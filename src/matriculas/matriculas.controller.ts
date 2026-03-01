@@ -1,39 +1,59 @@
-import { Controller, Post, Body, Get, Param, Patch, BadRequestException } from '@nestjs/common';
-import { MatriculasService } from './matriculas.service';
+import { Controller, Post, Body, Get, Param, Patch, BadRequestException, ParseIntPipe } from '@nestjs/common';
+import { MatriculasService } from './matriculas.service'; 
+import { StatusMatricula } from './inscricao.entity';
 
-@Controller('matriculas') // A URL será: http://localhost:3000/matriculas
+@Controller('matriculas')
 export class MatriculasController {
   constructor(private readonly matriculasService: MatriculasService) {}
 
-  /**
-   * WEBHOOK PARA O GOOGLE FORMS
-   * Recebe os dados do script e inicia a esteira como PENDENTE
-   */
+  @Get()
+  async listarInscricoes() {
+    return await this.matriculasService.listarTodas();
+  }
+
   @Post('inscricao')
   async receberInscricao(@Body() dados: any) {
-    // Validação básica: se o nome não vier, o formulário falhou
-    if (!dados.nome_completo) {
-      throw new BadRequestException('Dados do formulário incompletos.');
+    if (!dados?.nome_completo || !dados?.cpf) {
+      throw new BadRequestException('Campos obrigatórios (nome, cpf) ausentes.');
     }
     return await this.matriculasService.receberInscricao(dados);
   }
 
   /**
-   * TRANSIÇÃO DE ESTEIRA: Concluir Matrícula
-   * Transforma o registro de 'inscricoes' em um registro na tabela 'alunos'
+   * Passo 1: Disparo manual do funcionário
+   * Endpoint: PATCH /matriculas/:id/enviar-lgpd
    */
-  @Patch(':id/concluir')
-  async concluirMatricula(@Param('id') id: string) {
-    return await this.matriculasService.finalizarMatricula(id);
+  @Patch(':id/enviar-lgpd')
+  async enviarLGPD(@Param('id', ParseIntPipe) id: number) {
+    return await this.matriculasService.marcarComoAguardandoLGPD(id);
   }
 
   /**
-   * CONSULTA PARA O PAINEL DO FISCAL
-   * Lista todos que estão na esteira de matrícula
+   * Passo 2: Retorno do formulário (Webhook ou confirmação manual)
+   * Endpoint: PATCH /matriculas/:id/confirmar-lgpd
    */
-  @Get('todas')
-  async listarInscricoes() {
-    // Este método chamará uma função de listagem que criaremos no service
-    return await this.matriculasService.listarTodas();
+  @Patch(':id/confirmar-lgpd')
+  async confirmarLGPD(@Param('id', ParseIntPipe) id: number) {
+    return await this.matriculasService.confirmarAssinaturaLGPD(id);
+  }
+
+  /**
+   * Passo 3: Finalização da Matrícula (Agora aceita os cursos selecionados)
+   * Endpoint: PATCH /matriculas/:id/finalizar
+   */
+  @Patch(':id/finalizar')
+  async finalizarMatricula(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: { cursos?: string[] }
+  ) {
+    return await this.matriculasService.finalizarMatricula(id, body.cursos);
+  }
+
+  @Patch(':id/status')
+  async atualizarStatus(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: { status: StatusMatricula; motivo?: string }
+  ) {
+    return await this.matriculasService.atualizarStatus(id, body.status, body.motivo);
   }
 }

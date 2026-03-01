@@ -3,30 +3,30 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 
+// Core
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
+
 // Entities
 import { Materia } from './materia.entity';
 import { Usuario } from './usuarios/usuario.entity';
-import { Aluno } from './alunos/aluno.entity'; // ADICIONADO
-import { Inscricao } from './matriculas/inscricao.entity'; // ADICIONADO
+import { Aluno } from './alunos/aluno.entity';
+import { Inscricao } from './matriculas/inscricao.entity';
 
 // Services
 import { MateriasService } from './materias/materias.service';
 import { AuthService } from './auth/auth.service';
-import { MatriculasService } from './matriculas/matriculas.service'; // ADICIONADO
+// ✅ AJUSTE 1: Mude o caminho do import para o arquivo onde está a classe MatriculasService
+import { MatriculasService } from './matriculas/matriculas.service';
 
 // Controllers
 import { MateriasController } from './materias/materias.controller';
 import { AuthController } from './auth/auth.controller';
-import { MatriculasController } from './matriculas/matriculas.controller'; // ADICIONADO
+import { MatriculasController } from './matriculas/matriculas.controller';
 
 @Module({
   imports: [
-    // 1. Configuração Global
-    ConfigModule.forRoot({
-      isGlobal: true,
-    }),
-
-    // 2. Configuração do JWT
+    ConfigModule.forRoot({ isGlobal: true }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -36,39 +36,21 @@ import { MatriculasController } from './matriculas/matriculas.controller'; // AD
         signOptions: { expiresIn: '8h' },
       }),
     }),
-
-    // 3. Conexão com o Banco de Dados Neon
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
         type: 'postgres',
         url: configService.get<string>('DATABASE_URL'),
-        // IMPORTANTE: Adicionadas as novas entidades aqui para o TypeORM criar as tabelas
         entities: [Materia, Usuario, Aluno, Inscricao], 
-        synchronize: true, 
+        synchronize: true, // TypeORM tentará ajustar as colunas automaticamente
         ssl: true,
-        extra: {
-          ssl: {
-            rejectUnauthorized: false,
-          },
-        },
+        extra: { ssl: { rejectUnauthorized: false } },
       }),
     }),
-
-    // 4. Registro para Injeção de Repositórios
-    // Adicione Aluno e Inscricao aqui para poder usar o Repository no Service
     TypeOrmModule.forFeature([Materia, Usuario, Aluno, Inscricao]),
   ],
-  controllers: [
-    MateriasController, 
-    AuthController,
-    MatriculasController // ADICIONADO
-  ],
-  providers: [
-    MateriasService, 
-    AuthService,
-    MatriculasService // ADICIONADO
-  ],
+  controllers: [AppController, MateriasController, AuthController, MatriculasController],
+  providers: [AppService, MateriasService, AuthService, MatriculasService],
 })
 export class AppModule {}

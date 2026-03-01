@@ -1,4 +1,5 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, OneToMany } from 'typeorm';
+// backend/src/materias/entities/materia.entity.ts
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 
 export enum Prioridade {
   ALTA = 'Alta',
@@ -24,7 +25,7 @@ export class Materia {
   prioridade: Prioridade;
 
   @Column()
-  periodo: string;
+  periodo: string; // Ex: '2026.1'
 
   @Column({ type: 'int' })
   cargaHorariaEmenta: number;
@@ -33,9 +34,9 @@ export class Materia {
   professor: string;
 
   @Column({ default: 'Pendente' })
-  status: string;
+  status: string; // Pendente, Em Curso, Concluída
 
-  @Column({ type: 'float', default: 0 })
+  @Column({ type: 'decimal', precision: 5, scale: 2, default: 0 })
   media: number;
 
   @Column({ type: 'int', default: 0 })
@@ -44,9 +45,12 @@ export class Materia {
   @Column({ type: 'int', default: 0 })
   totalQuestoes: number;
 
-  @Column({ type: 'float', default: 0 })
-  progresso: number; // Barra evolutiva
+  @Column({ type: 'decimal', precision: 5, scale: 2, default: 0 })
+  progresso: number; // Porcentagem 0-100
 
   @CreateDateColumn()
   createdAt: Date;
+
+  @UpdateDateColumn()
+  updatedAt: Date;
 }

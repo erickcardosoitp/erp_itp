@@ -1,17 +1,23 @@
-import { Controller, Post, Body } from '@nestjs/common';
+import { Controller, Post, Body, HttpCode, HttpStatus } from '@nestjs/common';
 import { AuthService } from './auth.service';
 
-@Controller('auth') // Isso define o prefixo /auth
+@Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  @Post('registro') // Caminho final: /auth/registro
+  @Post('registro')
   async registrar(@Body() dados: any) {
+    // Recomendo que 'dados' contenha: nome, email, senha, role
     return await this.authService.registrar(dados);
   }
 
-  @Post('login') // Caminho final: /auth/login
+  @Post('login')
+  @HttpCode(HttpStatus.OK) // Login bem-sucedido deve retornar 200, não 201
   async login(@Body() body: any) {
-    return await this.authService.login(body.email, body.password);
+    // Ajustado para aceitar 'senha' ou 'password', dando preferência ao que seu banco usa
+    const email = body.email;
+    const senha = body.senha || body.password; 
+    
+    return await this.authService.login(email, senha);
   }
 }

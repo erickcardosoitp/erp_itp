@@ -1,25 +1,40 @@
 {
   "compilerOptions": {
-    "module": "nodenext",
-    "moduleResolution": "nodenext",
-    "resolvePackageJsonExports": true,
-    "esModuleInterop": true,
-    "isolatedModules": true,
+    "module": "commonjs",
     "declaration": true,
     "removeComments": true,
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
     "allowSyntheticDefaultImports": true,
-    "target": "ES2023",
+    "target": "ES2021",
     "sourceMap": true,
     "outDir": "./dist",
     "baseUrl": "./",
     "incremental": true,
     "skipLibCheck": true,
-    "strictNullChecks": true,
-    "forceConsistentCasingInFileNames": true,
+    "strictNullChecks": false,
     "noImplicitAny": false,
     "strictBindCallApply": false,
-    "noFallthroughCasesInSwitch": false
-  }
+    "forceConsistentCasingInFileNames": false,
+    "noFallthroughCasesInSwitch": false,
+    "esModuleInterop": true,
+    "jsx": "preserve",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": true,
+    "resolveJsonModule": true,
+    "moduleResolution": "node",
+    "noEmit": false  // <-- MUDANÇA CRÍTICA: Precisa ser false para gerar a pasta dist
+  },
+  "include": [
+    "src/**/*.ts", 
+    "itp_frontend/src/**/*.ts", 
+    "itp_frontend/src/**/*.tsx",
+    "next-env.d.ts"
+, "itp_frontend/src/app/financeiro/page.jsx"  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "itp_frontend/.next",
+    "app" // Ignora a pasta app que você criou na raiz para não dar conflito
+  ]
 }
