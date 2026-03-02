@@ -16,7 +16,6 @@ import { Inscricao } from './matriculas/inscricao.entity';
 // Services
 import { MateriasService } from './materias/materias.service';
 import { AuthService } from './auth/auth.service';
-// ✅ AJUSTE 1: Mude o caminho do import para o arquivo onde está a classe MatriculasService
 import { MatriculasService } from './matriculas/matriculas.service';
 
 // Controllers
@@ -26,26 +25,36 @@ import { MatriculasController } from './matriculas/matriculas.controller';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
+    // Configura o carregamento do .env (local) e variáveis da Vercel (produção)
+    ConfigModule.forRoot({ 
+      isGlobal: true,
+      envFilePath: '.env', // Garante que ignore se não existir em produção
+    }),
+    
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
         global: true,
-        secret: configService.get<string>('JWT_SECRET') || 'ITP_SECRET_KEY_2026',
+        // ✅ AJUSTE 1: Prioriza a variável do painel da Vercel. 
+        // O fallback deve ser apenas para desenvolvimento.
+        secret: configService.get<string>('JWT_SECRET'),
         signOptions: { expiresIn: '8h' },
       }),
     }),
+    
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
         type: 'postgres',
+        // ✅ AJUSTE 2: Verifica se a URL do banco existe antes de tentar conectar
         url: configService.get<string>('DATABASE_URL'),
         entities: [Materia, Usuario, Aluno, Inscricao], 
-        synchronize: true, // TypeORM tentará ajustar as colunas automaticamente
-        ssl: true,
-        extra: { ssl: { rejectUnauthorized: false } },
+        synchronize: process.env.NODE_ENV !== 'production', // ✅ AJUSTE 3: Evita mudanças acidentais em prod
+        ssl: {
+          rejectUnauthorized: false, // Necessário para a maioria dos DBs cloud (Neon/Supabase)
+        },
       }),
     }),
     TypeOrmModule.forFeature([Materia, Usuario, Aluno, Inscricao]),

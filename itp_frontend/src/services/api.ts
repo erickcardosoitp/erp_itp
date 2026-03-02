@@ -1,19 +1,16 @@
 import axios from 'axios';
+import Cookies from 'js-cookie';
 
 const api = axios.create({
-  // Mude para 3001
-  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001', 
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001',
+  headers: { 'Content-Type': 'application/json' },
 });
 
 api.interceptors.request.use((config) => {
-  if (typeof window !== 'undefined') {
-    const token = localStorage.getItem('@ITP:token');
-    if (token && config.headers) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
+  // Busca o token do Cookie (mais seguro para o middleware e SSR)
+  const token = Cookies.get('@ITP:token');
+  if (token && config.headers) {
+    config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
 });

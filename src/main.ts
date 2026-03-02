@@ -1,51 +1,43 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { Logger, ValidationPipe } from '@nestjs/common';
+import { ValidationPipe } from '@nestjs/common';
+import { ExpressAdapter } from '@nestjs/platform-express';
+import express from 'express';
 
-async function bootstrap() {
-  const logger = new Logger('Bootstrap');
-  const app = await NestFactory.create(AppModule);
+const server = express();
 
-  // MODO ARQUITETURA: Configuração de Segurança e Cross-Origin
-  const allowedOrigins = [
-    'http://localhost:3000',
-    'http://127.0.0.1:3000',
-    'https://itp.institutotiapretinha.org',
-    'https://institutotiapretinha.org',
-  ];
+export const createServer = async (expressInstance: any) => {
+  const app = await NestFactory.create(
+    AppModule,
+    new ExpressAdapter(expressInstance),
+  );
 
   app.enableCors({
-    origin: (origin, callback) => {
-      // Se não houver origin (ex: Postman/Mobile) ou se estiver na lista permitida
-      if (!origin || allowedOrigins.some(o => o === origin)) {
-        callback(null, true);
-      } else {
-        logger.warn(`🚫 Origin bloqueada pelo CORS: ${origin}`);
-        callback(new Error('Not allowed by CORS'));
-      }
-    },
+    origin: [
+      'https://itp.institutotiapretinha.org',
+      'https://institutotiapretinha.org',
+      'http://localhost:3000'
+    ],
+    credentials: true,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
-    credentials: true, // Necessário para permitir o envio de Cookies/Tokens
     allowedHeaders: 'Content-Type,Authorization,Accept',
   });
 
-  // MODO DEBUG: Validação Global de DTOs
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true, // Remove campos que não estão no DTO
-      forbidNonWhitelisted: true, // Retorna erro se enviar campos extras
-      transform: true, // Converte tipos automaticamente (ex: string para number)
-    }),
-  );
+  app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));
 
-  // Definição da Porta (Prioriza variável do servidor de deploy)
-  const port = process.env.PORT || 3001;
-  
-  // O '0.0.0.0' é essencial para que o servidor seja acessível externamente em VPS/Containers
-  await app.listen(port, '0.0.0.0');
+  await app.init();
+};
 
-  logger.log(`✅ ITP-BACKEND ATIVO NA PORTA: ${port}`);
-  logger.log(`🔗 ORIGENS PERMITIDAS: ${allowedOrigins.join(', ')}`);
+if (process.env.NODE_ENV !== 'production') {
+  async function bootstrap() {
+    const app = await NestFactory.create(AppModule);
+    app.enableCors();
+    await app.listen(3001);
+    console.log('🚀 Local: http://localhost:3001');
+  }
+  bootstrap();
+} else {
+  createServer(server);
 }
 
-bootstrap();
+export default server;

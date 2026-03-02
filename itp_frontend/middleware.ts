@@ -2,27 +2,21 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 export function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
-  const hostname = request.headers.get('host');
   const token = request.cookies.get('@ITP:token')?.value;
+  const { pathname } = request.nextUrl;
 
-  // 1. Lógica de Domínio: Se logado na raiz, vai para o Dashboard
-  if (hostname === 'itp.institutotiapretinha.org' && pathname === '/') {
-    const target = token ? '/dashboard' : '/login';
-    return NextResponse.redirect(new URL(target, request.url));
+  // Redireciona raiz para dashboard ou login
+  if (pathname === '/') {
+    return NextResponse.redirect(new URL(token ? '/dashboard' : '/login', request.url));
   }
 
-  // 2. Rotas Privadas
-  const privateRoutes = ['/matriculas', '/dashboard', '/academico', '/estoque', '/financeiro', '/doacoes'];
-  const isPrivateRoute = privateRoutes.some(route => pathname.startsWith(route));
-
+  // Proteção de rotas privadas
+  const isPrivateRoute = ['/dashboard', '/matriculas', '/academico', '/financeiro'].some(r => pathname.startsWith(r));
   if (isPrivateRoute && !token) {
-    const loginUrl = new URL('/login', request.url);
-    loginUrl.searchParams.set('callbackUrl', pathname);
-    return NextResponse.redirect(loginUrl);
+    return NextResponse.redirect(new URL('/login', request.url));
   }
 
-  // 3. Se logado e tentar ir para o login, manda para o dashboard
+  // Impede logado de ir para login
   if (pathname === '/login' && token) {
     return NextResponse.redirect(new URL('/dashboard', request.url));
   }
@@ -31,5 +25,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/', '/matriculas/:path*', '/dashboard/:path*', '/academico/:path*', '/estoque/:path*', '/financeiro/:path*', '/doacoes/:path*'],
+  matcher: ['/', '/dashboard/:path*', '/login'],
 };

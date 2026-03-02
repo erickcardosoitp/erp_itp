@@ -1,0 +1,27 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "src/main.ts",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "itp_frontend/package.json",
+      "use": "@vercel/next"
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/auth/:path*",
+      "destination": "src/main.ts"
+    },
+    {
+      "source": "/users/:path*",
+      "destination": "src/main.ts"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "itp_frontend/$1"
+    }
+  ]
+}
