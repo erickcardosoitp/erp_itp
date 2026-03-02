@@ -2,17 +2,17 @@
 
 import React, { useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Lock, User, ArrowRight, Loader2, AlertCircle, ShieldCheck } from 'lucide-react';
+import { Lock, User, ArrowRight, Loader2, AlertCircle, ShieldCheck, Eye, EyeOff } from 'lucide-react';
 import Cookies from 'js-cookie';
 
 function LoginForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false); // Estado para o olho
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   
   const searchParams = useSearchParams();
-  // Prioriza a URL de retorno, mas o padrão agora é Dashboard
   const callbackUrl = searchParams.get('callbackUrl') || '/dashboard';
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -32,14 +32,15 @@ function LoginForm() {
         }),
       });
 
-      const data = await response.json();
+      // Tratamento para evitar o erro "Unexpected end of JSON input"
+      const text = await response.text();
+      const data = text ? JSON.parse(text) : {};
 
       if (!response.ok) {
         throw new Error(data.message || 'Credenciais inválidas. Verifique seus dados.');
       }
 
       if (data.access_token) {
-        // Grava o cookie (secure: false para localhost não barrar)
         Cookies.set('@ITP:token', data.access_token, { 
           expires: 7, 
           path: '/',
@@ -48,12 +49,11 @@ function LoginForm() {
         });
 
         localStorage.setItem('@ITP:token', data.access_token);
-        
-        // Redirecionamento forçado para garantir que o Middleware valide o novo cookie
         window.location.href = callbackUrl;
       }
       
     } catch (err: any) {
+      console.error("Erro detalhado:", err);
       setError(err.message || 'Não foi possível conectar ao servidor.');
     } finally {
       setIsLoading(false);
@@ -93,6 +93,7 @@ function LoginForm() {
             )}
 
             <form onSubmit={handleLogin} className="space-y-4">
+              {/* Campo Email */}
               <div className="group relative">
                 <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-purple-600 transition-colors" size={20} />
                 <input 
@@ -102,13 +103,24 @@ function LoginForm() {
                 />
               </div>
 
+              {/* Campo Senha com Botão de Mostrar */}
               <div className="group relative">
                 <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-purple-600 transition-colors" size={20} />
                 <input 
-                  required type="password" placeholder="Sua senha"
-                  className="w-full pl-12 pr-4 py-4 bg-slate-50 rounded-2xl border-2 border-slate-100 focus:border-purple-600 focus:bg-white outline-none text-purple-900 font-semibold transition-all placeholder:text-slate-400"
+                  required 
+                  type={showPassword ? "text" : "password"} 
+                  placeholder="Sua senha"
+                  className="w-full pl-12 pr-12 py-4 bg-slate-50 rounded-2xl border-2 border-slate-100 focus:border-purple-600 focus:bg-white outline-none text-purple-900 font-semibold transition-all placeholder:text-slate-400"
                   value={password} onChange={(e) => setPassword(e.target.value)}
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-purple-600 transition-colors"
+                  title={showPassword ? "Esconder senha" : "Mostrar senha"}
+                >
+                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
               </div>
 
               <div className="flex justify-end pt-1">
