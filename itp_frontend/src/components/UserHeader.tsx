@@ -11,8 +11,9 @@ export default function UserHeader() {
         try {
           const user = JSON.parse(userRaw);
           // ✅ Ajuste para ler fotoUrl ou foto e garantir a URL do Backend (3001)
-          const fotoPath = user.fotoUrl || user.foto || null;
-          const fullFotoUrl = fotoPath ? `http://localhost:3001${fotoPath}` : null;
+          const fotoPath = user.fotoUrl || user.foto || ''; // fotoPath já deve ser relativo (ex: /uploads/perfil/...)
+          const backendBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.replace('/api', '') || 'http://localhost:3001';
+          const fullFotoUrl = fotoPath ? `${backendBaseUrl}${fotoPath}` : null;
 
           setUserData({
             nome: user.nome || user.name || "Usuário",

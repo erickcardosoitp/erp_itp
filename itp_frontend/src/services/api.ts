@@ -2,8 +2,8 @@ import axios from 'axios';
 import Cookies from 'js-cookie';
 
 const api = axios.create({
-  // ✅ Aponta para o backend NestJS (Porta 3001)
-  baseURL: 'http://localhost:3001/api', 
+  // ✅ Aponta para o backend NestJS (Porta 3001) em dev, ou /api em prod (Vercel)
+  baseURL: process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001/api',
   withCredentials: true, // Essencial para cross-origin cookies
   headers: { 'Content-Type': 'application/json' },
 });

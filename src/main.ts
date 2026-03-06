@@ -23,6 +23,7 @@ export const setupApp = async (app: NestExpressApplication) => {
   app.enableCors({
     origin: [
       'https://itp.institutotiapretinha.org',
+      'https://api.itp.institutotiapretinha.org', // Adicionado para o domínio da API em produção
       'https://institutotiapretinha.org',
       'http://localhost:3000',
       'http://127.0.0.1:3000',

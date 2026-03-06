@@ -30,12 +30,7 @@ function LoginForm() {
     setError('');
 
     try {
-      const isProd = process.env.NODE_ENV === 'production';
-      const apiUrl = isProd 
-        ? 'https://api.itp.institutotiapretinha.org/api' 
-        : 'http://localhost:3001/api';
-      
-      const response = await fetch(`${apiUrl}/auth/login`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001/api'}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include', 
