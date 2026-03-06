@@ -2,38 +2,28 @@
   "version": 2,
   "builds": [
     {
-      "src": "src/main.ts",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "itp_frontend/package.json",
+      "src": "itp_frontend/next.config.ts",
       "use": "@vercel/next",
       "config": {
-        "installCommand": "npm install",
-        "buildCommand": "npm run build"
+        "distDir": ".next"
+      }
+    },
+    {
+      "src": "src/main.ts",
+      "use": "@vercel/node",
+      "config": {
+        "includeFiles": ["dist/**"]
       }
     }
   ],
   "rewrites": [
     {
-      "source": "/api/auth/:path*",
-      "destination": "src/main.ts"
+      "source": "/api/(.*)",
+      "destination": "/src/main.ts"
     },
     {
-      "source": "/api/matriculas/:path*",
-      "destination": "src/main.ts"
-    },
-    {
-      "source": "/api/materias/:path*",
-      "destination": "src/main.ts"
-    },
-    {
-      "source": "/api/users/:path*",
-      "destination": "src/main.ts"
-    },
-    {
-      "source": "/((?!api).*)" ,
-      "destination": "itp_frontend/$1"
+      "source": "/(.*)",
+      "destination": "/itp_frontend/$1"
     }
   ]
 }

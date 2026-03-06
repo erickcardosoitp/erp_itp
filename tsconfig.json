@@ -11,7 +11,7 @@
     "sourceMap": true,
 
     "outDir": "./dist",
-    "rootDir": "./",
+    "rootDir": "./api",
     "baseUrl": "./",
 
     "incremental": true,
@@ -24,9 +24,9 @@
     "forceConsistentCasingInFileNames": true,
 
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["api/*"]
     }
   },
-  "include": ["src/**/*.ts"],
+  "include": ["api/**/*.ts"],
   "exclude": ["node_modules", "dist", "test", "**/*.spec.ts"]
 }

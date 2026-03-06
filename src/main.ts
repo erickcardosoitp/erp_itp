@@ -1,18 +1,19 @@
 import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
 import { ValidationPipe, Logger } from '@nestjs/common';
-import { ExpressAdapter, NestExpressApplication } from '@nestjs/platform-express';
-import express from 'express';
-// ✅ CORREÇÃO DO IMPORT: Remova o * as e use o import padrão
-import cookieParser from 'cookie-parser'; 
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
+// ✅ CORREÇÃO DO IMPORT: Tente usar o caminho absoluto ou garanta que o arquivo existe
+import { AppModule } from './app.module'; 
+// ✅ CORREÇÃO DO COOKIE-PARSER: Importação robusta para evitar erro de callable
+import * as cookieParser from 'cookie-parser';
 
-const server = express();
 const logger = new Logger('Bootstrap');
 
+// 1. Função de Configuração Compartilhada
 export const setupApp = async (app: NestExpressApplication) => {
-  // ✅ Agora a chamada funcionará sem erro de tipagem
-  app.use(cookieParser());
+  // ✅ Forma correta de usar o middleware em ambientes híbridos
+  const cookieMiddleware = (cookieParser as any).default || cookieParser;
+  app.use(cookieMiddleware());
   
   app.setGlobalPrefix('api');
 
@@ -23,54 +24,52 @@ export const setupApp = async (app: NestExpressApplication) => {
   app.enableCors({
     origin: [
       'https://itp.institutotiapretinha.org',
-      'https://api.itp.institutotiapretinha.org', // Adicionado para o domínio da API em produção
+      'https://api.itp.institutotiapretinha.org',
       'https://institutotiapretinha.org',
       'http://localhost:3000',
       'http://127.0.0.1:3000',
-      'http://localhost:3001'
+      'http://localhost:3001',
     ],
-    credentials: true, 
+    credentials: true,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
-    allowedHeaders: [
-      'Content-Type', 
-      'Authorization', 
-      'Accept', 
-      'Cookie', 
-      'X-Requested-With',
-    ],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Cookie', 'X-Requested-With'],
     exposedHeaders: ['Set-Cookie'],
   });
 
-  app.useGlobalPipes(new ValidationPipe({ 
-    transform: true, 
-    whitelist: true,
-    forbidNonWhitelisted: false 
-  }));
+  app.useGlobalPipes(
+    new ValidationPipe({
+      transform: true,
+      whitelist: true,
+      forbidNonWhitelisted: false,
+    }),
+  );
 
   return app;
 };
 
-async function bootstrap() {
-  try {
-    const app = await NestFactory.create<NestExpressApplication>(
-      AppModule, 
-      new ExpressAdapter(server)
-    );
-    
-    await setupApp(app);
-    app.getHttpAdapter().getInstance().set('trust proxy', 1);
-
-    const port = process.env.PORT || 3001;
-
-    await app.listen(port, '0.0.0.0');
-    logger.log(`✅ SERVIDOR ITP ONLINE: http://localhost:${port}/api`);
-  } catch (error: any) {
-    if (error.code === 'EADDRINUSE') {
-      logger.error(`❌ PORTA ${process.env.PORT || 3001} EM USO.`);
-    } else {
-      logger.error(`❌ FALHA AO INICIAR: ${error.message}`);
-    }
-    process.exit(1);
-  }
+// 2. Lógica para Servidor Local (npm run start:dev)
+async function bootstrapLocal() {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  await setupApp(app);
+  const port = process.env.PORT || 3001;
+  await app.listen(port);
+  logger.log(`🚀 SERVIDOR LOCAL ONLINE: http://localhost:${port}/api`);
 }
-bootstrap();
+
+// 3. Lógica para Handler Serverless (Vercel)
+let cachedServer: any;
+
+export default async function handler(req: any, res: any) {
+  if (!cachedServer) {
+    const app = await NestFactory.create<NestExpressApplication>(AppModule);
+    await setupApp(app);
+    await app.init();
+    cachedServer = app.getHttpAdapter().getInstance();
+  }
+  return cachedServer(req, res);
+}
+
+// ✅ Executa o listen apenas se NÃO estivermos no ambiente de handler (Serverless)
+if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
+  bootstrapLocal();
+}

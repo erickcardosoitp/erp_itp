@@ -26,18 +26,21 @@ import { MatriculasService } from './matriculas/matriculas.service';
 import { MateriasController } from './materias/materias.controller';
 import { MatriculasController } from './matriculas/matriculas.controller';
 import { UsuariosController } from './usuarios/usuarios.controller'; 
+
+// Modules
 import { GruposModule } from './grupos/grupos.module';
+import { UsersModule } from './modules/users/users.module'; 
 
 @Module({
   imports: [
-    // 1. Configuração Global de Variáveis de Ambiente
+    // 1. Configuração Global
     ConfigModule.forRoot({ 
       isGlobal: true,
       envFilePath: '.env',
       cache: true,
     }),
     
-    // 2. JWT Global - Centraliza a Secret para evitar 401 por divergência
+    // 2. JWT Global - Centralizado
     JwtModule.registerAsync({
       global: true, 
       imports: [ConfigModule],
@@ -48,7 +51,7 @@ import { GruposModule } from './grupos/grupos.module';
       }),
     }),
     
-    // 3. Conexão com Banco de Dados (Neon/Postgres)
+    // 3. Conexão com Banco de Dados
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
@@ -56,16 +59,17 @@ import { GruposModule } from './grupos/grupos.module';
         url: config.get<string>('DATABASE_URL'),
         entities: [Materia, Usuario, Aluno, Inscricao, Grupo], 
         autoLoadEntities: true, 
-        synchronize: false, // Segurança: Não altera o banco automaticamente
+        synchronize: false, 
         ssl: { rejectUnauthorized: false },
       }),
     }),
 
-    // 4. Repositórios para injeção nos Services
+    // 4. Repositórios
     TypeOrmModule.forFeature([Materia, Usuario, Aluno, Inscricao, Grupo]),
     
-    // 5. Módulos Externos
+    // 5. Módulos Encapsulados (Não adicione os services deles em providers!)
     GruposModule, 
+    UsersModule, 
   ],
   controllers: [
     AppController, 
@@ -79,16 +83,10 @@ import { GruposModule } from './grupos/grupos.module';
     MateriasService, 
     AuthService, 
     MatriculasService,
+    // O UsersService NÃO deve estar aqui, pois já está dentro do UsersModule
     JwtStrategy,
-    // Ordem dos Guards: Primeiro Autentica (JWT), depois Autoriza (Roles)
-    { 
-      provide: APP_GUARD, 
-      useClass: JwtAuthGuard 
-    },
-    { 
-      provide: APP_GUARD, 
-      useClass: RolesGuard 
-    },
+    { provide: APP_GUARD, useClass: JwtAuthGuard },
+    { provide: APP_GUARD, useClass: RolesGuard },
   ],
 })
 export class AppModule {}
