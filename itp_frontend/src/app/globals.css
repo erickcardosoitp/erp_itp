@@ -1,26 +1,82 @@
-@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
+/* ☀️ TEMA CLARO REFINADO (Contraste Elevado) */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Fundo um tom mais cinza para o card branco brilhar */
+  --background: #F1F5F9; /* Slate 100 */
+  --foreground: #0F172A; /* Slate 900 */
+  --card: #FFFFFF;
+  --border: #D1D5DB;     /* Gray 300: Bordas mais nítidas */
+  --input: #F8FAFC;      /* Slate 50 */
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* 🌙 TEMA ESCURO (Navy Premium - Já Ajustado) */
+.dark {
+  --background: #0F172A; 
+  --foreground: #F1F5F9; 
+  --card: #1E293B;       
+  --border: #334155;     
+  --input: #020617;      
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+    @apply transition-colors duration-500 ease-in-out;
+  }
+
+  /* 🏛️ FORMAS E SOMBRAS (Modo Arquitetura) */
+  section, .card-itp {
+    background-color: var(--card);
+    /* Sombras mais presentes no modo claro para volume */
+    @apply border border-slate-200 dark:border-slate-700/50 
+           shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.5)] 
+           transition-all duration-300;
+  }
+
+  /* LABELS: Agora mais claros no Dark e mais nítidos no Light */
+  label {
+    @apply text-slate-600 dark:text-slate-300 font-black uppercase tracking-widest text-[10px] transition-colors;
+  }
+
+  /* INPUTS: Com efeito de profundidade (shadow-inner) */
+  input, select, textarea {
+    background-color: var(--input);
+    color: var(--foreground);
+    border: 1px solid var(--border);
+    @apply rounded-2xl px-5 py-4 outline-none focus:ring-2 focus:ring-purple-500 
+           shadow-inner transition-all placeholder:text-slate-400 dark:placeholder:text-slate-600;
+  }
+
+  /* Reset de bordas genérico */
+  div, header, table, tr, td, th {
+    @apply border-slate-200 dark:border-slate-700/50;
   }
 }
 
-body {
+/* 🎨 BARRA DE ROLAGEM CUSTOMIZADA */
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
   background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1; /* slate-300 */
+  border-radius: 10px;
+  border: 3px solid var(--background);
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background-color: #475569; /* slate-600 */
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-purple-600;
 }

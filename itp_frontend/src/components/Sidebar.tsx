@@ -1,11 +1,12 @@
 'use client';
 
+import React from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { 
   LayoutDashboard, UserPlus, ClipboardList, 
   LogOut, Settings, PanelLeftClose, PanelLeftOpen,
-  GraduationCap, DollarSign, Heart, Package 
+  GraduationCap, DollarSign, Heart, Package, Loader2 
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -15,6 +16,8 @@ interface SidebarProps {
 
 export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
+  const [isLoggingOut, setIsLoggingOut] = React.useState(false);
 
   // Menu atualizado com a taxonomia do ITP ERP
   const primaryMenu = [
@@ -26,6 +29,37 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
     { name: 'Doações', path: '/doacoes', icon: Heart },
     { name: 'Estoque', path: '/estoque', icon: Package },
   ];
+
+  /**
+   * MODO ARQUITETURA:
+   * Chamada ao endpoint do NestJS para invalidar o cookie HttpOnly.
+   */
+  const handleLogout = async () => {
+    if (!confirm('Deseja realmente sair do sistema?')) return;
+    
+    setIsLoggingOut(true);
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+      
+      const response = await fetch(`${apiUrl}/auth/logout`, {
+        method: 'POST',
+        credentials: 'include', // Necessário para enviar e limpar o cookie
+      });
+
+      if (response.ok) {
+        // Força reload para limpar estados da aplicação e redirecionar via Middleware
+        window.location.href = '/login';
+      } else {
+        throw new Error('Falha no logout');
+      }
+    } catch (error) {
+      console.error('Erro ao deslogar:', error);
+      // Fallback: redireciona mesmo se a API falhar
+      router.push('/login');
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
 
   return (
     <aside 
@@ -44,7 +78,8 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
         )}
         <button 
           onClick={() => setIsCollapsed(!isCollapsed)}
-          className="p-1 hover:bg-purple-800 rounded-lg transition-colors text-purple-300"
+          className="p-1 hover:bg-purple-800 rounded-lg transition-colors text-purple-300 focus:outline-none focus:ring-2 focus:ring-purple-500"
+          aria-label={isCollapsed ? "Expandir menu" : "Recolher menu"}
         >
           {isCollapsed ? <PanelLeftOpen size={24} /> : <PanelLeftClose size={20} />}
         </button>
@@ -53,7 +88,7 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
       {/* Navegação Principal */}
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto scrollbar-hide">
         {primaryMenu.map((item) => {
-          const isActive = pathname === item.path;
+          const isActive = pathname.startsWith(item.path);
           const Icon = item.icon;
           
           return (
@@ -87,9 +122,21 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
           {!isCollapsed && <span className="uppercase text-[10px] font-black tracking-widest">Configurações</span>}
         </Link>
         
-        <button className="flex items-center gap-4 px-4 py-3 w-full rounded-xl font-bold text-red-400 hover:bg-red-500/10 transition-all group">
-          <LogOut size={22} className="group-hover:translate-x-1 transition-transform" />
-          {!isCollapsed && <span className="uppercase text-[10px] font-black tracking-widest">Sair</span>}
+        <button 
+          onClick={handleLogout}
+          disabled={isLoggingOut}
+          className="flex items-center gap-4 px-4 py-3 w-full rounded-xl font-bold text-red-400 hover:bg-red-500/10 transition-all group disabled:opacity-50"
+        >
+          {isLoggingOut ? (
+            <Loader2 size={22} className="animate-spin" />
+          ) : (
+            <LogOut size={22} className="group-hover:translate-x-1 transition-transform" />
+          )}
+          {!isCollapsed && (
+            <span className="uppercase text-[10px] font-black tracking-widest text-left">
+              {isLoggingOut ? 'Saindo...' : 'Sair'}
+            </span>
+          )}
         </button>
       </div>
     </aside>

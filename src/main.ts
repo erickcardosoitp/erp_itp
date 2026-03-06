@@ -1,49 +1,75 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { ValidationPipe } from '@nestjs/common';
-import { ExpressAdapter } from '@nestjs/platform-express';
+import { ValidationPipe, Logger } from '@nestjs/common';
+import { ExpressAdapter, NestExpressApplication } from '@nestjs/platform-express';
 import express from 'express';
+// ✅ CORREÇÃO DO IMPORT: Remova o * as e use o import padrão
+import cookieParser from 'cookie-parser'; 
+import { join } from 'path';
 
 const server = express();
+const logger = new Logger('Bootstrap');
 
-// Função para inicializar o NestJS dentro do Express
-export const createServer = async (expressInstance: any) => {
-  const app = await NestFactory.create(
-    AppModule,
-    new ExpressAdapter(expressInstance),
-  );
+export const setupApp = async (app: NestExpressApplication) => {
+  // ✅ Agora a chamada funcionará sem erro de tipagem
+  app.use(cookieParser());
+  
+  app.setGlobalPrefix('api');
+
+  app.useStaticAssets(join(process.cwd(), 'public'), {
+    prefix: '/public/',
+  });
 
   app.enableCors({
     origin: [
       'https://itp.institutotiapretinha.org',
       'https://institutotiapretinha.org',
-      'http://localhost:3000'
+      'http://localhost:3000',
+      'http://127.0.0.1:3000',
+      'http://localhost:3001'
     ],
-    credentials: true,
+    credentials: true, 
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
-    allowedHeaders: 'Content-Type,Authorization,Accept',
+    allowedHeaders: [
+      'Content-Type', 
+      'Authorization', 
+      'Accept', 
+      'Cookie', 
+      'X-Requested-With',
+    ],
+    exposedHeaders: ['Set-Cookie'],
   });
 
-  app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));
+  app.useGlobalPipes(new ValidationPipe({ 
+    transform: true, 
+    whitelist: true,
+    forbidNonWhitelisted: false 
+  }));
 
-  // Importante: Aguarda a inicialização dos módulos e controllers
-  await app.init();
+  return app;
 };
 
-// Lógica de execução
-if (process.env.NODE_ENV !== 'production') {
-  async function bootstrap() {
-    const app = await NestFactory.create(AppModule);
-    app.enableCors();
-    await app.listen(3001);
-    console.log('🚀 Local: http://localhost:3001');
-  }
-  bootstrap();
-} else {
-  // Em produção (Vercel), inicializamos a ponte Express-Nest
-  // A Vercel chamará o 'server' exportado abaixo
-  createServer(server);
-}
+async function bootstrap() {
+  try {
+    const app = await NestFactory.create<NestExpressApplication>(
+      AppModule, 
+      new ExpressAdapter(server)
+    );
+    
+    await setupApp(app);
+    app.getHttpAdapter().getInstance().set('trust proxy', 1);
 
-// Exportação obrigatória para o @vercel/node funcionar
-export default server;
+    const port = process.env.PORT || 3001;
+
+    await app.listen(port, '0.0.0.0');
+    logger.log(`✅ SERVIDOR ITP ONLINE: http://localhost:${port}/api`);
+  } catch (error: any) {
+    if (error.code === 'EADDRINUSE') {
+      logger.error(`❌ PORTA ${process.env.PORT || 3001} EM USO.`);
+    } else {
+      logger.error(`❌ FALHA AO INICIAR: ${error.message}`);
+    }
+    process.exit(1);
+  }
+}
+bootstrap();

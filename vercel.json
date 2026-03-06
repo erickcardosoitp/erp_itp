@@ -12,23 +12,23 @@
   ],
   "rewrites": [
     {
-      "source": "/auth/(.*)",
+      "source": "/api/auth/:path*",
       "destination": "src/main.ts"
     },
     {
-      "source": "/users/(.*)",
+      "source": "/api/matriculas/:path*",
       "destination": "src/main.ts"
     },
     {
-      "source": "/matriculas/(.*)",
+      "source": "/api/materias/:path*",
       "destination": "src/main.ts"
     },
     {
-      "source": "/materias/(.*)",
+      "source": "/api/users/:path*",
       "destination": "src/main.ts"
     },
     {
-      "source": "/((?!auth|users|matriculas|materias).*)",
+      "source": "/((?!api).*)" ,
       "destination": "itp_frontend/$1"
     }
   ]

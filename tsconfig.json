@@ -1,36 +1,32 @@
 {
   "compilerOptions": {
     "module": "commonjs",
+    "target": "ES2021",
+    "lib": ["es2021"],
     "declaration": true,
     "removeComments": true,
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
     "allowSyntheticDefaultImports": true,
-    "target": "ES2021",
     "sourceMap": true,
+
     "outDir": "./dist",
+    "rootDir": "./",
     "baseUrl": "./",
+
     "incremental": true,
     "skipLibCheck": true,
     "strict": true,
-    /* MUDANÇA CRÍTICA: Desativa a obrigatoriedade de inicializar propriedades no constructor.
-       Isso resolve os erros nas Entities do TypeORM (Aluno, Usuario, etc).
-    */
-    "strictPropertyInitialization": false, 
-    "noImplicitAny": false,
+    "strictPropertyInitialization": false,
     "esModuleInterop": true,
     "moduleResolution": "node",
-    "noEmit": false,
-    "forceConsistentCasingInFileNames": true
+    "resolveJsonModule": true,
+    "forceConsistentCasingInFileNames": true,
+
+    "paths": {
+      "@/*": ["src/*"]
+    }
   },
-  "include": [
-    "src/**/*.ts"
-  ],
-  "exclude": [
-    "node_modules",
-    "dist",
-    "itp_frontend",
-    "test",
-    "**/*.spec.ts"
-  ]
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist", "test", "**/*.spec.ts"]
 }

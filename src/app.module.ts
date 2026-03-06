@@ -2,64 +2,93 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
+import { APP_GUARD } from '@nestjs/core';
 
-// Core
+// Core & Auth
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { AuthService } from './auth/auth.service';
+import { AuthController } from './auth/auth.controller';
+import { JwtStrategy } from './auth/jwt.strategy';
+import { JwtAuthGuard } from './auth/jwt-auth.guard';
+import { RolesGuard } from './auth/guards/roles.guard';
 
 // Entities
 import { Materia } from './materia.entity';
 import { Usuario } from './usuarios/usuario.entity';
 import { Aluno } from './alunos/aluno.entity';
 import { Inscricao } from './matriculas/inscricao.entity';
+import { Grupo } from './grupos/grupo.entity';
 
-// Services
+// Services / Controllers
 import { MateriasService } from './materias/materias.service';
-import { AuthService } from './auth/auth.service';
 import { MatriculasService } from './matriculas/matriculas.service';
-
-// Controllers
 import { MateriasController } from './materias/materias.controller';
-import { AuthController } from './auth/auth.controller';
 import { MatriculasController } from './matriculas/matriculas.controller';
+import { UsuariosController } from './usuarios/usuarios.controller'; 
+import { GruposModule } from './grupos/grupos.module';
 
 @Module({
   imports: [
-    // Configura o carregamento do .env (local) e variáveis da Vercel (produção)
+    // 1. Configuração Global de Variáveis de Ambiente
     ConfigModule.forRoot({ 
       isGlobal: true,
-      envFilePath: '.env', // Garante que ignore se não existir em produção
+      envFilePath: '.env',
+      cache: true,
     }),
     
+    // 2. JWT Global - Centraliza a Secret para evitar 401 por divergência
     JwtModule.registerAsync({
+      global: true, 
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
-        global: true,
-        // ✅ AJUSTE 1: Prioriza a variável do painel da Vercel. 
-        // O fallback deve ser apenas para desenvolvimento.
-        secret: configService.get<string>('JWT_SECRET'),
+      useFactory: (config: ConfigService) => ({
+        secret: config.get<string>('JWT_SECRET'),
         signOptions: { expiresIn: '8h' },
       }),
     }),
     
+    // 3. Conexão com Banco de Dados (Neon/Postgres)
     TypeOrmModule.forRootAsync({
-      imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
+      useFactory: (config: ConfigService) => ({
         type: 'postgres',
-        // ✅ AJUSTE 2: Verifica se a URL do banco existe antes de tentar conectar
-        url: configService.get<string>('DATABASE_URL'),
-        entities: [Materia, Usuario, Aluno, Inscricao], 
-        synchronize: process.env.NODE_ENV !== 'production', // ✅ AJUSTE 3: Evita mudanças acidentais em prod
-        ssl: {
-          rejectUnauthorized: false, // Necessário para a maioria dos DBs cloud (Neon/Supabase)
-        },
+        url: config.get<string>('DATABASE_URL'),
+        entities: [Materia, Usuario, Aluno, Inscricao, Grupo], 
+        autoLoadEntities: true, 
+        synchronize: false, // Segurança: Não altera o banco automaticamente
+        ssl: { rejectUnauthorized: false },
       }),
     }),
-    TypeOrmModule.forFeature([Materia, Usuario, Aluno, Inscricao]),
+
+    // 4. Repositórios para injeção nos Services
+    TypeOrmModule.forFeature([Materia, Usuario, Aluno, Inscricao, Grupo]),
+    
+    // 5. Módulos Externos
+    GruposModule, 
   ],
-  controllers: [AppController, MateriasController, AuthController, MatriculasController],
-  providers: [AppService, MateriasService, AuthService, MatriculasService],
+  controllers: [
+    AppController, 
+    MateriasController, 
+    AuthController, 
+    MatriculasController,
+    UsuariosController 
+  ],
+  providers: [
+    AppService, 
+    MateriasService, 
+    AuthService, 
+    MatriculasService,
+    JwtStrategy,
+    // Ordem dos Guards: Primeiro Autentica (JWT), depois Autoriza (Roles)
+    { 
+      provide: APP_GUARD, 
+      useClass: JwtAuthGuard 
+    },
+    { 
+      provide: APP_GUARD, 
+      useClass: RolesGuard 
+    },
+  ],
 })
 export class AppModule {}

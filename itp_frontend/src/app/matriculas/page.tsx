@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, useEffect, useMemo } from 'react';
-import axios from 'axios';
+// ✅ IMPORTANTE: Instância configurada com porta 3001 e Credentials
+import api from '@/services/api'; 
 import * as XLSX from 'xlsx';
 import { 
   Search, Download, UserCheck, ChevronDown, Filter,
@@ -13,97 +14,89 @@ export default function GestaoMatriculas() {
   const [candidatoSelecionado, setCandidatoSelecionado] = useState<any>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [loading, setLoading] = useState(true);
   
   // Estados de Filtro
   const [filtroNome, setFiltroNome] = useState('');
   const [filtroCidade, setFiltroCidade] = useState('');
   const [filtroBairro, setFiltroBairro] = useState('');
-  const [filtroCurso, setFiltroCurso] = useState('');
   const [filtroStatus, setFiltroStatus] = useState('');
 
-  useEffect(() => { fetchMatriculas(); }, []);
-
+  // ✅ Busca sincronizada com o Backend ITP (Porta 3001)
   const fetchMatriculas = async () => {
-  try {
-    const response = await axios.get('http://localhost:3000/matriculas');
-    const dados = Array.isArray(response.data) ? response.data : [];
-
-    if (dados.length > 0) {
-      const primeiro = dados[0];
-      console.log("--- 🕵️ ANALISADOR DE DADOS ---");
-      console.log("Objeto completo:", primeiro);
-      console.log("Cidade existe?", 'cidade' in primeiro);
-      console.log("Bairro existe?", 'bairro' in primeiro);
-      console.log("Valor da Cidade:", primeiro.cidade);
-      
-      // ALERTA VISUAL NO BROWSER PARA TESTE RÁPIDO
-      if (!primeiro.cidade && !primeiro.Cidade) {
-        console.warn("⚠️ ALERTA: O Backend enviou o aluno, mas os campos de localização vieram NULOS.");
-      }
+    setLoading(true);
+    try {
+      const response = await api.get('/matriculas');
+      const dados = Array.isArray(response.data) ? response.data : [];
+      setMatriculas(dados);
+    } catch (error: any) {
+      console.error("❌ Erro na requisição de matrículas:", error.response?.status || error.message);
+    } finally {
+      setLoading(false);
     }
+  };
 
-    setMatriculas(dados);
-  } catch (error) {
-    console.error("❌ Erro na requisição:", error);
-  }
-};
+  useEffect(() => { 
+    fetchMatriculas(); 
+  }, []);
 
-  // 1. FILTRO SÍNCRONO: Bairros dependem da Cidade filtrada
+  // FILTRO SÍNCRONO: Bairros dependem da Cidade selecionada
   const bairrosDisponiveis = useMemo(() => {
     const listaBase = filtroCidade 
       ? matriculas.filter(m => (m.cidade || m.Cidade) === filtroCidade) 
       : matriculas;
-    return [...new Set(listaBase.map(m => m.bairro || m.Bairro))].filter(Boolean).sort();
+    return [...new Set(listaBase.map(m => m.bairro || m.Bairro))].filter(Boolean).sort() as string[];
   }, [filtroCidade, matriculas]);
 
-  // Contadores para os KPIs
-  const stats = {
+  // KPIs dinâmicos com useMemo
+  const stats = useMemo(() => ({
     total: matriculas.length,
     pendentes: matriculas.filter(m => m.status_matricula === 'Pendente').length,
     aguardandoLgpd: matriculas.filter(m => m.status_matricula === 'Aguardando Assinatura LGPD').length,
     emValidacao: matriculas.filter(m => m.status_matricula === 'Em Validação').length,
     matriculados: matriculas.filter(m => m.status_matricula === 'Matriculado').length,
-  };
+  }), [matriculas]);
 
-  // Lógica de Filtro em tempo real (Normalizando para evitar erros de undefined)
-  const dadosFiltrados = matriculas.filter(m => {
-    const valNome = (m.nome_completo || '').toLowerCase();
-    const valCidade = m.cidade || m.Cidade || '';
-    const valBairro = m.bairro || m.Bairro || '';
-    const valCurso = (m.cursos_desejados || '').toLowerCase();
-    const valStatus = m.status_matricula || '';
+  // Lógica de Filtro Case-Insensitive
+  const dadosFiltrados = useMemo(() => {
+    return matriculas.filter(m => {
+      const valNome = (m.nome_completo || '').toLowerCase();
+      const valCidade = (m.cidade || m.Cidade || '');
+      const valBairro = (m.bairro || m.Bairro || '');
+      const valStatus = m.status_matricula || '';
 
-    const matchNome = valNome.includes(filtroNome.toLowerCase());
-    const matchCidade = filtroCidade === '' || valCidade === filtroCidade;
-    const matchBairro = filtroBairro === '' || valBairro === filtroBairro;
-    const matchCurso = filtroCurso === '' || valCurso.includes(filtroCurso.toLowerCase());
-    const matchStatus = filtroStatus === '' || valStatus === filtroStatus;
-    
-    return matchNome && matchCidade && matchBairro && matchCurso && matchStatus;
-  });
+      return (
+        valNome.includes(filtroNome.toLowerCase()) &&
+        (filtroCidade === '' || valCidade === filtroCidade) &&
+        (filtroBairro === '' || valBairro === filtroBairro) &&
+        (filtroStatus === '' || valStatus === filtroStatus)
+      );
+    });
+  }, [matriculas, filtroNome, filtroCidade, filtroBairro, filtroStatus]);
 
-  const handleExport = (formato: 'xlsx' | 'csv' | 'json' | 'xml') => {
+  const handleExport = (formato: 'xlsx' | 'csv' | 'json') => {
     const dataToExport = dadosFiltrados.map(m => ({
       ID: m.id,
       Nome: m.nome_completo,
       CPF: m.cpf,
       Cidade: m.cidade || m.Cidade || 'N/I',
       Bairro: m.bairro || m.Bairro || 'N/I',
-      Curso: m.cursos_desejados,
+      Curso: m.cursos_desejados || 'Não informado',
       Status: m.status_matricula,
       LGPD: m.lgpd_aceito ? 'Sim' : 'Não',
-      Data_Inscricao: new Date(m.createdAt || m.created_at).toLocaleDateString('pt-BR')
+      Data_Inscricao: m.createdAt || m.created_at ? new Date(m.createdAt || m.created_at).toLocaleDateString('pt-BR') : '---'
     }));
 
     if (formato === 'json') {
       const blob = new Blob([JSON.stringify(dataToExport, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a'); a.href = url; a.download = `matriculas_itp_${new Date().getTime()}.json`; a.click();
+      const a = document.createElement('a'); a.href = url; 
+      a.download = `matriculas_itp_${Date.now()}.json`; a.click();
     } else {
       const ws = XLSX.utils.json_to_sheet(dataToExport);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Dados");
-      XLSX.writeFile(wb, `matriculas_itp.${formato}`);
+      XLSX.writeFile(wb, `matriculas_itp_${Date.now()}.${formato}`);
     }
     setShowExportMenu(false);
   };
@@ -136,7 +129,7 @@ export default function GestaoMatriculas() {
           <div className="relative">
             <button 
               onClick={() => setShowExportMenu(!showExportMenu)}
-              className="flex items-center gap-2 px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest text-white shadow-lg transition-all hover:scale-105 bg-purple-600">
+              className="flex items-center gap-2 px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest text-white shadow-lg bg-purple-600 hover:scale-105 transition-all">
               <Download size={16} /> Exportar Base <ChevronDown size={14} className={showExportMenu ? 'rotate-180' : ''}/>
             </button>
             
@@ -172,7 +165,7 @@ export default function GestaoMatriculas() {
           <FilterGroup label="Cidade">
             <select value={filtroCidade} className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 text-xs font-bold text-gray-700 uppercase outline-none" onChange={(e) => { setFiltroCidade(e.target.value); setFiltroBairro(''); }}>
               <option value="">Todas</option>
-              {[...new Set(matriculas.map(m => m.cidade || m.Cidade))].filter(Boolean).sort().map(c => <option key={c} value={c}>{c}</option>)}
+              {[...new Set(matriculas.map(m => m.cidade || m.Cidade))].filter(Boolean).sort().map((c: any) => <option key={c} value={c}>{c}</option>)}
             </select>
           </FilterGroup>
 
@@ -194,7 +187,7 @@ export default function GestaoMatriculas() {
           </FilterGroup>
 
           <div className="flex items-center pb-1">
-            <button onClick={() => {setFiltroNome(''); setFiltroCidade(''); setFiltroBairro(''); setFiltroCurso(''); setFiltroStatus('');}}
+            <button onClick={() => {setFiltroNome(''); setFiltroCidade(''); setFiltroBairro(''); setFiltroStatus('');}}
               className="flex items-center gap-2 text-red-500 font-black text-[10px] uppercase hover:underline">
               <FilterX size={14} /> Limpar
             </button>
@@ -215,17 +208,18 @@ export default function GestaoMatriculas() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {dadosFiltrados.length > 0 ? (
-                  dadosFiltrados.map((m) => {
+                {loading ? (
+                   <tr><td colSpan={5} className="py-10 text-center text-gray-400 font-black uppercase text-xs animate-pulse italic">Sincronizando com Servidor ITP...</td></tr>
+                ) : dadosFiltrados.length > 0 ? (
+                  dadosFiltrados.map((m, idx) => {
                     const statusStyle = getStatusStyle(m.status_matricula);
                     return (
-                      <tr key={m.id} className="hover:bg-purple-50/30 transition-all group">
+                      <tr key={m.id || idx} className="hover:bg-purple-50/30 transition-all group">
                         <td className="px-6 py-4">
                           <div className="font-black text-gray-800 uppercase text-xs">{m.nome_completo}</div>
                           <div className="text-[10px] text-gray-400 font-bold">{m.cpf}</div>
                         </td>
                         <td className="px-6 py-4">
-                          {/* CORREÇÃO: Lê cidade/bairro em minúsculo ou maiúsculo */}
                           <div className="font-bold text-gray-700 uppercase text-[11px]">
                             {m.cidade || m.Cidade || "N/I"}
                           </div>
@@ -234,7 +228,7 @@ export default function GestaoMatriculas() {
                           </div>
                         </td>
                         <td className="px-6 py-4 text-center font-mono text-[11px] font-bold text-gray-600">
-                          {new Date(m.createdAt || m.created_at).toLocaleDateString('pt-BR')}
+                          {m.createdAt || m.created_at ? new Date(m.createdAt || m.created_at).toLocaleDateString('pt-BR') : '---'}
                         </td>
                         <td className="px-6 py-4 text-center">
                           <span className="px-3 py-1.5 rounded-lg text-[9px] font-black uppercase shadow-sm" style={{ backgroundColor: statusStyle.bg, color: statusStyle.text }}>
@@ -262,7 +256,13 @@ export default function GestaoMatriculas() {
           </div>
         </div>
       </div>
-      {isModalOpen && candidatoSelecionado && <DossieCandidato aluno={candidatoSelecionado} onClose={() => setIsModalOpen(false)} onSuccess={fetchMatriculas} />}
+      {isModalOpen && candidatoSelecionado && (
+        <DossieCandidato 
+          aluno={candidatoSelecionado} 
+          onClose={() => setIsModalOpen(false)} 
+          onSuccess={fetchMatriculas} 
+        />
+      )}
     </div>
   );
 }

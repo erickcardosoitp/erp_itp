@@ -1,17 +1,16 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Força o Next.js a resolver pacotes a partir da pasta atual
-  serverExternalPackages: ["tailwindcss", "postcss", "autoprefixer"],
+  // ✅ Remova o serverExternalPackages: o Tailwind v4 precisa ser processado internamente
   
-  // Se estiver usando Turbopack, tentamos isolar a raiz
+  // ✅ standalone é ótimo para o deploy futuro na Vercel/Docker
+  output: 'standalone',
+
+  // ✅ Configurações experimentais padrão (limpas)
   experimental: {
-    // No Next 15/16, isso ajuda a evitar que ele suba para o diretório pai
+    // Se você tiver problemas com o monorepo (pasta pai), mantenha o externalDir como false
     externalDir: false,
   },
-  
-  // Garante que o output não tente buscar arquivos fora do build
-  output: 'standalone',
 };
 
 export default nextConfig;

@@ -3,8 +3,11 @@ import {
   PrimaryGeneratedColumn, 
   Column, 
   CreateDateColumn, 
-  UpdateDateColumn 
+  UpdateDateColumn,
+  OneToOne,
+  JoinColumn
 } from 'typeorm';
+import { Aluno } from '../alunos/aluno.entity';
 
 export enum StatusMatricula {
   PENDENTE = 'Pendente',
@@ -122,6 +125,11 @@ export class Inscricao {
 
   @Column({ name: 'url_termo_lgpd', nullable: true }) 
   url_termo_lgpd: string;
+
+  // RELACIONAMENTO: Aponta para o aluno que foi gerado a partir desta inscrição
+  @OneToOne(() => Aluno, { nullable: true })
+  @JoinColumn({ name: 'aluno_id' })
+  aluno: Aluno;
 
   @CreateDateColumn({ name: 'created_at' }) 
   createdAt: Date;
