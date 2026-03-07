@@ -10,7 +10,7 @@
     "build:backend": "nest build",
     "start": "node dist/main.js",
     "build:frontend": "cd itp_frontend && npm run build",
-    "vercel-build": "npm run build:backend && npm run build:frontend"
+    "vercel-build": "npm run build -w itp_frontend"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.0",

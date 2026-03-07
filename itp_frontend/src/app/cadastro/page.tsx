@@ -32,7 +32,7 @@ export default function CadastroBasicoSistemico() {
   useEffect(() => { setIsMounted(true); }, []);
 
   // --- MOCK DATA ESTRUTURADO ---
-  const mockData: Record<TabId, MockItem[]> = {
+  const mockData: Record<TabId, MockItem[]> = useMemo(() => ({
     funcionarios: [
       { id: 1, nome: 'Dr. Ricardo Silva', categoria: 'Professor', subtexto: 'Robótica Avançada', status: 'Ativo', unidade: 'Rio de Janeiro' },
       { id: 2, nome: 'Ana Paula Souza', categoria: 'Coordenação', subtexto: 'Pedagógico Central', status: 'Ativo', unidade: 'Madureira' },
@@ -47,7 +47,7 @@ export default function CadastroBasicoSistemico() {
     usuarios: [
       { id: 901, nome: 'admin_itp', categoria: 'Root', subtexto: 'Acesso Total', status: 'Ativo', unidade: 'Sede' },
     ],
-  };
+  }), []);
 
   // Lógica de Filtro Síncrono
   const dadosFiltrados = useMemo(() => {
