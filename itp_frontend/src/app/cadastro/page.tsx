@@ -57,7 +57,7 @@ export default function CadastroBasicoSistemico() {
       const matchUnidade = filtroUnidade === '' || item.unidade === filtroUnidade;
       return matchBusca && matchStatus && matchUnidade;
     });
-  }, [activeTab, filtroBusca, filtroStatus, filtroUnidade]);
+  }, [activeTab, filtroBusca, filtroStatus, filtroUnidade, mockData]);
 
   if (!isMounted) return <div className="min-h-screen bg-[#F8FAFC]" />;
 
