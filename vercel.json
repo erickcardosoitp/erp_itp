@@ -5,5 +5,11 @@
       "src": "itp_frontend/package.json",
       "use": "@vercel/next"
     }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/itp_frontend/$1"
+    }
   ]
 }
