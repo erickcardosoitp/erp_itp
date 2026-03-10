@@ -5,10 +5,7 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const monorepoRoot = path.resolve(__dirname, '../..');
-
 const nextConfig = {
-  outputFileTracingRoot: monorepoRoot,
   experimental: {
     turbo: {
       resolveAlias: {
@@ -31,10 +28,9 @@ const nextConfig = {
   transpilePackages: [],
 
   webpack: (config) => {
-    // npm workspaces hoists packages to the monorepo root node_modules
-    config.resolve.modules.push(path.resolve(monorepoRoot, 'node_modules'));
-    // Follow symlinks (needed for Vercel where node_modules is symlinked)
-    config.resolve.symlinks = true;
+    // Força uma única instância de react/react-dom (evita conflito com root node_modules)
+    config.resolve.alias['react'] = path.resolve(__dirname, 'node_modules/react');
+    config.resolve.alias['react-dom'] = path.resolve(__dirname, 'node_modules/react-dom');
     return config;
   },
 
