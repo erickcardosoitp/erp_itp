@@ -1,6 +1,7 @@
 {
   "version": 2,
-  "installCommand": "cd ../.. && npm install && rm -rf apps/frontend/node_modules && ln -s ../../node_modules apps/frontend/node_modules",
+  "installCommand": "mv ../../package.json /tmp/root-pkg.json && npm install --legacy-peer-deps; RC=$?; mv /tmp/root-pkg.json ../../package.json; exit $RC",
+  "buildCommand": "node_modules/.bin/next build",
   "env": {
     "BACKEND_INTERNAL_URL": "https://api.itp.institutotiapretinha.org",
     "APP_URL": "https://itp.institutotiapretinha.org"
