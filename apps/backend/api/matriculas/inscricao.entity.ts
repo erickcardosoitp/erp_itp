@@ -14,6 +14,8 @@ export enum StatusMatricula {
   INCOMPLETO = 'Incompleto',
   AGUARDANDO_LGPD = 'Aguardando Assinatura LGPD',
   EM_VALIDACAO = 'Em Validação',
+  AGUARDANDO_DOCUMENTOS = 'Aguardando Documentos',
+  DOCUMENTOS_ENVIADOS = 'Documentos Enviados',
   MATRICULADO = 'Matriculado',
   DESISTENTE = 'Desistente',
   CANCELADA = 'Cancelada'
@@ -114,8 +116,14 @@ export class Inscricao {
   @Column({ name: 'data_assinatura_lgpd', type: 'timestamp', nullable: true }) 
   data_assinatura_lgpd: Date;
 
+  @Column({ name: 'data_inscricao', type: 'timestamp', nullable: true })
+  data_inscricao: Date;
+
   @Column({ name: 'status_matricula', type: 'varchar', default: StatusMatricula.PENDENTE })
   status_matricula: string;
+
+  @Column({ name: 'origem_inscricao', type: 'varchar', nullable: true, default: 'Manual' })
+  origem_inscricao: string;
 
   @Column({ name: 'motivo_status', type: 'text', nullable: true })
   motivo_status: string;
@@ -125,6 +133,22 @@ export class Inscricao {
 
   @Column({ name: 'url_termo_lgpd', nullable: true }) 
   url_termo_lgpd: string;
+
+  @Column({ name: 'lgpd_token', type: 'varchar', nullable: true })
+  lgpd_token: string | null;
+
+  @Column({ name: 'lgpd_token_expires_at', type: 'timestamp', nullable: true })
+  lgpd_token_expires_at: Date | null;
+
+  @Column({ name: 'lgpd_ip', type: 'varchar', nullable: true })
+  lgpd_ip: string | null;
+
+  /** Token para a página pública de envio de documentos */
+  @Column({ name: 'doc_token', type: 'varchar', nullable: true, unique: true })
+  doc_token: string | null;
+
+  @Column({ name: 'doc_token_expires_at', type: 'timestamp', nullable: true })
+  doc_token_expires_at: Date | null;
 
   // RELACIONAMENTO: Aponta para o aluno que foi gerado a partir desta inscrição
   @OneToOne(() => Aluno, { nullable: true })

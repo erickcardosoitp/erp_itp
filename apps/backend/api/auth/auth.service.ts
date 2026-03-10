@@ -120,6 +120,23 @@ export class AuthService {
   }
 
   /**
+   * PERFIL: Retorna os dados completos do usuário pelo email.
+   */
+  async getProfile(email: string) {
+    const usuario = await this.usuarioRepository.findOne({
+      where: { email: email.toLowerCase().trim() },
+      relations: ['grupo'],
+    });
+
+    if (!usuario) {
+      throw new NotFoundException('Usuário não encontrado.');
+    }
+
+    const { password, ...usuarioSemSenha } = usuario;
+    return usuarioSemSenha;
+  }
+
+  /**
    * ATUALIZAÇÃO DE PERFIL: Nome e Foto.
    */
   async updateProfile(email: string, data: { nome?: string; fotoUrl?: string }) {

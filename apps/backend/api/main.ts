@@ -13,19 +13,24 @@ export const setupApp = async (app: NestExpressApplication) => {
   app.use(cookieParser());
   app.setGlobalPrefix('api');
 
-  app.useStaticAssets(join(process.cwd(), 'public'), {
-    prefix: '/public/',
-  });
+  app.useStaticAssets(join(__dirname, '..', '..', 'public'));
+
+  const isDev = process.env.NODE_ENV !== 'production';
 
   app.enableCors({
-    origin: [
-      'https://itp.institutotiapretinha.org',
-      'https://api.itp.institutotiapretinha.org',
-      'https://institutotiapretinha.org',
-      'http://localhost:3000',
-      'http://127.0.0.1:3000',
-      'http://localhost:3001',
-    ],
+    origin: isDev
+      ? (origin: string | undefined, cb: (err: Error | null, allow: boolean) => void) => {
+          if (!origin || /^https?:\/\/(localhost|127\.0\.0\.1|192\.168\.|10\.)/.test(origin)) {
+            cb(null, true);
+          } else {
+            cb(new Error('CORS bloqueado: ' + origin), false);
+          }
+        }
+      : [
+          'https://itp.institutotiapretinha.org',
+          'https://api.itp.institutotiapretinha.org',
+          'https://institutotiapretinha.org',
+        ],
     credentials: true,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     allowedHeaders: [

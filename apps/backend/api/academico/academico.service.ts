@@ -1,0 +1,364 @@
+import { Injectable, NotFoundException, ConflictException, BadRequestException, Logger } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Curso } from './entities/curso.entity';
+import { Professor } from './entities/professor.entity';
+import { Turma } from './entities/turma.entity';
+import { TurmaAluno } from './entities/turma-aluno.entity';
+import { GradeHoraria } from './entities/grade-horaria.entity';
+import { DiarioAcademico } from './entities/diario.entity';
+import { Aluno } from '../alunos/aluno.entity';
+
+@Injectable()
+export class AcademicoService {
+  private readonly logger = new Logger(AcademicoService.name);
+
+  constructor(
+    @InjectRepository(Curso)           private cursoRepo: Repository<Curso>,
+    @InjectRepository(Professor)       private professorRepo: Repository<Professor>,
+    @InjectRepository(Turma)           private turmaRepo: Repository<Turma>,
+    @InjectRepository(GradeHoraria)    private gradeRepo: Repository<GradeHoraria>,
+    @InjectRepository(DiarioAcademico) private diarioRepo: Repository<DiarioAcademico>,
+    @InjectRepository(Aluno)           private alunoRepo: Repository<Aluno>,
+    @InjectRepository(TurmaAluno)      private turmaAlunoRepo: Repository<TurmaAluno>,
+  ) {}
+
+  // ── UTILITÁRIOS ───────────────────────────────────────────────────────────
+
+  /** Gera CRS-YYYYMMX onde X é sequência do mês */
+  private async gerarCodigoCurso(): Promise<string> {
+    const now = new Date();
+    const base = `CRS-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const existentes = await this.cursoRepo
+      .createQueryBuilder('c')
+      .where('c.codigo LIKE :base', { base: `${base}%` })
+      .getCount();
+    return `${base}${existentes + 1}`;
+  }
+
+  /** Gera TRM-[SIGLA]-YYYYMMX onde X é sequência do mês para aquela sigla */
+  private async gerarCodigoTurma(siglaCurso: string): Promise<string> {
+    const now = new Date();
+    const base = `TRM-${siglaCurso.toUpperCase()}-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const existentes = await this.turmaRepo
+      .createQueryBuilder('t')
+      .where('t.codigo LIKE :base', { base: `${base}%` })
+      .getCount();
+    return `${base}${existentes + 1}`;
+  }
+
+  // ── CURSOS ────────────────────────────────────────────────────────────────
+
+  listarCursos() {
+    this.logger.log('Listando cursos');
+    return this.cursoRepo.find({ order: { nome: 'ASC' } });
+  }
+
+  async criarCurso(dto: Partial<Curso>) {
+    this.logger.log(`Criando curso: ${dto.nome} | sigla: ${dto.sigla}`);
+    if (!dto.nome || !dto.sigla) throw new BadRequestException('Nome e sigla são obrigatórios');
+
+    const existente = await this.cursoRepo.findOne({ where: { sigla: dto.sigla.toUpperCase() } });
+    if (existente) throw new ConflictException(`Já existe um curso com a sigla ${dto.sigla.toUpperCase()}`);
+
+    const codigo = await this.gerarCodigoCurso();
+    const curso = this.cursoRepo.create({ ...dto, sigla: dto.sigla.toUpperCase(), codigo });
+    const salvo = await this.cursoRepo.save(curso);
+    this.logger.log(`Curso criado: ${salvo.codigo} - ${salvo.nome}`);
+    return salvo;
+  }
+
+  async editarCurso(id: string, dto: Partial<Curso>) {
+    this.logger.log(`Editando curso id=${id}`);
+    const curso = await this.cursoRepo.findOneBy({ id });
+    if (!curso) throw new NotFoundException('Curso não encontrado');
+    if (dto.sigla) dto.sigla = dto.sigla.toUpperCase();
+    await this.cursoRepo.update(id, dto);
+    return this.cursoRepo.findOneByOrFail({ id });
+  }
+
+  async deletarCurso(id: string) {
+    this.logger.warn(`Deletando curso id=${id}`);
+    const turmasVinculadas = await this.turmaRepo.count({ where: { curso_id: id } });
+    if (turmasVinculadas > 0) throw new ConflictException('Não é possível excluir um curso com turmas vinculadas');
+    await this.cursoRepo.delete(id);
+  }
+
+  // ── PROFESSORES ───────────────────────────────────────────────────────────
+
+  listarProfessores() {
+    this.logger.log('Listando professores');
+    return this.professorRepo.find({ order: { nome: 'ASC' } });
+  }
+
+  async criarProfessor(dto: Partial<Professor>) {
+    this.logger.log(`Criando professor: ${dto.nome}`);
+    if (!dto.nome) throw new BadRequestException('Nome é obrigatório');
+    const prof = this.professorRepo.create(dto);
+    const salvo = await this.professorRepo.save(prof);
+    this.logger.log(`Professor criado: ${salvo.id} - ${salvo.nome}`);
+    return salvo;
+  }
+
+  async editarProfessor(id: string, dto: Partial<Professor>) {
+    this.logger.log(`Editando professor id=${id}`);
+    const prof = await this.professorRepo.findOneBy({ id });
+    if (!prof) throw new NotFoundException('Professor não encontrado');
+    await this.professorRepo.update(id, dto);
+    return this.professorRepo.findOneByOrFail({ id });
+  }
+
+  async deletarProfessor(id: string) {
+    this.logger.warn(`Deletando professor id=${id}`);
+    await this.professorRepo.delete(id);
+  }
+
+  // ── TURMAS ────────────────────────────────────────────────────────────────
+
+  listarTurmas() {
+    this.logger.log('Listando turmas');
+    return this.turmaRepo.find({ order: { nome: 'ASC' } });
+  }
+
+  async criarTurma(dto: Partial<Turma>) {
+    this.logger.log(`Criando turma: ${dto.nome} | curso_id=${dto.curso_id} | professor_id=${dto.professor_id}`);
+    if (!dto.nome) throw new BadRequestException('Nome da turma é obrigatório');
+    if (!dto.curso_id) throw new BadRequestException('É obrigatório selecionar um curso para a turma');
+
+    const curso = await this.cursoRepo.findOneBy({ id: dto.curso_id });
+    if (!curso) throw new NotFoundException('Curso não encontrado');
+
+    if (dto.professor_id) {
+      const professor = await this.professorRepo.findOneBy({ id: dto.professor_id });
+      if (!professor) throw new NotFoundException('Professor não encontrado');
+    }
+
+    const codigo = await this.gerarCodigoTurma(curso.sigla);
+    const turma = this.turmaRepo.create({ ...dto, codigo });
+    const salva = await this.turmaRepo.save(turma);
+    this.logger.log(`Turma criada: ${salva.codigo} - ${salva.nome}`);
+    return salva;
+  }
+
+  async editarTurma(id: string, dto: Partial<Turma>) {
+    this.logger.log(`Editando turma id=${id}`);
+    const turma = await this.turmaRepo.findOneBy({ id });
+    if (!turma) throw new NotFoundException('Turma não encontrada');
+    await this.turmaRepo.update(id, dto);
+    return this.turmaRepo.findOneByOrFail({ id });
+  }
+
+  async deletarTurma(id: string) {
+    this.logger.warn(`Deletando turma id=${id}`);
+    const alunosNaTurma = await this.turmaAlunoRepo.count({ where: { turma_id: id, status: 'ativo' } });
+    if (alunosNaTurma > 0) throw new ConflictException('Não é possível excluir uma turma com alunos ativos');
+    await this.turmaRepo.delete(id);
+  }
+
+  // ── GRADE HORÁRIA ─────────────────────────────────────────────────────────
+
+  listarGrade() {
+    this.logger.log('Listando grade horária');
+    return this.gradeRepo.find({ order: { dia_semana: 'ASC', horario_inicio: 'ASC' } });
+  }
+
+  async criarCardGrade(dto: Partial<GradeHoraria>) {
+    this.logger.log(`Criando card grade: dia=${dto.dia_semana} ${dto.horario_inicio}-${dto.horario_fim} turma=${dto.turma_id}`);
+    if (dto.dia_semana === undefined || dto.dia_semana === null) throw new BadRequestException('Dia da semana é obrigatório');
+    if (!dto.horario_inicio) throw new BadRequestException('Hora início é obrigatória');
+    if (!dto.horario_fim)    throw new BadRequestException('Hora fim é obrigatória');
+    if (!dto.turma_id)       throw new BadRequestException('Turma é obrigatória');
+
+    // Validar que a turma existe
+    const turma = await this.turmaRepo.findOneBy({ id: dto.turma_id });
+    if (!turma) throw new NotFoundException('Turma não encontrada');
+
+    // Buscar dados da turma para preencher automaticamente
+    let nomeCurso = dto.nome_curso;
+    let nomeProfessor = dto.nome_professor;
+    let professorId = dto.professor_id;
+
+    if (turma.curso_id) {
+      const curso = await this.cursoRepo.findOneBy({ id: turma.curso_id });
+      if (curso) nomeCurso = curso.nome;
+    }
+    if (turma.professor_id) {
+      const prof = await this.professorRepo.findOneBy({ id: turma.professor_id });
+      if (prof) { nomeProfessor = prof.nome; professorId = prof.id; }
+    }
+
+    const card = this.gradeRepo.create({
+      ...dto,
+      nome_curso: nomeCurso,
+      nome_professor: nomeProfessor,
+      professor_id: professorId,
+    });
+    const salvo = await this.gradeRepo.save(card);
+    this.logger.log(`Card grade criado: ${salvo.id}`);
+    return salvo;
+  }
+
+  async moverCardGrade(id: string, dto: Partial<GradeHoraria>) {
+    this.logger.log(`Movendo card grade id=${id}`);
+    await this.gradeRepo.update(id, dto);
+    return this.gradeRepo.findOneByOrFail({ id });
+  }
+
+  async deletarCardGrade(id: string) {
+    this.logger.warn(`Deletando card grade id=${id}`);
+    await this.gradeRepo.delete(id);
+  }
+
+  // ── ALUNOS ────────────────────────────────────────────────────────────────
+
+  async listarAlunos(filtros: any) {
+    this.logger.log(`Listando alunos filtros=${JSON.stringify(filtros)}`);
+    let qb = this.alunoRepo.createQueryBuilder('a').where('a.ativo = true');
+    if (filtros.nome)   qb = qb.andWhere('LOWER(a.nome_completo) LIKE :nome', { nome: `%${filtros.nome.toLowerCase()}%` });
+    if (filtros.cpf)    qb = qb.andWhere('a.cpf LIKE :cpf', { cpf: `%${filtros.cpf.replace(/\D/g, '')}%` });
+    if (filtros.cidade) qb = qb.andWhere('a.cidade = :cidade', { cidade: filtros.cidade });
+    if (filtros.turno)  qb = qb.andWhere('a.turno_escolar = :turno', { turno: filtros.turno });
+    if (filtros.curso)  qb = qb.andWhere('LOWER(a.cursos_matriculados) LIKE :curso', { curso: `%${filtros.curso.toLowerCase()}%` });
+    return qb.orderBy('a.nome_completo', 'ASC').getMany();
+  }
+
+  async fichaAluno(id: string) {
+    this.logger.log(`Carregando ficha do aluno id=${id}`);
+    const aluno = await this.alunoRepo.findOneBy({ id });
+    if (!aluno) throw new NotFoundException('Aluno não encontrado');
+
+    const [frequencia, historico, turmaAluno] = await Promise.all([
+      this.diarioRepo.find({ where: { aluno_id: id, tipo: 'Presença' }, order: { data: 'DESC' } }),
+      this.diarioRepo.find({ where: { aluno_id: id }, order: { created_at: 'DESC' } }),
+      this.turmaAlunoRepo.findOne({ where: { aluno_id: id, status: 'ativo' } }),
+    ]);
+
+    let turmaInfo: Turma | null = null;
+    if (turmaAluno?.turma_id) {
+      turmaInfo = await this.turmaRepo.findOneBy({ id: turmaAluno.turma_id });
+    }
+
+    const totalPresencas = frequencia.filter(f => f.descricao?.toLowerCase().includes('presente')).length;
+    const totalFaltas    = frequencia.filter(f => f.descricao?.toLowerCase().includes('falta') || !f.descricao?.toLowerCase().includes('presente')).length;
+
+    this.logger.log(`Ficha do aluno ${aluno.nome_completo}: ${historico.length} registros no diário`);
+    return { aluno, frequencia, historico, turmaInfo, totalPresencas, totalFaltas };
+  }
+
+  async criarAluno(dto: Partial<Aluno>) {
+    if (!dto.nome_completo) throw new BadRequestException('Nome completo é obrigatório');
+    const hoje = new Date();
+    const anoStr = String(hoje.getFullYear());
+    const mesStr = String(hoje.getMonth() + 1).padStart(2, '0');
+    const diaStr = String(hoje.getDate()).padStart(2, '0');
+    const inicioHoje = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate(), 0, 0, 0);
+    const fimHoje = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate(), 23, 59, 59);
+    const contaHoje = await this.alunoRepo
+      .createQueryBuilder('a')
+      .where('a.data_matricula BETWEEN :ini AND :fim', { ini: inicioHoje, fim: fimHoje })
+      .getCount();
+    const numero_matricula = `ITP-${anoStr}-${mesStr}${diaStr}${contaHoje + 1}`;
+    const cpfLimpo = dto.cpf ? dto.cpf.replace(/\D/g, '') : undefined;
+    if (cpfLimpo) {
+      const duplicado = await this.alunoRepo.findOneBy({ cpf: cpfLimpo });
+      if (duplicado) throw new ConflictException(`CPF já cadastrado para o aluno: ${duplicado.nome_completo}`);
+    }
+    const aluno = this.alunoRepo.create({
+      ...dto,
+      cpf: cpfLimpo,
+      numero_matricula,
+      ativo: true,
+      data_matricula: hoje,
+    });
+    const salvo = await this.alunoRepo.save(aluno);
+    // Adiciona ao backlog automaticamente
+    await this.turmaAlunoRepo.save(this.turmaAlunoRepo.create({ aluno_id: salvo.id, status: 'backlog' }));
+    this.logger.log(`Aluno criado diretamente: ${salvo.numero_matricula} – ${salvo.nome_completo}`);
+    return salvo;
+  }
+
+  async editarAluno(id: string, dto: Partial<Aluno>) {
+    const aluno = await this.alunoRepo.findOneBy({ id });
+    if (!aluno) throw new NotFoundException('Aluno não encontrado');
+    if (dto.cpf) dto.cpf = dto.cpf.replace(/\D/g, '');
+    await this.alunoRepo.update(id, dto);
+    return this.alunoRepo.findOneByOrFail({ id });
+  }
+
+  async deletarAluno(id: string) {
+    const aluno = await this.alunoRepo.findOneBy({ id });
+    if (!aluno) throw new NotFoundException('Aluno não encontrado');
+    await this.alunoRepo.update(id, { ativo: false });
+    return { message: 'Aluno desativado com sucesso' };
+  }
+
+  // ── TURMA ALUNOS / BACKLOG ─────────────────────────────────────────────────
+
+  listarBacklog() {
+    this.logger.log('Listando backlog de alunos');
+    return this.turmaAlunoRepo.find({ where: { status: 'backlog' }, order: { created_at: 'ASC' } });
+  }
+
+  listarAlunosDaTurma(turmaId: string) {
+    this.logger.log(`Listando alunos da turma id=${turmaId}`);
+    return this.turmaAlunoRepo.find({ where: { turma_id: turmaId, status: 'ativo' } });
+  }
+
+  async incluirAlunoNaTurma(alunoId: string, turmaId: string) {
+    this.logger.log(`Incluindo aluno ${alunoId} na turma ${turmaId}`);
+    if (!alunoId || !turmaId) throw new BadRequestException('aluno_id e turma_id são obrigatórios');
+
+    const turma = await this.turmaRepo.findOneBy({ id: turmaId });
+    if (!turma) throw new NotFoundException('Turma não encontrada');
+
+    const registro = await this.turmaAlunoRepo.findOne({ where: { aluno_id: alunoId } });
+    if (registro) {
+      registro.turma_id = turmaId;
+      registro.status = 'ativo';
+      return this.turmaAlunoRepo.save(registro);
+    }
+    return this.turmaAlunoRepo.save(
+      this.turmaAlunoRepo.create({ aluno_id: alunoId, turma_id: turmaId, status: 'ativo' })
+    );
+  }
+
+  async removerAlunoDaTurma(id: string) {
+    this.logger.warn(`Removendo aluno da turma, turma_aluno id=${id}`);
+    await this.turmaAlunoRepo.update(id, { turma_id: null, status: 'backlog' });
+  }
+
+  /** Para uso interno pelo MatriculasService ao criar aluno */
+  adicionarAoBacklog(alunoId: string) {
+    this.logger.log(`Adicionando aluno ${alunoId} ao backlog`);
+    return this.turmaAlunoRepo.save(
+      this.turmaAlunoRepo.create({ aluno_id: alunoId, status: 'backlog' })
+    );
+  }
+
+  // ── DIÁRIO ────────────────────────────────────────────────────────────────
+
+  listarDiario(filtros: any) {
+    this.logger.log(`Listando diário filtros=${JSON.stringify(filtros)}`);
+    let qb = this.diarioRepo.createQueryBuilder('d').orderBy('d.created_at', 'DESC');
+    if (filtros.tipo)     qb = qb.andWhere('d.tipo = :tipo', { tipo: filtros.tipo });
+    if (filtros.aluno_id) qb = qb.andWhere('d.aluno_id = :a', { a: filtros.aluno_id });
+    if (filtros.turma_id) qb = qb.andWhere('d.turma_id = :t', { t: filtros.turma_id });
+    if (filtros.data_ini) qb = qb.andWhere('d.data >= :di', { di: filtros.data_ini });
+    if (filtros.data_fim) qb = qb.andWhere('d.data <= :df', { df: filtros.data_fim });
+    return qb.getMany();
+  }
+
+  async criarRegistroDiario(dto: Partial<DiarioAcademico>) {
+    this.logger.log(`Criando registro diário: tipo=${dto.tipo} aluno=${dto.aluno_id} turma=${dto.turma_id}`);
+    if (!dto.tipo) throw new BadRequestException('Tipo do registro é obrigatório');
+    const registro = this.diarioRepo.create(dto);
+    const salvo = await this.diarioRepo.save(registro);
+    this.logger.log(`Diário criado: ${salvo.id}`);
+    return salvo;
+  }
+
+  async deletarRegistroDiario(id: string) {
+    this.logger.warn(`Deletando registro diário id=${id}`);
+    await this.diarioRepo.delete(id);
+  }
+}

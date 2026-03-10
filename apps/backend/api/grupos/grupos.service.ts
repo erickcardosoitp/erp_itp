@@ -35,4 +35,22 @@ export class GruposService {
     if (!grupo) throw new NotFoundException('Grupo não encontrado.');
     return grupo;
   }
+
+  async atualizar(id: string, dados: Partial<{ nome: string; grupo_permissoes: any }>) {
+    const grupo = await this.grupoRepository.findOneBy({ id });
+    if (!grupo) throw new NotFoundException('Grupo não encontrado.');
+    if (dados.nome) dados.nome = dados.nome.toUpperCase().trim();
+    await this.grupoRepository.update(id, dados);
+    return this.grupoRepository.findOneByOrFail({ id });
+  }
+
+  async deletar(id: string) {
+    const grupo = await this.grupoRepository.findOne({ where: { id }, relations: ['usuarios'] });
+    if (!grupo) throw new NotFoundException('Grupo não encontrado.');
+    if (grupo.usuarios && grupo.usuarios.length > 0) {
+      throw new ConflictException('Não é possível excluir um grupo com usuários vinculados.');
+    }
+    await this.grupoRepository.delete(id);
+    return { message: 'Grupo removido com sucesso.' };
+  }
 }

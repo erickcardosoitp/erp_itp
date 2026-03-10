@@ -25,16 +25,17 @@ export class AuthController {
       // ✅ MUDANÇA CRÍTICA: Renomeado de '@ITP:token' para 'itp_token'
       // Nomes com @ ou : podem causar o erro "argument name is invalid" em alguns sistemas
       res.cookie('itp_token', result.access_token, {
-        httpOnly: false, 
+        httpOnly: true,
         secure: isProd,
         sameSite: 'lax',
-        maxAge: 8 * 60 * 60 * 1000, // 8 horas
+        // Sem maxAge/expires → session cookie: apagado ao fechar o navegador
         path: '/',
       });
 
       this.logger.log(`✅ Login Sucesso: ${email} | Cargo: ${result.usuario.role}`);
       
       return { 
+        access_token: result.access_token,
         usuario: result.usuario, 
         message: 'Login realizado com sucesso' 
       };
