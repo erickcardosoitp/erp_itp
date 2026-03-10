@@ -1,0 +1,7 @@
+{
+  "version": 2,
+  "env": {
+    "BACKEND_INTERNAL_URL": "https://api.itp.institutotiapretinha.org",
+    "APP_URL": "https://itp.institutotiapretinha.org"
+  }
+}

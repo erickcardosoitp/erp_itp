@@ -1,11 +1,4 @@
 {
-  "version": 2,
-  "installCommand": "npm --prefix apps/frontend install",
-  "buildCommand": "npm --prefix apps/frontend run build",
-  "outputDirectory": "apps/frontend/.next",
-  "env": {
-    "BACKEND_INTERNAL_URL": "https://api.itp.institutotiapretinha.org",
-    "APP_URL": "https://itp.institutotiapretinha.org"
-  }
+  "version": 2
 }
 
