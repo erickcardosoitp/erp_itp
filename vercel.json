@@ -1,9 +1,6 @@
 {
   "version": 2,
-  "framework": "nextjs",
-  "buildCommand": "cd apps/frontend && npm install && npm run build",
-  "outputDirectory": "apps/frontend/.next",
-  "installCommand": "npm install",
+  "rootDirectory": "apps/frontend",
   "env": {
     "BACKEND_INTERNAL_URL": "https://api.itp.institutotiapretinha.org",
     "APP_URL": "https://itp.institutotiapretinha.org"
