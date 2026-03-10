@@ -17,19 +17,25 @@ export const setupApp = async (app: NestExpressApplication) => {
   
   app.setGlobalPrefix('api');
 
-  app.useStaticAssets(join(process.cwd(), 'public'), {
-    prefix: '/public/',
-  });
+  app.useStaticAssets(join(__dirname, '..', '..', 'public'));
+
+  const isDev = process.env.NODE_ENV !== 'production';
 
   app.enableCors({
-    origin: [
-      'https://itp.institutotiapretinha.org',
-      'https://api.itp.institutotiapretinha.org',
-      'https://institutotiapretinha.org',
-      'http://localhost:3000',
-      'http://127.0.0.1:3000',
-      'http://localhost:3001',
-    ],
+    origin: isDev
+      ? (origin: string | undefined, cb: (err: Error | null, allow: boolean) => void) => {
+          // Em dev, aceita localhost e qualquer IP da rede local (192.168.x.x, 10.x.x.x)
+          if (!origin || /^https?:\/\/(localhost|127\.0\.0\.1|192\.168\.|10\.)/.test(origin)) {
+            cb(null, true);
+          } else {
+            cb(new Error('CORS bloqueado: ' + origin), false);
+          }
+        }
+      : [
+          'https://itp.institutotiapretinha.org',
+          'https://api.itp.institutotiapretinha.org',
+          'https://institutotiapretinha.org',
+        ],
     credentials: true,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Cookie', 'X-Requested-With'],
@@ -69,7 +75,7 @@ export default async function handler(req: any, res: any) {
   return cachedServer(req, res);
 }
 
-// ✅ Executa o listen apenas se NÃO estivermos no ambiente de handler (Serverless)
-if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
+// Executa o servidor em qualquer ambiente exceto Vercel (Railway, Render, local, etc.)
+if (!process.env.VERCEL) {
   bootstrapLocal();
 }

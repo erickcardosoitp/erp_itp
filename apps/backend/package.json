@@ -5,6 +5,48 @@
   "scripts": {
     "start:dev": "nest start --watch",
     "build": "nest build",
-    "start": "node dist/main.js"
+    "start": "node dist/src/main.js"
+  },
+  "dependencies": {
+    "@nestjs/common": "^11.0.0",
+    "@nestjs/config": "^4.0.3",
+    "@nestjs/core": "^11.1.16",
+    "@nestjs/jwt": "^11.0.0",
+    "@nestjs/passport": "^11.0.0",
+    "@nestjs/platform-express": "^11.1.16",
+    "@nestjs/typeorm": "^11.0.0",
+    "@types/multer": "^2.1.0",
+    "@types/nodemailer": "^7.0.11",
+    "bcrypt": "^5.1.1",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.4",
+    "cookie-parser": "^1.4.6",
+    "csv-parse": "^6.1.0",
+    "dotenv": "^17.3.1",
+    "express": "5.2.1",
+    "nodemailer": "^8.0.1",
+    "passport": "^0.7.0",
+    "passport-jwt": "^4.0.1",
+    "pg": "^8.20.0",
+    "reflect-metadata": "^0.2.0",
+    "rxjs": "^7.8.1",
+    "typeorm": "^0.3.20"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^11.0.0",
+    "@nestjs/schematics": "^11.0.0",
+    "@nestjs/testing": "^11.0.0",
+    "@types/bcrypt": "^5.0.2",
+    "@types/cookie-parser": "^1.4.3",
+    "@types/express": "^4.17.21",
+    "@types/jest": "^29.5.0",
+    "@types/node": "^20.0.0",
+    "@types/passport-jwt": "^4.0.1",
+    "typescript": "^5.9.3"
+  },
+  "overrides": {
+    "rimraf": "^5.0.0",
+    "glob": "^10.4.1",
+    "tar": "^7.0.0"
   }
 }
