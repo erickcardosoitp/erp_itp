@@ -1,171 +1,968 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-// Certifique-se de que instalou lucide-react no itp_frontend
-import { 
-  GraduationCap, Users, Calendar, BookOpen, 
-  Search, Clock, Plus, LayoutGrid, History,
-  Save, Trash2, UserPlus, CheckCircle2, ChevronRight
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  GraduationCap, Users, BookOpen, LayoutGrid, History,
+  Plus, Trash2, Search, X, ClipboardList,
+  Edit3, Coffee, UserPlus,
 } from 'lucide-react';
+import api from '@/services/api';
+import { useAuth } from '@/context/auth-context';
 
-export default function GestaoAcademicaCompleta() {
-  const [activeTab, setActiveTab] = useState('grade'); 
-  const [isMounted, setIsMounted] = useState(false);
-  const [grade, setGrade] = useState<Record<string, any>>({}); 
+// ─── Tipos ────────────────────────────────────────────────────────────────────
 
-  // Hidratação segura para Next.js
-  useEffect(() => { 
-    setIsMounted(true); 
-  }, []);
+interface Curso { id: string; nome: string; sigla: string; status: string; periodo?: string; }
+interface Professor { id: string; nome: string; especialidade?: string; email?: string; ativo?: boolean; }
+interface Turma { id: string; nome: string; curso_id?: string; professor_id?: string; turno?: string; ano?: string; max_alunos?: number; ativo?: boolean; hora_inicio?: string; hora_fim?: string; }
+interface TurmaAlunoRecord { id: string; turma_id: string | null; aluno_id: string; status: string; created_at: string; }
+interface GradeCard { id: string; dia_semana: number; horario_inicio: string; horario_fim: string; nome_curso?: string; nome_professor?: string; turma_id?: string; sala?: string; cor?: string; }
+interface DiarioEntry { id: string; tipo: string; titulo?: string; descricao?: string; aluno_id?: string; turma_id?: string; data: string; usuario_nome?: string; created_at: string; }
+interface Aluno { id: string; nome_completo: string; numero_matricula?: string; cpf?: string; celular?: string; email?: string; sexo?: string; data_nascimento?: string; cidade?: string; bairro?: string; cursos_matriculados?: string; turno_escolar?: string; ativo?: boolean; data_matricula?: string; }
 
-  if (!isMounted) return null;
+// ─── Constantes ───────────────────────────────────────────────────────────────
 
-  const DIAS = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta'];
-  const HORARIOS = ['08:00', '09:00', '10:00', '11:00'];
+const DIAS_SEMANA = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
 
-  const handleAlocar = (dia: string, hora: string) => {
-    if (typeof window !== 'undefined') {
-      const disc = window.prompt("Disciplina:");
-      if (disc) {
-        setGrade(prev => ({ 
-          ...prev, 
-          [`${dia}-${hora}`]: { disc, prof: 'Prof. Ricardo' } 
-        }));
-      }
-    }
-  };
+const HORARIOS: Array<{ label: string; value?: string; lanche?: boolean }> = [
+  { label: '8:30',   value: '08:30' },
+  { label: '9:00',   value: '09:00' },
+  { label: '9:30',   value: '09:30' },
+  { label: 'LANCHE', lanche: true },
+  { label: '10:00',  value: '10:00' },
+  { label: '10:30',  value: '10:30' },
+  { label: '11:00',  value: '11:00' },
+  { label: '14:30',  value: '14:30' },
+  { label: '15:00',  value: '15:00' },
+  { label: '15:30',  value: '15:30' },
+  { label: '16:00',  value: '16:00' },
+  { label: '16:30',  value: '16:30' },
+  { label: 'LANCHE', lanche: true },
+  { label: '17:00',  value: '17:00' },
+  { label: '17:30',  value: '17:30' },
+  { label: '18:00',  value: '18:00' },
+  { label: '18:30',  value: '18:30' },
+  { label: '19:00',  value: '19:00' },
+  { label: '19:30',  value: '19:30' },
+  { label: '20:00',  value: '20:00' },
+  { label: '20:30',  value: '20:30' },
+  { label: '21:00',  value: '21:00' },
+];
 
+const GRUPOS_EDITOR = ['ADMIN', 'PRT', 'VP', 'DRT', 'DRT ADJ'];
+
+const CORES_CARD = [
+  '#7c3aed', '#0891b2', '#16a34a', '#d97706',
+  '#dc2626', '#db2777', '#0284c7', '#059669',
+];
+
+const TIPOS_DIARIO = ['Avaliação', 'Presença', 'Incidente', 'Observação', 'Comunicado'];
+
+function fmtDate(v?: string | null) {
+  if (!v) return '---';
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(v)) return v;
+  const s = /^\d{4}-\d{2}-\d{2}$/.test(v) ? v + 'T12:00:00' : v;
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? '---' : d.toLocaleDateString('pt-BR');
+}
+
+// ─── Componentes auxiliares ───────────────────────────────────────────────────
+
+function TabBtn({ id, active, set, label, Icon }: { id: string; active: string; set: (id: string) => void; label: string; Icon: any }) {
   return (
-    <div className="min-h-screen bg-[#FDFDFF] p-6 lg:p-10 font-sans">
-      <div className="max-w-[1600px] mx-auto space-y-8">
-        
-        {/* HEADER */}
-        <header className="flex flex-col md:flex-row justify-between items-center bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm gap-4">
-          <div className="flex items-center gap-4">
-            <div className="bg-purple-600 p-3 rounded-2xl shadow-lg">
-              <GraduationCap className="text-white" size={28} />
-            </div>
-            <h1 className="text-3xl font-black text-slate-900 uppercase italic tracking-tighter">
-              Acadêmico<span className="text-purple-600">.ITP</span>
-            </h1>
-          </div>
-          <nav className="flex bg-slate-100 p-1.5 rounded-2xl gap-1 overflow-x-auto">
-            <TabBtn id="grade" active={activeTab} set={setActiveTab} label="Grade" icon={LayoutGrid} />
-            <TabBtn id="alunos" active={activeTab} set={setActiveTab} label="Alunos" icon={Users} />
-            <TabBtn id="diario" active={activeTab} set={setActiveTab} label="Diário" icon={History} />
-          </nav>
-        </header>
+    <button
+      onClick={() => set(id)}
+      className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap
+        ${active === id ? 'bg-white text-purple-700 shadow' : 'text-slate-500 hover:text-slate-800'}`}
+    >
+      <Icon size={13} />{label}
+    </button>
+  );
+}
 
-        {/* CONTEÚDO */}
-        <div className="transition-all duration-500">
-          {activeTab === 'grade' && (
-            <div className="space-y-6">
-              <div className="flex justify-between items-center">
-                <h2 className="text-xl font-black uppercase italic text-slate-800">Editor de Matriz Semanal</h2>
-                <button 
-                  onClick={() => alert('Grade Salva (Simulação)')}
-                  className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-xl font-black text-[10px] uppercase flex items-center gap-2 shadow-lg transition-colors"
-                >
-                  <Save size={16}/> Salvar Alterações
-                </button>
-              </div>
-
-              <div className="bg-white rounded-[40px] border border-slate-100 shadow-xl overflow-x-auto">
-                <div className="min-w-[800px]">
-                  <div className="grid grid-cols-6 bg-slate-50 border-b border-slate-100">
-                    <div className="p-4 border-r border-slate-100"></div>
-                    {DIAS.map(d => <div key={d} className="p-4 text-center text-[10px] font-black uppercase text-slate-400">{d}</div>)}
-                  </div>
-                  {HORARIOS.map(h => (
-                    <div key={h} className="grid grid-cols-6 border-b border-slate-50 last:border-0 group">
-                      <div className="p-6 border-r border-slate-100 bg-slate-50/30 flex items-center justify-center font-mono font-black text-slate-400 text-xs">{h}</div>
-                      {DIAS.map(d => {
-                        const aula = grade[`${d}-${h}`];
-                        return (
-                          <div 
-                            key={`${d}-${h}`} 
-                            onClick={() => !aula && handleAlocar(d, h)} 
-                            className={`p-2 min-h-[100px] border-r border-slate-50 last:border-0 transition-all ${!aula ? 'hover:bg-purple-50/50 cursor-pointer' : ''}`}
-                          >
-                            {aula ? (
-                              <div className="h-full bg-purple-900 rounded-xl p-3 shadow-md relative group/card">
-                                <p className="text-[9px] font-black text-purple-300 uppercase leading-none">{aula.disc}</p>
-                                <p className="text-[10px] font-bold text-white uppercase mt-1">{aula.prof}</p>
-                                <button 
-                                  onClick={(e) => {
-                                    e.stopPropagation(); 
-                                    const n = {...grade}; 
-                                    delete n[`${d}-${h}`]; 
-                                    setGrade(n);
-                                  }} 
-                                  className="absolute top-1 right-1 opacity-0 group-hover/card:opacity-100 text-rose-400 p-1 hover:bg-rose-900/50 rounded"
-                                >
-                                  <Trash2 size={12}/>
-                                </button>
-                              </div>
-                            ) : (
-                              <div className="h-full border-2 border-dashed border-slate-100 rounded-xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                <Plus size={16} className="text-purple-200" />
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* VIEW: ALUNOS */}
-          {activeTab === 'alunos' && (
-            <div className="bg-white rounded-[40px] border border-slate-100 shadow-xl p-8">
-              <div className="flex justify-between items-center mb-8">
-                <h2 className="text-xl font-black uppercase italic text-slate-800">Base de Discentes</h2>
-                <button className="bg-slate-900 text-white px-6 py-3 rounded-xl font-black text-[10px] uppercase flex items-center gap-2">
-                  <UserPlus size={16}/> Novo Aluno
-                </button>
-              </div>
-              <div className="space-y-3">
-                 {[1,2,3].map(i => (
-                   <div key={i} className="flex justify-between items-center p-4 bg-slate-50 rounded-2xl hover:bg-purple-50 transition-colors cursor-pointer border border-transparent hover:border-purple-100">
-                      <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center font-black text-purple-600 text-xs">AL</div>
-                        <div>
-                          <p className="text-sm font-black text-slate-800 uppercase">Aluno de Exemplo {i}</p>
-                          <p className="text-[10px] font-bold text-slate-400 uppercase">Matrícula: 202600{i} • Informática</p>
-                        </div>
-                      </div>
-                      <ChevronRight className="text-slate-300" size={18} />
-                   </div>
-                 ))}
-              </div>
-            </div>
-          )}
+function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  return (
+    <div className="fixed inset-0 z-[300] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden">
+        <div className="flex justify-between items-center p-5 border-b">
+          <h3 className="font-black text-sm uppercase tracking-tight text-slate-800">{title}</h3>
+          <button onClick={onClose} className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-400"><X size={16}/></button>
         </div>
+        <div className="p-5">{children}</div>
       </div>
     </div>
   );
 }
 
-interface TabBtnProps {
-  id: string;
-  active: string;
-  set: (id: string) => void;
-  label: string;
-  icon: any;
-}
-
-function TabBtn({ id, active, set, label, icon: Icon }: TabBtnProps) {
-  const isActive = active === id;
+function FieldInput({ label, value, onChange, type = 'text', required = false }: { label: string; value?: any; onChange: (v: string) => void; type?: string; required?: boolean }) {
   return (
-    <button 
-      onClick={() => set(id)}
-      className={`px-6 py-3 rounded-xl flex items-center gap-2 transition-all ${isActive ? 'bg-white text-purple-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-    >
-      <Icon size={16} strokeWidth={isActive ? 3 : 2} />
-      <span className="text-[10px] font-black uppercase tracking-widest">{label}</span>
-    </button>
+    <div className="space-y-1">
+      <label className="text-[10px] font-black uppercase text-slate-500">{label}{required && ' *'}</label>
+      <input type={type} value={value ?? ''} onChange={e => onChange(e.target.value)} required={required}
+        className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400" />
+    </div>
   );
 }
+
+function FieldSelect({ label, value, onChange, options, required = false }: { label: string; value?: any; onChange: (v: string) => void; options: Array<{value: string; label: string} | string>; required?: boolean }) {
+  return (
+    <div className="space-y-1">
+      <label className="text-[10px] font-black uppercase text-slate-500">{label}{required && ' *'}</label>
+      <select value={value ?? ''} onChange={e => onChange(e.target.value)} required={required}
+        className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white">
+        <option value="">Selecione...</option>
+        {options.map((o) => {
+          const val = typeof o === 'string' ? o : o.value;
+          const lbl = typeof o === 'string' ? o : o.label;
+          return <option key={val} value={val}>{lbl}</option>;
+        })}
+      </select>
+    </div>
+  );
+}
+
+// ─── Tab: Grade ───────────────────────────────────────────────────────────────
+
+function GradeTab({ podeEditar, turmas }: { podeEditar: boolean; turmas: Turma[] }) {
+  const [grade, setGrade] = useState<GradeCard[]>([]);
+  const [showModal, setShowModal] = useState(false);
+  const [dragCard, setDragCard] = useState<GradeCard | null>(null);
+  const [form, setForm] = useState<Partial<GradeCard>>({ cor: '#7c3aed' });
+
+  const load = useCallback(async () => {
+    try { const r = await api.get('/academico/grade'); setGrade(r.data); } catch {}
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const cardsAt = (dia: number, hora: string) =>
+    grade.filter(g => g.dia_semana === dia && g.horario_inicio === hora + ':00');
+
+  const handleDrop = async (e: React.DragEvent, dia: number, hora: string) => {
+    e.preventDefault();
+    if (!dragCard || !podeEditar) return;
+    try {
+      await api.patch(`/academico/grade/${dragCard.id}`, { dia_semana: dia, horario_inicio: hora + ':00' });
+      await load();
+    } catch {}
+    setDragCard(null);
+  };
+
+  const handleCriar = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await api.post('/academico/grade', {
+        ...form,
+        horario_inicio: form.horario_inicio ? form.horario_inicio + ':00' : undefined,
+        horario_fim:    form.horario_fim    ? form.horario_fim    + ':00' : undefined,
+      });
+      setShowModal(false); setForm({ cor: '#7c3aed' }); await load();
+    } catch {}
+  };
+
+  const handleDeletar = async (id: string) => {
+    if (!confirm('Remover este horário?')) return;
+    try { await api.delete(`/academico/grade/${id}`); await load(); } catch {}
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <h2 className="text-lg font-black uppercase tracking-tight text-slate-800">Grade Horária Semanal</h2>
+        {podeEditar && (
+          <button onClick={() => setShowModal(true)} className="flex items-center gap-2 bg-purple-600 text-white px-5 py-2.5 rounded-xl font-black text-[10px] uppercase hover:bg-purple-700 transition-colors">
+            <Plus size={14}/> Adicionar Horário
+          </button>
+        )}
+      </div>
+
+      <div className="bg-white rounded-3xl border border-slate-100 shadow overflow-x-auto">
+        <div className="min-w-[900px]">
+          {/* Header dias */}
+          <div className="grid border-b border-slate-100" style={{ gridTemplateColumns: '80px repeat(6, 1fr)' }}>
+            <div className="p-3 border-r border-slate-50" />
+            {DIAS_SEMANA.map(d => (
+              <div key={d} className="p-3 text-center text-[10px] font-black uppercase text-slate-400 border-r border-slate-50 last:border-0">{d}</div>
+            ))}
+          </div>
+          {/* Linhas de horário */}
+          {HORARIOS.map((h, idx) => {
+            if (h.lanche) {
+              return (
+                <div key={`lanche-${idx}`} className="grid border-b border-slate-50 bg-amber-50/60" style={{ gridTemplateColumns: '80px repeat(6, 1fr)' }}>
+                  <div className="p-2 flex items-center justify-center gap-1 border-r border-slate-100">
+                    <Coffee size={10} className="text-amber-500" />
+                    <span className="text-[9px] font-black uppercase text-amber-500">Lanche</span>
+                  </div>
+                  {Array.from({ length: 6 }).map((_, di) => (
+                    <div key={di} className="p-2 border-r border-slate-50 last:border-0 bg-amber-50/40" />
+                  ))}
+                </div>
+              );
+            }
+            const hora = h.value!;
+            return (
+              <div key={hora} className="grid border-b border-slate-50 hover:bg-slate-50/40 transition-colors" style={{ gridTemplateColumns: '80px repeat(6, 1fr)' }}>
+                <div className="p-2 flex items-center justify-center border-r border-slate-100">
+                  <span className="text-[10px] font-black text-slate-400">{h.label}</span>
+                </div>
+                {DIAS_SEMANA.map((_, di) => {
+                  const diaNum = di + 1;
+                  const cards = cardsAt(diaNum, hora);
+                  return (
+                    <div key={di} className="p-1 min-h-[44px] border-r border-slate-50 last:border-0"
+                      onDragOver={e => { if (podeEditar) e.preventDefault(); }}
+                      onDrop={e => handleDrop(e, diaNum, hora)}>
+                      {cards.map(card => (
+                        <div key={card.id} draggable={podeEditar}
+                          onDragStart={() => setDragCard(card)}
+                          onDragEnd={() => setDragCard(null)}
+                          className="rounded-lg p-1.5 mb-1 text-white text-[9px] font-bold cursor-grab active:cursor-grabbing shadow-sm relative group/card"
+                          style={{ backgroundColor: card.cor || '#7c3aed' }}>
+                          {podeEditar && (
+                            <button onClick={() => handleDeletar(card.id)}
+                              className="absolute -top-1 -right-1 bg-red-500 rounded-full p-0.5 opacity-0 group-hover/card:opacity-100 transition-opacity">
+                              <X size={9}/>
+                            </button>
+                          )}
+                          <div className="font-black leading-tight truncate">{card.nome_curso || '–'}</div>
+                          <div className="opacity-80 text-[8px] truncate">{card.nome_professor || ''}</div>
+                          <div className="opacity-70 text-[8px]">{card.horario_inicio?.slice(0,5)} – {card.horario_fim?.slice(0,5)}</div>
+                          {card.sala && <div className="opacity-60 text-[8px]">Sala: {card.sala}</div>}
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {!podeEditar && (
+        <p className="text-[10px] text-center text-slate-400 font-bold uppercase tracking-widest">
+          Visualização apenas · Edição restrita a ADMIN / PRT / VP / DRT
+        </p>
+      )}
+
+      {showModal && (
+        <Modal title="Adicionar Horário na Grade" onClose={() => { setShowModal(false); setForm({ cor: '#7c3aed' }); }}>
+          <form onSubmit={handleCriar} className="space-y-3">
+            <FieldSelect label="Dia da Semana" value={String(form.dia_semana ?? '')}
+              onChange={v => setForm(p => ({ ...p, dia_semana: Number(v) }))}
+              options={DIAS_SEMANA.map((d, i) => ({ value: String(i+1), label: d }))} required />
+            <div className="grid grid-cols-2 gap-3">
+              <FieldSelect label="Hora Início" value={form.horario_inicio}
+                onChange={v => setForm(p => ({ ...p, horario_inicio: v }))}
+                options={HORARIOS.filter(h => h.value).map(h => ({ value: h.value!, label: h.label }))} required />
+              <FieldSelect label="Hora Fim" value={form.horario_fim}
+                onChange={v => setForm(p => ({ ...p, horario_fim: v }))}
+                options={HORARIOS.filter(h => h.value).map(h => ({ value: h.value!, label: h.label }))} required />
+            </div>
+            <FieldInput label="Nome do Curso" value={form.nome_curso} onChange={v => setForm(p => ({ ...p, nome_curso: v }))} required />
+            <FieldInput label="Nome do Professor" value={form.nome_professor} onChange={v => setForm(p => ({ ...p, nome_professor: v }))} />
+            {turmas.length > 0 && (
+              <FieldSelect label="Turma (opcional)" value={form.turma_id ?? ''}
+                onChange={v => setForm(p => ({ ...p, turma_id: v }))}
+                options={turmas.map(t => ({ value: t.id, label: t.nome }))} />
+            )}
+            <FieldInput label="Sala (opcional)" value={form.sala} onChange={v => setForm(p => ({ ...p, sala: v }))} />
+            <div className="space-y-1">
+              <label className="text-[10px] font-black uppercase text-slate-500">Cor do Card</label>
+              <div className="flex gap-2 flex-wrap">
+                {CORES_CARD.map(c => (
+                  <button key={c} type="button" onClick={() => setForm(p => ({ ...p, cor: c }))}
+                    className={`w-7 h-7 rounded-lg transition-all ${form.cor === c ? 'ring-2 ring-offset-2 ring-slate-800 scale-110' : ''}`}
+                    style={{ backgroundColor: c }} />
+                ))}
+              </div>
+            </div>
+            <button type="submit" className="w-full bg-purple-600 text-white py-2.5 rounded-xl font-black text-xs uppercase hover:bg-purple-700">
+              Confirmar
+            </button>
+          </form>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ─── Tab: Alunos ──────────────────────────────────────────────────────────────
+
+function AlunosTab() {
+  const [alunos, setAlunos] = useState<Aluno[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filtroNome, setFiltroNome] = useState('');
+  const [filtroCurso, setFiltroCurso] = useState('');
+  const [filtroTurno, setFiltroTurno] = useState('');
+  const [fichaAluno, setFichaAluno] = useState<any>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params: Record<string, string> = {};
+      if (filtroNome)  params.nome  = filtroNome;
+      if (filtroCurso) params.curso = filtroCurso;
+      if (filtroTurno) params.turno = filtroTurno;
+      const r = await api.get('/academico/alunos', { params });
+      setAlunos(r.data);
+    } catch {}
+    setLoading(false);
+  }, [filtroNome, filtroCurso, filtroTurno]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const verFicha = async (id: string) => {
+    try { const r = await api.get(`/academico/alunos/${id}/ficha`); setFichaAluno(r.data); } catch {}
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-3 items-end bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
+        <div className="flex-1 min-w-[180px]">
+          <label className="text-[9px] font-black uppercase text-slate-400 mb-1 block">Nome</label>
+          <div className="relative">
+            <Search size={11} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input value={filtroNome} onChange={e => setFiltroNome(e.target.value)} placeholder="Buscar aluno..."
+              className="w-full pl-8 pr-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-400" />
+          </div>
+        </div>
+        <div className="min-w-[160px]">
+          <label className="text-[9px] font-black uppercase text-slate-400 mb-1 block">Curso</label>
+          <input value={filtroCurso} onChange={e => setFiltroCurso(e.target.value)} placeholder="Ex: Ballet"
+            className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-400" />
+        </div>
+        <div className="min-w-[140px]">
+          <label className="text-[9px] font-black uppercase text-slate-400 mb-1 block">Turno</label>
+          <select value={filtroTurno} onChange={e => setFiltroTurno(e.target.value)}
+            className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white">
+            <option value="">Todos</option>
+            <option>Manhã</option><option>Tarde</option><option>Noite</option>
+          </select>
+        </div>
+        <button onClick={() => { setFiltroNome(''); setFiltroCurso(''); setFiltroTurno(''); }}
+          className="text-[10px] font-black uppercase text-red-400 hover:text-red-600 flex items-center gap-1">
+          <X size={11}/> Limpar
+        </button>
+      </div>
+
+      <div className="bg-white rounded-3xl border border-slate-100 shadow overflow-hidden">
+        {loading ? (
+          <div className="py-16 text-center text-sm text-slate-400">Carregando...</div>
+        ) : alunos.length === 0 ? (
+          <div className="py-16 text-center text-sm text-slate-400">Nenhum aluno encontrado.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-[11px]">
+              <thead className="bg-slate-50 border-b border-slate-100">
+                <tr className="text-[9px] font-black uppercase text-slate-400">
+                  <th className="text-left px-4 py-3">Aluno</th>
+                  <th className="text-left px-4 py-3">Matrícula</th>
+                  <th className="text-left px-4 py-3">CPF</th>
+                  <th className="text-left px-4 py-3">Cursos</th>
+                  <th className="text-left px-4 py-3">Turno</th>
+                  <th className="text-left px-4 py-3">Data Matr.</th>
+                  <th className="text-center px-4 py-3">Ficha</th>
+                </tr>
+              </thead>
+              <tbody>
+                {alunos.map((a, i) => (
+                  <tr key={a.id} className={`border-b border-slate-50 hover:bg-purple-50/30 transition-colors ${i % 2 === 0 ? '' : 'bg-slate-50/30'}`}>
+                    <td className="px-4 py-3">
+                      <div className="font-bold text-slate-800">{a.nome_completo}</div>
+                      <div className="text-[9px] text-slate-400">{a.celular || a.email || '–'}</div>
+                    </td>
+                    <td className="px-4 py-3 font-mono text-purple-700 font-bold">{a.numero_matricula || '–'}</td>
+                    <td className="px-4 py-3 text-slate-500">{a.cpf || '–'}</td>
+                    <td className="px-4 py-3 max-w-[160px] truncate text-slate-600">{a.cursos_matriculados || '–'}</td>
+                    <td className="px-4 py-3 text-slate-500">{a.turno_escolar || '–'}</td>
+                    <td className="px-4 py-3 text-slate-500">{fmtDate(a.data_matricula)}</td>
+                    <td className="px-4 py-3 text-center">
+                      <button onClick={() => verFicha(a.id)}
+                        className="bg-purple-100 text-purple-700 px-3 py-1 rounded-lg text-[9px] font-black uppercase hover:bg-purple-200 transition-colors">
+                        Ver
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {fichaAluno && (
+        <Modal title={`Ficha: ${fichaAluno.aluno?.nome_completo}`} onClose={() => setFichaAluno(null)}>
+          <div className="space-y-4 max-h-[65vh] overflow-y-auto pr-1">
+            <section>
+              <h4 className="text-[9px] font-black uppercase text-purple-600 mb-2 tracking-widest">Dados Pessoais</h4>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                {([['Matrícula', fichaAluno.aluno?.numero_matricula],
+                  ['CPF', fichaAluno.aluno?.cpf],
+                  ['Celular', fichaAluno.aluno?.celular],
+                  ['E-mail', fichaAluno.aluno?.email],
+                  ['Nascimento', fmtDate(fichaAluno.aluno?.data_nascimento)],
+                  ['Sexo', fichaAluno.aluno?.sexo],
+                  ['Cidade', fichaAluno.aluno?.cidade],
+                  ['Bairro', fichaAluno.aluno?.bairro],
+                  ['Turno', fichaAluno.aluno?.turno_escolar],
+                  ['Cursos', fichaAluno.aluno?.cursos_matriculados],
+                ] as [string, string][]).map(([k, v]) => (
+                  <div key={k} className="bg-slate-50 rounded-xl p-2">
+                    <span className="text-[8px] font-black uppercase text-slate-400 block">{k}</span>
+                    <span className="font-bold text-slate-700 truncate block">{v || '–'}</span>
+                  </div>
+                ))}
+              </div>
+            </section>
+            {fichaAluno.historico?.length > 0 && (
+              <section>
+                <h4 className="text-[9px] font-black uppercase text-purple-600 mb-2 tracking-widest">Histórico Diário</h4>
+                <div className="space-y-1.5">
+                  {fichaAluno.historico.map((h: DiarioEntry) => (
+                    <div key={h.id} className="flex gap-2 bg-slate-50 rounded-xl p-2">
+                      <span className="px-1.5 py-0.5 rounded text-[8px] font-black bg-purple-100 text-purple-700 uppercase self-start whitespace-nowrap">{h.tipo}</span>
+                      <div>
+                        {h.titulo && <div className="text-xs font-bold text-slate-700">{h.titulo}</div>}
+                        {h.descricao && <div className="text-[10px] text-slate-500">{h.descricao}</div>}
+                        <div className="text-[9px] text-slate-400 mt-0.5">{fmtDate(h.data)} · {h.usuario_nome}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ─── Tab: Cursos ──────────────────────────────────────────────────────────────
+
+function CursosTab() {
+  const [cursos, setCursos] = useState<Curso[]>([]);
+  const [showModal, setShowModal] = useState(false);
+  const [editando, setEditando] = useState<Curso | null>(null);
+  const [form, setForm] = useState<Partial<Curso>>({});
+  const [erro, setErro] = useState<string | null>(null);
+  const [salvando, setSalvando] = useState(false);
+
+  const load = useCallback(async () => {
+    try { const r = await api.get('/academico/cursos'); setCursos(r.data); } catch {}
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const abrir = (c?: Curso) => { setEditando(c || null); setForm(c ? { ...c } : {}); setErro(null); setShowModal(true); };
+
+  const salvar = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErro(null);
+    setSalvando(true);
+    try {
+      if (editando) await api.patch(`/academico/cursos/${editando.id}`, form);
+      else await api.post('/academico/cursos', form);
+      setShowModal(false); await load();
+    } catch (e: any) {
+      const msg = e?.response?.data?.message || e?.message || 'Erro desconhecido ao salvar curso.';
+      setErro(Array.isArray(msg) ? msg.join(', ') : msg);
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  const deletar = async (id: string) => {
+    if (!confirm('Excluir curso?')) return;
+    try { await api.delete(`/academico/cursos/${id}`); await load(); }
+    catch (e: any) {
+      const msg = e?.response?.data?.message || e?.message || 'Erro ao excluir.';
+      alert(Array.isArray(msg) ? msg.join(', ') : msg);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <h2 className="text-lg font-black uppercase tracking-tight text-slate-800">Cursos Oferecidos</h2>
+        <button onClick={() => abrir()} className="flex items-center gap-2 bg-purple-600 text-white px-5 py-2.5 rounded-xl font-black text-[10px] uppercase hover:bg-purple-700">
+          <Plus size={14}/> Novo Curso
+        </button>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        {cursos.map(c => (
+          <div key={c.id} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 hover:shadow-md transition-shadow">
+            <div className="flex justify-between items-start mb-3">
+              <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 uppercase">{c.sigla}</span>
+              <div className="flex gap-1">
+                <button onClick={() => abrir(c)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><Edit3 size={12}/></button>
+                <button onClick={() => deletar(c.id)} className="p-1.5 rounded-lg hover:bg-red-50 text-red-400"><Trash2 size={12}/></button>
+              </div>
+            </div>
+            <h3 className="font-black text-sm text-slate-800 leading-tight">{c.nome}</h3>
+            <div className="mt-2 flex gap-2 flex-wrap">
+              <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase ${c.status === 'Ativo' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>{c.status || 'Ativo'}</span>
+              {c.periodo && <span className="text-[8px] font-bold text-slate-400">{c.periodo}</span>}
+
+            </div>
+          </div>
+        ))}
+        {cursos.length === 0 && <div className="col-span-full py-16 text-center text-sm text-slate-400">Nenhum curso cadastrado ainda.</div>}
+      </div>
+
+      {showModal && (
+        <Modal title={editando ? 'Editar Curso' : 'Novo Curso'} onClose={() => setShowModal(false)}>
+          <form onSubmit={salvar} className="space-y-3">
+            <FieldInput label="Nome do Curso" value={form.nome} onChange={v => setForm(p => ({ ...p, nome: v }))} required />
+            <FieldInput label="Sigla" value={form.sigla} onChange={v => setForm(p => ({ ...p, sigla: v.toUpperCase() }))} required />
+            <FieldInput label="Período (ex: 2026.1)" value={form.periodo} onChange={v => setForm(p => ({ ...p, periodo: v }))} />
+            <FieldSelect label="Status" value={form.status ?? ''} onChange={v => setForm(p => ({ ...p, status: v }))}
+              options={['Ativo', 'Inativo', 'Em breve']} />
+            {erro && (
+              <div className="bg-red-50 border border-red-200 text-red-700 text-[11px] font-bold rounded-xl px-4 py-2.5 uppercase tracking-wide">
+                ⚠ {erro}
+              </div>
+            )}
+            <button type="submit" disabled={salvando} className="w-full bg-purple-600 text-white py-2.5 rounded-xl font-black text-xs uppercase disabled:opacity-50">
+              {salvando ? 'Salvando...' : 'Salvar'}
+            </button>
+          </form>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ─── Tab: Turmas ──────────────────────────────────────────────────────────────
+
+function calcularTurno(horaInicio: string): string {
+  if (!horaInicio) return '';
+  const h = parseInt(horaInicio.split(':')[0], 10);
+  if (h >= 6 && h < 12) return 'Manhã';
+  if (h >= 12 && h < 18) return 'Tarde';
+  return 'Noite';
+}
+
+function TurmasTab({ cursos, professores, alunos }: { cursos: Curso[]; professores: Professor[]; alunos: Aluno[] }) {
+  const [turmas, setTurmas] = useState<Turma[]>([]);
+  const [showModal, setShowModal] = useState(false);
+  const [editando, setEditando] = useState<Turma | null>(null);
+  const [form, setForm] = useState<Partial<Turma>>({ ano: '2026' });
+  const [erro, setErro] = useState<string | null>(null);
+  const [salvando, setSalvando] = useState(false);
+  const [showBacklog, setShowBacklog] = useState(false);
+  const [backlog, setBacklog] = useState<TurmaAlunoRecord[]>([]);
+  const [backlogAlunoId, setBacklogAlunoId] = useState('');
+  const [backlogTurmaId, setBacklogTurmaId] = useState('');
+  const [backlogLoading, setBacklogLoading] = useState(false);
+
+  const load = useCallback(async () => {
+    try { const r = await api.get('/academico/turmas'); setTurmas(r.data); } catch {}
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const abrir = (t?: Turma) => {
+    setErro(null);
+    if (t) {
+      setEditando(t);
+      setForm({ ...t });
+    } else {
+      setEditando(null);
+      setForm({ ano: new Date().getFullYear().toString() });
+    }
+    setShowModal(true);
+  };
+
+  const setFormCurso = (cursoId: string) => {
+    const curso = cursos.find(c => c.id === cursoId);
+    setForm(p => ({
+      ...p,
+      curso_id: cursoId,
+      nome: curso ? curso.nome : p.nome,
+    }));
+  };
+
+  const setFormHoraInicio = (v: string) => {
+    const turno = calcularTurno(v);
+    setForm(p => ({ ...p, hora_inicio: v, turno: turno || p.turno }));
+  };
+
+  const setFormHoraFim = (v: string) => {
+    setForm(p => {
+      const turno = p.hora_inicio ? calcularTurno(p.hora_inicio) : p.turno;
+      return { ...p, hora_fim: v, turno: turno || p.turno };
+    });
+  };
+
+  const salvar = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErro(null);
+    setSalvando(true);
+    try {
+      if (editando) await api.patch(`/academico/turmas/${editando.id}`, form);
+      else await api.post('/academico/turmas', form);
+      setShowModal(false); await load();
+    } catch (e: any) {
+      const msg = e?.response?.data?.message || e?.message || 'Erro desconhecido ao salvar turma.';
+      setErro(Array.isArray(msg) ? msg.join(', ') : msg);
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  const deletar = async (id: string) => {
+    if (!confirm('Excluir turma?')) return;
+    try { await api.delete(`/academico/turmas/${id}`); await load(); }
+    catch (e: any) {
+      const msg = e?.response?.data?.message || e?.message || 'Erro ao excluir.';
+      alert(Array.isArray(msg) ? msg.join(', ') : msg);
+    }
+  };
+
+  const abrirBacklog = async () => {
+    setBacklogAlunoId(''); setBacklogTurmaId('');
+    setShowBacklog(true); setBacklogLoading(true);
+    try { const r = await api.get('/academico/turma-alunos/backlog'); setBacklog(r.data); } catch {}
+    setBacklogLoading(false);
+  };
+
+  const confirmarInclusao = async () => {
+    if (!backlogAlunoId || !backlogTurmaId) return;
+    try {
+      await api.post('/academico/turma-alunos/incluir', { aluno_id: backlogAlunoId, turma_id: backlogTurmaId });
+      setShowBacklog(false); setBacklog([]);
+    } catch {}
+  };
+
+  const nomeAluno = (id: string) => alunos.find(a => a.id === id)?.nome_completo || id;
+  const nomeCurso = (id?: string) => cursos.find(c => c.id === id)?.nome || '–';
+  const nomeProf  = (id?: string) => professores.find(p => p.id === id)?.nome || '–';
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap justify-between items-center gap-2">
+        <h2 className="text-lg font-black uppercase tracking-tight text-slate-800">Turmas</h2>
+        <div className="flex gap-2">
+          <button onClick={abrirBacklog} className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2.5 rounded-xl font-black text-[10px] uppercase hover:bg-indigo-700">
+            <UserPlus size={14}/> Incluir Aluno em Turma
+          </button>
+          <button onClick={() => abrir()} className="flex items-center gap-2 bg-purple-600 text-white px-5 py-2.5 rounded-xl font-black text-[10px] uppercase hover:bg-purple-700">
+            <Plus size={14}/> Nova Turma
+          </button>
+        </div>
+      </div>
+      <div className="bg-white rounded-3xl border border-slate-100 shadow overflow-hidden">
+        {turmas.length === 0 ? (
+          <div className="py-16 text-center text-sm text-slate-400">Nenhuma turma cadastrada.</div>
+        ) : (
+          <table className="w-full text-[11px]">
+            <thead className="bg-slate-50 border-b border-slate-100">
+              <tr className="text-[9px] font-black uppercase text-slate-400">
+                <th className="text-left px-4 py-3">Turma</th>
+                <th className="text-left px-4 py-3">Curso</th>
+                <th className="text-left px-4 py-3">Professor</th>
+                <th className="text-left px-4 py-3">Turno</th>
+                <th className="text-left px-4 py-3">Horário</th>
+                <th className="text-left px-4 py-3">Ano</th>
+                <th className="text-left px-4 py-3">Status</th>
+                <th className="text-center px-4 py-3">Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {turmas.map((t, i) => (
+                <tr key={t.id} className={`border-b border-slate-50 hover:bg-purple-50/30 ${i % 2 === 0 ? '' : 'bg-slate-50/20'}`}>
+                  <td className="px-4 py-3 font-bold text-slate-800">{t.nome}</td>
+                  <td className="px-4 py-3 text-slate-600">{nomeCurso(t.curso_id)}</td>
+                  <td className="px-4 py-3 text-slate-600">{nomeProf(t.professor_id)}</td>
+                  <td className="px-4 py-3 text-slate-500">{t.turno || '–'}</td>
+                  <td className="px-4 py-3 text-slate-500">
+                    {t.hora_inicio && t.hora_fim ? `${t.hora_inicio} – ${t.hora_fim}` : t.hora_inicio || '–'}
+                  </td>
+                  <td className="px-4 py-3 text-slate-500">{t.ano}</td>
+                  <td className="px-4 py-3">
+                    <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase ${t.ativo ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
+                      {t.ativo ? 'Ativa' : 'Inativa'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex justify-center gap-1">
+                      <button onClick={() => abrir(t)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><Edit3 size={12}/></button>
+                      <button onClick={() => deletar(t.id)} className="p-1.5 rounded-lg hover:bg-red-50 text-red-400"><Trash2 size={12}/></button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {showModal && (
+        <Modal title={editando ? 'Editar Turma' : 'Nova Turma'} onClose={() => setShowModal(false)}>
+          <form onSubmit={salvar} className="space-y-3">
+            {/* 1. Curso primeiro — auto-preenche o nome */}
+            {cursos.length > 0 && (
+              <FieldSelect label="Curso *" value={form.curso_id ?? ''} onChange={setFormCurso}
+                options={cursos.filter(c => c.status === 'Ativo' || !c.status).map(c => ({ value: c.id, label: `${c.sigla} – ${c.nome}` }))} />
+            )}
+            {/* 2. Nome já vem preenchido mas pode editar */}
+            <FieldInput label="Nome da Turma *" value={form.nome} onChange={v => setForm(p => ({ ...p, nome: v }))} required />
+            {professores.length > 0 && (
+              <FieldSelect label="Professor" value={form.professor_id ?? ''} onChange={v => setForm(p => ({ ...p, professor_id: v }))}
+                options={professores.filter(p => p.ativo !== false).map(p => ({ value: p.id, label: p.nome }))} />
+            )}
+            {/* 3. Horários — turno calculado automaticamente */}
+            <div className="grid grid-cols-2 gap-3">
+              <FieldInput label="Hora Início" type="time" value={form.hora_inicio} onChange={setFormHoraInicio} />
+              <FieldInput label="Hora Fim" type="time" value={form.hora_fim} onChange={setFormHoraFim} />
+            </div>
+            {/* 4. Turno preenchido automaticamente (editável) */}
+            <div className="space-y-1">
+              <label className="text-[10px] font-black uppercase text-slate-500">Turno</label>
+              <div className="flex gap-2">
+                {['Manhã', 'Tarde', 'Noite', 'Integral'].map(t => (
+                  <button key={t} type="button"
+                    onClick={() => setForm(p => ({ ...p, turno: t }))}
+                    className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase border transition-all ${
+                      form.turno === t
+                        ? 'bg-purple-600 text-white border-purple-600'
+                        : 'bg-white text-slate-500 border-slate-200 hover:border-purple-300'
+                    }`}>{t}</button>
+                ))}
+              </div>
+            </div>
+            <FieldInput label="Ano" value={form.ano} onChange={v => setForm(p => ({ ...p, ano: v }))} />
+            {erro && (
+              <div className="bg-red-50 border border-red-200 text-red-700 text-[11px] font-bold rounded-xl px-4 py-2.5 uppercase tracking-wide">
+                ⚠ {erro}
+              </div>
+            )}
+            <button type="submit" disabled={salvando} className="w-full bg-purple-600 text-white py-2.5 rounded-xl font-black text-xs uppercase disabled:opacity-50">
+              {salvando ? 'Salvando...' : 'Salvar'}
+            </button>
+          </form>
+        </Modal>
+      )}
+
+      {showBacklog && (
+        <Modal title="Incluir Aluno em Turma" onClose={() => setShowBacklog(false)}>
+          <div className="space-y-4">
+            {backlogLoading ? (
+              <p className="text-sm text-slate-400 text-center py-6">Carregando backlog...</p>
+            ) : backlog.length === 0 ? (
+              <p className="text-sm text-slate-400 text-center py-6">Nenhum aluno no backlog.</p>
+            ) : (
+              <>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase text-slate-500">Aluno (backlog)</label>
+                  <select value={backlogAlunoId} onChange={e => setBacklogAlunoId(e.target.value)}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white">
+                    <option value="">Selecione o aluno...</option>
+                    {backlog.map(b => (
+                      <option key={b.id} value={b.aluno_id}>{nomeAluno(b.aluno_id)}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase text-slate-500">Turma de destino</label>
+                  <select value={backlogTurmaId} onChange={e => setBacklogTurmaId(e.target.value)}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white">
+                    <option value="">Selecione a turma...</option>
+                    {turmas.filter(t => t.ativo !== false).map(t => (
+                      <option key={t.id} value={t.id}>{t.nome}{t.turno ? ` (${t.turno})` : ''}</option>
+                    ))}
+                  </select>
+                </div>
+                <button disabled={!backlogAlunoId || !backlogTurmaId}
+                  onClick={confirmarInclusao}
+                  className="w-full bg-indigo-600 text-white py-2.5 rounded-xl font-black text-xs uppercase disabled:opacity-40 hover:bg-indigo-700">
+                  Confirmar
+                </button>
+              </>
+            )}
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ─── Tab: Diário ──────────────────────────────────────────────────────────────
+
+function DiarioTab({ turmas, alunos }: { turmas: Turma[]; alunos: Aluno[] }) {
+  const [registros, setRegistros] = useState<DiarioEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [filtroTipo, setFiltroTipo] = useState('');
+  const [form, setForm] = useState<Partial<DiarioEntry>>({ data: new Date().toISOString().slice(0,10) });
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params: Record<string, string> = {};
+      if (filtroTipo) params.tipo = filtroTipo;
+      const r = await api.get('/academico/diario', { params });
+      setRegistros(r.data);
+    } catch {}
+    setLoading(false);
+  }, [filtroTipo]);
+  useEffect(() => { load(); }, [load]);
+
+  const salvar = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try { await api.post('/academico/diario', form); setShowModal(false); setForm({ data: new Date().toISOString().slice(0,10) }); await load(); } catch {}
+  };
+
+  const deletar = async (id: string) => {
+    if (!confirm('Excluir registro?')) return;
+    try { await api.delete(`/academico/diario/${id}`); await load(); } catch {}
+  };
+
+  const corTipo: Record<string, string> = {
+    'Avaliação':  'bg-blue-100 text-blue-700',
+    'Presença':   'bg-green-100 text-green-700',
+    'Incidente':  'bg-red-100 text-red-700',
+    'Observação': 'bg-amber-100 text-amber-700',
+    'Comunicado': 'bg-purple-100 text-purple-700',
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap justify-between items-center gap-3">
+        <div className="flex items-center gap-3">
+          <h2 className="text-lg font-black uppercase tracking-tight text-slate-800">Diário Acadêmico</h2>
+          <select value={filtroTipo} onChange={e => setFiltroTipo(e.target.value)}
+            className="border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white">
+            <option value="">Todos os tipos</option>
+            {TIPOS_DIARIO.map(t => <option key={t}>{t}</option>)}
+          </select>
+        </div>
+        <button onClick={() => setShowModal(true)} className="flex items-center gap-2 bg-purple-600 text-white px-5 py-2.5 rounded-xl font-black text-[10px] uppercase hover:bg-purple-700">
+          <Plus size={14}/> Novo Registro
+        </button>
+      </div>
+
+      <div className="space-y-2">
+        {loading ? (
+          <div className="py-16 text-center text-sm text-slate-400">Carregando...</div>
+        ) : registros.length === 0 ? (
+          <div className="py-16 text-center text-sm text-slate-400">Nenhum registro encontrado.</div>
+        ) : registros.map(r => (
+          <div key={r.id} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 flex gap-4 hover:shadow-md transition-shadow">
+            <div className="shrink-0 flex flex-col items-center gap-1">
+              <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase ${corTipo[r.tipo] || 'bg-slate-100 text-slate-600'}`}>{r.tipo}</span>
+              <span className="text-[9px] text-slate-400 font-bold">{fmtDate(r.data)}</span>
+            </div>
+            <div className="flex-1 min-w-0">
+              {r.titulo && <h4 className="font-black text-sm text-slate-800 leading-tight">{r.titulo}</h4>}
+              {r.descricao && <p className="text-xs text-slate-600 mt-0.5">{r.descricao}</p>}
+              {r.usuario_nome && <p className="text-[9px] text-slate-400 mt-1">Por: {r.usuario_nome}</p>}
+            </div>
+            <button onClick={() => deletar(r.id)} className="shrink-0 p-1.5 rounded-lg hover:bg-red-50 text-red-300 hover:text-red-500 transition-colors">
+              <Trash2 size={13}/>
+            </button>
+          </div>
+        ))}
+      </div>
+
+      {showModal && (
+        <Modal title="Novo Registro no Diário" onClose={() => { setShowModal(false); setForm({ data: new Date().toISOString().slice(0,10) }); }}>
+          <form onSubmit={salvar} className="space-y-3">
+            <FieldSelect label="Tipo" value={form.tipo ?? ''} onChange={v => setForm(p => ({ ...p, tipo: v }))} options={TIPOS_DIARIO} required />
+            <FieldInput label="Data" type="date" value={form.data} onChange={v => setForm(p => ({ ...p, data: v }))} required />
+            <FieldInput label="Título (opcional)" value={form.titulo} onChange={v => setForm(p => ({ ...p, titulo: v }))} />
+            <div className="space-y-1">
+              <label className="text-[10px] font-black uppercase text-slate-500">Descrição</label>
+              <textarea value={form.descricao ?? ''} onChange={e => setForm(p => ({ ...p, descricao: e.target.value }))} rows={3}
+                className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 resize-none" />
+            </div>
+            {alunos.length > 0 && (
+              <FieldSelect label="Aluno (opcional)" value={form.aluno_id ?? ''} onChange={v => setForm(p => ({ ...p, aluno_id: v }))}
+                options={alunos.map(a => ({ value: a.id, label: a.nome_completo }))} />
+            )}
+            {turmas.length > 0 && (
+              <FieldSelect label="Turma (opcional)" value={form.turma_id ?? ''} onChange={v => setForm(p => ({ ...p, turma_id: v }))}
+                options={turmas.map(t => ({ value: t.id, label: t.nome }))} />
+            )}
+            <button type="submit" className="w-full bg-purple-600 text-white py-2.5 rounded-xl font-black text-xs uppercase">Salvar Registro</button>
+          </form>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ─── Página principal ─────────────────────────────────────────────────────────
+
+export default function AcademicoPage() {
+  const [activeTab, setActiveTab] = useState('grade');
+  const [cursos, setCursos] = useState<Curso[]>([]);
+  const [professores, setProfessores] = useState<Professor[]>([]);
+  const [turmas, setTurmas] = useState<Turma[]>([]);
+  const [alunos, setAlunos] = useState<Aluno[]>([]);
+  const [isMounted, setIsMounted] = useState(false);
+  const { user } = useAuth();
+
+  const podeEditar = GRUPOS_EDITOR.map(g => g.toLowerCase()).includes((user?.role ?? '').toLowerCase());
+
+  useEffect(() => {
+    setIsMounted(true);
+    const loadBase = async () => {
+      try {
+        const [rc, rp, rt, ra] = await Promise.all([
+          api.get('/academico/cursos'),
+          api.get('/academico/professores'),
+          api.get('/academico/turmas'),
+          api.get('/academico/alunos'),
+        ]);
+        setCursos(rc.data);
+        setProfessores(rp.data);
+        setTurmas(rt.data);
+        setAlunos(ra.data);
+      } catch {}
+    };
+    loadBase();
+  }, []);
+
+  if (!isMounted) return null;
+
+  const TABS = [
+    { id: 'grade',  label: 'Grade',  Icon: LayoutGrid },
+    { id: 'alunos', label: 'Alunos', Icon: Users },
+    { id: 'cursos', label: 'Cursos', Icon: BookOpen },
+    { id: 'turmas', label: 'Turmas', Icon: ClipboardList },
+    { id: 'diario', label: 'Diário', Icon: History },
+  ];
+
+  return (
+    <div className="min-h-screen bg-gray-50 dark:bg-[#131b2e] p-6 lg:p-8 font-sans antialiased text-slate-900 dark:text-slate-100">
+      <div className="max-w-[1600px] mx-auto space-y-6">
+        <header className="flex flex-col md:flex-row justify-between items-center bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm gap-4">
+          <div className="flex items-center gap-4">
+            <div className="bg-purple-600 p-3 rounded-2xl shadow-lg">
+              <GraduationCap className="text-white" size={26} />
+            </div>
+            <div>
+              <h1 className="text-2xl font-black uppercase tracking-tighter italic text-slate-900 dark:text-white">
+                Acadêmico<span className="text-purple-400">.ITP</span>
+              </h1>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">
+                Gestão Educacional e Grade Curricular
+              </p>
+            </div>
+          </div>
+          <nav className="flex bg-slate-100 dark:bg-slate-800 p-1.5 rounded-2xl gap-1 overflow-x-auto">
+            {TABS.map(t => <TabBtn key={t.id} id={t.id} active={activeTab} set={setActiveTab} label={t.label} Icon={t.Icon} />)}
+          </nav>
+        </header>
+        <main>
+          {activeTab === 'grade'  && <GradeTab podeEditar={podeEditar} turmas={turmas} />}
+          {activeTab === 'alunos' && <AlunosTab />}
+          {activeTab === 'cursos' && <CursosTab />}
+          {activeTab === 'turmas' && <TurmasTab cursos={cursos} professores={professores} alunos={alunos} />}
+          {activeTab === 'diario' && <DiarioTab turmas={turmas} alunos={alunos} />}
+        </main>
+      </div>
+    </div>
+  );
+}
+

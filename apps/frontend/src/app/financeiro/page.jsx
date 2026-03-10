@@ -18,7 +18,7 @@ export default function FinanceiroOperacional() {
   if (!isMounted) return null;
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] p-4 md:p-8 font-sans antialiased text-slate-900">
+    <div className="min-h-screen bg-[#F8FAFC] dark:bg-[#131b2e] p-4 md:p-8 font-sans antialiased text-slate-900 dark:text-slate-100">
       <div className="max-w-[1600px] mx-auto space-y-6">
         
         {/* HEADER OPERACIONAL */}

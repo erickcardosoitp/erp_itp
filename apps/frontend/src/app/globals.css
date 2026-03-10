@@ -2,36 +2,64 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ☀️ TEMA CLARO REFINADO (Contraste Elevado) */
-:root {
-  /* Fundo um tom mais cinza para o card branco brilhar */
-  --background: #F1F5F9; /* Slate 100 */
-  --foreground: #0F172A; /* Slate 900 */
-  --card: #FFFFFF;
-  --border: #D1D5DB;     /* Gray 300: Bordas mais nítidas */
-  --input: #F8FAFC;      /* Slate 50 */
-}
-
-/* 🌙 TEMA ESCURO (Navy Premium - Já Ajustado) */
-.dark {
-  --background: #0F172A; 
-  --foreground: #F1F5F9; 
-  --card: #1E293B;       
-  --border: #334155;     
-  --input: #020617;      
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 262.1 83.3% 57.8%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 262.1 83.3% 57.8%;
+    --radius: 0.5rem;
+  }
+ 
+  .dark {
+    --background: 222 25% 13%;
+    --foreground: 215 25% 88%;
+    --card: 222 25% 16%;
+    --card-foreground: 215 25% 88%;
+    --popover: 222 25% 16%;
+    --popover-foreground: 215 25% 88%;
+    --primary: 262.1 83.3% 57.8%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 222 20% 20%;
+    --secondary-foreground: 215 25% 85%;
+    --muted: 222 20% 20%;
+    --muted-foreground: 215 15% 60%;
+    --accent: 222 20% 20%;
+    --accent-foreground: 215 25% 88%;
+    --destructive: 0 62.8% 40%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 222 20% 22%;
+    --input: 222 20% 18%;
+    --ring: 262.1 83.3% 57.8%;
+  }
 }
 
 @layer base {
   body {
-    background-color: var(--background);
-    color: var(--foreground);
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
     font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
     @apply transition-colors duration-500 ease-in-out;
   }
 
   /* 🏛️ FORMAS E SOMBRAS (Modo Arquitetura) */
   section, .card-itp {
-    background-color: var(--card);
+    background-color: hsl(var(--card));
     /* Sombras mais presentes no modo claro para volume */
     @apply border border-slate-200 dark:border-slate-700/50 
            shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.5)] 
@@ -45,11 +73,14 @@
 
   /* INPUTS: Com efeito de profundidade (shadow-inner) */
   input, select, textarea {
-    background-color: var(--input);
-    color: var(--foreground);
-    border: 1px solid var(--border);
-    @apply rounded-2xl px-5 py-4 outline-none focus:ring-2 focus:ring-purple-500 
+    background-color: hsl(var(--input));
+    color: hsl(var(--foreground));
+    border-color: hsl(var(--border));
+    @apply rounded-2xl px-5 py-4 outline-none border focus:ring-2 
            shadow-inner transition-all placeholder:text-slate-400 dark:placeholder:text-slate-600;
+  }
+  input:focus, select:focus, textarea:focus {
+    --tw-ring-color: hsl(var(--ring));
   }
 
   /* Reset de bordas genérico */
@@ -58,7 +89,88 @@
   }
 }
 
-/* 🎨 BARRA DE ROLAGEM CUSTOMIZADA */
+/* � DARK MODE: garante que qualquer wrapper de página com min-h-screen herde o fundo escuro */
+.dark [class*="min-h-screen"]:not(aside) {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
+/* Cards e seções brancas no dark mode */
+.dark .bg-white {
+  background-color: hsl(222 25% 16%) !important;
+}
+
+.dark [class*="rounded"][class*="bg-white"] {
+  background-color: hsl(222 25% 16%);
+}
+
+/* 🌙 TEXTOS ESCUROS → CLAROS NO DARK MODE */
+/* Cobre todas as classes Tailwind de texto escuro usadas nas páginas */
+.dark .text-slate-900,
+.dark .text-slate-800,
+.dark .text-slate-700 {
+  color: hsl(215 25% 88%) !important;
+}
+
+.dark .text-slate-600,
+.dark .text-slate-500 {
+  color: hsl(215 15% 65%) !important;
+}
+
+.dark .text-slate-400 {
+  color: hsl(215 12% 52%) !important;
+}
+
+/* Fundos cinza claro (slate-50 / slate-100) ficam cinza escuro */
+.dark .bg-slate-50 {
+  background-color: hsl(222 22% 18%) !important;
+}
+
+.dark .bg-slate-100 {
+  background-color: hsl(222 22% 20%) !important;
+}
+
+/* Fundos gray-50 / gray-100 (usados em rows e cards internos) */
+.dark .bg-gray-50 {
+  background-color: hsl(222 22% 18%) !important;
+}
+
+.dark .bg-gray-100 {
+  background-color: hsl(222 22% 20%) !important;
+}
+
+/* Textos gray escuros → claros no dark mode */
+.dark .text-black {
+  color: hsl(215 25% 92%) !important;
+}
+
+.dark .text-gray-900,
+.dark .text-gray-800,
+.dark .text-gray-700 {
+  color: hsl(215 25% 88%) !important;
+}
+
+.dark .text-purple-950,
+.dark .text-purple-900 {
+  color: hsl(270 80% 85%) !important;
+}
+
+.dark .text-gray-600,
+.dark .text-gray-500 {
+  color: hsl(215 15% 65%) !important;
+}
+
+.dark .text-gray-400 {
+  color: hsl(215 12% 52%) !important;
+}
+
+/* Bordas gray no dark mode */
+.dark .border-gray-100,
+.dark .border-gray-200 {
+  border-color: hsl(222 20% 22%) !important;
+}
+
+/* �🎨 BARRA DE ROLAGEM CUSTOMIZADA */
 ::-webkit-scrollbar {
   width: 10px;
 }

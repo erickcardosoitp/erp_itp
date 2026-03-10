@@ -23,7 +23,7 @@ export default function GestaoDoacoesPro() {
   if (!isMounted) return null;
 
   return (
-    <div className="min-h-screen bg-[#FDFDFF] p-6 lg:p-10 font-sans">
+    <div className="min-h-screen bg-[#FDFDFF] dark:bg-[#131b2e] p-6 lg:p-10 font-sans dark:text-slate-100">
       <div className="max-w-[1500px] mx-auto space-y-8">
         
         {/* HEADER ESTRUTURADO */}
@@ -34,10 +34,10 @@ export default function GestaoDoacoesPro() {
             </div>
             <div>
               <h1 className="text-4xl font-black text-slate-900 uppercase italic tracking-tighter">
-                Captação<span className="text-rose-500">.ITP</span>
+                Doações<span className="text-rose-500">.ITP</span>
               </h1>
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                <ShieldCheck size={14} className="text-rose-500" /> Gestão de Impacto e Transparência
+                <ShieldCheck size={14} className="text-rose-500" /> Gestão de Captação e Transparência
               </p>
             </div>
           </div>

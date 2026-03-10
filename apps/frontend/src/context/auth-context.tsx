@@ -2,24 +2,27 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import Cookies from 'js-cookie';
-import { jwtDecode } from 'jwt-decode';
 
 interface UserPayload {
   email: string;
   role: string; // Ex: 'ADMIN', 'DRT'
   sub: number;
+  nome?: string;
+  fotoUrl?: string;
 }
 
 interface AuthContextType {
   user: UserPayload | null;
+  setUser: React.Dispatch<React.SetStateAction<UserPayload | null>>;
   isAuthenticated: boolean;
   loading: boolean;
 }
 
-const AuthContext = createContext<AuthContextType>({ 
-  user: null, 
+const AuthContext = createContext<AuthContextType>({
+  user: null,
+  setUser: () => {},
   isAuthenticated: false,
-  loading: true 
+  loading: true
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -27,24 +30,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // 1. Captura o cookie definido no backend (nome sincronizado com auth.controller.ts)
-    const token = Cookies.get('itp_token');
-
-    if (token) {
+    const fetchUser = async () => {
       try {
-        // 2. Decodifica o cargo (Role) do token
-        const decoded = jwtDecode<UserPayload>(token);
-        setUser(decoded);
+        const token = Cookies.get('itp_token');
+
+        // Monta os headers: se o cookie for legível pelo js-cookie, usa Bearer.
+        // Caso contrário, o browser enviará automaticamente o cookie httpOnly
+        // graças a credentials: 'include'.
+        const headers: Record<string, string> = {};
+        if (token) {
+          headers['Authorization'] = `Bearer ${token.replace(/"/g, '')}`;
+        }
+
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_API_BASE_URL}/usuarios/perfil`,
+          { method: 'GET', credentials: 'include', headers }
+        );
+
+        if (response.ok) {
+          const userData = await response.json();
+          setUser(userData);
+        } else {
+          setUser(null);
+        }
       } catch (error) {
-        console.error("Sessão inválida:", error);
-        Cookies.remove('itp_token');
+        console.error('Falha ao buscar os dados do usuário:', error);
+        setUser(null);
+      } finally {
+        setLoading(false);
       }
-    }
-    setLoading(false);
+    };
+
+    fetchUser();
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated: !!user, loading }}>
+    <AuthContext.Provider value={{ user, setUser, isAuthenticated: !!user, loading }}>
       {children}
     </AuthContext.Provider>
   );

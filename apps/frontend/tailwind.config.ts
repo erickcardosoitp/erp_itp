@@ -1,6 +1,7 @@
 import type { Config } from "tailwindcss";
 
 const config: Config = {
+  darkMode: 'class',
   // Ajustamos os caminhos para garantir que ele foque na pasta src do frontend
   content: [
     "./src/app/**/*.{js,ts,jsx,tsx,mdx}",

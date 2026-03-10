@@ -10,7 +10,7 @@ export default function RelatoriosPage() {
   ];
 
   return (
-    <div className="p-8 space-y-8">
+    <div className="min-h-screen bg-[#F8FAFC] dark:bg-[#131b2e] p-8 space-y-8 text-slate-900 dark:text-slate-100">
       <h1 className="text-3xl font-black uppercase text-purple-950">Central de Relatórios</h1>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">

@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
 import Cookies from 'js-cookie';
 import { 
   Lock, User, Loader2, 
@@ -16,9 +15,6 @@ function LoginForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [isMounted, setIsMounted] = useState(false);
-  
-  const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get('callbackUrl') || '/dashboard';
 
   useEffect(() => {
     setIsMounted(true);
@@ -50,14 +46,17 @@ function LoginForm() {
       const infoUsuario = data.usuario || data.user || data;
       if (infoUsuario) {
         const usuarioString = JSON.stringify(infoUsuario);
-        // Persistência para o Frontend ler a Identidade Visual
         localStorage.setItem('usuario', usuarioString);
-        Cookies.set('usuario', usuarioString, { expires: 7 });
+      }
+
+      // Salva o token num cookie legível pelo axios (8h de validade)
+      if (data.access_token) {
+        Cookies.set('itp_token', data.access_token, { expires: 1 / 3, path: '/' }); // 8h = 1/3 dia
       }
 
       // Pequeno delay para garantir que o navegador processe o localStorage antes de mudar de página
       setTimeout(() => {
-        window.location.href = callbackUrl;
+        window.location.href = '/dashboard';
       }, 100);
       
     } catch (err: any) {

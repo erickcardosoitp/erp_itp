@@ -52,10 +52,10 @@ export default function DashboardEstrategico() {
     setIsMounted(true);
   }, []);
 
-  if (!isMounted) return <div className="min-h-screen bg-slate-50" />;
+  if (!isMounted) return <div className="min-h-screen bg-slate-50 dark:bg-[#131b2e]" />;
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] p-4 md:p-8 font-sans antialiased text-slate-900">
+    <div className="min-h-screen bg-[#F8FAFC] dark:bg-[#131b2e] p-4 md:p-8 font-sans antialiased text-slate-900 dark:text-slate-100">
       <div className="max-w-[1600px] mx-auto">
         
         {/* HEADER COM STORYTELLING */}
@@ -70,9 +70,9 @@ export default function DashboardEstrategico() {
               </span>
             </div>
             <h1 className="text-4xl font-black text-slate-900 uppercase tracking-tighter italic">
-              Visão <span className="text-purple-600">Estratégica</span>
+              Dash<span className="text-purple-600">.ITP</span>
             </h1>
-            <p className="text-slate-500 font-bold text-xs uppercase tracking-tight">Instituto Todos Por Um • Unidade Rio de Janeiro</p>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Visão Geral e Indicadores Estratégicos</p>
           </div>
 
           <div className="flex gap-4 bg-white p-3 rounded-3xl shadow-sm border border-slate-100">
