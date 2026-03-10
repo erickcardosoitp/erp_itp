@@ -33,6 +33,8 @@ const nextConfig = {
   webpack: (config) => {
     // npm workspaces hoists packages to the monorepo root node_modules
     config.resolve.modules.push(path.resolve(monorepoRoot, 'node_modules'));
+    // Follow symlinks (needed for Vercel where node_modules is symlinked)
+    config.resolve.symlinks = true;
     return config;
   },
 

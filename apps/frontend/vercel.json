@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "installCommand": "cd ../.. && npm install",
+  "installCommand": "cd ../.. && npm install && rm -rf apps/frontend/node_modules && ln -s ../../node_modules apps/frontend/node_modules",
   "env": {
     "BACKEND_INTERNAL_URL": "https://api.itp.institutotiapretinha.org",
     "APP_URL": "https://itp.institutotiapretinha.org"
