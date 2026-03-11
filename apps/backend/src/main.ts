@@ -3,7 +3,7 @@ import { ValidationPipe, Logger } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
 // ✅ CORREÇÃO DO IMPORT: Tente usar o caminho absoluto ou garanta que o arquivo existe
-import { AppModule } from '../api/app.module'; 
+import { AppModule } from './app.module';
 // ✅ CORREÇÃO DO COOKIE-PARSER: Importação robusta para evitar erro de callable
 import * as cookieParser from 'cookie-parser';
 
