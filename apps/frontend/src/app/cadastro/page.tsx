@@ -12,7 +12,32 @@ import api from '@/services/api';
 
 type TabId = 'funcionarios' | 'usuarios' | 'grupos' | 'cursos' | 'alunos' | 'insumos' | 'doadores' | 'contas';
 
-interface Professor { id: string; nome: string; especialidade?: string; email?: string; ativo?: boolean; }
+interface Professor {
+  id: string;
+  nome: string;
+  especialidade?: string;
+  email?: string;
+  cpf?: string;
+  data_nascimento?: string;
+  celular?: string;
+  sexo?: string;
+  raca_cor?: string;
+  escolaridade?: string;
+  cep?: string;
+  numero_residencia?: string;
+  complemento?: string;
+  estado?: string;
+  telefone_emergencia_1?: string;
+  telefone_emergencia_2?: string;
+  possui_deficiencia?: boolean;
+  deficiencia_descricao?: string;
+  possui_alergias?: boolean;
+  alergias_descricao?: string;
+  usa_medicamentos?: boolean;
+  medicamentos_descricao?: string;
+  interesse_cursos?: boolean;
+  ativo?: boolean;
+}
 interface UsuarioAdmin { id: string; nome: string; email: string; role: string; grupo?: { id: string; nome: string }; }
 interface Grupo { id: string; nome: string; grupo_permissoes?: any; usuarios?: { id: string; nome: string }[]; }
 interface Curso { id: string; codigo?: string; nome: string; sigla: string; status: string; periodo?: string; descricao?: string; }
@@ -205,12 +230,88 @@ function FuncionariosTab({ onCount }: { onCount: (n: number) => void }) {
 
       {modal.aberto && (
         <Modal title={modal.editando ? 'Editar Funcionário' : 'Novo Funcionário'} onClose={fecharModal}>
-          <form onSubmit={handleSalvar} className="space-y-3">
+          <form onSubmit={handleSalvar} className="space-y-4">
             {erro && <ErroBanner msg={erro} />}
-            <FieldInput label="Nome *" value={form.nome ?? ''} onChange={v => setForm(p => ({ ...p, nome: v }))} required />
-            <FieldInput label="Cargo / Especialidade" value={form.especialidade ?? ''} onChange={v => setForm(p => ({ ...p, especialidade: v }))} placeholder="Ex: Professor, Cozinha, Administrativo..." />
-            <FieldInput label="E-mail" type="email" value={form.email ?? ''} onChange={v => setForm(p => ({ ...p, email: v }))} />
-            <ToggleAtivo valor={form.ativo !== false} onChange={v => setForm(p => ({ ...p, ativo: v }))} />
+
+            <p className="text-xs font-semibold text-purple-700 uppercase tracking-wider">Dados Pessoais</p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <FieldInput label="Nome Completo *" value={form.nome ?? ''} onChange={v => setForm(p => ({ ...p, nome: v }))} required />
+              <FieldInput label="Cargo / Especialidade" value={form.especialidade ?? ''} onChange={v => setForm(p => ({ ...p, especialidade: v }))} placeholder="Ex: Professor, Cozinha, Administrativo..." />
+              <FieldInput label="E-mail" type="email" value={form.email ?? ''} onChange={v => setForm(p => ({ ...p, email: v }))} />
+              <FieldInput label="CPF" value={form.cpf ?? ''} onChange={v => setForm(p => ({ ...p, cpf: v }))} placeholder="000.000.000-00" />
+              <FieldInput label="Data de Nascimento" type="date" value={form.data_nascimento ?? ''} onChange={v => setForm(p => ({ ...p, data_nascimento: v }))} />
+              <FieldInput label="Celular *" value={form.celular ?? ''} onChange={v => setForm(p => ({ ...p, celular: v }))} placeholder="(21) 99999-9999" />
+              <FieldSelect label="Sexo" value={form.sexo ?? ''} onChange={v => setForm(p => ({ ...p, sexo: v }))}>
+                <option value="">Selecione...</option>
+                <option value="Masculino">Masculino</option>
+                <option value="Feminino">Feminino</option>
+                <option value="Não-binário">Não-binário</option>
+                <option value="Prefiro não informar">Prefiro não informar</option>
+              </FieldSelect>
+              <FieldSelect label="Raça/Cor" value={form.raca_cor ?? ''} onChange={v => setForm(p => ({ ...p, raca_cor: v }))}>
+                <option value="">Selecione...</option>
+                <option value="Branca">Branca</option>
+                <option value="Preta">Preta</option>
+                <option value="Parda">Parda</option>
+                <option value="Amarela">Amarela</option>
+                <option value="Indígena">Indígena</option>
+                <option value="Prefiro não informar">Prefiro não informar</option>
+              </FieldSelect>
+              <FieldSelect label="Escolaridade" value={form.escolaridade ?? ''} onChange={v => setForm(p => ({ ...p, escolaridade: v }))}>
+                <option value="">Selecione...</option>
+                <option value="Fundamental Incompleto">Fundamental Incompleto</option>
+                <option value="Fundamental Completo">Fundamental Completo</option>
+                <option value="Médio Incompleto">Médio Incompleto</option>
+                <option value="Médio Completo">Médio Completo</option>
+                <option value="Superior Incompleto">Superior Incompleto</option>
+                <option value="Superior Completo">Superior Completo</option>
+                <option value="Pós-graduação">Pós-graduação</option>
+              </FieldSelect>
+            </div>
+
+            <p className="text-xs font-semibold text-purple-700 uppercase tracking-wider pt-2">Endereço</p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <FieldInput label="CEP" value={form.cep ?? ''} onChange={v => setForm(p => ({ ...p, cep: v }))} placeholder="00000-000" />
+              <FieldInput label="Número da Residência" value={form.numero_residencia ?? ''} onChange={v => setForm(p => ({ ...p, numero_residencia: v }))} />
+              <FieldInput label="Complemento" value={form.complemento ?? ''} onChange={v => setForm(p => ({ ...p, complemento: v }))} placeholder="Ex: Apartamento, Bloco" />
+              <FieldInput label="Estado" value={form.estado ?? ''} onChange={v => setForm(p => ({ ...p, estado: v }))} placeholder="Ex: RJ, SP" />
+            </div>
+
+            <p className="text-xs font-semibold text-purple-700 uppercase tracking-wider pt-2">Emergência</p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <FieldInput label="Telefone de Emergência 1 *" value={form.telefone_emergencia_1 ?? ''} onChange={v => setForm(p => ({ ...p, telefone_emergencia_1: v }))} placeholder="(21) 99999-9999" />
+              <FieldInput label="Telefone de Emergência 2" value={form.telefone_emergencia_2 ?? ''} onChange={v => setForm(p => ({ ...p, telefone_emergencia_2: v }))} placeholder="(21) 99999-9999" />
+            </div>
+
+            <p className="text-xs font-semibold text-purple-700 uppercase tracking-wider pt-2">Saúde</p>
+            <div className="space-y-2">
+              <div className="flex items-center gap-3">
+                <input type="checkbox" id="possui_deficiencia" checked={!!form.possui_deficiencia} onChange={e => setForm(p => ({ ...p, possui_deficiencia: e.target.checked, deficiencia_descricao: e.target.checked ? p.deficiencia_descricao : '' }))} className="w-4 h-4 accent-purple-600" />
+                <label htmlFor="possui_deficiencia" className="text-sm text-gray-700">Possui algum tipo de deficiência?</label>
+              </div>
+              {form.possui_deficiencia && <FieldInput label="Qual(is) deficiência(s)?" value={form.deficiencia_descricao ?? ''} onChange={v => setForm(p => ({ ...p, deficiencia_descricao: v }))} placeholder="Descreva" />}
+
+              <div className="flex items-center gap-3">
+                <input type="checkbox" id="possui_alergias" checked={!!form.possui_alergias} onChange={e => setForm(p => ({ ...p, possui_alergias: e.target.checked, alergias_descricao: e.target.checked ? p.alergias_descricao : '' }))} className="w-4 h-4 accent-purple-600" />
+                <label htmlFor="possui_alergias" className="text-sm text-gray-700">Possui Alergias?</label>
+              </div>
+              {form.possui_alergias && <FieldInput label="Qual(is) alergia(s)?" value={form.alergias_descricao ?? ''} onChange={v => setForm(p => ({ ...p, alergias_descricao: v }))} placeholder="Descreva" />}
+
+              <div className="flex items-center gap-3">
+                <input type="checkbox" id="usa_medicamentos" checked={!!form.usa_medicamentos} onChange={e => setForm(p => ({ ...p, usa_medicamentos: e.target.checked, medicamentos_descricao: e.target.checked ? p.medicamentos_descricao : '' }))} className="w-4 h-4 accent-purple-600" />
+                <label htmlFor="usa_medicamentos" className="text-sm text-gray-700">Faz uso contínuo de algum medicamento?</label>
+              </div>
+              {form.usa_medicamentos && <FieldInput label="Quais medicamentos? (Nome e dosagem)" value={form.medicamentos_descricao ?? ''} onChange={v => setForm(p => ({ ...p, medicamentos_descricao: v }))} placeholder="Ex: Metformina 500mg" />}
+
+              <div className="flex items-center gap-3">
+                <input type="checkbox" id="interesse_cursos" checked={!!form.interesse_cursos} onChange={e => setForm(p => ({ ...p, interesse_cursos: e.target.checked }))} className="w-4 h-4 accent-purple-600" />
+                <label htmlFor="interesse_cursos" className="text-sm text-gray-700">Tem interesse em se matricular em algum curso do Instituto Tia Pretinha?</label>
+              </div>
+            </div>
+
+            <div className="pt-2">
+              <ToggleAtivo valor={form.ativo !== false} onChange={v => setForm(p => ({ ...p, ativo: v }))} />
+            </div>
             <BtnSalvar salvando={salvando} editando={!!modal.editando} />
           </form>
         </Modal>
