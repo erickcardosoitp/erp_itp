@@ -274,9 +274,6 @@ const MODULOS_SISTEMA = [
   { key: 'financeiro',      label: 'Financeiro' },
   { key: 'doacoes',         label: 'Doações' },
   { key: 'estoque',         label: 'Estoque' },
-  { key: 'relatorios',      label: 'Relatórios' },
-  { key: 'marketing',       label: 'Marketing' },
-  { key: 'configuracoes',   label: 'Configurações' },
 ];
 
 const ACOES_PERM = [
