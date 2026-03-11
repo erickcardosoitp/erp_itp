@@ -35,24 +35,33 @@ function str_(value) {
 }
 
 /**
- * Busca um campo no objeto r com comparação case-insensitive e sem pontuação final.
+ * Extrai o valor de uma entrada do namedValues (array) ou string já processada.
+ */
+function extrair_(raw) {
+  if (!raw) return null;
+  var val = Array.isArray(raw) ? raw[0] : raw;
+  return str_(val);
+}
+
+/**
+ * Busca um campo em r (namedValues) com comparação case-insensitive e sem pontuação final.
  * Aceita múltiplas chaves candidatas e retorna a primeira que tiver valor.
  */
 function campo_(r, chaves) {
   if (!Array.isArray(chaves)) chaves = [chaves];
   // Tentativa exata primeiro
   for (var i = 0; i < chaves.length; i++) {
-    var v = str_(r[chaves[i]]);
+    var v = extrair_(r[chaves[i]]);
     if (v) return v;
   }
-  // Fallback case-insensitive + sem pontuação final
+  // Fallback case-insensitive + sem pontuação/espaço no final
   var normalize = function(s) { return s.toLowerCase().replace(/[:\s]+$/, '').trim(); };
   var normalizedKeys = chaves.map(normalize);
   for (var key in r) {
     var nk = normalize(key);
     for (var j = 0; j < normalizedKeys.length; j++) {
       if (nk === normalizedKeys[j]) {
-        var v2 = str_(r[key]);
+        var v2 = extrair_(r[key]);
         if (v2) return v2;
       }
     }
@@ -83,11 +92,11 @@ var API_URL_FUNCIONARIO = 'https://api.itp.institutotiapretinha.org/api/academic
 
 function onFormSubmit(e) {
   try {
-    var r = {};
-    var values = e.namedValues || {};
-    for (var key in values) {
-      r[key] = (values[key][0] || '').toString().trim();
-    }
+    // Usa namedValues diretamente — cada chave é o título da pergunta, valor é array
+    var r = (e && e.namedValues) ? e.namedValues : {};
+
+    // Log diagnóstico: mostra todos os campos recebidos
+    Logger.log('[Campos recebidos] ' + Object.keys(r).join(' | '));
 
     var body = {
       nome:                   campo_(r, ['Nome Completo', 'Nome completo', 'Nome']),
@@ -113,6 +122,8 @@ function onFormSubmit(e) {
       interesse_cursos:       simParaBool_(campo_(r, ['Tem interesse em se matricular em algum curso do Instituto Tia Pretinha?', 'Interesse em cursos?'])),
       ativo:                  true,
     };
+
+    Logger.log('[body.nome resolvido] "' + body.nome + '"');
 
     var secret = getConf_('WEBHOOK_SECRET') || 'itp-forms-2026';
 
