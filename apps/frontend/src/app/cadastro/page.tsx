@@ -5,13 +5,15 @@ import {
   Users, Briefcase, ShieldCheck, GraduationCap, UserCheck,
   Package, Heart, Landmark, MapPin, Phone, User, Activity,
   Plus, Trash2, Edit3, Search, X, AlertCircle, Eye, EyeOff, Settings2, UserPlus, RefreshCw,
+  ArrowLeftRight, BookOpen, Tag, UserCog, CreditCard, Repeat,
 } from 'lucide-react';
 import api from '@/services/api';
 import { useAuth } from '@/context/auth-context';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
-type TabId = 'funcionarios' | 'usuarios' | 'grupos' | 'cursos' | 'alunos' | 'insumos' | 'doadores' | 'contas';
+type TabId = 'funcionarios' | 'usuarios' | 'grupos' | 'cursos' | 'alunos' | 'insumos' | 'doadores' | 'contas'
+  | 'fin_tipos_mov' | 'fin_planos' | 'fin_categorias' | 'fin_tipos_pessoa' | 'fin_formas_pag' | 'fin_recorrencias';
 
 interface Professor {
   id: string;
@@ -135,6 +137,8 @@ export default function CadastroBasicoPage() {
   const [counts, setCounts] = useState<Record<TabId, number>>({
     funcionarios: 0, usuarios: 0, grupos: 0, cursos: 0,
     alunos: 0, insumos: 0, doadores: 0, contas: 0,
+    fin_tipos_mov: 0, fin_planos: 0, fin_categorias: 0,
+    fin_tipos_pessoa: 0, fin_formas_pag: 0, fin_recorrencias: 0,
   });
   const [refreshKey, setRefreshKey] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
@@ -151,6 +155,12 @@ export default function CadastroBasicoPage() {
       ['insumos',      '/cadastro/insumos'],
       ['doadores',     '/cadastro/doadores'],
       ['contas',       '/cadastro/contas-bancarias'],
+      ['fin_tipos_mov',    '/financeiro/tipos-movimentacao'],
+      ['fin_planos',       '/financeiro/planos-contas'],
+      ['fin_categorias',   '/financeiro/categorias'],
+      ['fin_tipos_pessoa', '/financeiro/tipos-pessoa'],
+      ['fin_formas_pag',   '/financeiro/formas-pagamento'],
+      ['fin_recorrencias', '/financeiro/recorrencias'],
     ];
     const results = await Promise.allSettled(endpoints.map(([, url]) => api.get(url)));
     setCounts(prev => {
@@ -175,6 +185,9 @@ export default function CadastroBasicoPage() {
       funcionarios: m('funcionarios'), usuarios: m('usuarios'), grupos: m('grupos'),
       cursos: m('cursos'), alunos: m('alunos'), insumos: m('insumos'),
       doadores: m('doadores'), contas: m('contas'),
+      fin_tipos_mov: m('fin_tipos_mov'), fin_planos: m('fin_planos'),
+      fin_categorias: m('fin_categorias'), fin_tipos_pessoa: m('fin_tipos_pessoa'),
+      fin_formas_pag: m('fin_formas_pag'), fin_recorrencias: m('fin_recorrencias'),
     } as Record<TabId, (n: number) => void>;
   }, []);
 
@@ -189,6 +202,15 @@ export default function CadastroBasicoPage() {
     { id: 'insumos',      label: 'Insumos',        icon: Package,       cor: 'orange' },
     { id: 'doadores',     label: 'Doadores',       icon: Heart,         cor: 'rose' },
     { id: 'contas',       label: 'Contas Banc.',   icon: Landmark,      cor: 'indigo' },
+  ];
+
+  const TABS_FINANCEIRO: typeof TABS = [
+    { id: 'fin_tipos_mov',    label: 'Tipo Movim.',    icon: ArrowLeftRight, cor: 'teal' },
+    { id: 'fin_planos',       label: 'Plano Contas',   icon: BookOpen,       cor: 'teal' },
+    { id: 'fin_categorias',   label: 'Categorias',     icon: Tag,            cor: 'teal' },
+    { id: 'fin_tipos_pessoa', label: 'Tipo Pessoa',    icon: UserCog,        cor: 'teal' },
+    { id: 'fin_formas_pag',   label: 'Forma Pagam.',   icon: CreditCard,     cor: 'teal' },
+    { id: 'fin_recorrencias', label: 'Recorrências',   icon: Repeat,         cor: 'teal' },
   ];
 
   return (
@@ -228,10 +250,26 @@ export default function CadastroBasicoPage() {
         </header>
 
         {/* TABS — scroll horizontal em mobile */}
-        <div className="flex gap-3 overflow-x-auto pb-2 mb-8 snap-x">
+        <div className="flex gap-3 overflow-x-auto pb-2 mb-4 snap-x">
           {TABS.map(t => (
             <TabKpi key={t.id} tab={t} active={activeTab} set={setActiveTab} count={counts[t.id]} />
           ))}
+        </div>
+
+        {/* FINANCEIRO — sub-tabs de cadastro */}
+        <div className="mb-8">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="h-px flex-1 bg-teal-200 dark:bg-teal-800" />
+            <span className="text-[9px] font-black uppercase tracking-widest text-teal-600 dark:text-teal-400 px-3 py-1 bg-teal-50 dark:bg-teal-900/30 border border-teal-200 dark:border-teal-800 rounded-full">
+              Cadastros Financeiros
+            </span>
+            <div className="h-px flex-1 bg-teal-200 dark:bg-teal-800" />
+          </div>
+          <div className="flex gap-3 overflow-x-auto pb-2 snap-x">
+            {TABS_FINANCEIRO.map(t => (
+              <TabKpi key={t.id} tab={t} active={activeTab} set={setActiveTab} count={counts[t.id]} />
+            ))}
+          </div>
         </div>
 
         {/* CONTEÚDO */}
@@ -243,6 +281,12 @@ export default function CadastroBasicoPage() {
         {activeTab === 'insumos'      && <InsumosTab      key={refreshKey} onCount={countSetters.insumos} />}
         {activeTab === 'doadores'     && <DoadoresTab     key={refreshKey} onCount={countSetters.doadores} />}
         {activeTab === 'contas'       && <ContasTab       key={refreshKey} onCount={countSetters.contas} />}
+        {activeTab === 'fin_tipos_mov'    && <FinLookupTab key={`${refreshKey}-ftm`} onCount={countSetters.fin_tipos_mov}    endpoint="/financeiro/tipos-movimentacao" titulo="Tipo de Movimentação" cor="teal" />}
+        {activeTab === 'fin_planos'       && <FinLookupTab key={`${refreshKey}-fpc`} onCount={countSetters.fin_planos}       endpoint="/financeiro/planos-contas"      titulo="Plano de Contas"       cor="teal" />}
+        {activeTab === 'fin_categorias'   && <FinLookupTab key={`${refreshKey}-fca`} onCount={countSetters.fin_categorias}   endpoint="/financeiro/categorias"          titulo="Categoria Financeira"  cor="teal" />}
+        {activeTab === 'fin_tipos_pessoa' && <FinLookupTab key={`${refreshKey}-ftp`} onCount={countSetters.fin_tipos_pessoa} endpoint="/financeiro/tipos-pessoa"        titulo="Tipo de Pessoa"        cor="teal" />}
+        {activeTab === 'fin_formas_pag'   && <FinLookupTab key={`${refreshKey}-ffp`} onCount={countSetters.fin_formas_pag}   endpoint="/financeiro/formas-pagamento"    titulo="Forma de Pagamento"    cor="teal" />}
+        {activeTab === 'fin_recorrencias' && <FinLookupTab key={`${refreshKey}-frc`} onCount={countSetters.fin_recorrencias} endpoint="/financeiro/recorrencias"        titulo="Recorrência"           cor="teal" />}
 
       </div>
     </div>
@@ -1554,6 +1598,106 @@ function ContasTab({ onCount }: { onCount: (n: number) => void }) {
   );
 }
 
+// ─── Tab: Cadastro Financeiro (Genérica para lookup tables) ───────────────────
+
+interface LookupItem { id: string; nome: string; descricao?: string; ativo?: boolean; }
+
+function FinLookupTab({ onCount, endpoint, titulo, cor }: {
+  onCount: (n: number) => void; endpoint: string; titulo: string; cor: string;
+}) {
+  const [lista, setLista]   = useState<LookupItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [erro, setErro]     = useState('');
+  const [busca, setBusca]   = useState('');
+  const [modal, setModal]   = useState<{ aberto: boolean; editando: LookupItem | null }>({ aberto: false, editando: null });
+  const [form, setForm]     = useState<Partial<LookupItem>>({ ativo: true });
+  const [salvando, setSalvando] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await api.get(endpoint);
+      setLista(r.data); onCount(r.data.length);
+    } catch { setErro(`Erro ao carregar ${titulo.toLowerCase()}.`); }
+    setLoading(false);
+  }, [onCount, endpoint, titulo]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const abrirCriar  = () => { setForm({ ativo: true }); setModal({ aberto: true, editando: null }); };
+  const abrirEditar = (i: LookupItem) => {
+    setForm({ nome: i.nome, descricao: i.descricao, ativo: i.ativo });
+    setModal({ aberto: true, editando: i });
+  };
+  const fecharModal = () => { setModal({ aberto: false, editando: null }); setForm({ ativo: true }); setErro(''); };
+
+  const handleSalvar = async (e: React.FormEvent) => {
+    e.preventDefault(); setSalvando(true); setErro('');
+    try {
+      if (modal.editando) await api.patch(`${endpoint}/${modal.editando.id}`, form);
+      else await api.post(endpoint, form);
+      fecharModal(); load();
+    } catch (e: any) { setErro(e.response?.data?.message || 'Erro ao salvar.'); }
+    setSalvando(false);
+  };
+
+  const handleDeletar = async (id: string) => {
+    if (!confirm(`Confirmar exclusão deste registro de ${titulo.toLowerCase()}?`)) return;
+    try { await api.delete(`${endpoint}/${id}`); load(); }
+    catch (e: any) { alert(e.response?.data?.message || 'Erro ao excluir.'); }
+  };
+
+  const filtrados = lista.filter(i =>
+    i.nome.toLowerCase().includes(busca.toLowerCase()) ||
+    (i.descricao ?? '').toLowerCase().includes(busca.toLowerCase()),
+  );
+
+  return (
+    <div className="space-y-4">
+      {erro && <Banner tipo="erro" msg={erro} onClose={() => setErro('')} />}
+
+      <BarraAcao busca={busca} setBusca={setBusca} placeholder={`Buscar ${titulo.toLowerCase()}...`} btnLabel={`Novo(a) ${titulo}`} btnCor={cor} onClick={abrirCriar} />
+
+      <Tabela loading={loading} vazio={filtrados.length === 0} msgVazio={`Nenhum registro de ${titulo.toLowerCase()} encontrado.`}>
+        <thead className="bg-slate-50 dark:bg-slate-700/50 border-b border-slate-100 dark:border-slate-600">
+          <tr className="text-[9px] font-black uppercase text-slate-400 tracking-widest">
+            <th className="text-left px-6 py-4">Nome</th>
+            <th className="text-left px-6 py-4">Descrição</th>
+            <th className="text-center px-6 py-4">Status</th>
+            <th className="text-right px-6 py-4">Ações</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-50 dark:divide-slate-700">
+          {filtrados.map(i => (
+            <tr key={i.id} className="hover:bg-teal-50/30 dark:hover:bg-teal-900/20 transition-colors">
+              <td className="px-6 py-4 font-bold text-slate-800 dark:text-slate-100 text-sm">{i.nome}</td>
+              <td className="px-6 py-4 text-xs text-slate-500">{i.descricao || '–'}</td>
+              <td className="px-6 py-4 text-center">
+                <StatusBadge ativo={i.ativo !== false} />
+              </td>
+              <td className="px-6 py-4 text-right">
+                <AcoesBotoes onEdit={() => abrirEditar(i)} onDelete={() => handleDeletar(i.id)} cor={cor} />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </Tabela>
+
+      {modal.aberto && (
+        <Modal title={modal.editando ? `Editar ${titulo}` : `Novo(a) ${titulo}`} onClose={fecharModal}>
+          <form onSubmit={handleSalvar} className="space-y-3">
+            {erro && <ErroBanner msg={erro} />}
+            <FieldInput label="Nome *" value={form.nome ?? ''} onChange={v => setForm(p => ({ ...p, nome: v }))} required />
+            <FieldInput label="Descrição" value={form.descricao ?? ''} onChange={v => setForm(p => ({ ...p, descricao: v }))} />
+            <ToggleAtivo valor={form.ativo !== false} onChange={v => setForm(p => ({ ...p, ativo: v }))} />
+            <BtnSalvar salvando={salvando} editando={!!modal.editando} cor={cor} />
+          </form>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
 // ─── Sub-Componentes Compartilhados ───────────────────────────────────────────
 
 const CORES: Record<string, { tab: string; btn: string; ring: string }> = {
@@ -1565,6 +1709,7 @@ const CORES: Record<string, { tab: string; btn: string; ring: string }> = {
   orange: { tab: 'bg-orange-500',  btn: 'bg-orange-500 hover:bg-orange-600', ring: 'focus:ring-orange-400' },
   rose:   { tab: 'bg-rose-500',    btn: 'bg-rose-500 hover:bg-rose-600',     ring: 'focus:ring-rose-400' },
   indigo: { tab: 'bg-indigo-600',  btn: 'bg-indigo-600 hover:bg-indigo-700', ring: 'focus:ring-indigo-400' },
+  teal:   { tab: 'bg-teal-600',    btn: 'bg-teal-600 hover:bg-teal-700',     ring: 'focus:ring-teal-400' },
 };
 
 function TabKpi({ tab, active, set, count }: {

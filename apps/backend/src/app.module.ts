@@ -39,6 +39,7 @@ import { UsersModule } from './modules/users/users.module';
 import { AcademicoModule } from './academico/academico.module';
 import { CadastroModule } from './cadastro/cadastro.module';
 import { FuncionariosModule } from './funcionarios/funcionarios.module';
+import { FinanceiroModule } from './financeiro/financeiro.module';
 
 @Module({
   imports: [
@@ -99,6 +100,7 @@ import { FuncionariosModule } from './funcionarios/funcionarios.module';
     AcademicoModule,
     CadastroModule,
     FuncionariosModule,
+    FinanceiroModule,
   ],
   controllers: [
     AppController, 
