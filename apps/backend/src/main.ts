@@ -1,10 +1,10 @@
+import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
-// ✅ CORREÇÃO DO IMPORT: Tente usar o caminho absoluto ou garanta que o arquivo existe
+import { existsSync } from 'fs';
 import { AppModule } from './app.module';
-// ✅ CORREÇÃO DO COOKIE-PARSER: Importação robusta para evitar erro de callable
 import * as cookieParser from 'cookie-parser';
 
 const logger = new Logger('Bootstrap');
@@ -17,7 +17,10 @@ export const setupApp = async (app: NestExpressApplication) => {
   
   app.setGlobalPrefix('api');
 
-  app.useStaticAssets(join(__dirname, '..', '..', 'public'));
+  const publicDir = join(__dirname, '..', '..', 'public');
+  if (existsSync(publicDir)) {
+    app.useStaticAssets(publicDir);
+  }
 
   const isDev = process.env.NODE_ENV !== 'production';
 
