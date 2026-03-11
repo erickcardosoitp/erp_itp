@@ -2,16 +2,16 @@
  * Google Apps Script — Formulário de Inscrição de Candidato
  * Instituto Tia Pretinha
  *
- * Grava diretamente no banco de dados Neon (PostgreSQL) via JDBC.
+ * Grava diretamente no banco Neon via Data API (REST/PostgREST).
  * Não depende de nenhuma API ou backend do projeto.
  *
  * Configure o gatilho: Extensões → Apps Script → Gatilhos
  *   → Adicionar gatilho → aoEnviarFormulario → Do formulário → Ao enviar formulário
  *
  * Propriedades do script (Projeto → Configurações → Propriedades do script):
- *   DB_URL        = jdbc:postgresql://<host>.neon.tech/<dbname>?sslmode=require
- *   DB_USER       = <usuario_neon>
- *   DB_PASSWORD   = <senha_neon>
+ *   NEON_API_URL  = https://ep-wispy-tooth-aihlvt7v.apirest.c-4.us-east-1.aws.neon.tech/neondb/rest/v1
+ *   DB_USER       = neondb_owner
+ *   DB_PASSWORD   = npg_qEAt05zJicRn
  *   EMAIL_VENDAS  = karina.livia.sales@gmail.com,gabrielagracianobezerra@gmail.com
  *   EMAIL_SUPORTE = goncalvecardoso@gmail.com
  */
@@ -154,99 +154,58 @@ function aoEnviarFormulario(e) {
   // ── Salva na planilha (independente do banco) ─────────────────────
   salvarNaPlanilha_(dados);
 
-  // ── Conexão com o Neon (PostgreSQL) via JDBC ──────────────────────
-  var conn;
+  // ── POST para a Neon Data API (REST) ────────────────────────────
   var sucesso = false;
   var erroMsg = '';
 
   try {
-    var dbUrl  = getConf_('DB_URL');
-    var dbUser = getConf_('DB_USER');
-    var dbPass = getConf_('DB_PASSWORD');
+    // Adiciona campos de metadados
+    dados.status_matricula = 'Pendente';
+    dados.origem_inscricao = 'Forms';
+    dados.data_inscricao   = new Date().toISOString();
 
-    conn = Jdbc.getConnection(dbUrl, dbUser, dbPass);
-    conn.setAutoCommit(false);
+    // Remove campos null/vazios (mantém booleans)
+    var body = {};
+    for (var k in dados) {
+      if (dados[k] !== null && dados[k] !== undefined && dados[k] !== '') {
+        body[k] = dados[k];
+      }
+    }
+    body['maior_18_anos']   = dados.maior_18_anos;
+    body['lgpd_aceito']     = dados.lgpd_aceito;
+    body['autoriza_imagem'] = dados.autoriza_imagem;
 
-    // ── INSERT na tabela inscricoes ──────────────────────────────
-    var sql = [
-      'INSERT INTO inscricoes (',
-      '  nome_completo, cpf, email, celular,',
-      '  data_nascimento, idade, sexo, escolaridade, turno_escolar, maior_18_anos,',
-      '  logradouro, numero, complemento, bairro, cidade, estado_uf, cep,',
-      '  nome_responsavel, grau_parentesco, cpf_responsavel, telefone_alternativo,',
-      '  possui_alergias, cuidado_especial, detalhes_cuidado, uso_medicamento,',
-      '  cursos_desejados, lgpd_aceito, autoriza_imagem,',
-      '  status_matricula, origem_inscricao, data_inscricao',
-      ') VALUES (',
-      '  ?, ?, ?, ?,',
-      '  ?, ?, ?, ?, ?, ?,',
-      '  ?, ?, ?, ?, ?, ?, ?,',
-      '  ?, ?, ?, ?,',
-      '  ?, ?, ?, ?,',
-      '  ?, ?, ?,',
-      "  'Pendente', 'Forms', NOW()",
-      ')',
-    ].join(' ');
+    var baseUrl = getConf_('NEON_API_URL') || 'https://ep-wispy-tooth-aihlvt7v.apirest.c-4.us-east-1.aws.neon.tech/neondb/rest/v1';
+    var dbUser  = getConf_('DB_USER')      || 'neondb_owner';
+    var dbPass  = getConf_('DB_PASSWORD')  || '';
+    var auth    = Utilities.base64Encode(dbUser + ':' + dbPass);
 
-    var st = conn.prepareStatement(sql);
-    var i = 1;
+    var options = {
+      method: 'post',
+      contentType: 'application/json',
+      headers: {
+        'Authorization': 'Basic ' + auth,
+        'Prefer': 'return=minimal',
+      },
+      payload: JSON.stringify(body),
+      muteHttpExceptions: true,
+    };
 
-    // nome_completo, cpf, email, celular
-    st.setString(i++, dados.nome_completo);
-    st.setString(i++, dados.cpf);
-    st.setString(i++, dados.email);
-    st.setString(i++, dados.celular);
+    var response = UrlFetchApp.fetch(baseUrl + '/inscricoes', options);
+    var code     = response.getResponseCode();
+    var text     = response.getContentText();
 
-    // data_nascimento
-    if (dados.data_nascimento) { st.setString(i++, dados.data_nascimento); } else { st.setNull(i++, 0); }
-    // idade
-    if (dados.idade !== null && dados.idade !== undefined) { st.setInt(i++, dados.idade); } else { st.setNull(i++, 0); }
-    // sexo, escolaridade, turno_escolar
-    st.setString(i++, dados.sexo);
-    st.setString(i++, dados.escolaridade);
-    st.setString(i++, dados.turno_escolar);
-    // maior_18_anos
-    st.setBoolean(i++, dados.maior_18_anos);
-
-    // logradouro, numero, complemento, bairro, cidade, estado_uf, cep
-    st.setString(i++, dados.logradouro);
-    st.setString(i++, dados.numero);
-    st.setString(i++, dados.complemento);
-    st.setString(i++, dados.bairro);
-    st.setString(i++, dados.cidade);
-    st.setString(i++, dados.estado_uf);
-    st.setString(i++, dados.cep);
-
-    // responsável
-    st.setString(i++, dados.nome_responsavel);
-    st.setString(i++, dados.grau_parentesco);
-    st.setString(i++, dados.cpf_responsavel);
-    st.setString(i++, dados.telefone_alternativo);
-
-    // saúde
-    st.setString(i++, dados.possui_alergias);
-    st.setString(i++, dados.cuidado_especial);
-    st.setString(i++, dados.detalhes_cuidado);
-    st.setString(i++, dados.uso_medicamento);
-
-    // cursos, termos
-    st.setString(i++, dados.cursos_desejados);
-    st.setBoolean(i++, dados.lgpd_aceito);
-    st.setBoolean(i++, dados.autoriza_imagem);
-
-    st.executeUpdate();
-    conn.commit();
-    st.close();
-
-    sucesso = true;
-    Logger.log('✅ Candidato gravado no banco: ' + dados.nome_completo);
+    if (code === 201 || code === 200) {
+      sucesso = true;
+      Logger.log('✅ Candidato gravado no banco: ' + dados.nome_completo);
+    } else {
+      erroMsg = 'HTTP ' + code + ' — ' + text;
+      Logger.log('❌ ' + erroMsg);
+    }
 
   } catch (err) {
     erroMsg = err.toString();
-    Logger.log('❌ Erro JDBC: ' + erroMsg);
-    if (conn) { try { conn.rollback(); } catch (e2) {} }
-  } finally {
-    if (conn) { try { conn.close(); } catch (e3) {} }
+    Logger.log('❌ Erro REST: ' + erroMsg);
   }
 
   notificarEquipe_(dados, sucesso, erroMsg);
