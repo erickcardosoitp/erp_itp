@@ -52,9 +52,32 @@ function dataISO_(val) {
   return v; // já pode estar em ISO
 }
 
-/** Lê campo das respostas do formulário */
-function campo_(r, chave) {
-  return str_(r[chave] ? r[chave][0] : null);
+/**
+ * Lê campo do namedValues com comparação case-insensitive e sem pontuação final.
+ * Aceita múltiplas chaves candidatas e retorna a primeira que tiver valor.
+ */
+function campo_(r, chaves) {
+  if (!Array.isArray(chaves)) chaves = [chaves];
+  // Tentativa exata primeiro (incluindo array do namedValues)
+  for (var i = 0; i < chaves.length; i++) {
+    var raw = r[chaves[i]];
+    var v = str_(raw ? raw[0] : null);
+    if (v) return v;
+  }
+  // Fallback case-insensitive + sem pontuação final
+  var normalize = function(s) { return s.toLowerCase().replace(/[:\s]+$/, '').trim(); };
+  var normalizedKeys = chaves.map(normalize);
+  for (var key in r) {
+    var nk = normalize(key);
+    for (var j = 0; j < normalizedKeys.length; j++) {
+      if (nk === normalizedKeys[j]) {
+        var raw2 = r[key];
+        var v2 = str_(raw2 ? raw2[0] : null);
+        if (v2) return v2;
+      }
+    }
+  }
+  return null;
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -119,34 +142,34 @@ function aoEnviarFormulario(e) {
 
   // ── Leitura dos campos do formulário ──────────────────────────────
   var dados = {
-    nome_completo:        campo_(r, 'Nome completo:')              || '',
-    email:                campo_(r, 'Endereço de e-mail')          || '',
-    cpf:                  digits_(campo_(r, 'CPF:'))               || '',
-    celular:              digits_(campo_(r, 'Celular:'))           || '',
-    data_nascimento:      dataISO_(campo_(r, 'Data de Nascimento:')),
-    idade:                campo_(r, 'Idade:') ? parseInt(campo_(r, 'Idade:').replace(/\D/g, '')) || null : null,
-    sexo:                 campo_(r, 'Sexo:'),
-    escolaridade:         campo_(r, 'Escolaridade:'),
-    turno_escolar:        campo_(r, 'Turno escolar:'),
-    maior_18_anos:        bool_(campo_(r, 'Maior de 18 anos:')),
-    logradouro:           campo_(r, 'Logradouro:'),
-    numero:               campo_(r, 'Número:'),
-    complemento:          campo_(r, 'Complemento:'),
-    bairro:               campo_(r, 'Bairro:'),
-    cidade:               campo_(r, 'Cidade:')      || 'Rio de Janeiro',
-    estado_uf:            campo_(r, 'Estado (UF):') || 'RJ',
-    cep:                  digits_(campo_(r, 'CEP:')),
-    nome_responsavel:     campo_(r, 'Nome Completo do Responsável:'),
-    grau_parentesco:      campo_(r, 'Grau de parentesco do responsável:'),
-    cpf_responsavel:      digits_(campo_(r, 'CPF do Responsável:')),
-    telefone_alternativo: digits_(campo_(r, 'Telefone alternativo:')),
-    possui_alergias:      campo_(r, 'Possui alergias:'),
-    cuidado_especial:     campo_(r, 'Necessita de cuidado especial:'),
-    detalhes_cuidado:     campo_(r, 'Detalhes do cuidado:'),
-    uso_medicamento:      campo_(r, 'Faz uso de medicamento:'),
-    cursos_desejados:     campo_(r, 'Cursos desejados:'),
-    lgpd_aceito:          bool_(campo_(r, 'LGPD Aceito:')),
-    autoriza_imagem:      bool_(campo_(r, 'Autoriza uso de imagem:')),
+    nome_completo:        campo_(r, ['Nome completo', 'Nome Completo', 'Nome completo:'])   || '',
+    email:                campo_(r, ['Endereço de e-mail', 'E-mail', 'Email'])              || '',
+    cpf:                  digits_(campo_(r, ['CPF', 'CPF:']))                               || '',
+    celular:              digits_(campo_(r, ['Celular', 'Celular:']))                       || '',
+    data_nascimento:      dataISO_(campo_(r, ['Data de Nascimento', 'Data de nascimento'])),
+    idade:                (function() { var v = campo_(r, ['Idade', 'Idade:']); return v ? parseInt(v.replace(/\D/g, '')) || null : null; })(),
+    sexo:                 campo_(r, ['Sexo', 'Sexo:']),
+    escolaridade:         campo_(r, ['Escolaridade', 'Escolaridade:']),
+    turno_escolar:        campo_(r, ['Turno escolar', 'Turno escolar:']),
+    maior_18_anos:        bool_(campo_(r, ['Maior de 18 anos', 'Maior de 18 anos:'])),
+    logradouro:           campo_(r, ['Logradouro', 'Logradouro:']),
+    numero:               campo_(r, ['Número', 'Número:', 'Numero']),
+    complemento:          campo_(r, ['Complemento', 'Complemento:']),
+    bairro:               campo_(r, ['Bairro', 'Bairro:']),
+    cidade:               campo_(r, ['Cidade', 'Cidade:'])           || 'Rio de Janeiro',
+    estado_uf:            campo_(r, ['Estado (UF)', 'Estado (UF):', 'Estado', 'Estado:']) || 'RJ',
+    cep:                  digits_(campo_(r, ['CEP', 'CEP:'])),
+    nome_responsavel:     campo_(r, ['Nome Completo do Responsável', 'Nome do Responsável', 'Nome completo do responsável']),
+    grau_parentesco:      campo_(r, ['Grau de parentesco do responsável', 'Grau de parentesco']),
+    cpf_responsavel:      digits_(campo_(r, ['CPF do Responsável', 'CPF do responsável'])),
+    telefone_alternativo: digits_(campo_(r, ['Telefone alternativo', 'Telefone alternativo:'])),
+    possui_alergias:      campo_(r, ['Possui alergias', 'Possui alergias:']),
+    cuidado_especial:     campo_(r, ['Necessita de cuidado especial', 'Necessita de cuidado especial:']),
+    detalhes_cuidado:     campo_(r, ['Detalhes do cuidado', 'Detalhes do cuidado:']),
+    uso_medicamento:      campo_(r, ['Faz uso de medicamento', 'Faz uso de medicamento:']),
+    cursos_desejados:     campo_(r, ['Cursos desejados', 'Cursos desejados:']),
+    lgpd_aceito:          bool_(campo_(r, ['LGPD Aceito', 'LGPD Aceito:'])),
+    autoriza_imagem:      bool_(campo_(r, ['Autoriza uso de imagem', 'Autoriza uso de imagem:'])),
   };
 
   Logger.log('👤 Candidato: ' + dados.nome_completo + ' | CPF: ' + dados.cpf);

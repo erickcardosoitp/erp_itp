@@ -35,6 +35,32 @@ function str_(value) {
 }
 
 /**
+ * Busca um campo no objeto r com comparação case-insensitive e sem pontuação final.
+ * Aceita múltiplas chaves candidatas e retorna a primeira que tiver valor.
+ */
+function campo_(r, chaves) {
+  if (!Array.isArray(chaves)) chaves = [chaves];
+  // Tentativa exata primeiro
+  for (var i = 0; i < chaves.length; i++) {
+    var v = str_(r[chaves[i]]);
+    if (v) return v;
+  }
+  // Fallback case-insensitive + sem pontuação final
+  var normalize = function(s) { return s.toLowerCase().replace(/[:\s]+$/, '').trim(); };
+  var normalizedKeys = chaves.map(normalize);
+  for (var key in r) {
+    var nk = normalize(key);
+    for (var j = 0; j < normalizedKeys.length; j++) {
+      if (nk === normalizedKeys[j]) {
+        var v2 = str_(r[key]);
+        if (v2) return v2;
+      }
+    }
+  }
+  return null;
+}
+
+/**
  * Converte data no formato DD/MM/YYYY (Google Forms BR) para YYYY-MM-DD (SQL).
  * Retorna null se não conseguir converter.
  */
@@ -64,27 +90,27 @@ function onFormSubmit(e) {
     }
 
     var body = {
-      nome:                   str_(r['Nome Completo']),
-      email:                  str_(r['E-mail (Obrigatório)'])  || str_(r['E-mail']),
-      cpf:                    str_(r['CPF (Obrigatório)'])     || str_(r['CPF']),
-      data_nascimento:        dataParaISO_(r['Data de Nascimento (Obrigatório)'] || r['Data de Nascimento']),
-      celular:                str_(r['Celular (Obrigatório)']) || str_(r['Celular']),
-      sexo:                   str_(r['Sexo (Obrigatório)'])   || str_(r['Sexo']),
-      raca_cor:               str_(r['Raça/Cor']),
-      escolaridade:           str_(r['Escolaridade']),
-      cep:                    str_(r['CEP']),
-      numero_residencia:      str_(r['Número da Residência']),
-      complemento:            str_(r['Complemento (Ex: Apartamento, Bloco)']),
-      estado:                 str_(r['Estado (Ex: RJ, SP)']),
-      telefone_emergencia_1:  str_(r['Telefone de Emergência 1 (Obrigatório)']),
-      telefone_emergencia_2:  str_(r['Telefone de Emergência 2 (Opcional)']),
-      possui_deficiencia:     simParaBool_(r['Possui algum tipo de deficiência?']),
-      deficiencia_descricao:  str_(r['Se sim, qual(is) deficiência(s) possui? (Descreva)']),
-      possui_alergias:        simParaBool_(r['Possui Alergias?']),
-      alergias_descricao:     str_(r['Se sim, qual(is) tipo(s) de alergia possui? (Descreva)']),
-      usa_medicamentos:       simParaBool_(r['Faz uso contínuo de algum tipo de medicamento?']),
-      medicamentos_descricao: str_(r['Se sim, quais medicamentos utiliza? (Nome e dosagem, se souber)']),
-      interesse_cursos:       simParaBool_(r['Tem interesse em se matricular em algum curso do Instituto Tia Pretinha?']),
+      nome:                   campo_(r, ['Nome Completo', 'Nome completo', 'Nome']),
+      email:                  campo_(r, ['E-mail (Obrigatório)', 'E-mail', 'Email', 'Endereço de e-mail']),
+      cpf:                    campo_(r, ['CPF (Obrigatório)', 'CPF']),
+      data_nascimento:        dataParaISO_(campo_(r, ['Data de Nascimento (Obrigatório)', 'Data de Nascimento', 'Data de nascimento'])),
+      celular:                campo_(r, ['Celular (Obrigatório)', 'Celular']),
+      sexo:                   campo_(r, ['Sexo (Obrigatório)', 'Sexo']),
+      raca_cor:               campo_(r, ['Raça/Cor', 'Raça / Cor', 'Raca/Cor']),
+      escolaridade:           campo_(r, ['Escolaridade']),
+      cep:                    campo_(r, ['CEP', 'Cep']),
+      numero_residencia:      campo_(r, ['Número da Residência', 'Numero da Residencia', 'Número']),
+      complemento:            campo_(r, ['Complemento (Ex: Apartamento, Bloco)', 'Complemento']),
+      estado:                 campo_(r, ['Estado (Ex: RJ, SP)', 'Estado']),
+      telefone_emergencia_1:  campo_(r, ['Telefone de Emergência 1 (Obrigatório)', 'Telefone de Emergência 1', 'Telefone emergência 1']),
+      telefone_emergencia_2:  campo_(r, ['Telefone de Emergência 2 (Opcional)', 'Telefone de Emergência 2', 'Telefone emergência 2']),
+      possui_deficiencia:     simParaBool_(campo_(r, ['Possui algum tipo de deficiência?', 'Possui deficiência?'])),
+      deficiencia_descricao:  campo_(r, ['Se sim, qual(is) deficiência(s) possui? (Descreva)', 'Descreva a deficiência']),
+      possui_alergias:        simParaBool_(campo_(r, ['Possui Alergias?', 'Possui alergias?'])),
+      alergias_descricao:     campo_(r, ['Se sim, qual(is) tipo(s) de alergia possui? (Descreva)', 'Descreva as alergias']),
+      usa_medicamentos:       simParaBool_(campo_(r, ['Faz uso contínuo de algum tipo de medicamento?', 'Usa medicamentos?'])),
+      medicamentos_descricao: campo_(r, ['Se sim, quais medicamentos utiliza? (Nome e dosagem, se souber)', 'Quais medicamentos?']),
+      interesse_cursos:       simParaBool_(campo_(r, ['Tem interesse em se matricular em algum curso do Instituto Tia Pretinha?', 'Interesse em cursos?'])),
       ativo:                  true,
     };
 
