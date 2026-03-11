@@ -6,7 +6,8 @@ import api from '@/services/api';
 import { 
   Search, Download, UserCheck, ChevronDown, Filter,
   Users, Clock, ShieldAlert, CheckCircle2, FilterX, ChevronsUpDown, ChevronUp,
-  FileText, FileCheck2, AlertCircle, UserX, Ban, ChevronRight, RefreshCw
+  FileText, FileCheck2, AlertCircle, UserX, Ban, ChevronRight, RefreshCw,
+  GraduationCap, X
 } from 'lucide-react';
 
 // Formata datas com segurança (evita "Invalid Date")
@@ -50,6 +51,13 @@ export default function GestaoMatriculas() {
   const [filtroAlergia, setFiltroAlergia] = useState('');
   const [showMoreKPIs, setShowMoreKPIs] = useState(false);
 
+  // Modal de Matricular Candidato
+  const [cursosDisponiveis, setCursosDisponiveis] = useState<string[]>([]);
+  const [modalMatricular, setModalMatricular] = useState<{ aberto: boolean; candidato: any | null }>({ aberto: false, candidato: null });
+  const [cursosSelecionados, setCursosSelecionados] = useState<string[]>([]);
+  const [matriculando, setMatriculando] = useState(false);
+  const [matriculaResultado, setMatriculaResultado] = useState<{ numero: string; nome: string } | null>(null);
+
   // ✅ Busca sincronizada com o Backend ITP (Porta 3001)
   const fetchMatriculas = async () => {
     setLoading(true);
@@ -64,8 +72,11 @@ export default function GestaoMatriculas() {
     }
   };
 
-  useEffect(() => { 
-    fetchMatriculas(); 
+  useEffect(() => {
+    fetchMatriculas();
+    api.get('/matriculas/cursos-disponiveis')
+      .then(r => { const d = r.data; setCursosDisponiveis(Array.isArray(d) ? d : []); })
+      .catch(() => {});
   }, []);
 
   // FILTRO SÍNCRONO: Bairros dependem da Cidade selecionada
@@ -167,6 +178,45 @@ export default function GestaoMatriculas() {
   // Paleta de cores fundamentada em UX de workflow:
   // Cinza = neutro/aguardando | Laranja = ação do candidato | Azul = processamento interno
   // Verde = sucesso | Vermelho = problema | Cinza-escuro = saída passiva
+  const podeMatricular = (status: string) => !['Matriculado', 'Desistente', 'Cancelado'].includes(status);
+
+  const abrirModalMatricular = (m: any) => {
+    const raw = m.cursos_desejados ?? '';
+    const desejados = Array.isArray(raw)
+      ? raw
+      : raw.split(',').map((s: string) => s.trim()).filter(Boolean);
+    setCursosSelecionados(desejados);
+    setMatriculaResultado(null);
+    setModalMatricular({ aberto: true, candidato: m });
+  };
+
+  const fecharModalMatricular = () => {
+    setModalMatricular({ aberto: false, candidato: null });
+    setCursosSelecionados([]);
+    setMatriculaResultado(null);
+  };
+
+  const toggleCurso = (curso: string) => {
+    setCursosSelecionados(prev =>
+      prev.includes(curso) ? prev.filter(c => c !== curso) : [...prev, curso]
+    );
+  };
+
+  const confirmarMatricula = async () => {
+    if (!modalMatricular.candidato) return;
+    if (cursosSelecionados.length === 0) { alert('Selecione ao menos um curso para efetivar a matrícula.'); return; }
+    setMatriculando(true);
+    try {
+      const r = await api.post(`/matriculas/${modalMatricular.candidato.id}/finalizar`, { cursos: cursosSelecionados });
+      const num = r.data?.numero_matricula || r.data?.aluno?.numero_matricula || '—';
+      setMatriculaResultado({ numero: num, nome: modalMatricular.candidato.nome_completo });
+      fetchMatriculas();
+    } catch (e: any) {
+      alert(e.response?.data?.message || 'Erro ao efetivar matrícula.');
+    }
+    setMatriculando(false);
+  };
+
   const getStatusStyle = (status: string) => {
     switch (status) {
       case 'Pendente':                     return { bg: '#94a3b8', text: '#fff' };  // slate-400 — neutro recebido
@@ -341,11 +391,11 @@ export default function GestaoMatriculas() {
           <div className="overflow-x-auto">
             <table className="w-full text-left table-fixed">
               <colgroup>
-                <col className="w-[34%]" />
-                <col className="w-[20%]" />
-                <col className="w-[13%]" />
-                <col className="w-[19%]" />
-                <col className="w-[14%]" />
+                <col className="w-[30%]" />
+                <col className="w-[18%]" />
+                <col className="w-[12%]" />
+                <col className="w-[18%]" />
+                <col className="w-[22%]" />
               </colgroup>
               <thead>
                 <tr className="bg-gray-50 text-gray-500 uppercase text-[10px] font-black tracking-widest border-b border-gray-100">
@@ -385,12 +435,23 @@ export default function GestaoMatriculas() {
                           </span>
                         </td>
                         <td className="px-6 py-4 text-right">
-                          <button 
-                            onClick={() => { setCandidatoSelecionado(m); setIsModalOpen(true); }}
-                            className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-xl text-purple-900 font-black text-[10px] uppercase hover:bg-yellow-400 transition-all border border-gray-200 shadow-sm whitespace-nowrap"
-                          >
-                            <UserCheck size={13} /> FICHA
-                          </button>
+                          <div className="flex items-center justify-end gap-2 flex-wrap">
+                            <button
+                              onClick={() => { setCandidatoSelecionado(m); setIsModalOpen(true); }}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 rounded-xl text-purple-900 font-black text-[10px] uppercase hover:bg-yellow-400 transition-all border border-gray-200 shadow-sm whitespace-nowrap"
+                            >
+                              <UserCheck size={12} /> Ficha
+                            </button>
+                            {podeMatricular(m.status_matricula) && (
+                              <button
+                                onClick={() => abrirModalMatricular(m)}
+                                title="Efetivar Matrícula"
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 rounded-xl text-white font-black text-[10px] uppercase transition-all shadow-sm whitespace-nowrap"
+                              >
+                                <GraduationCap size={12} /> Matricular
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -406,11 +467,133 @@ export default function GestaoMatriculas() {
         </div>
       </div>
       {isModalOpen && candidatoSelecionado && (
-        <DossieCandidato 
-          aluno={candidatoSelecionado} 
-          onClose={() => setIsModalOpen(false)} 
-          onSuccess={fetchMatriculas} 
+        <DossieCandidato
+          aluno={candidatoSelecionado}
+          onClose={() => setIsModalOpen(false)}
+          onSuccess={fetchMatriculas}
         />
+      )}
+
+      {/* ── Modal: Efetivar Matrícula ─────────────────────────────────── */}
+      {modalMatricular.aberto && modalMatricular.candidato && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden">
+
+            {/* Header */}
+            <div className="bg-green-600 px-6 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="bg-white/20 p-2 rounded-xl"><GraduationCap size={20} className="text-white" /></div>
+                <div>
+                  <p className="text-[9px] font-black uppercase tracking-widest text-green-100">Efetivar Matrícula</p>
+                  <p className="text-sm font-black text-white leading-tight truncate max-w-[300px]">{modalMatricular.candidato.nome_completo}</p>
+                </div>
+              </div>
+              <button onClick={fecharModalMatricular} className="text-white/70 hover:text-white transition-colors"><X size={18} /></button>
+            </div>
+
+            <div className="px-6 py-5 space-y-5 max-h-[70vh] overflow-y-auto">
+
+              {matriculaResultado ? (
+                /* ── SUCESSO ── */
+                <div className="text-center py-4 space-y-4">
+                  <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
+                    <CheckCircle2 size={32} className="text-green-600" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-green-600 mb-1">Matrícula Efetivada!</p>
+                    <p className="text-slate-700 dark:text-slate-200 font-bold text-sm">{matriculaResultado.nome}</p>
+                    <p className="text-[10px] text-slate-500 mt-1">Número de Matrícula</p>
+                    <p className="font-mono text-2xl font-black text-green-700 dark:text-green-400 mt-1 tracking-wider">{matriculaResultado.numero}</p>
+                  </div>
+                  <button
+                    onClick={fecharModalMatricular}
+                    className="px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl font-black text-xs uppercase tracking-widest transition-colors"
+                  >
+                    Fechar
+                  </button>
+                </div>
+              ) : (
+                /* ── FORMULÁRIO ── */
+                <>
+                  {/* Dados do candidato */}
+                  <div className="bg-slate-50 dark:bg-slate-700/50 rounded-2xl p-4 space-y-2">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-3">Candidato</p>
+                    <div className="grid grid-cols-2 gap-3 text-xs">
+                      <InfoItem label="CPF" value={modalMatricular.candidato.cpf} />
+                      <InfoItem label="Idade" value={modalMatricular.candidato.idade ? `${modalMatricular.candidato.idade} anos` : modalMatricular.candidato.data_nascimento ? fmtDateSafe(modalMatricular.candidato.data_nascimento) : '—'} />
+                      <InfoItem label="Cidade" value={modalMatricular.candidato.cidade || '—'} />
+                      <InfoItem label="Status Atual" value={modalMatricular.candidato.status_matricula} />
+                    </div>
+                    {modalMatricular.candidato.cursos_desejados && (
+                      <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-600">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Interesse declarado</p>
+                        <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">{modalMatricular.candidato.cursos_desejados}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Seleção de cursos */}
+                  <div>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-3">
+                      Cursos a matricular <span className="text-red-500">*</span>
+                      <span className="ml-2 font-normal normal-case text-slate-400">({cursosSelecionados.length} selecionado{cursosSelecionados.length !== 1 ? 's' : ''})</span>
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {cursosDisponiveis.map(curso => {
+                        const ativo = cursosSelecionados.includes(curso);
+                        return (
+                          <button
+                            key={curso}
+                            type="button"
+                            onClick={() => toggleCurso(curso)}
+                            className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-left text-[11px] font-bold transition-all ${
+                              ativo
+                                ? 'bg-green-600 border-green-600 text-white shadow-sm'
+                                : 'bg-slate-50 dark:bg-slate-700 border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:border-green-400'
+                            }`}
+                          >
+                            <span className={`w-4 h-4 rounded flex-shrink-0 flex items-center justify-center border ${
+                              ativo ? 'bg-white border-white' : 'border-slate-300 dark:border-slate-500'
+                            }`}>
+                              {ativo && <span className="text-green-600 text-[10px] font-black">✓</span>}
+                            </span>
+                            {curso}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Aviso */}
+                  <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/40 rounded-xl p-3">
+                    <p className="text-[10px] text-amber-700 dark:text-amber-300 font-bold">
+                      ⚠️ Esta ação é irreversível. Será gerado um número de matrícula e o candidato será registrado como aluno do ITP.
+                    </p>
+                  </div>
+
+                  {/* Botões */}
+                  <div className="flex gap-3">
+                    <button
+                      onClick={fecharModalMatricular}
+                      className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 font-black text-xs uppercase hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={confirmarMatricula}
+                      disabled={matriculando || cursosSelecionados.length === 0}
+                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-green-600 hover:bg-green-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-black text-xs uppercase tracking-widest transition-colors shadow-sm"
+                    >
+                      {matriculando
+                        ? <><RefreshCw size={13} className="animate-spin" /> Matriculando...</>
+                        : <><GraduationCap size={13} /> Confirmar Matrícula</>}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -463,5 +646,14 @@ function SortTh({ label, sortKey, current, asc, onSort, align = 'left' }: {
           : <ChevronsUpDown size={11} className="text-gray-300" />}
       </span>
     </th>
+  );
+}
+
+function InfoItem({ label, value }: { label: string; value?: string | null }) {
+  return (
+    <div>
+      <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">{label}</p>
+      <p className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate">{value || '—'}</p>
+    </div>
   );
 }
