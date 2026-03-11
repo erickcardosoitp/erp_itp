@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Users, Briefcase, ShieldCheck, GraduationCap, UserCheck,
-  Package, Heart, Landmark,
+  Package, Heart, Landmark, MapPin, Phone, User, Activity,
   Plus, Trash2, Edit3, Search, X, AlertCircle, Eye, EyeOff, Settings2, UserPlus, RefreshCw,
 } from 'lucide-react';
 import api from '@/services/api';
@@ -27,6 +27,35 @@ interface Professor {
   cep?: string;
   numero_residencia?: string;
   complemento?: string;
+  estado?: string;
+  telefone_emergencia_1?: string;
+  telefone_emergencia_2?: string;
+  possui_deficiencia?: boolean;
+  deficiencia_descricao?: string;
+  possui_alergias?: boolean;
+  alergias_descricao?: string;
+  usa_medicamentos?: boolean;
+  medicamentos_descricao?: string;
+  interesse_cursos?: boolean;
+  ativo?: boolean;
+}
+interface Funcionario {
+  id: string;
+  nome: string;
+  cargo?: string;
+  email?: string;
+  cpf?: string;
+  data_nascimento?: string;
+  celular?: string;
+  sexo?: string;
+  raca_cor?: string;
+  escolaridade?: string;
+  cep?: string;
+  logradouro?: string;
+  numero_residencia?: string;
+  complemento?: string;
+  bairro?: string;
+  cidade?: string;
   estado?: string;
   telefone_emergencia_1?: string;
   telefone_emergencia_2?: string;
@@ -115,7 +144,7 @@ export default function CadastroBasicoPage() {
   const loadAllCounts = useCallback(async () => {
     setRefreshing(true);
     const endpoints: Array<[TabId, string]> = [
-      ['funcionarios', '/academico/professores'],
+      ['funcionarios', '/funcionarios'],
       ['usuarios',     '/admin/usuarios'],
       ['grupos',       '/grupos'],
       ['cursos',       '/academico/cursos'],
@@ -225,16 +254,17 @@ export default function CadastroBasicoPage() {
 
 function FuncionariosTab({ onCount }: { onCount: (n: number) => void }) {
   const { user } = useAuth();
-  const [lista, setLista]   = useState<Professor[]>([]);
+  const [lista, setLista]   = useState<Funcionario[]>([]);
   const [grupos, setGrupos] = useState<Grupo[]>([]);
   const [loading, setLoading] = useState(true);
   const [erro, setErro]     = useState('');
   const [busca, setBusca]   = useState('');
-  const [modal, setModal]   = useState<{ aberto: boolean; editando: Professor | null }>({ aberto: false, editando: null });
-  const [form, setForm]     = useState<Partial<Professor>>({ ativo: true });
+  const [modal, setModal]   = useState<{ aberto: boolean; editando: Funcionario | null }>({ aberto: false, editando: null });
+  const [form, setForm]     = useState<Partial<Funcionario>>({ ativo: true });
   const [salvando, setSalvando] = useState(false);
+  const [buscandoCep, setBuscandoCep] = useState(false);
   // Estado do modal "Criar Usuário" a partir do funcionário
-  const [modalUsuario, setModalUsuario] = useState<{ aberto: boolean; funcionario: Professor | null }>({ aberto: false, funcionario: null });
+  const [modalUsuario, setModalUsuario] = useState<{ aberto: boolean; funcionario: Funcionario | null }>({ aberto: false, funcionario: null });
   const [formUsuario, setFormUsuario] = useState<any>({ role: 'prof', senha: '' });
   const [salvandoUsuario, setSalvandoUsuario] = useState(false);
   const [erroUsuario, setErroUsuario] = useState('');
@@ -244,7 +274,7 @@ function FuncionariosTab({ onCount }: { onCount: (n: number) => void }) {
     setLoading(true);
     try {
       const [rP, rG] = await Promise.all([
-        api.get('/academico/professores'),
+        api.get('/funcionarios'),
         api.get('/grupos'),
       ]);
       setLista(rP.data); setGrupos(rG.data); onCount(rP.data.length);
@@ -254,14 +284,45 @@ function FuncionariosTab({ onCount }: { onCount: (n: number) => void }) {
 
   useEffect(() => { load(); }, [load]);
 
+  const buscarCep = async (cep: string) => {
+    const numeros = cep.replace(/\D/g, '');
+    if (numeros.length !== 8) return;
+    setBuscandoCep(true);
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${numeros}/json/`);
+      const data = await res.json();
+      if (!data.erro) {
+        setForm(p => ({
+          ...p,
+          logradouro: data.logradouro ?? p.logradouro,
+          bairro: data.bairro ?? p.bairro,
+          cidade: data.localidade ?? p.cidade,
+          estado: data.uf ?? p.estado,
+        }));
+      }
+    } catch { /* ignora falhas silenciosamente */ }
+    setBuscandoCep(false);
+  };
+
   const abrirCriar  = () => { setForm({ ativo: true }); setModal({ aberto: true, editando: null }); };
-  const abrirEditar = (p: Professor) => {
-    setForm({ nome: p.nome, especialidade: p.especialidade, email: p.email, ativo: p.ativo });
+  const abrirEditar = (p: Funcionario) => {
+    setForm({
+      nome: p.nome, cargo: p.cargo, email: p.email, cpf: p.cpf,
+      data_nascimento: p.data_nascimento, celular: p.celular,
+      sexo: p.sexo, raca_cor: p.raca_cor, escolaridade: p.escolaridade,
+      cep: p.cep, logradouro: p.logradouro, numero_residencia: p.numero_residencia,
+      complemento: p.complemento, bairro: p.bairro, cidade: p.cidade, estado: p.estado,
+      telefone_emergencia_1: p.telefone_emergencia_1, telefone_emergencia_2: p.telefone_emergencia_2,
+      possui_deficiencia: p.possui_deficiencia, deficiencia_descricao: p.deficiencia_descricao,
+      possui_alergias: p.possui_alergias, alergias_descricao: p.alergias_descricao,
+      usa_medicamentos: p.usa_medicamentos, medicamentos_descricao: p.medicamentos_descricao,
+      interesse_cursos: p.interesse_cursos, ativo: p.ativo,
+    });
     setModal({ aberto: true, editando: p });
   };
   const fecharModal = () => { setModal({ aberto: false, editando: null }); setForm({ ativo: true }); setErro(''); };
 
-  const abrirCriarUsuario = (p: Professor) => {
+  const abrirCriarUsuario = (p: Funcionario) => {
     setFormUsuario({ nome: p.nome, email: p.email ?? '', role: 'prof', senha: '', grupo_id: '' });
     setErroUsuario('');
     setMostrarSenhaUsuario(false);
@@ -289,8 +350,8 @@ function FuncionariosTab({ onCount }: { onCount: (n: number) => void }) {
   const handleSalvar = async (e: React.FormEvent) => {
     e.preventDefault(); setSalvando(true); setErro('');
     try {
-      if (modal.editando) await api.patch(`/academico/professores/${modal.editando.id}`, form);
-      else await api.post('/academico/professores', form);
+      if (modal.editando) await api.patch(`/funcionarios/${modal.editando.id}`, form);
+      else await api.post('/funcionarios', form);
       fecharModal(); load();
     } catch (e: any) { setErro(e.response?.data?.message || 'Erro ao salvar.'); }
     setSalvando(false);
@@ -298,14 +359,14 @@ function FuncionariosTab({ onCount }: { onCount: (n: number) => void }) {
 
   const handleDeletar = async (id: string) => {
     if (!confirm('Confirmar exclusão?')) return;
-    try { await api.delete(`/academico/professores/${id}`); load(); }
+    try { await api.delete(`/funcionarios/${id}`); load(); }
     catch (e: any) { alert(e.response?.data?.message || 'Erro ao excluir.'); }
   };
 
   const podeCriarUsuario = ROLES_CRIAR_USUARIO.includes(user?.role ?? '');
   const filtrados = lista.filter(p =>
     p.nome.toLowerCase().includes(busca.toLowerCase()) ||
-    (p.especialidade ?? '').toLowerCase().includes(busca.toLowerCase()),
+    (p.cargo ?? '').toLowerCase().includes(busca.toLowerCase()),
   );
 
   return (
@@ -336,7 +397,7 @@ function FuncionariosTab({ onCount }: { onCount: (n: number) => void }) {
                   <span className="font-bold text-slate-800 dark:text-slate-100 text-sm">{p.nome}</span>
                 </div>
               </td>
-              <td className="px-6 py-4 text-xs text-slate-500">{p.especialidade || '–'}</td>
+              <td className="px-6 py-4 text-xs text-slate-500">{p.cargo || '–'}</td>
               <td className="px-6 py-4 text-xs text-slate-500">{p.email || '–'}</td>
               <td className="px-6 py-4 text-center">
                 <StatusBadge ativo={p.ativo !== false} />
@@ -411,17 +472,25 @@ function FuncionariosTab({ onCount }: { onCount: (n: number) => void }) {
 
       {modal.aberto && (
         <Modal title={modal.editando ? 'Editar Funcionário' : 'Novo Funcionário'} onClose={fecharModal}>
-          <form onSubmit={handleSalvar} className="space-y-4">
+          <form onSubmit={handleSalvar} className="space-y-5">
             {erro && <ErroBanner msg={erro} />}
 
-            <p className="text-xs font-semibold text-purple-700 uppercase tracking-wider">Dados Pessoais</p>
+            {/* ── Dados Pessoais ── */}
+            <div className="flex items-center gap-2 bg-purple-50 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-800/50 rounded-xl px-4 py-2.5">
+              <div className="p-1.5 bg-purple-100 dark:bg-purple-800 rounded-lg flex-shrink-0">
+                <User size={13} className="text-purple-600 dark:text-purple-300" />
+              </div>
+              <span className="text-[10px] font-black text-purple-700 dark:text-purple-300 uppercase tracking-widest">Dados Pessoais</span>
+            </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <FieldInput label="Nome Completo *" value={form.nome ?? ''} onChange={v => setForm(p => ({ ...p, nome: v }))} required />
-              <FieldInput label="Cargo / Especialidade" value={form.especialidade ?? ''} onChange={v => setForm(p => ({ ...p, especialidade: v }))} placeholder="Ex: Professor, Cozinha, Administrativo..." />
-              <FieldInput label="E-mail" type="email" value={form.email ?? ''} onChange={v => setForm(p => ({ ...p, email: v }))} />
+              <div className="sm:col-span-2">
+                <FieldInput label="Nome Completo *" value={form.nome ?? ''} onChange={v => setForm(p => ({ ...p, nome: v }))} required />
+              </div>
+              <FieldInput label="Cargo / Função" value={form.cargo ?? ''} onChange={v => setForm(p => ({ ...p, cargo: v }))} placeholder="Ex: Professor, Cozinha, Administrativo..." />
               <FieldInput label="CPF" value={form.cpf ?? ''} onChange={v => setForm(p => ({ ...p, cpf: v }))} placeholder="000.000.000-00" />
-              <FieldInput label="Data de Nascimento" type="date" value={form.data_nascimento ?? ''} onChange={v => setForm(p => ({ ...p, data_nascimento: v }))} />
+              <FieldInput label="E-mail" type="email" value={form.email ?? ''} onChange={v => setForm(p => ({ ...p, email: v }))} />
               <FieldInput label="Celular *" value={form.celular ?? ''} onChange={v => setForm(p => ({ ...p, celular: v }))} placeholder="(21) 99999-9999" />
+              <FieldInput label="Data de Nascimento" type="date" value={form.data_nascimento ?? ''} onChange={v => setForm(p => ({ ...p, data_nascimento: v }))} />
               <FieldSelect label="Sexo" value={form.sexo ?? ''} onChange={v => setForm(p => ({ ...p, sexo: v }))}>
                 <option value="">Selecione...</option>
                 <option value="Masculino">Masculino</option>
@@ -429,7 +498,7 @@ function FuncionariosTab({ onCount }: { onCount: (n: number) => void }) {
                 <option value="Não-binário">Não-binário</option>
                 <option value="Prefiro não informar">Prefiro não informar</option>
               </FieldSelect>
-              <FieldSelect label="Raça/Cor" value={form.raca_cor ?? ''} onChange={v => setForm(p => ({ ...p, raca_cor: v }))}>
+              <FieldSelect label="Raça / Cor" value={form.raca_cor ?? ''} onChange={v => setForm(p => ({ ...p, raca_cor: v }))}>
                 <option value="">Selecione...</option>
                 <option value="Branca">Branca</option>
                 <option value="Preta">Preta</option>
@@ -450,47 +519,81 @@ function FuncionariosTab({ onCount }: { onCount: (n: number) => void }) {
               </FieldSelect>
             </div>
 
-            <p className="text-xs font-semibold text-purple-700 uppercase tracking-wider pt-2">Endereço</p>
+            {/* ── Endereço ── */}
+            <div className="flex items-center gap-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/50 rounded-xl px-4 py-2.5">
+              <div className="p-1.5 bg-blue-100 dark:bg-blue-800 rounded-lg flex-shrink-0">
+                <MapPin size={13} className="text-blue-600 dark:text-blue-300" />
+              </div>
+              <span className="text-[10px] font-black text-blue-700 dark:text-blue-300 uppercase tracking-widest">Endereço</span>
+              {buscandoCep && <span className="ml-auto text-[9px] text-blue-500 animate-pulse">Buscando CEP...</span>}
+            </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <FieldInput label="CEP" value={form.cep ?? ''} onChange={v => setForm(p => ({ ...p, cep: v }))} placeholder="00000-000" />
-              <FieldInput label="Número da Residência" value={form.numero_residencia ?? ''} onChange={v => setForm(p => ({ ...p, numero_residencia: v }))} />
-              <FieldInput label="Complemento" value={form.complemento ?? ''} onChange={v => setForm(p => ({ ...p, complemento: v }))} placeholder="Ex: Apartamento, Bloco" />
-              <FieldInput label="Estado" value={form.estado ?? ''} onChange={v => setForm(p => ({ ...p, estado: v }))} placeholder="Ex: RJ, SP" />
+              <div>
+                <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">CEP</label>
+                <input
+                  type="text"
+                  value={form.cep ?? ''}
+                  onChange={e => setForm(p => ({ ...p, cep: e.target.value }))}
+                  onBlur={e => buscarCep(e.target.value)}
+                  placeholder="00000-000"
+                  className="w-full border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400 transition-shadow"
+                />
+              </div>
+              <FieldInput label="Número" value={form.numero_residencia ?? ''} onChange={v => setForm(p => ({ ...p, numero_residencia: v }))} placeholder="Ex: 123" />
+              <div className="sm:col-span-2">
+                <FieldInput label="Logradouro" value={form.logradouro ?? ''} onChange={v => setForm(p => ({ ...p, logradouro: v }))} placeholder="Rua, Av., Travessa..." />
+              </div>
+              <FieldInput label="Complemento" value={form.complemento ?? ''} onChange={v => setForm(p => ({ ...p, complemento: v }))} placeholder="Apto, Bloco..." />
+              <FieldInput label="Bairro" value={form.bairro ?? ''} onChange={v => setForm(p => ({ ...p, bairro: v }))} />
+              <FieldInput label="Cidade" value={form.cidade ?? ''} onChange={v => setForm(p => ({ ...p, cidade: v }))} />
+              <FieldInput label="Estado (UF)" value={form.estado ?? ''} onChange={v => setForm(p => ({ ...p, estado: v }))} placeholder="Ex: RJ" />
             </div>
 
-            <p className="text-xs font-semibold text-purple-700 uppercase tracking-wider pt-2">Emergência</p>
+            {/* ── Emergência ── */}
+            <div className="flex items-center gap-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800/50 rounded-xl px-4 py-2.5">
+              <div className="p-1.5 bg-amber-100 dark:bg-amber-800 rounded-lg flex-shrink-0">
+                <Phone size={13} className="text-amber-600 dark:text-amber-300" />
+              </div>
+              <span className="text-[10px] font-black text-amber-700 dark:text-amber-300 uppercase tracking-widest">Contato de Emergência</span>
+            </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <FieldInput label="Telefone de Emergência 1 *" value={form.telefone_emergencia_1 ?? ''} onChange={v => setForm(p => ({ ...p, telefone_emergencia_1: v }))} placeholder="(21) 99999-9999" />
               <FieldInput label="Telefone de Emergência 2" value={form.telefone_emergencia_2 ?? ''} onChange={v => setForm(p => ({ ...p, telefone_emergencia_2: v }))} placeholder="(21) 99999-9999" />
             </div>
 
-            <p className="text-xs font-semibold text-purple-700 uppercase tracking-wider pt-2">Saúde</p>
-            <div className="space-y-2">
-              <div className="flex items-center gap-3">
-                <input type="checkbox" id="possui_deficiencia" checked={!!form.possui_deficiencia} onChange={e => setForm(p => ({ ...p, possui_deficiencia: e.target.checked, deficiencia_descricao: e.target.checked ? p.deficiencia_descricao : '' }))} className="w-4 h-4 accent-purple-600" />
-                <label htmlFor="possui_deficiencia" className="text-sm text-gray-700">Possui algum tipo de deficiência?</label>
+            {/* ── Saúde ── */}
+            <div className="flex items-center gap-2 bg-rose-50 dark:bg-rose-900/20 border border-rose-100 dark:border-rose-800/50 rounded-xl px-4 py-2.5">
+              <div className="p-1.5 bg-rose-100 dark:bg-rose-800 rounded-lg flex-shrink-0">
+                <Activity size={13} className="text-rose-600 dark:text-rose-300" />
               </div>
+              <span className="text-[10px] font-black text-rose-700 dark:text-rose-300 uppercase tracking-widest">Saúde</span>
+            </div>
+            <div className="space-y-2">
+              <label className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-700/50 cursor-pointer hover:bg-purple-50/60 dark:hover:bg-purple-900/20 transition-colors">
+                <input type="checkbox" checked={!!form.possui_deficiencia} onChange={e => setForm(p => ({ ...p, possui_deficiencia: e.target.checked, deficiencia_descricao: e.target.checked ? p.deficiencia_descricao : '' }))} className="w-4 h-4 accent-purple-600 flex-shrink-0" />
+                <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">Possui algum tipo de deficiência?</span>
+              </label>
               {form.possui_deficiencia && <FieldInput label="Qual(is) deficiência(s)?" value={form.deficiencia_descricao ?? ''} onChange={v => setForm(p => ({ ...p, deficiencia_descricao: v }))} placeholder="Descreva" />}
 
-              <div className="flex items-center gap-3">
-                <input type="checkbox" id="possui_alergias" checked={!!form.possui_alergias} onChange={e => setForm(p => ({ ...p, possui_alergias: e.target.checked, alergias_descricao: e.target.checked ? p.alergias_descricao : '' }))} className="w-4 h-4 accent-purple-600" />
-                <label htmlFor="possui_alergias" className="text-sm text-gray-700">Possui Alergias?</label>
-              </div>
+              <label className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-700/50 cursor-pointer hover:bg-purple-50/60 dark:hover:bg-purple-900/20 transition-colors">
+                <input type="checkbox" checked={!!form.possui_alergias} onChange={e => setForm(p => ({ ...p, possui_alergias: e.target.checked, alergias_descricao: e.target.checked ? p.alergias_descricao : '' }))} className="w-4 h-4 accent-purple-600 flex-shrink-0" />
+                <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">Possui alergias?</span>
+              </label>
               {form.possui_alergias && <FieldInput label="Qual(is) alergia(s)?" value={form.alergias_descricao ?? ''} onChange={v => setForm(p => ({ ...p, alergias_descricao: v }))} placeholder="Descreva" />}
 
-              <div className="flex items-center gap-3">
-                <input type="checkbox" id="usa_medicamentos" checked={!!form.usa_medicamentos} onChange={e => setForm(p => ({ ...p, usa_medicamentos: e.target.checked, medicamentos_descricao: e.target.checked ? p.medicamentos_descricao : '' }))} className="w-4 h-4 accent-purple-600" />
-                <label htmlFor="usa_medicamentos" className="text-sm text-gray-700">Faz uso contínuo de algum medicamento?</label>
-              </div>
+              <label className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-700/50 cursor-pointer hover:bg-purple-50/60 dark:hover:bg-purple-900/20 transition-colors">
+                <input type="checkbox" checked={!!form.usa_medicamentos} onChange={e => setForm(p => ({ ...p, usa_medicamentos: e.target.checked, medicamentos_descricao: e.target.checked ? p.medicamentos_descricao : '' }))} className="w-4 h-4 accent-purple-600 flex-shrink-0" />
+                <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">Faz uso contínuo de algum medicamento?</span>
+              </label>
               {form.usa_medicamentos && <FieldInput label="Quais medicamentos? (Nome e dosagem)" value={form.medicamentos_descricao ?? ''} onChange={v => setForm(p => ({ ...p, medicamentos_descricao: v }))} placeholder="Ex: Metformina 500mg" />}
 
-              <div className="flex items-center gap-3">
-                <input type="checkbox" id="interesse_cursos" checked={!!form.interesse_cursos} onChange={e => setForm(p => ({ ...p, interesse_cursos: e.target.checked }))} className="w-4 h-4 accent-purple-600" />
-                <label htmlFor="interesse_cursos" className="text-sm text-gray-700">Tem interesse em se matricular em algum curso do Instituto Tia Pretinha?</label>
-              </div>
+              <label className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-700/50 cursor-pointer hover:bg-purple-50/60 dark:hover:bg-purple-900/20 transition-colors">
+                <input type="checkbox" checked={!!form.interesse_cursos} onChange={e => setForm(p => ({ ...p, interesse_cursos: e.target.checked }))} className="w-4 h-4 accent-purple-600 flex-shrink-0" />
+                <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">Interesse em cursos do Instituto Tia Pretinha?</span>
+              </label>
             </div>
 
-            <div className="pt-2">
+            <div className="pt-1">
               <ToggleAtivo valor={form.ativo !== false} onChange={v => setForm(p => ({ ...p, ativo: v }))} />
             </div>
             <BtnSalvar salvando={salvando} editando={!!modal.editando} />

@@ -36,7 +36,16 @@ export class Funcionario {
   cep: string;
 
   @Column({ type: 'text', nullable: true })
+  logradouro: string;
+
+  @Column({ type: 'text', nullable: true })
   numero_residencia: string;
+
+  @Column({ type: 'text', nullable: true })
+  bairro: string;
+
+  @Column({ type: 'text', nullable: true })
+  cidade: string;
 
   @Column({ type: 'text', nullable: true })
   complemento: string;
