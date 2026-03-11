@@ -1,15 +1,13 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "api/main.ts",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "api/health.ts",
-      "use": "@vercel/node"
+  "buildCommand": "npm run build",
+  "outputDirectory": ".",
+  "functions": {
+    "api/main.ts": {
+      "memory": 1024,
+      "maxDuration": 30
     }
-  ],
+  },
   "routes": [
     {
       "src": "/health",
