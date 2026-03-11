@@ -1,7 +1,7 @@
 import {
   Controller, Get, Post, Patch, Delete,
   Param, Body, Query, UseGuards, Req, Logger,
-  InternalServerErrorException,
+  InternalServerErrorException, Headers, UnauthorizedException,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Public } from '../auth/decorators/public.decorator';
@@ -47,6 +47,46 @@ export class AcademicoController {
 
   @Delete('professores/:id')
   deletarProfessor(@Param('id') id: string) { return this.svc.deletarProfessor(id); }
+
+  // ── WEBHOOK: Google Forms → Cadastro de Funcionário (rota pública) ────────
+  @Public()
+  @Post('professores/webhook')
+  async webhookGoogleForms(
+    @Headers('x-itp-webhook-secret') secret: string,
+    @Body() payload: any,
+  ) {
+    const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || 'itp-forms-2026';
+    if (secret !== WEBHOOK_SECRET) {
+      throw new UnauthorizedException('Secret inválido.');
+    }
+    // Mapeia campos do Google Forms → entidade Professor
+    const dto = {
+      nome:                  payload['Nome Completo']?.trim(),
+      email:                 payload['E-mail (Obrigatório)']?.trim() || payload['E-mail']?.trim(),
+      cpf:                   payload['CPF (Obrigatório)']?.trim() || payload['CPF']?.trim(),
+      data_nascimento:       payload['Data de Nascimento (Obrigatório)']?.trim() || payload['Data de Nascimento']?.trim(),
+      celular:               payload['Celular (Obrigatório)']?.trim() || payload['Celular']?.trim(),
+      sexo:                  payload['Sexo (Obrigatório)']?.trim() || payload['Sexo']?.trim(),
+      raca_cor:              payload['Raça/Cor']?.trim(),
+      escolaridade:          payload['Escolaridade']?.trim(),
+      cep:                   payload['CEP']?.trim(),
+      numero_residencia:     payload['Número da Residência']?.trim(),
+      complemento:           payload['Complemento (Ex: Apartamento, Bloco)']?.trim(),
+      estado:                payload['Estado (Ex: RJ, SP)']?.trim(),
+      telefone_emergencia_1: payload['Telefone de Emergência 1 (Obrigatório)']?.trim(),
+      telefone_emergencia_2: payload['Telefone de Emergência 2 (Opcional)']?.trim(),
+      possui_deficiencia:    payload['Possui algum tipo de deficiência?']?.toLowerCase().startsWith('sim'),
+      deficiencia_descricao: payload['Se sim, qual(is) deficiência(s) possui? (Descreva)']?.trim(),
+      possui_alergias:       payload['Possui Alergias?']?.toLowerCase().startsWith('sim'),
+      alergias_descricao:    payload['Se sim, qual(is) tipo(s) de alergia possui? (Descreva)']?.trim(),
+      usa_medicamentos:      payload['Faz uso contínuo de algum tipo de medicamento?']?.toLowerCase().startsWith('sim'),
+      medicamentos_descricao:payload['Se sim, quais medicamentos utiliza? (Nome e dosagem, se souber)']?.trim(),
+      interesse_cursos:      payload['Tem interesse em se matricular em algum curso do Instituto Tia Pretinha?']?.toLowerCase().startsWith('sim'),
+      ativo:                 true,
+    };
+    this.logger.log(`[Webhook Google Forms] Cadastrando funcionário: ${dto.nome}`);
+    return this.svc.criarProfessor(dto);
+  }
 
   // ── TURMAS ────────────────────────────────────────────────────────────────
   @Get('turmas')

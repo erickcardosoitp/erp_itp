@@ -6,7 +6,7 @@ import api from '@/services/api';
 import { 
   Search, Download, UserCheck, ChevronDown, Filter,
   Users, Clock, ShieldAlert, CheckCircle2, FilterX, ChevronsUpDown, ChevronUp,
-  FileText, FileCheck2, AlertCircle, UserX, Ban, ChevronRight
+  FileText, FileCheck2, AlertCircle, UserX, Ban, ChevronRight, RefreshCw
 } from 'lucide-react';
 
 // Formata datas com segurança (evita "Invalid Date")
@@ -195,9 +195,18 @@ export default function GestaoMatriculas() {
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Portal de Inscrições e Gestão de Alunos</p>
           </div>
           
-          <div className="relative">
-            <button 
-              onClick={() => setShowExportMenu(!showExportMenu)}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={fetchMatriculas}
+              disabled={loading}
+              title="Atualizar lista"
+              className="p-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 text-slate-500 hover:text-purple-600 hover:border-purple-400 transition-all disabled:opacity-60"
+            >
+              <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
+            </button>
+            <div className="relative">
+              <button 
+                onClick={() => setShowExportMenu(!showExportMenu)}
               className="flex items-center gap-2 px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest text-white shadow-lg bg-purple-600 hover:scale-105 transition-all">
               <Download size={16} /> Exportar Base <ChevronDown size={14} className={showExportMenu ? 'rotate-180' : ''}/>
             </button>
@@ -211,8 +220,8 @@ export default function GestaoMatriculas() {
                 ))}
               </div>
             )}
+            </div>
           </div>
-        </div>
 
         {/* ── KPIs ─────────────────────────────────────────────────────────────── */}
         <div className="mb-8 space-y-3">

@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   GraduationCap, Users, BookOpen, LayoutGrid, History,
   Plus, Trash2, Search, X, ClipboardList,
-  Edit3, Coffee, UserPlus,
+  Edit3, Coffee, UserPlus, RefreshCw,
 } from 'lucide-react';
 import api from '@/services/api';
 import { useAuth } from '@/context/auth-context';
@@ -900,28 +900,32 @@ export default function AcademicoPage() {
   const [turmas, setTurmas] = useState<Turma[]>([]);
   const [alunos, setAlunos] = useState<Aluno[]>([]);
   const [isMounted, setIsMounted] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const { user } = useAuth();
 
   const podeEditar = GRUPOS_EDITOR.map(g => g.toLowerCase()).includes((user?.role ?? '').toLowerCase());
 
+  const loadBase = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      const [rc, rp, rt, ra] = await Promise.all([
+        api.get('/academico/cursos'),
+        api.get('/academico/professores'),
+        api.get('/academico/turmas'),
+        api.get('/academico/alunos'),
+      ]);
+      setCursos(rc.data);
+      setProfessores(rp.data);
+      setTurmas(rt.data);
+      setAlunos(ra.data);
+    } catch {}
+    setRefreshing(false);
+  }, []);
+
   useEffect(() => {
     setIsMounted(true);
-    const loadBase = async () => {
-      try {
-        const [rc, rp, rt, ra] = await Promise.all([
-          api.get('/academico/cursos'),
-          api.get('/academico/professores'),
-          api.get('/academico/turmas'),
-          api.get('/academico/alunos'),
-        ]);
-        setCursos(rc.data);
-        setProfessores(rp.data);
-        setTurmas(rt.data);
-        setAlunos(ra.data);
-      } catch {}
-    };
     loadBase();
-  }, []);
+  }, [loadBase]);
 
   if (!isMounted) return null;
 
@@ -950,9 +954,19 @@ export default function AcademicoPage() {
               </p>
             </div>
           </div>
-          <nav className="flex bg-slate-100 dark:bg-slate-800 p-1.5 rounded-2xl gap-1 overflow-x-auto">
-            {TABS.map(t => <TabBtn key={t.id} id={t.id} active={activeTab} set={setActiveTab} label={t.label} Icon={t.Icon} />)}
-          </nav>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={loadBase}
+              disabled={refreshing}
+              title="Atualizar dados"
+              className="p-2 rounded-xl bg-slate-100 dark:bg-slate-700 hover:bg-purple-100 dark:hover:bg-purple-900/30 text-slate-500 dark:text-slate-300 hover:text-purple-600 transition-all disabled:opacity-60"
+            >
+              <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
+            </button>
+            <nav className="flex bg-slate-100 dark:bg-slate-800 p-1.5 rounded-2xl gap-1 overflow-x-auto">
+              {TABS.map(t => <TabBtn key={t.id} id={t.id} active={activeTab} set={setActiveTab} label={t.label} Icon={t.Icon} />)}
+            </nav>
+          </div>
         </header>
         <main>
           {activeTab === 'grade'  && <GradeTab podeEditar={podeEditar} turmas={turmas} />}

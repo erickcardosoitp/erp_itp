@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Users, Briefcase, ShieldCheck, GraduationCap, UserCheck,
   Package, Heart, Landmark,
-  Plus, Trash2, Edit3, Search, X, AlertCircle, Eye, EyeOff, Settings2,
+  Plus, Trash2, Edit3, Search, X, AlertCircle, Eye, EyeOff, Settings2, UserPlus, RefreshCw,
 } from 'lucide-react';
 import api from '@/services/api';
 import { useAuth } from '@/context/auth-context';
@@ -66,6 +66,8 @@ const TIPOS_CONTA = ['Corrente', 'Poupança', 'Pagamento', 'Investimento'];
 
 // Grupos que podem excluir registros do Cadastro Básico
 const ROLES_PODEM_DELETAR = ['admin', 'prt', 'vp', 'drt', 'adjunto'];
+// Grupos que podem criar um usuário a partir de um funcionário
+const ROLES_CRIAR_USUARIO = ['admin', 'prt', 'vp', 'drt'];
 
 // Módulos do sistema para configuração de permissões de grupo
 const MODULOS_SISTEMA = [
@@ -106,8 +108,37 @@ export default function CadastroBasicoPage() {
     funcionarios: 0, usuarios: 0, grupos: 0, cursos: 0,
     alunos: 0, insumos: 0, doadores: 0, contas: 0,
   });
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => { setIsMounted(true); }, []);
+  // Carrega contagens de todas as abas em paralelo (KPIs visíveis imediatamente)
+  const loadAllCounts = useCallback(async () => {
+    setRefreshing(true);
+    const endpoints: Array<[TabId, string]> = [
+      ['funcionarios', '/academico/professores'],
+      ['usuarios',     '/admin/usuarios'],
+      ['grupos',       '/grupos'],
+      ['cursos',       '/academico/cursos'],
+      ['alunos',       '/academico/alunos'],
+      ['insumos',      '/cadastro/insumos'],
+      ['doadores',     '/cadastro/doadores'],
+      ['contas',       '/cadastro/contas-bancarias'],
+    ];
+    const results = await Promise.allSettled(endpoints.map(([, url]) => api.get(url)));
+    setCounts(prev => {
+      const next = { ...prev };
+      endpoints.forEach(([tab], i) => {
+        const r = results[i];
+        if (r.status === 'fulfilled' && Array.isArray(r.value.data)) next[tab] = r.value.data.length;
+      });
+      return next;
+    });
+    setRefreshing(false);
+  }, []);
+
+  useEffect(() => { setIsMounted(true); loadAllCounts(); }, [loadAllCounts]);
+
+  const handleRefresh = () => { setRefreshKey(k => k + 1); loadAllCounts(); };
 
   // CORREÇÃO: useMemo garante referências estáveis → evita re-render loop nos filhos
   const countSetters = useMemo(() => {
@@ -157,6 +188,15 @@ export default function CadastroBasicoPage() {
               Cadastro centralizado de todos os registros do sistema
             </p>
           </div>
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            title="Atualizar todos os registros"
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 text-slate-500 dark:text-slate-300 hover:border-purple-400 hover:text-purple-600 transition-all text-[10px] font-black uppercase tracking-widest shadow-sm disabled:opacity-60"
+          >
+            <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
+            Atualizar
+          </button>
         </header>
 
         {/* TABS — scroll horizontal em mobile */}
@@ -167,14 +207,14 @@ export default function CadastroBasicoPage() {
         </div>
 
         {/* CONTEÚDO */}
-        {activeTab === 'funcionarios' && <FuncionariosTab onCount={countSetters.funcionarios} />}
-        {activeTab === 'usuarios'     && <UsuariosTab     onCount={countSetters.usuarios} />}
-        {activeTab === 'grupos'       && <GruposTab       onCount={countSetters.grupos} />}
-        {activeTab === 'cursos'       && <CursosTab       onCount={countSetters.cursos} />}
-        {activeTab === 'alunos'       && <AlunosTab       onCount={countSetters.alunos} />}
-        {activeTab === 'insumos'      && <InsumosTab      onCount={countSetters.insumos} />}
-        {activeTab === 'doadores'     && <DoadoresTab     onCount={countSetters.doadores} />}
-        {activeTab === 'contas'       && <ContasTab       onCount={countSetters.contas} />}
+        {activeTab === 'funcionarios' && <FuncionariosTab key={refreshKey} onCount={countSetters.funcionarios} />}
+        {activeTab === 'usuarios'     && <UsuariosTab     key={refreshKey} onCount={countSetters.usuarios} />}
+        {activeTab === 'grupos'       && <GruposTab       key={refreshKey} onCount={countSetters.grupos} />}
+        {activeTab === 'cursos'       && <CursosTab       key={refreshKey} onCount={countSetters.cursos} />}
+        {activeTab === 'alunos'       && <AlunosTab       key={refreshKey} onCount={countSetters.alunos} />}
+        {activeTab === 'insumos'      && <InsumosTab      key={refreshKey} onCount={countSetters.insumos} />}
+        {activeTab === 'doadores'     && <DoadoresTab     key={refreshKey} onCount={countSetters.doadores} />}
+        {activeTab === 'contas'       && <ContasTab       key={refreshKey} onCount={countSetters.contas} />}
 
       </div>
     </div>
@@ -184,19 +224,30 @@ export default function CadastroBasicoPage() {
 // ─── Tab: Funcionários ────────────────────────────────────────────────────────
 
 function FuncionariosTab({ onCount }: { onCount: (n: number) => void }) {
+  const { user } = useAuth();
   const [lista, setLista]   = useState<Professor[]>([]);
+  const [grupos, setGrupos] = useState<Grupo[]>([]);
   const [loading, setLoading] = useState(true);
   const [erro, setErro]     = useState('');
   const [busca, setBusca]   = useState('');
   const [modal, setModal]   = useState<{ aberto: boolean; editando: Professor | null }>({ aberto: false, editando: null });
   const [form, setForm]     = useState<Partial<Professor>>({ ativo: true });
   const [salvando, setSalvando] = useState(false);
+  // Estado do modal "Criar Usuário" a partir do funcionário
+  const [modalUsuario, setModalUsuario] = useState<{ aberto: boolean; funcionario: Professor | null }>({ aberto: false, funcionario: null });
+  const [formUsuario, setFormUsuario] = useState<any>({ role: 'prof', senha: '' });
+  const [salvandoUsuario, setSalvandoUsuario] = useState(false);
+  const [erroUsuario, setErroUsuario] = useState('');
+  const [mostrarSenhaUsuario, setMostrarSenhaUsuario] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const r = await api.get('/academico/professores');
-      setLista(r.data); onCount(r.data.length);
+      const [rP, rG] = await Promise.all([
+        api.get('/academico/professores'),
+        api.get('/grupos'),
+      ]);
+      setLista(rP.data); setGrupos(rG.data); onCount(rP.data.length);
     } catch { setErro('Erro ao carregar funcionários.'); }
     setLoading(false);
   }, [onCount]);
@@ -209,6 +260,31 @@ function FuncionariosTab({ onCount }: { onCount: (n: number) => void }) {
     setModal({ aberto: true, editando: p });
   };
   const fecharModal = () => { setModal({ aberto: false, editando: null }); setForm({ ativo: true }); setErro(''); };
+
+  const abrirCriarUsuario = (p: Professor) => {
+    setFormUsuario({ nome: p.nome, email: p.email ?? '', role: 'prof', senha: '', grupo_id: '' });
+    setErroUsuario('');
+    setMostrarSenhaUsuario(false);
+    setModalUsuario({ aberto: true, funcionario: p });
+  };
+  const fecharModalUsuario = () => {
+    setModalUsuario({ aberto: false, funcionario: null });
+    setFormUsuario({ role: 'prof', senha: '' });
+    setErroUsuario('');
+  };
+  const handleCriarUsuario = async (e: React.FormEvent) => {
+    e.preventDefault(); setSalvandoUsuario(true); setErroUsuario('');
+    try {
+      const payload: any = { nome: formUsuario.nome, email: formUsuario.email, senha: formUsuario.senha, role: formUsuario.role };
+      if (formUsuario.grupo_id) payload.grupo_id = formUsuario.grupo_id;
+      await api.post('/admin/usuarios', payload);
+      fecharModalUsuario();
+      alert(`Usuário criado com sucesso para ${formUsuario.nome}!`);
+    } catch (err: any) {
+      setErroUsuario(err.response?.data?.message || 'Erro ao criar usuário.');
+    }
+    setSalvandoUsuario(false);
+  };
 
   const handleSalvar = async (e: React.FormEvent) => {
     e.preventDefault(); setSalvando(true); setErro('');
@@ -226,6 +302,7 @@ function FuncionariosTab({ onCount }: { onCount: (n: number) => void }) {
     catch (e: any) { alert(e.response?.data?.message || 'Erro ao excluir.'); }
   };
 
+  const podeCriarUsuario = ROLES_CRIAR_USUARIO.includes(user?.role ?? '');
   const filtrados = lista.filter(p =>
     p.nome.toLowerCase().includes(busca.toLowerCase()) ||
     (p.especialidade ?? '').toLowerCase().includes(busca.toLowerCase()),
@@ -265,12 +342,72 @@ function FuncionariosTab({ onCount }: { onCount: (n: number) => void }) {
                 <StatusBadge ativo={p.ativo !== false} />
               </td>
               <td className="px-6 py-4 text-right">
-                <AcoesBotoes onEdit={() => abrirEditar(p)} onDelete={() => handleDeletar(p.id)} />
+                <div className="flex items-center justify-end gap-1">
+                  {podeCriarUsuario && (
+                    <button
+                      onClick={() => abrirCriarUsuario(p)}
+                      title="Criar conta de usuário para este funcionário"
+                      className="p-1.5 rounded-lg bg-blue-500 hover:bg-blue-600 text-white transition-colors"
+                    >
+                      <UserPlus size={11} />
+                    </button>
+                  )}
+                  <AcoesBotoes onEdit={() => abrirEditar(p)} onDelete={() => handleDeletar(p.id)} />
+                </div>
               </td>
             </tr>
           ))}
         </tbody>
       </Tabela>
+
+      {/* Modal: Criar Usuário a partir do Funcionário */}
+      {modalUsuario.aberto && (
+        <Modal title={`Criar Usuário — ${modalUsuario.funcionario?.nome ?? ''}`} onClose={fecharModalUsuario}>
+          <form onSubmit={handleCriarUsuario} className="space-y-4">
+            {erroUsuario && <ErroBanner msg={erroUsuario} />}
+            <p className="text-xs text-slate-500 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-xl px-4 py-3">
+              Isso criará uma conta de acesso ao sistema vinculada a este funcionário.
+              Informe a senha inicial — o usuário poderá alterá-la depois.
+            </p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <FieldInput label="Nome *" value={formUsuario.nome ?? ''} onChange={v => setFormUsuario((p: any) => ({ ...p, nome: v }))} required />
+              <FieldInput label="E-mail *" type="email" value={formUsuario.email ?? ''} onChange={v => setFormUsuario((p: any) => ({ ...p, email: v }))} required />
+            </div>
+            {/* Senha */}
+            <div>
+              <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Senha Inicial *</label>
+              <div className="relative">
+                <input
+                  type={mostrarSenhaUsuario ? 'text' : 'password'}
+                  value={formUsuario.senha ?? ''}
+                  onChange={e => setFormUsuario((p: any) => ({ ...p, senha: e.target.value }))}
+                  required
+                  minLength={6}
+                  placeholder="Mínimo 6 caracteres"
+                  className="w-full border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400 pr-10"
+                />
+                <button type="button" onClick={() => setMostrarSenhaUsuario(v => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                  {mostrarSenhaUsuario ? <EyeOff size={13} /> : <Eye size={13} />}
+                </button>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <FieldSelect label="Cargo / Permissão *" value={formUsuario.role ?? 'prof'} onChange={v => setFormUsuario((p: any) => ({ ...p, role: v }))}>
+                {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+              </FieldSelect>
+              <FieldSelect label="Grupo" value={formUsuario.grupo_id ?? ''} onChange={v => setFormUsuario((p: any) => ({ ...p, grupo_id: v }))}>
+                <option value="">Sem grupo</option>
+                {grupos.map(g => <option key={g.id} value={g.id}>{g.nome}</option>)}
+              </FieldSelect>
+            </div>
+            <button type="submit" disabled={salvandoUsuario}
+              className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm transition-colors disabled:opacity-60">
+              {salvandoUsuario ? 'Criando conta...' : 'Criar Conta de Usuário'}
+            </button>
+          </form>
+        </Modal>
+      )}
 
       {modal.aberto && (
         <Modal title={modal.editando ? 'Editar Funcionário' : 'Novo Funcionário'} onClose={fecharModal}>
@@ -543,10 +680,19 @@ function GruposTab({ onCount }: { onCount: (n: number) => void }) {
 
   useEffect(() => { load(); }, [load]);
 
+  // Grupos privilegiados sempre têm todos os módulos ativos por padrão
+  const GRUPOS_FULL_ACCESS = ['ADMIN', 'PRT', 'VP', 'DRT'];
+  const todosModulosAtivos = () => Object.fromEntries(MODULOS_SISTEMA.map(m => [m.key, true]));
+
   const abrirCriar  = () => { setNomeForm(''); setPermModulos({}); setModal({ aberto: true, editando: null }); };
   const abrirEditar = (g: Grupo) => {
     setNomeForm(g.nome);
-    setPermModulos(g.grupo_permissoes || {});
+    // Se é um grupo privilegiado, garante que todos os módulos aparecem marcados
+    const perms = g.grupo_permissoes || {};
+    const permsFinal = GRUPOS_FULL_ACCESS.includes(g.nome.toUpperCase())
+      ? { ...todosModulosAtivos(), ...perms }
+      : perms;
+    setPermModulos(permsFinal);
     setModal({ aberto: true, editando: g });
   };
   const fecharModal = () => { setModal({ aberto: false, editando: null }); setNomeForm(''); setPermModulos({}); setErro(''); };
@@ -627,7 +773,20 @@ function GruposTab({ onCount }: { onCount: (n: number) => void }) {
             {erro && <ErroBanner msg={erro} />}
             <FieldInput label="Nome do Grupo *" value={nomeForm} onChange={setNomeForm} required />
             <div className="flex flex-col gap-2">
-              <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">Módulos de Acesso</label>
+              <div className="flex items-center justify-between">
+                <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">Módulos de Acesso</label>
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => setPermModulos(todosModulosAtivos())}
+                    className="text-[9px] font-black uppercase tracking-wider text-emerald-600 hover:underline">
+                    Selecionar Todos
+                  </button>
+                  <span className="text-slate-300">|</span>
+                  <button type="button" onClick={() => setPermModulos({})}
+                    className="text-[9px] font-black uppercase tracking-wider text-slate-400 hover:underline">
+                    Limpar
+                  </button>
+                </div>
+              </div>
               <div className="grid grid-cols-2 gap-2">
                 {MODULOS_SISTEMA.map(m => (
                   <label key={m.key} className="flex items-center gap-2 cursor-pointer py-2 px-3 rounded-xl border border-slate-100 dark:border-slate-600 hover:bg-emerald-50/50 dark:hover:bg-emerald-900/20 transition-colors">
