@@ -3,9 +3,14 @@
   "buildCommand": "npm run build",
   "outputDirectory": ".",
   "functions": {
-    "api/main.ts": {
+    "api/server.js": {
       "memory": 1024,
-      "maxDuration": 30
+      "maxDuration": 30,
+      "includeFiles": "dist/**"
+    },
+    "api/health.ts": {
+      "memory": 128,
+      "maxDuration": 10
     }
   },
   "routes": [
@@ -15,7 +20,7 @@
     },
     {
       "src": "/(.*)",
-      "dest": "/api/main.ts"
+      "dest": "/api/server.js"
     }
   ]
 }
