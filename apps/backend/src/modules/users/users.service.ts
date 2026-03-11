@@ -41,13 +41,17 @@ export class UsersService {
     return semSenha;
   }
 
-  async atualizar(id: string, dados: Partial<{ nome: string; role: string; grupo_id: string | null }>) {
+  async atualizar(id: string, dados: Partial<{ nome: string; role: string; grupo_id: string | null; nova_senha: string }>) {
     const usuario = await this.usuarioRepo.findOne({ where: { id }, relations: ['grupo'] });
     if (!usuario) throw new NotFoundException('Usuário não encontrado.');
     if (dados.nome !== undefined) usuario.nome = dados.nome;
     if (dados.role !== undefined) usuario.role = dados.role;
     if ('grupo_id' in dados) {
       (usuario as any).grupo = dados.grupo_id ? { id: dados.grupo_id } : null;
+    }
+    if (dados.nova_senha) {
+      if (dados.nova_senha.length < 6) throw new BadRequestException('A senha deve ter pelo menos 6 caracteres.');
+      usuario.password = await bcrypt.hash(dados.nova_senha, 10);
     }
     const salvo = await this.usuarioRepo.save(usuario);
     const { password, ...semSenha } = salvo as any;

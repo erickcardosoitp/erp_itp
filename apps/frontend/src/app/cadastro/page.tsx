@@ -7,6 +7,7 @@ import {
   Plus, Trash2, Edit3, Search, X, AlertCircle, Eye, EyeOff, Settings2,
 } from 'lucide-react';
 import api from '@/services/api';
+import { useAuth } from '@/context/auth-context';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -55,6 +56,7 @@ const ROLES = [
   { value: 'adjunto', label: 'Adjunto' },
   { value: 'drt',     label: 'Diretor' },
   { value: 'vp',      label: 'Vice-Presidente' },
+  { value: 'prt',     label: 'Presidente' },
   { value: 'admin',   label: 'Administrador' },
 ];
 
@@ -62,9 +64,42 @@ const STATUS_INSUMO = ['ok', 'alerta', 'zerado'];
 const CATEGORIAS_INSUMO = ['Alimentação', 'Higiene', 'Material Escolar', 'Uniforme', 'Limpeza', 'Tecnologia', 'Outros'];
 const TIPOS_CONTA = ['Corrente', 'Poupança', 'Pagamento', 'Investimento'];
 
+// Grupos que podem excluir registros do Cadastro Básico
+const ROLES_PODEM_DELETAR = ['admin', 'prt', 'vp', 'drt', 'adjunto'];
+
+// Módulos do sistema para configuração de permissões de grupo
+const MODULOS_SISTEMA = [
+  { key: 'cadastro_basico', label: 'Cadastro Básico' },
+  { key: 'financeiro',      label: 'Financeiro' },
+  { key: 'matriculas',      label: 'Matrículas' },
+  { key: 'academico',       label: 'Acadêmico' },
+  { key: 'relatorios',      label: 'Relatórios' },
+  { key: 'configuracoes',   label: 'Configurações' },
+  { key: 'marketing',       label: 'Marketing' },
+  { key: 'doacao',          label: 'Doações' },
+];
+
+// Proposta de numeração automática por categoria (aguardando validação)
+const PROTO_NUMERACAO = [
+  { cat: 'Alimentação',     codigo: 'CZNH', exemplo: 'ITP-CZNH-202603-001' },
+  { cat: 'Higiene',         codigo: 'HGNE', exemplo: 'ITP-HGNE-202603-001' },
+  { cat: 'Material Escolar',codigo: 'MESL', exemplo: 'ITP-MESL-202603-001' },
+  { cat: 'Uniforme',        codigo: 'UNFM', exemplo: 'ITP-UNFM-202603-001' },
+  { cat: 'Limpeza',         codigo: 'LMPZ', exemplo: 'ITP-LMPZ-202603-001' },
+  { cat: 'Tecnologia',      codigo: 'TKNL', exemplo: 'ITP-TKNL-202603-001' },
+  { cat: 'Outros',          codigo: 'OTRS', exemplo: 'ITP-OTRS-202603-001' },
+  { cat: 'Funcionário',     codigo: 'FUNC', exemplo: 'ITP-FUNC-202603-001' },
+  { cat: 'Curso',           codigo: 'CRSO', exemplo: 'ITP-CRSO-202603-001' },
+  { cat: 'Doador',          codigo: 'DOAD', exemplo: 'ITP-DOAD-202603-001' },
+  { cat: 'Conta Bancária',  codigo: 'BNCO', exemplo: 'ITP-BNCO-202603-001' },
+  { cat: 'Aluno',           codigo: 'AUNO', exemplo: 'ITP-AUNO-20260301-01 (já implementado)' },
+];
+
 // ─── Página Principal ─────────────────────────────────────────────────────────
 
 export default function CadastroBasicoPage() {
+  // hooks SEMPRE antes de qualquer return condicional
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<TabId>('funcionarios');
   const [isMounted, setIsMounted] = useState(false);
   const [counts, setCounts] = useState<Record<TabId, number>>({
@@ -73,9 +108,18 @@ export default function CadastroBasicoPage() {
   });
 
   useEffect(() => { setIsMounted(true); }, []);
-  if (!isMounted) return <div className="min-h-screen bg-[#F8FAFC] dark:bg-[#131b2e]" />;
 
-  const setCount = (tab: TabId) => (n: number) => setCounts(p => ({ ...p, [tab]: n }));
+  // CORREÇÃO: useMemo garante referências estáveis → evita re-render loop nos filhos
+  const countSetters = useMemo(() => {
+    const m = (tab: TabId) => (n: number) => setCounts(p => ({ ...p, [tab]: n }));
+    return {
+      funcionarios: m('funcionarios'), usuarios: m('usuarios'), grupos: m('grupos'),
+      cursos: m('cursos'), alunos: m('alunos'), insumos: m('insumos'),
+      doadores: m('doadores'), contas: m('contas'),
+    } as Record<TabId, (n: number) => void>;
+  }, []);
+
+  if (!isMounted) return <div className="min-h-screen bg-[#F8FAFC] dark:bg-[#131b2e]" />;
 
   const TABS: { id: TabId; label: string; icon: React.ElementType; cor: string }[] = [
     { id: 'funcionarios', label: 'Funcionários',  icon: Briefcase,     cor: 'purple' },
@@ -123,14 +167,14 @@ export default function CadastroBasicoPage() {
         </div>
 
         {/* CONTEÚDO */}
-        {activeTab === 'funcionarios' && <FuncionariosTab onCount={setCount('funcionarios')} />}
-        {activeTab === 'usuarios'     && <UsuariosTab     onCount={setCount('usuarios')} />}
-        {activeTab === 'grupos'       && <GruposTab       onCount={setCount('grupos')} />}
-        {activeTab === 'cursos'       && <CursosTab       onCount={setCount('cursos')} />}
-        {activeTab === 'alunos'       && <AlunosTab       onCount={setCount('alunos')} />}
-        {activeTab === 'insumos'      && <InsumosTab      onCount={setCount('insumos')} />}
-        {activeTab === 'doadores'     && <DoadoresTab     onCount={setCount('doadores')} />}
-        {activeTab === 'contas'       && <ContasTab       onCount={setCount('contas')} />}
+        {activeTab === 'funcionarios' && <FuncionariosTab onCount={countSetters.funcionarios} />}
+        {activeTab === 'usuarios'     && <UsuariosTab     onCount={countSetters.usuarios} />}
+        {activeTab === 'grupos'       && <GruposTab       onCount={countSetters.grupos} />}
+        {activeTab === 'cursos'       && <CursosTab       onCount={countSetters.cursos} />}
+        {activeTab === 'alunos'       && <AlunosTab       onCount={countSetters.alunos} />}
+        {activeTab === 'insumos'      && <InsumosTab      onCount={countSetters.insumos} />}
+        {activeTab === 'doadores'     && <DoadoresTab     onCount={countSetters.doadores} />}
+        {activeTab === 'contas'       && <ContasTab       onCount={countSetters.contas} />}
 
       </div>
     </div>
@@ -357,6 +401,7 @@ function UsuariosTab({ onCount }: { onCount: (n: number) => void }) {
       if (modal.editando) {
         await api.patch(`/admin/usuarios/${modal.editando.id}`, {
           nome: form.nome, role: form.role, grupo_id: form.grupo_id || null,
+          ...(form.nova_senha ? { nova_senha: form.nova_senha } : {}),
         });
       } else {
         await api.post('/admin/usuarios', form);
@@ -446,6 +491,27 @@ function UsuariosTab({ onCount }: { onCount: (n: number) => void }) {
               <option value="">Sem grupo</option>
               {grupos.map(g => <option key={g.id} value={g.id}>{g.nome}</option>)}
             </FieldSelect>
+            {modal.editando && (
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  Nova Senha <span className="text-slate-400 normal-case">(deixe vazio para manter a atual)</span>
+                </label>
+                <div className="relative">
+                  <input type={mostrarSenha ? 'text' : 'password'} value={form.nova_senha ?? ''}
+                    onChange={e => setForm((p: any) => ({ ...p, nova_senha: e.target.value }))}
+                    placeholder="Mínimo 6 caracteres"
+                    className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-400 pr-10" />
+                  <button type="button" onClick={() => setMostrarSenha(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">
+                    {mostrarSenha ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
+                </div>
+              </div>
+            )}
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/30 rounded-xl p-2.5">
+              <p className="text-[9px] text-blue-700 dark:text-blue-300 font-bold">
+                💡 <strong>Contas separadas:</strong> Para ter conta de Admin e conta de Professor, crie dois usuários com e-mails diferentes e cargos distintos. Ex: <em>nome@itp.org</em> (Admin) e <em>nome.prof@itp.org</em> (Professor).
+              </p>
+            </div>
             <BtnSalvar salvando={salvando} editando={!!modal.editando} label={modal.editando ? 'Salvar Alterações' : 'Criar Usuário'} />
           </form>
         </Modal>
@@ -463,7 +529,7 @@ function GruposTab({ onCount }: { onCount: (n: number) => void }) {
   const [busca, setBusca]   = useState('');
   const [modal, setModal]   = useState<{ aberto: boolean; editando: Grupo | null }>({ aberto: false, editando: null });
   const [nomeForm, setNomeForm] = useState('');
-  const [permJson, setPermJson] = useState('{}');
+  const [permModulos, setPermModulos] = useState<Record<string, boolean>>({});
   const [salvando, setSalvando] = useState(false);
 
   const load = useCallback(async () => {
@@ -477,23 +543,21 @@ function GruposTab({ onCount }: { onCount: (n: number) => void }) {
 
   useEffect(() => { load(); }, [load]);
 
-  const abrirCriar  = () => { setNomeForm(''); setPermJson('{}'); setModal({ aberto: true, editando: null }); };
+  const abrirCriar  = () => { setNomeForm(''); setPermModulos({}); setModal({ aberto: true, editando: null }); };
   const abrirEditar = (g: Grupo) => {
     setNomeForm(g.nome);
-    setPermJson(g.grupo_permissoes ? JSON.stringify(g.grupo_permissoes, null, 2) : '{}');
+    setPermModulos(g.grupo_permissoes || {});
     setModal({ aberto: true, editando: g });
   };
-  const fecharModal = () => { setModal({ aberto: false, editando: null }); setNomeForm(''); setPermJson('{}'); setErro(''); };
+  const fecharModal = () => { setModal({ aberto: false, editando: null }); setNomeForm(''); setPermModulos({}); setErro(''); };
 
   const handleSalvar = async (e: React.FormEvent) => {
     e.preventDefault(); setSalvando(true); setErro('');
-    let permissoes: any = {};
-    try { permissoes = JSON.parse(permJson); } catch { setErro('JSON de permissões inválido.'); setSalvando(false); return; }
     try {
       if (modal.editando) {
-        await api.patch(`/grupos/${modal.editando.id}`, { nome: nomeForm, grupo_permissoes: permissoes });
+        await api.patch(`/grupos/${modal.editando.id}`, { nome: nomeForm, grupo_permissoes: permModulos });
       } else {
-        await api.post('/grupos', { nome: nomeForm, permissoes });
+        await api.post('/grupos', { nome: nomeForm, permissoes: permModulos });
       }
       fecharModal(); load();
     } catch (e: any) { setErro(e.response?.data?.message || 'Erro ao salvar grupo.'); }
@@ -562,11 +626,24 @@ function GruposTab({ onCount }: { onCount: (n: number) => void }) {
           <form onSubmit={handleSalvar} className="space-y-3">
             {erro && <ErroBanner msg={erro} />}
             <FieldInput label="Nome do Grupo *" value={nomeForm} onChange={setNomeForm} required />
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400">Permissões (JSON)</label>
-              <textarea value={permJson} onChange={e => setPermJson(e.target.value)} rows={5}
-                placeholder={'{\n  "financeiro": true,\n  "matriculas": true\n}'}
-                className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-emerald-400 font-mono" />
+            <div className="flex flex-col gap-2">
+              <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">Módulos de Acesso</label>
+              <div className="grid grid-cols-2 gap-2">
+                {MODULOS_SISTEMA.map(m => (
+                  <label key={m.key} className="flex items-center gap-2 cursor-pointer py-2 px-3 rounded-xl border border-slate-100 dark:border-slate-600 hover:bg-emerald-50/50 dark:hover:bg-emerald-900/20 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={!!permModulos[m.key]}
+                      onChange={e => setPermModulos(p => ({ ...p, [m.key]: e.target.checked }))}
+                      className="w-4 h-4 accent-emerald-600"
+                    />
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">{m.label}</span>
+                  </label>
+                ))}
+              </div>
+              <p className="text-[9px] text-slate-400 font-semibold">
+                Grupos ADMIN, PRT, VP, DRT e Adjunto sempre podem excluir registros.
+              </p>
             </div>
             <BtnSalvar salvando={salvando} editando={!!modal.editando} cor="emerald" />
           </form>
@@ -864,6 +941,25 @@ function InsumosTab({ onCount }: { onCount: (n: number) => void }) {
   return (
     <div className="space-y-4">
       {erro && <Banner tipo="erro" msg={erro} onClose={() => setErro('')} />}
+
+      {/* ── Protótipo de Numeração para Validação ── */}
+      <div className="bg-purple-50 dark:bg-purple-900/20 border-2 border-dashed border-purple-300 dark:border-purple-700 rounded-2xl p-4 space-y-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="bg-purple-600 text-white text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider animate-pulse">PROTÓTIPO EM VALIDAÇÃO</span>
+          <p className="text-xs font-black text-purple-800 dark:text-purple-300 uppercase tracking-wide">Proposta de Numeração Automática por Tipo de Cadastro</p>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+          {PROTO_NUMERACAO.filter(n => CATEGORIAS_INSUMO.includes(n.cat)).map(n => (
+            <div key={n.cat} className="bg-white dark:bg-slate-800 rounded-xl px-3 py-2 border border-purple-100 dark:border-purple-800/30 space-y-0.5">
+              <div className="text-[9px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-wider">{n.cat}</div>
+              <code className="text-[10px] font-mono font-bold text-slate-700 dark:text-slate-300 block">{n.exemplo}</code>
+            </div>
+          ))}
+        </div>
+        <p className="text-[9px] text-purple-600 dark:text-purple-400 font-semibold">
+          Formato: ITP - [CÓDIGO CATEGORIA] - [ANO][MÊS] - [SEQ]. X = sequencial mensal (reset todo mês). Valide e confirme para implementar no backend.
+        </p>
+      </div>
 
       <BarraAcao busca={busca} setBusca={setBusca} placeholder="Buscar insumo ou categoria..." btnLabel="Novo Insumo" btnCor="orange" onClick={abrirCriar} />
 
@@ -1191,7 +1287,7 @@ function TabKpi({ tab, active, set, count }: {
       </div>
       <div>
         <p className={`text-[8px] font-black uppercase tracking-wider leading-none mb-0.5 ${isActive ? 'text-white/70' : 'text-slate-400'}`}>{tab.label}</p>
-        <p className="text-xl font-black tracking-tighter">{String(count).padStart(2, '0')}</p>
+        <p className="text-xl font-black tracking-tighter">{count}</p>
       </div>
     </button>
   );
@@ -1266,11 +1362,15 @@ function StatusBadge({ ativo, labelAtivo = 'Ativo', labelInativo = 'Inativo' }: 
 }
 
 function AcoesBotoes({ onEdit, onDelete, cor = 'purple' }: { onEdit: () => void; onDelete: () => void; cor?: string }) {
+  const { user } = useAuth();
+  const podeExcluir = ROLES_PODEM_DELETAR.includes(user?.role ?? '');
   const c = CORES[cor] ?? CORES.purple;
   return (
     <div className="flex items-center gap-1">
       <button onClick={onEdit} className={`p-1.5 rounded-lg ${c.btn} text-white transition-colors`}><Edit3 size={11} /></button>
-      <button onClick={onDelete} className="p-1.5 rounded-lg bg-red-500 hover:bg-red-600 text-white transition-colors"><Trash2 size={11} /></button>
+      {podeExcluir && (
+        <button onClick={onDelete} className="p-1.5 rounded-lg bg-red-500 hover:bg-red-600 text-white transition-colors"><Trash2 size={11} /></button>
+      )}
     </div>
   );
 }

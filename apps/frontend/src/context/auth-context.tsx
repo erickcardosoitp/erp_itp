@@ -5,10 +5,12 @@ import Cookies from 'js-cookie';
 
 interface UserPayload {
   email: string;
-  role: string; // Ex: 'ADMIN', 'DRT'
+  role: string; // Ex: 'admin', 'drt', 'vp'
   sub: number;
   nome?: string;
   fotoUrl?: string;
+  grupo?: string; // Nome do grupo do usuário (do JWT payload)
+  permissoes?: Record<string, boolean>; // Permissões do grupo
 }
 
 interface AuthContextType {
