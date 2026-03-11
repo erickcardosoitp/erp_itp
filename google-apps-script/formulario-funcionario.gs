@@ -2,13 +2,17 @@
  * Google Apps Script — Formulário de Cadastro de Funcionário
  * Instituto Tia Pretinha
  *
+ * Grava diretamente no banco de dados Neon (PostgreSQL) via JDBC.
+ * Não depende de nenhuma API ou backend do projeto.
+ *
  * Configure o gatilho: Extensões → Apps Script → Gatilhos
  *   → Adicionar gatilho → onFormSubmit → Do formulário → Ao enviar formulário
  *
- * Variáveis de script (Projeto → Configurações do projeto → Propriedades do script):
- *   API_URL    = https://api.itp.institutotiapretinha.org/api/academico/professores/webhook
- *   API_SECRET = <mesmo valor de WEBHOOK_SECRET no backend>
- *   EMAIL_ERROS = seuemail@dominio.com   (opcional — para receber erros)
+ * Propriedades do script (Projeto → Configurações → Propriedades do script):
+ *   DB_URL      = jdbc:postgresql://<host>.neon.tech/<dbname>?sslmode=require
+ *   DB_USER     = <usuario_neon>
+ *   DB_PASSWORD = <senha_neon>
+ *   EMAIL_ERROS = seuemail@dominio.com   (opcional)
  */
 
 // ─────────────────────────────────────────────────────────────────────
@@ -19,13 +23,31 @@ function getConf_(key) {
   return PropertiesService.getScriptProperties().getProperty(key) || '';
 }
 
+/** "Sim..." → true | qualquer outra coisa → false */
 function simParaBool_(value) {
   if (!value) return false;
   return value.toString().toLowerCase().startsWith('sim');
 }
 
-function trim_(value) {
-  return (value || '').toString().trim() || null;
+/** Retorna string limpa ou null */
+function str_(value) {
+  var v = (value || '').toString().trim();
+  return v === '' ? null : v;
+}
+
+/**
+ * Converte data no formato DD/MM/YYYY (Google Forms BR) para YYYY-MM-DD (SQL).
+ * Retorna null se não conseguir converter.
+ */
+function dataParaISO_(value) {
+  var v = str_(value);
+  if (!v) return null;
+  var partes = v.split('/');
+  if (partes.length === 3) {
+    return partes[2] + '-' + partes[1] + '-' + partes[0];
+  }
+  // Tenta retornar como está (já pode estar em ISO)
+  return v;
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -33,84 +55,112 @@ function trim_(value) {
 // ─────────────────────────────────────────────────────────────────────
 
 function onFormSubmit(e) {
+  var conn;
   try {
-    // e.namedValues: objeto cujas chaves são os títulos das perguntas
-    // e cada valor é um array com a resposta (FormApp)
+    // Normaliza respostas: { "Título da Pergunta": "resposta" }
     var r = {};
     var values = e.namedValues || {};
-
-    // Normaliza para string simples: pega o primeiro elemento do array
     for (var key in values) {
       r[key] = (values[key][0] || '').toString().trim();
     }
 
-    // ── Mapeamento dos campos ──────────────────────────────────────
-    var payload = {
-      nome:                   trim_(r['Nome Completo']),
-      email:                  trim_(r['E-mail (Obrigatório)']) || trim_(r['E-mail']),
-      cpf:                    trim_(r['CPF (Obrigatório)']) || trim_(r['CPF']),
-      data_nascimento:        trim_(r['Data de Nascimento (Obrigatório)']) || trim_(r['Data de Nascimento']),
-      celular:                trim_(r['Celular (Obrigatório)']) || trim_(r['Celular']),
-      sexo:                   trim_(r['Sexo (Obrigatório)']) || trim_(r['Sexo']),
-      raca_cor:               trim_(r['Raça/Cor']),
-      escolaridade:           trim_(r['Escolaridade']),
-      cep:                    trim_(r['CEP']),
-      numero_residencia:      trim_(r['Número da Residência']),
-      complemento:            trim_(r['Complemento (Ex: Apartamento, Bloco)']),
-      estado:                 trim_(r['Estado (Ex: RJ, SP)']),
-      telefone_emergencia_1:  trim_(r['Telefone de Emergência 1 (Obrigatório)']),
-      telefone_emergencia_2:  trim_(r['Telefone de Emergência 2 (Opcional)']),
-      possui_deficiencia:     simParaBool_(r['Possui algum tipo de deficiência?']),
-      deficiencia_descricao:  trim_(r['Se sim, qual(is) deficiência(s) possui? (Descreva)']),
-      possui_alergias:        simParaBool_(r['Possui Alergias?']),
-      alergias_descricao:     trim_(r['Se sim, qual(is) tipo(s) de alergia possui? (Descreva)']),
-      usa_medicamentos:       simParaBool_(r['Faz uso contínuo de algum tipo de medicamento?']),
-      medicamentos_descricao: trim_(r['Se sim, quais medicamentos utiliza? (Nome e dosagem, se souber)']),
-      interesse_cursos:       simParaBool_(r['Tem interesse em se matricular em algum curso do Instituto Tia Pretinha?']),
-      ativo:                  true,
-    };
+    // ── Leitura dos campos do formulário ──────────────────────────
+    var nome               = str_(r['Nome Completo']);
+    var email              = str_(r['E-mail (Obrigatório)'])            || str_(r['E-mail']);
+    var cpf                = str_(r['CPF (Obrigatório)'])               || str_(r['CPF']);
+    var data_nascimento    = dataParaISO_(r['Data de Nascimento (Obrigatório)'] || r['Data de Nascimento']);
+    var celular            = str_(r['Celular (Obrigatório)'])           || str_(r['Celular']);
+    var sexo               = str_(r['Sexo (Obrigatório)'])              || str_(r['Sexo']);
+    var raca_cor           = str_(r['Raça/Cor']);
+    var escolaridade       = str_(r['Escolaridade']);
+    var cep                = str_(r['CEP']);
+    var numero_residencia  = str_(r['Número da Residência']);
+    var complemento        = str_(r['Complemento (Ex: Apartamento, Bloco)']);
+    var estado             = str_(r['Estado (Ex: RJ, SP)']);
+    var tel1               = str_(r['Telefone de Emergência 1 (Obrigatório)']);
+    var tel2               = str_(r['Telefone de Emergência 2 (Opcional)']);
+    var possui_deficiencia = simParaBool_(r['Possui algum tipo de deficiência?']);
+    var def_descricao      = str_(r['Se sim, qual(is) deficiência(s) possui? (Descreva)']);
+    var possui_alergias    = simParaBool_(r['Possui Alergias?']);
+    var alergia_descricao  = str_(r['Se sim, qual(is) tipo(s) de alergia possui? (Descreva)']);
+    var usa_medicamentos   = simParaBool_(r['Faz uso contínuo de algum tipo de medicamento?']);
+    var med_descricao      = str_(r['Se sim, quais medicamentos utiliza? (Nome e dosagem, se souber)']);
+    var interesse_cursos   = simParaBool_(r['Tem interesse em se matricular em algum curso do Instituto Tia Pretinha?']);
 
-    // Remove campos nulos para não sobrescrever defaults do banco
-    var body = {};
-    for (var k in payload) {
-      if (payload[k] !== null && payload[k] !== undefined && payload[k] !== '') {
-        body[k] = payload[k];
-      }
-    }
-    // Booleans sempre enviados mesmo que false
-    body['possui_deficiencia']  = payload['possui_deficiencia'];
-    body['possui_alergias']     = payload['possui_alergias'];
-    body['usa_medicamentos']    = payload['usa_medicamentos'];
-    body['interesse_cursos']    = payload['interesse_cursos'];
+    // ── Conexão com o Neon (PostgreSQL) via JDBC ──────────────────
+    var dbUrl  = getConf_('DB_URL');
+    var dbUser = getConf_('DB_USER');
+    var dbPass = getConf_('DB_PASSWORD');
 
-    // ── Chamada à API ─────────────────────────────────────────────
-    var apiUrl    = getConf_('API_URL')    || 'https://api.itp.institutotiapretinha.org/api/academico/professores/webhook';
-    var apiSecret = getConf_('API_SECRET') || '';
+    conn = Jdbc.getConnection(dbUrl, dbUser, dbPass);
+    conn.setAutoCommit(false);
 
-    var options = {
-      method: 'post',
-      contentType: 'application/json',
-      headers: {
-        'x-itp-webhook-secret': apiSecret,
-      },
-      payload: JSON.stringify(body),
-      muteHttpExceptions: true,
-    };
+    // ── INSERT na tabela professores ──────────────────────────────
+    var sql = [
+      'INSERT INTO professores (',
+      '  id, nome, email, cpf, data_nascimento, celular, sexo, raca_cor, escolaridade,',
+      '  cep, numero_residencia, complemento, estado,',
+      '  telefone_emergencia_1, telefone_emergencia_2,',
+      '  possui_deficiencia, deficiencia_descricao,',
+      '  possui_alergias, alergias_descricao,',
+      '  usa_medicamentos, medicamentos_descricao,',
+      '  interesse_cursos, ativo, created_at, updated_at',
+      ') VALUES (',
+      '  gen_random_uuid(), ?, ?, ?, ?, ?, ?, ?, ?,',
+      '  ?, ?, ?, ?,',
+      '  ?, ?,',
+      '  ?, ?,',
+      '  ?, ?,',
+      '  ?, ?,',
+      '  ?, true, NOW(), NOW()',
+      ')',
+    ].join(' ');
 
-    var response = UrlFetchApp.fetch(apiUrl, options);
-    var code     = response.getResponseCode();
-    var text     = response.getContentText();
-
-    if (code < 200 || code >= 300) {
-      Logger.log('[ERRO] HTTP ' + code + ' — ' + text);
-      notificarErro_('Erro ao cadastrar funcionário\nHTTP ' + code + '\n' + text, payload.nome);
+    var stmt = conn.prepareStatement(sql);
+    var i = 1;
+    stmt.setString(i++, nome);
+    stmt.setString(i++, email);
+    stmt.setString(i++, cpf);
+    // data_nascimento é DATE — usa setNull se ausente
+    if (data_nascimento) {
+      stmt.setString(i++, data_nascimento);
     } else {
-      Logger.log('[OK] Funcionário cadastrado: ' + payload.nome + ' (HTTP ' + code + ')');
+      stmt.setNull(i++, 0);
     }
+    stmt.setString(i++, celular);
+    stmt.setString(i++, sexo);
+    stmt.setString(i++, raca_cor);
+    stmt.setString(i++, escolaridade);
+    stmt.setString(i++, cep);
+    stmt.setString(i++, numero_residencia);
+    stmt.setString(i++, complemento);
+    stmt.setString(i++, estado);
+    stmt.setString(i++, tel1);
+    stmt.setString(i++, tel2);
+    stmt.setBoolean(i++, possui_deficiencia);
+    stmt.setString(i++, def_descricao);
+    stmt.setBoolean(i++, possui_alergias);
+    stmt.setString(i++, alergia_descricao);
+    stmt.setBoolean(i++, usa_medicamentos);
+    stmt.setString(i++, med_descricao);
+    stmt.setBoolean(i++, interesse_cursos);
+
+    stmt.executeUpdate();
+    conn.commit();
+    stmt.close();
+
+    Logger.log('[OK] Funcionário cadastrado diretamente no banco: ' + nome);
 
   } catch (err) {
     Logger.log('[EXCEPTION] ' + err.toString());
-    notificarErro_(err.toString(), '(erro antes do envio)');
+    if (conn) {
+      try { conn.rollback(); } catch (e2) {}
+    }
+    notificarErro_(err.toString(), (e && e.namedValues && e.namedValues['Nome Completo']) ? e.namedValues['Nome Completo'][0] : '?');
+  } finally {
+    if (conn) {
+      try { conn.close(); } catch (e3) {}
+    }
   }
 }
 
@@ -129,11 +179,11 @@ function notificarErro_(detalhe, nome) {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-//  Teste manual — rode no editor do Apps Script para testar sem enviar form
+//  Teste manual — rode no editor do Apps Script para validar sem form
 // ─────────────────────────────────────────────────────────────────────
 
 function testeManual_() {
-  var fakaeEvent = {
+  var fakeEvent = {
     namedValues: {
       'Nome Completo':                      ['Maria de Teste'],
       'E-mail (Obrigatório)':               ['teste@itp.org'],
@@ -158,5 +208,5 @@ function testeManual_() {
       'Tem interesse em se matricular em algum curso do Instituto Tia Pretinha?': ['Sim'],
     },
   };
-  onFormSubmit(fakaeEvent);
+  onFormSubmit(fakeEvent);
 }
