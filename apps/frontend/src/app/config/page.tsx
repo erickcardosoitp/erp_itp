@@ -7,10 +7,11 @@ import { toast } from 'sonner';
 import {
   User, Camera, Save, Loader2, Settings2,
   Palette, ShieldCheck, Moon, Sun,
-  UserCog
+  UserCog, ChevronDown, Check, Lock
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 
+import api from '@/services/api';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
 
@@ -265,103 +266,286 @@ function AcessibilidadeTab() {
 // ─────────────────────────────────────────────────────────────
 // ABA: GESTÃO DE ACESSO
 // ─────────────────────────────────────────────────────────────
-const MOCK_USUARIOS = [
-  { id: 1, nome: 'Ricardo Almeida',  email: 'admin@itp.org.br',      role: 'ADMIN',      status: 'Ativo' },
-  { id: 2, nome: 'Carla Mendes',     email: 'carla@itp.org.br',       role: 'DIRETOR',    status: 'Ativo' },
-  { id: 3, nome: 'Marcus Vinícius',  email: 'marcus@itp.org.br',      role: 'PROFESSOR',  status: 'Ativo' },
-  { id: 4, nome: 'Juliana Pereira',  email: 'juliana@itp.org.br',     role: 'COORDENADOR', status: 'Ativo' },
-  { id: 5, nome: 'Pedro Henrique',   email: 'pedro.h@itp.org.br',     role: 'PROFESSOR',  status: 'Pendente' },
+const MODULOS_SISTEMA = [
+  { key: 'dashboard',       label: 'Dashboard' },
+  { key: 'cadastro_basico', label: 'Cadastro Básico' },
+  { key: 'matriculas',      label: 'Matrículas' },
+  { key: 'academico',       label: 'Acadêmico' },
+  { key: 'financeiro',      label: 'Financeiro' },
+  { key: 'doacoes',         label: 'Doações' },
+  { key: 'estoque',         label: 'Estoque' },
+  { key: 'relatorios',      label: 'Relatórios' },
+  { key: 'marketing',       label: 'Marketing' },
+  { key: 'configuracoes',   label: 'Configurações' },
 ];
 
+const ACOES_PERM = [
+  { key: 'visualizar', label: 'Visualizar' },
+  { key: 'incluir',    label: 'Incluir' },
+  { key: 'editar',     label: 'Editar' },
+  { key: 'excluir',    label: 'Excluir' },
+];
+
+interface GrupoGA {
+  id: string;
+  nome: string;
+  grupo_permissoes: any;
+  usuarios?: { id: string; nome: string }[];
+}
+
 function GestaoAcessoTab() {
+  const [grupos, setGrupos] = useState<GrupoGA[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [grupoSelecionado, setGrupoSelecionado] = useState<GrupoGA | null>(null);
+  const [permissoes, setPermissoes] = useState<Record<string, Record<string, boolean>>>({});
+  const [salvando, setSalvando] = useState(false);
+  const [mensagem, setMensagem] = useState<{ tipo: 'ok' | 'erro'; texto: string } | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        const r = await api.get('/grupos');
+        setGrupos(r.data);
+      } catch { /* ignore */ }
+      setLoading(false);
+    })();
+  }, []);
+
+  const isAdmin = (nome: string) => nome.toUpperCase() === 'ADMIN';
+
+  const selecionarGrupo = (g: GrupoGA) => {
+    setGrupoSelecionado(g);
+    setMensagem(null);
+    if (isAdmin(g.nome)) {
+      // ADMIN tem tudo
+      const all: Record<string, Record<string, boolean>> = {};
+      MODULOS_SISTEMA.forEach(m => { all[m.key] = { visualizar: true, incluir: true, editar: true, excluir: true }; });
+      setPermissoes(all);
+      return;
+    }
+    // Carrega permissões existentes
+    const gp = g.grupo_permissoes || {};
+    const permsExistentes = gp.permissoes || {};
+    const modulosVisiveis = gp.modulos_visiveis || {};
+    const result: Record<string, Record<string, boolean>> = {};
+    MODULOS_SISTEMA.forEach(m => {
+      const visivel = !!modulosVisiveis[m.key];
+      const p = permsExistentes[m.key] || {};
+      result[m.key] = {
+        visualizar: visivel || !!p.visualizar,
+        incluir:    !!p.incluir,
+        editar:     !!p.editar,
+        excluir:    !!p.excluir,
+      };
+    });
+    setPermissoes(result);
+  };
+
+  const togglePerm = (modulo: string, acao: string) => {
+    if (grupoSelecionado && isAdmin(grupoSelecionado.nome)) return;
+    setPermissoes(prev => {
+      const modPerms = { ...(prev[modulo] || {}) };
+      modPerms[acao] = !modPerms[acao];
+      // Se visualizar é desmarcado, remove todas as outras
+      if (acao === 'visualizar' && !modPerms[acao]) {
+        modPerms.incluir = false;
+        modPerms.editar = false;
+        modPerms.excluir = false;
+      }
+      // Se marca incluir/editar/excluir, visualizar deve estar ativo
+      if (acao !== 'visualizar' && modPerms[acao]) {
+        modPerms.visualizar = true;
+      }
+      return { ...prev, [modulo]: modPerms };
+    });
+  };
+
+  const handleSalvar = async () => {
+    if (!grupoSelecionado || isAdmin(grupoSelecionado.nome)) return;
+    setSalvando(true); setMensagem(null);
+    try {
+      const gp = grupoSelecionado.grupo_permissoes || {};
+      const modulosVisiveis = gp.modulos_visiveis || {};
+      // Sincroniza: se visualizar está ativo, garante que modulos_visiveis também está
+      const mvAtualizado = { ...modulosVisiveis };
+      MODULOS_SISTEMA.forEach(m => {
+        if (permissoes[m.key]?.visualizar) mvAtualizado[m.key] = true;
+      });
+      const payload = {
+        grupo_permissoes: {
+          modulos_visiveis: mvAtualizado,
+          permissoes: permissoes,
+        },
+      };
+      await api.patch(`/grupos/${grupoSelecionado.id}`, payload);
+      // Atualiza local
+      setGrupos(prev => prev.map(g => g.id === grupoSelecionado.id
+        ? { ...g, grupo_permissoes: payload.grupo_permissoes }
+        : g
+      ));
+      setGrupoSelecionado({ ...grupoSelecionado, grupo_permissoes: payload.grupo_permissoes });
+      setMensagem({ tipo: 'ok', texto: `Permissões de "${grupoSelecionado.nome}" salvas com sucesso.` });
+    } catch (e: any) {
+      setMensagem({ tipo: 'erro', texto: e.response?.data?.message || 'Erro ao salvar permissões.' });
+    }
+    setSalvando(false);
+  };
+
+  const modulosVisiveis = (g: GrupoGA) => {
+    const gp = g.grupo_permissoes || {};
+    const mv = gp.modulos_visiveis || {};
+    return MODULOS_SISTEMA.filter(m => mv[m.key]);
+  };
+
   return (
     <div className="space-y-8">
-      {/* Cabeçalho da seção */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-100">
-        <div className="flex items-center gap-3">
-          <div className="bg-purple-600 p-2.5 rounded-xl shadow-lg shadow-purple-500/20">
-            <ShieldCheck size={20} className="text-white" />
-          </div>
-          <div>
-            <h2 className="text-sm font-black uppercase tracking-tighter text-slate-900">Gestão de Acesso</h2>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Usuários e permissões do sistema</p>
-          </div>
+      {/* Header */}
+      <div className="flex items-center gap-3 pb-6 border-b border-slate-100 dark:border-slate-700">
+        <div className="bg-purple-600 p-2.5 rounded-xl shadow-lg shadow-purple-500/20">
+          <ShieldCheck size={20} className="text-white" />
         </div>
-        <button
-          disabled
-          className="bg-yellow-400 text-purple-950 px-6 py-3 rounded-2xl font-black text-[10px] uppercase flex items-center gap-2 opacity-50 cursor-not-allowed border-b-4 border-yellow-600"
-          title="Em desenvolvimento"
-        >
-          <UserCog size={14} strokeWidth={3} /> Convidar Usuário
-        </button>
+        <div>
+          <h2 className="text-sm font-black uppercase tracking-tighter text-slate-900 dark:text-slate-100">Gestão de Acesso</h2>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Permissões granulares por grupo de usuário</p>
+        </div>
       </div>
 
-      {/* KPIs resumidos */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {[
-          { label: 'Total de Usuários', value: '5',  color: 'bg-purple-900 text-white' },
-          { label: 'Ativos',            value: '4',  color: 'bg-emerald-50 text-emerald-700 border border-emerald-100' },
-          { label: 'Pendentes',         value: '1',  color: 'bg-amber-50 text-amber-600 border border-amber-100' },
-          { label: 'Perfis de Acesso',  value: '6',  color: 'bg-slate-100 text-slate-600' },
-        ].map(({ label, value, color }) => (
-          <div key={label} className={`${color} px-5 py-4 rounded-2xl`}>
-            <p className="text-2xl font-black">{value}</p>
-            <p className="text-[10px] font-black uppercase tracking-widest mt-0.5 opacity-70">{label}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Tabela de usuários */}
-      <div className="overflow-x-auto rounded-[28px] border border-slate-100 shadow-sm">
-        <table className="w-full text-left">
-          <thead>
-            <tr className="bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-widest border-b border-slate-100">
-              <th className="px-6 py-4">Usuário</th>
-              <th className="px-6 py-4 hidden md:table-cell">E-mail</th>
-              <th className="px-6 py-4 text-center">Perfil</th>
-              <th className="px-6 py-4 text-center">Status</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-50 bg-white">
-            {MOCK_USUARIOS.map((u) => {
-              const roleInfo = ROLE_LABELS[u.role] ?? { label: u.role, color: 'bg-slate-100 text-slate-600 border-slate-200' };
+      {loading ? (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="animate-spin text-purple-600" size={32} />
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-6">
+          {/* Lista de Grupos */}
+          <div className="space-y-2">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Selecione o Grupo</p>
+            {grupos.map(g => {
+              const isSelected = grupoSelecionado?.id === g.id;
+              const mvCount = modulosVisiveis(g).length;
               return (
-                <tr key={u.id} className="hover:bg-purple-50/40 transition-all group">
-                  <td className="px-6 py-4">
+                <button
+                  key={g.id}
+                  onClick={() => selecionarGrupo(g)}
+                  className={`w-full text-left p-4 rounded-2xl border transition-all duration-200 ${
+                    isSelected
+                      ? 'bg-purple-950 border-purple-950 text-white shadow-xl shadow-purple-900/20'
+                      : 'bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700 hover:border-purple-300 hover:shadow-md'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-xl bg-purple-900 flex items-center justify-center text-yellow-400 font-black text-[10px] flex-shrink-0">
-                        {getInitials(u.nome)}
+                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-[10px] font-black ${
+                        isSelected ? 'bg-purple-600 text-white' : 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
+                      }`}>
+                        {g.nome.slice(0, 2)}
                       </div>
-                      <span className="font-black text-xs text-slate-900 uppercase tracking-tighter">{u.nome}</span>
+                      <div>
+                        <p className={`text-xs font-black uppercase tracking-tight ${isSelected ? 'text-white' : 'text-slate-800 dark:text-slate-100'}`}>{g.nome}</p>
+                        <p className={`text-[9px] font-bold ${isSelected ? 'text-purple-300' : 'text-slate-400'}`}>
+                          {g.usuarios?.length ?? 0} usuário(s) · {mvCount} módulo(s)
+                        </p>
+                      </div>
                     </div>
-                  </td>
-                  <td className="px-6 py-4 hidden md:table-cell">
-                    <span className="text-xs text-slate-500 font-medium">{u.email}</span>
-                  </td>
-                  <td className="px-6 py-4 text-center">
-                    <span className={`text-[9px] font-black uppercase px-3 py-1 rounded-lg border ${roleInfo.color}`}>
-                      {roleInfo.label}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-center">
-                    <span className={`text-[9px] font-black uppercase px-3 py-1.5 rounded-xl shadow-sm border ${
-                      u.status === 'Ativo'
-                        ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
-                        : 'bg-amber-50 text-amber-600 border-amber-100'
-                    }`}>
-                      {u.status}
-                    </span>
-                  </td>
-                </tr>
+                    {isAdmin(g.nome) && <Lock size={12} className={isSelected ? 'text-yellow-400' : 'text-slate-300'} />}
+                  </div>
+                </button>
               );
             })}
-          </tbody>
-        </table>
-      </div>
+          </div>
 
-      <p className="text-center text-[10px] font-black uppercase tracking-widest text-slate-300">
-        Gestão completa de usuários em desenvolvimento
-      </p>
+          {/* Painel de Permissões */}
+          <div className="bg-slate-50 dark:bg-slate-800/50 rounded-3xl border border-slate-100 dark:border-slate-700 p-6">
+            {!grupoSelecionado ? (
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <ShieldCheck size={40} className="text-slate-200 dark:text-slate-600 mb-4" />
+                <p className="text-sm font-black text-slate-400 dark:text-slate-500 uppercase tracking-tight">Selecione um grupo</p>
+                <p className="text-[10px] font-bold text-slate-300 dark:text-slate-600 mt-1">Clique em um grupo à esquerda para configurar as permissões</p>
+              </div>
+            ) : (
+              <div className="space-y-5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-black uppercase tracking-tight text-slate-900 dark:text-slate-100">
+                      Permissões — {grupoSelecionado.nome}
+                    </h3>
+                    {isAdmin(grupoSelecionado.nome) && (
+                      <p className="text-[9px] font-bold text-amber-600 mt-1 flex items-center gap-1">
+                        <Lock size={10} /> ADMIN possui acesso total a todas as funcionalidades
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {mensagem && (
+                  <div className={`flex items-start gap-2 rounded-xl p-3 border text-xs font-semibold ${
+                    mensagem.tipo === 'ok'
+                      ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400'
+                      : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-600 dark:text-red-400'
+                  }`}>
+                    {mensagem.tipo === 'ok' ? <Check size={14} className="mt-0.5 shrink-0" /> : null}
+                    {mensagem.texto}
+                  </div>
+                )}
+
+                {/* Tabela de Permissões */}
+                <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-600">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="bg-white dark:bg-slate-700 border-b border-slate-200 dark:border-slate-600">
+                        <th className="text-left px-5 py-3 text-[9px] font-black uppercase tracking-widest text-slate-400">Módulo</th>
+                        {ACOES_PERM.map(a => (
+                          <th key={a.key} className="text-center px-4 py-3 text-[9px] font-black uppercase tracking-widest text-slate-400">{a.label}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-600">
+                      {MODULOS_SISTEMA.map(m => {
+                        const modPerms = permissoes[m.key] || {};
+                        const isDisabled = isAdmin(grupoSelecionado.nome);
+                        return (
+                          <tr key={m.key} className="bg-white dark:bg-slate-800 hover:bg-purple-50/30 dark:hover:bg-purple-900/10 transition-colors">
+                            <td className="px-5 py-3">
+                              <span className="font-bold text-slate-800 dark:text-slate-200 text-xs">{m.label}</span>
+                            </td>
+                            {ACOES_PERM.map(a => (
+                              <td key={a.key} className="text-center px-4 py-3">
+                                <label className="inline-flex items-center justify-center cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={!!modPerms[a.key]}
+                                    onChange={() => togglePerm(m.key, a.key)}
+                                    disabled={isDisabled}
+                                    className={`w-4 h-4 rounded accent-purple-600 ${isDisabled ? 'opacity-60 cursor-not-allowed' : ''}`}
+                                  />
+                                </label>
+                              </td>
+                            ))}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                <p className="text-[9px] text-slate-400 font-semibold">
+                  Ao marcar <strong>Incluir</strong>, <strong>Editar</strong> ou <strong>Excluir</strong>, a permissão de <strong>Visualizar</strong> é habilitada automaticamente.
+                </p>
+
+                {!isAdmin(grupoSelecionado.nome) && (
+                  <button
+                    onClick={handleSalvar}
+                    disabled={salvando}
+                    className="w-full py-3 rounded-2xl bg-purple-600 hover:bg-purple-700 text-white font-black text-xs uppercase tracking-wider transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+                  >
+                    {salvando ? <><Loader2 size={14} className="animate-spin" /> Salvando...</> : <><Save size={14} /> Salvar Permissões</>}
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

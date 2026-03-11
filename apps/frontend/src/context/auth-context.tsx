@@ -3,14 +3,22 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import Cookies from 'js-cookie';
 
+interface GrupoPermissoes {
+  modulos_visiveis?: Record<string, boolean>;
+  permissoes?: Record<string, { visualizar?: boolean; incluir?: boolean; editar?: boolean; excluir?: boolean }>;
+}
+
 interface UserPayload {
   email: string;
   role: string; // Ex: 'admin', 'drt', 'vp'
   sub: number;
   nome?: string;
   fotoUrl?: string;
-  grupo?: string; // Nome do grupo do usuário (do JWT payload)
-  permissoes?: Record<string, boolean>; // Permissões do grupo
+  grupo?: {
+    id: string;
+    nome: string;
+    grupo_permissoes?: GrupoPermissoes;
+  };
 }
 
 interface AuthContextType {

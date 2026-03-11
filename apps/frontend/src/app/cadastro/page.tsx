@@ -100,14 +100,16 @@ const ROLES_CRIAR_USUARIO = ['admin', 'prt', 'vp', 'drt'];
 
 // Módulos do sistema para configuração de permissões de grupo
 const MODULOS_SISTEMA = [
+  { key: 'dashboard',       label: 'Dashboard' },
   { key: 'cadastro_basico', label: 'Cadastro Básico' },
-  { key: 'financeiro',      label: 'Financeiro' },
   { key: 'matriculas',      label: 'Matrículas' },
   { key: 'academico',       label: 'Acadêmico' },
+  { key: 'financeiro',      label: 'Financeiro' },
+  { key: 'doacoes',         label: 'Doações' },
+  { key: 'estoque',         label: 'Estoque' },
   { key: 'relatorios',      label: 'Relatórios' },
-  { key: 'configuracoes',   label: 'Configurações' },
   { key: 'marketing',       label: 'Marketing' },
-  { key: 'doacao',          label: 'Doações' },
+  { key: 'configuracoes',   label: 'Configurações' },
 ];
 
 // Proposta de numeração automática por categoria (aguardando validação)
@@ -769,7 +771,7 @@ function GruposTab({ onCount }: { onCount: (n: number) => void }) {
   const [busca, setBusca]   = useState('');
   const [modal, setModal]   = useState<{ aberto: boolean; editando: Grupo | null }>({ aberto: false, editando: null });
   const [nomeForm, setNomeForm] = useState('');
-  const [permModulos, setPermModulos] = useState<Record<string, boolean>>({});
+  const [modulosVisiveis, setModulosVisiveis] = useState<Record<string, boolean>>({});
   const [salvando, setSalvando] = useState(false);
 
   const load = useCallback(async () => {
@@ -783,30 +785,48 @@ function GruposTab({ onCount }: { onCount: (n: number) => void }) {
 
   useEffect(() => { load(); }, [load]);
 
-  // Grupos privilegiados sempre têm todos os módulos ativos por padrão
   const GRUPOS_FULL_ACCESS = ['ADMIN', 'PRT', 'VP', 'DRT'];
   const todosModulosAtivos = () => Object.fromEntries(MODULOS_SISTEMA.map(m => [m.key, true]));
 
-  const abrirCriar  = () => { setNomeForm(''); setPermModulos({}); setModal({ aberto: true, editando: null }); };
+  const extrairModulosVisiveis = (gp: any): Record<string, boolean> => {
+    if (!gp) return {};
+    if (gp.modulos_visiveis) return gp.modulos_visiveis;
+    // Compatibilidade com formato antigo { "cadastro_basico": true, ... }
+    const result: Record<string, boolean> = {};
+    for (const k of Object.keys(gp)) {
+      if (k !== 'permissoes' && k !== 'modulos_visiveis' && typeof gp[k] === 'boolean') result[k] = gp[k];
+    }
+    return result;
+  };
+
+  const abrirCriar  = () => { setNomeForm(''); setModulosVisiveis({}); setModal({ aberto: true, editando: null }); };
   const abrirEditar = (g: Grupo) => {
     setNomeForm(g.nome);
-    // Se é um grupo privilegiado, garante que todos os módulos aparecem marcados
-    const perms = g.grupo_permissoes || {};
-    const permsFinal = GRUPOS_FULL_ACCESS.includes(g.nome.toUpperCase())
-      ? { ...todosModulosAtivos(), ...perms }
-      : perms;
-    setPermModulos(permsFinal);
+    const mv = extrairModulosVisiveis(g.grupo_permissoes);
+    const mvFinal = GRUPOS_FULL_ACCESS.includes(g.nome.toUpperCase())
+      ? { ...todosModulosAtivos(), ...mv }
+      : mv;
+    setModulosVisiveis(mvFinal);
     setModal({ aberto: true, editando: g });
   };
-  const fecharModal = () => { setModal({ aberto: false, editando: null }); setNomeForm(''); setPermModulos({}); setErro(''); };
+  const fecharModal = () => { setModal({ aberto: false, editando: null }); setNomeForm(''); setModulosVisiveis({}); setErro(''); };
 
   const handleSalvar = async (e: React.FormEvent) => {
     e.preventDefault(); setSalvando(true); setErro('');
     try {
+      // Preserva permissões CRUD existentes ao salvar
+      const permissoesExistentes = modal.editando?.grupo_permissoes?.permissoes || {};
+      const payload = {
+        nome: nomeForm,
+        grupo_permissoes: {
+          modulos_visiveis: modulosVisiveis,
+          permissoes: permissoesExistentes,
+        },
+      };
       if (modal.editando) {
-        await api.patch(`/grupos/${modal.editando.id}`, { nome: nomeForm, grupo_permissoes: permModulos });
+        await api.patch(`/grupos/${modal.editando.id}`, payload);
       } else {
-        await api.post('/grupos', { nome: nomeForm, permissoes: permModulos });
+        await api.post('/grupos', { nome: nomeForm, permissoes: { modulos_visiveis: modulosVisiveis, permissoes: {} } });
       }
       fecharModal(); load();
     } catch (e: any) { setErro(e.response?.data?.message || 'Erro ao salvar grupo.'); }
@@ -821,6 +841,12 @@ function GruposTab({ onCount }: { onCount: (n: number) => void }) {
 
   const filtrados = lista.filter(g => g.nome.toLowerCase().includes(busca.toLowerCase()));
 
+  // Extrai nomes legíveis dos módulos visíveis de um grupo para a tabela
+  const modulosLabelDoGrupo = (gp: any): { key: string; ativo: boolean }[] => {
+    const mv = extrairModulosVisiveis(gp);
+    return MODULOS_SISTEMA.filter(m => mv[m.key]).map(m => ({ key: m.label, ativo: true }));
+  };
+
   return (
     <div className="space-y-4">
       {erro && <Banner tipo="erro" msg={erro} onClose={() => setErro('')} />}
@@ -832,80 +858,87 @@ function GruposTab({ onCount }: { onCount: (n: number) => void }) {
           <tr className="text-[9px] font-black uppercase text-slate-400 tracking-widest">
             <th className="text-left px-6 py-4">Grupo / Perfil</th>
             <th className="text-center px-6 py-4">Usuários</th>
-            <th className="text-left px-6 py-4">Permissões</th>
+            <th className="text-left px-6 py-4">Módulos Liberados</th>
             <th className="text-right px-6 py-4">Ações</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-50 dark:divide-slate-700">
-          {filtrados.map(g => (
-            <tr key={g.id} className="hover:bg-emerald-50/30 dark:hover:bg-emerald-900/20 transition-colors">
-              <td className="px-6 py-4">
-                <div className="flex items-center gap-3">
-                  <Avatar nome={g.nome} cor="emerald" />
-                  <span className="font-bold text-slate-800 dark:text-slate-100 text-sm uppercase">{g.nome}</span>
-                </div>
-              </td>
-              <td className="px-6 py-4 text-center">
-                <span className="bg-slate-100 dark:bg-slate-600 text-slate-600 dark:text-slate-300 px-3 py-1 rounded-lg text-[10px] font-black">
-                  {g.usuarios?.length ?? 0}
-                </span>
-              </td>
-              <td className="px-6 py-4">
-                {g.grupo_permissoes && Object.keys(g.grupo_permissoes).length > 0 ? (
-                  <div className="flex flex-wrap gap-1">
-                    {Object.entries(g.grupo_permissoes).slice(0, 4).map(([k, v]) => (
-                      <span key={k} className={`px-2 py-0.5 rounded text-[8px] font-black uppercase border ${v ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-slate-50 text-slate-400 border-slate-100'}`}>{k}</span>
-                    ))}
-                    {Object.keys(g.grupo_permissoes).length > 4 && (
-                      <span className="text-[9px] text-slate-400 font-bold self-center">+{Object.keys(g.grupo_permissoes).length - 4}</span>
-                    )}
+          {filtrados.map(g => {
+            const modulos = modulosLabelDoGrupo(g.grupo_permissoes);
+            return (
+              <tr key={g.id} className="hover:bg-emerald-50/30 dark:hover:bg-emerald-900/20 transition-colors">
+                <td className="px-6 py-4">
+                  <div className="flex items-center gap-3">
+                    <Avatar nome={g.nome} cor="emerald" />
+                    <span className="font-bold text-slate-800 dark:text-slate-100 text-sm uppercase">{g.nome}</span>
                   </div>
-                ) : <span className="text-[10px] text-slate-400">Sem permissões</span>}
-              </td>
-              <td className="px-6 py-4 text-right">
-                <AcoesBotoes onEdit={() => abrirEditar(g)} onDelete={() => handleDeletar(g.id)} cor="emerald" />
-              </td>
-            </tr>
-          ))}
+                </td>
+                <td className="px-6 py-4 text-center">
+                  <span className="bg-slate-100 dark:bg-slate-600 text-slate-600 dark:text-slate-300 px-3 py-1 rounded-lg text-[10px] font-black">
+                    {g.usuarios?.length ?? 0}
+                  </span>
+                </td>
+                <td className="px-6 py-4">
+                  {modulos.length > 0 ? (
+                    <div className="flex flex-wrap gap-1">
+                      {modulos.slice(0, 4).map(m => (
+                        <span key={m.key} className="px-2 py-0.5 rounded text-[8px] font-black uppercase border bg-emerald-50 text-emerald-600 border-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800">{m.key}</span>
+                      ))}
+                      {modulos.length > 4 && (
+                        <span className="text-[9px] text-slate-400 font-bold self-center">+{modulos.length - 4}</span>
+                      )}
+                    </div>
+                  ) : <span className="text-[10px] text-slate-400">Nenhum módulo</span>}
+                </td>
+                <td className="px-6 py-4 text-right">
+                  <AcoesBotoes onEdit={() => abrirEditar(g)} onDelete={() => handleDeletar(g.id)} cor="emerald" />
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </Tabela>
 
       {modal.aberto && (
         <Modal title={modal.editando ? 'Editar Grupo' : 'Novo Grupo'} onClose={fecharModal}>
-          <form onSubmit={handleSalvar} className="space-y-3">
+          <form onSubmit={handleSalvar} className="space-y-4">
             {erro && <ErroBanner msg={erro} />}
             <FieldInput label="Nome do Grupo *" value={nomeForm} onChange={setNomeForm} required />
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">Módulos de Acesso</label>
-                <div className="flex gap-2">
-                  <button type="button" onClick={() => setPermModulos(todosModulosAtivos())}
-                    className="text-[9px] font-black uppercase tracking-wider text-emerald-600 hover:underline">
-                    Selecionar Todos
-                  </button>
-                  <span className="text-slate-300">|</span>
-                  <button type="button" onClick={() => setPermModulos({})}
-                    className="text-[9px] font-black uppercase tracking-wider text-slate-400 hover:underline">
-                    Limpar
-                  </button>
-                </div>
+
+            {/* Módulos Visíveis */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800/50 rounded-xl px-4 py-2.5">
+                <ShieldCheck size={13} className="text-emerald-600 dark:text-emerald-300" />
+                <span className="text-[10px] font-black text-emerald-700 dark:text-emerald-300 uppercase tracking-widest">Módulos Visíveis no Menu</span>
+              </div>
+              <p className="text-[9px] text-slate-500 font-semibold px-1">
+                Define quais módulos os usuários deste grupo poderão visualizar no menu lateral.
+                Permissões de edição, inclusão e exclusão são configuradas em <strong>Configurações → Gestão de Acesso</strong>.
+              </p>
+              <div className="flex items-center justify-end gap-2">
+                <button type="button" onClick={() => setModulosVisiveis(todosModulosAtivos())}
+                  className="text-[9px] font-black uppercase tracking-wider text-emerald-600 hover:underline">Marcar Todos</button>
+                <span className="text-slate-300">|</span>
+                <button type="button" onClick={() => setModulosVisiveis({})}
+                  className="text-[9px] font-black uppercase tracking-wider text-slate-400 hover:underline">Limpar</button>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 {MODULOS_SISTEMA.map(m => (
-                  <label key={m.key} className="flex items-center gap-2 cursor-pointer py-2 px-3 rounded-xl border border-slate-100 dark:border-slate-600 hover:bg-emerald-50/50 dark:hover:bg-emerald-900/20 transition-colors">
+                  <label key={m.key} className={`flex items-center gap-2 cursor-pointer py-2.5 px-3 rounded-xl border transition-colors ${
+                    modulosVisiveis[m.key]
+                      ? 'border-emerald-300 bg-emerald-50/80 dark:border-emerald-700 dark:bg-emerald-900/30'
+                      : 'border-slate-100 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700/50'
+                  }`}>
                     <input
                       type="checkbox"
-                      checked={!!permModulos[m.key]}
-                      onChange={e => setPermModulos(p => ({ ...p, [m.key]: e.target.checked }))}
+                      checked={!!modulosVisiveis[m.key]}
+                      onChange={e => setModulosVisiveis(p => ({ ...p, [m.key]: e.target.checked }))}
                       className="w-4 h-4 accent-emerald-600"
                     />
-                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">{m.label}</span>
+                    <span className={`text-xs font-bold ${modulosVisiveis[m.key] ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-600 dark:text-slate-400'}`}>{m.label}</span>
                   </label>
                 ))}
               </div>
-              <p className="text-[9px] text-slate-400 font-semibold">
-                Grupos ADMIN, PRT, VP, DRT e Adjunto sempre podem excluir registros.
-              </p>
             </div>
             <BtnSalvar salvando={salvando} editando={!!modal.editando} cor="emerald" />
           </form>

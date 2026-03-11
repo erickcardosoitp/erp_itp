@@ -3,6 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { useAuth } from '@/context/auth-context';
 import { 
   LayoutDashboard, UserPlus, ClipboardList, 
   LogOut, Settings, PanelLeftClose, PanelLeftOpen,
@@ -14,9 +15,21 @@ interface SidebarProps {
   setIsCollapsed: (value: boolean) => void;
 }
 
+// Mapeia path → chave de modulos_visiveis
+const PATH_TO_MODULE: Record<string, string> = {
+  '/dashboard': 'dashboard',
+  '/cadastro': 'cadastro_basico',
+  '/matriculas': 'matriculas',
+  '/academico': 'academico',
+  '/financeiro': 'financeiro',
+  '/doacoes': 'doacoes',
+  '/estoque': 'estoque',
+};
+
 export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const { user } = useAuth();
   const [isLoggingOut, setIsLoggingOut] = React.useState(false);
 
   // Menu atualizado com a taxonomia do ITP ERP
@@ -29,6 +42,17 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
     { name: 'Doações', path: '/doacoes', icon: Heart },
     { name: 'Estoque', path: '/estoque', icon: Package },
   ];
+
+  // Filtra módulos com base nas permissões do grupo
+  const isAdmin = user?.role?.toLowerCase() === 'admin';
+  const modulosVisiveis = user?.grupo?.grupo_permissoes?.modulos_visiveis;
+
+  const filteredMenu = primaryMenu.filter(item => {
+    if (isAdmin) return true; // Admin vê tudo
+    if (!modulosVisiveis) return true; // Sem permissões definidas → mostra tudo (fallback)
+    const key = PATH_TO_MODULE[item.path];
+    return key ? modulosVisiveis[key] !== false : true;
+  });
 
   /**
    * MODO ARQUITETURA:
@@ -87,7 +111,7 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
 
       {/* Navegação Principal */}
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto scrollbar-hide">
-        {primaryMenu.map((item) => {
+        {filteredMenu.map((item) => {
           const isActive = pathname.startsWith(item.path);
           const Icon = item.icon;
           
