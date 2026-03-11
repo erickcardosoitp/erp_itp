@@ -390,6 +390,7 @@ function GestaoAcessoTab() {
   };
 
   const modulosVisiveis = (g: GrupoGA) => {
+    if (isAdmin(g.nome)) return MODULOS_SISTEMA;
     const gp = g.grupo_permissoes || {};
     const mv = gp.modulos_visiveis || {};
     return MODULOS_SISTEMA.filter(m => mv[m.key]);

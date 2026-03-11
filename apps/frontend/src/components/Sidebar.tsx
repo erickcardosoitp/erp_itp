@@ -51,7 +51,9 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
     if (isAdmin) return true; // Admin vê tudo
     if (!modulosVisiveis) return true; // Sem permissões definidas → mostra tudo (fallback)
     const key = PATH_TO_MODULE[item.path];
-    return key ? modulosVisiveis[key] !== false : true;
+    if (!key) return true;
+    // Se a chave não existe no objeto, mostra por padrão (backward compat)
+    return modulosVisiveis[key] === true || !(key in modulosVisiveis);
   });
 
   /**

@@ -839,7 +839,11 @@ function GruposTab({ onCount }: { onCount: (n: number) => void }) {
   const filtrados = lista.filter(g => g.nome.toLowerCase().includes(busca.toLowerCase()));
 
   // Extrai nomes legíveis dos módulos visíveis de um grupo para a tabela
-  const modulosLabelDoGrupo = (gp: any): { key: string; ativo: boolean }[] => {
+  const modulosLabelDoGrupo = (nome: string, gp: any): { key: string; ativo: boolean }[] => {
+    // Grupos com acesso total sempre mostram todos os módulos
+    if (GRUPOS_FULL_ACCESS.includes(nome.toUpperCase())) {
+      return MODULOS_SISTEMA.map(m => ({ key: m.label, ativo: true }));
+    }
     const mv = extrairModulosVisiveis(gp);
     return MODULOS_SISTEMA.filter(m => mv[m.key]).map(m => ({ key: m.label, ativo: true }));
   };
@@ -861,7 +865,7 @@ function GruposTab({ onCount }: { onCount: (n: number) => void }) {
         </thead>
         <tbody className="divide-y divide-slate-50 dark:divide-slate-700">
           {filtrados.map(g => {
-            const modulos = modulosLabelDoGrupo(g.grupo_permissoes);
+            const modulos = modulosLabelDoGrupo(g.nome, g.grupo_permissoes);
             return (
               <tr key={g.id} className="hover:bg-emerald-50/30 dark:hover:bg-emerald-900/20 transition-colors">
                 <td className="px-6 py-4">
