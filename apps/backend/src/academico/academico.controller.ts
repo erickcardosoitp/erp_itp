@@ -59,30 +59,31 @@ export class AcademicoController {
     if (secret !== WEBHOOK_SECRET) {
       throw new UnauthorizedException('Secret inválido.');
     }
-    // Mapeia campos do Google Forms → entidade Professor
+    // O Google Apps Script já envia os campos mapeados em snake_case
+    // (nome, email, cpf, ...) — apenas repassamos para o serviço.
     const dto = {
-      nome:                  payload['Nome Completo']?.trim(),
-      email:                 payload['E-mail (Obrigatório)']?.trim() || payload['E-mail']?.trim(),
-      cpf:                   payload['CPF (Obrigatório)']?.trim() || payload['CPF']?.trim(),
-      data_nascimento:       payload['Data de Nascimento (Obrigatório)']?.trim() || payload['Data de Nascimento']?.trim(),
-      celular:               payload['Celular (Obrigatório)']?.trim() || payload['Celular']?.trim(),
-      sexo:                  payload['Sexo (Obrigatório)']?.trim() || payload['Sexo']?.trim(),
-      raca_cor:              payload['Raça/Cor']?.trim(),
-      escolaridade:          payload['Escolaridade']?.trim(),
-      cep:                   payload['CEP']?.trim(),
-      numero_residencia:     payload['Número da Residência']?.trim(),
-      complemento:           payload['Complemento (Ex: Apartamento, Bloco)']?.trim(),
-      estado:                payload['Estado (Ex: RJ, SP)']?.trim(),
-      telefone_emergencia_1: payload['Telefone de Emergência 1 (Obrigatório)']?.trim(),
-      telefone_emergencia_2: payload['Telefone de Emergência 2 (Opcional)']?.trim(),
-      possui_deficiencia:    payload['Possui algum tipo de deficiência?']?.toLowerCase().startsWith('sim'),
-      deficiencia_descricao: payload['Se sim, qual(is) deficiência(s) possui? (Descreva)']?.trim(),
-      possui_alergias:       payload['Possui Alergias?']?.toLowerCase().startsWith('sim'),
-      alergias_descricao:    payload['Se sim, qual(is) tipo(s) de alergia possui? (Descreva)']?.trim(),
-      usa_medicamentos:      payload['Faz uso contínuo de algum tipo de medicamento?']?.toLowerCase().startsWith('sim'),
-      medicamentos_descricao:payload['Se sim, quais medicamentos utiliza? (Nome e dosagem, se souber)']?.trim(),
-      interesse_cursos:      payload['Tem interesse em se matricular em algum curso do Instituto Tia Pretinha?']?.toLowerCase().startsWith('sim'),
-      ativo:                 true,
+      nome:                   payload.nome,
+      email:                  payload.email,
+      cpf:                    payload.cpf,
+      data_nascimento:        payload.data_nascimento,
+      celular:                payload.celular,
+      sexo:                   payload.sexo,
+      raca_cor:               payload.raca_cor,
+      escolaridade:           payload.escolaridade,
+      cep:                    payload.cep,
+      numero_residencia:      payload.numero_residencia,
+      complemento:            payload.complemento,
+      estado:                 payload.estado,
+      telefone_emergencia_1:  payload.telefone_emergencia_1,
+      telefone_emergencia_2:  payload.telefone_emergencia_2,
+      possui_deficiencia:     payload.possui_deficiencia === true,
+      deficiencia_descricao:  payload.deficiencia_descricao,
+      possui_alergias:        payload.possui_alergias === true,
+      alergias_descricao:     payload.alergias_descricao,
+      usa_medicamentos:       payload.usa_medicamentos === true,
+      medicamentos_descricao: payload.medicamentos_descricao,
+      interesse_cursos:       payload.interesse_cursos === true,
+      ativo:                  true,
     };
     this.logger.log(`[Webhook Google Forms] Cadastrando funcionário: ${dto.nome}`);
     return this.svc.criarProfessor(dto);
