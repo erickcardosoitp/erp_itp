@@ -169,7 +169,7 @@ function notificarErro_(detalhe, nome) {
 //  Teste manual — rode no editor do Apps Script para validar sem form
 // ─────────────────────────────────────────────────────────────────────
 
-function testeManual_() {
+function testeManual() {
   var fakeEvent = {
     namedValues: {
       'Nome Completo':                      ['Maria de Teste'],

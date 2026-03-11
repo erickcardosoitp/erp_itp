@@ -246,7 +246,7 @@ function aoEnviarFormulario(e) {
 //  Teste manual — rode no editor do Apps Script para validar sem form
 // ─────────────────────────────────────────────────────────────────────
 
-function testeManual_() {
+function testeManual() {
   var fakeEvent = {
     namedValues: {
       'Endereço de e-mail':                    ['candidato@teste.com'],
