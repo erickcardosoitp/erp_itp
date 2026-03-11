@@ -5,6 +5,7 @@ import {
   GraduationCap, Users, BookOpen, LayoutGrid, History,
   Plus, Trash2, Search, X, ClipboardList,
   Edit3, Coffee, UserPlus, RefreshCw, ClipboardCheck, CheckSquare, Square,
+  ChevronDown, ChevronUp, FileText, Eye,
 } from 'lucide-react';
 import api from '@/services/api';
 import { useAuth } from '@/context/auth-context';
@@ -18,6 +19,7 @@ interface TurmaAlunoRecord { id: string; turma_id: string | null; aluno_id: stri
 interface GradeCard { id: string; dia_semana: number; horario_inicio: string; horario_fim: string; nome_curso?: string; nome_professor?: string; turma_id?: string; sala?: string; cor?: string; }
 interface DiarioEntry { id: string; tipo: string; titulo?: string; descricao?: string; aluno_id?: string; turma_id?: string; data: string; usuario_nome?: string; created_at: string; }
 interface Aluno { id: string; nome_completo: string; numero_matricula?: string; cpf?: string; celular?: string; email?: string; sexo?: string; data_nascimento?: string; cidade?: string; bairro?: string; cursos_matriculados?: string; turno_escolar?: string; ativo?: boolean; data_matricula?: string; }
+interface PresencaSessao { id: string; turma_id: string; turma_nome?: string; data: string; tema_aula?: string; conteudo_abordado?: string; usuario_nome?: string; total_presentes: number; total_ausentes: number; created_at: string; }
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
@@ -912,176 +914,354 @@ function DiarioTab({ turmas, alunos }: { turmas: Turma[]; alunos: Aluno[] }) {
 // ─── Tab: Presença ───────────────────────────────────────────────────────────
 
 function PresencaTab({ turmas, podeEditar }: { turmas: Turma[]; podeEditar: boolean }) {
-  const [turmaId, setTurmaId] = useState('');
-  const [data, setData] = useState(new Date().toISOString().slice(0, 10));
-  const [alunos, setAlunos] = useState<Aluno[]>([]);
+  // ─── Filtros do histórico ───────────────────────────────────────────────
+  const [filtroTurma, setFiltroTurma] = useState('');
+  const [filtroDataIni, setFiltroDataIni] = useState('');
+  const [filtroDataFim, setFiltroDataFim] = useState('');
+  const [sessoes, setSessoes] = useState<PresencaSessao[]>([]);
+  const [carregandoHist, setCarregandoHist] = useState(false);
+  const [sessaoExpandida, setSessaoExpandida] = useState<string | null>(null);
+  const [detalhesSessao, setDetalhesSessao] = useState<Record<string, any[]>>({});
+
+  // ─── Modal nova lista ────────────────────────────────────────────────────
+  const [etapa, setEtapa] = useState<1 | 2>(1);
+  const [showModal, setShowModal] = useState(false);
+  const [formSessao, setFormSessao] = useState<{
+    turma_id: string; data: string; tema_aula: string; conteudo_abordado: string;
+  }>({ turma_id: '', data: new Date().toISOString().slice(0, 10), tema_aula: '', conteudo_abordado: '' });
+  const [alunosSessao, setAlunosSessao] = useState<Aluno[]>([]);
   const [presenca, setPresenca] = useState<Record<string, boolean>>({});
-  const [carregando, setCarregando] = useState(false);
+  const [carregandoAlunos, setCarregandoAlunos] = useState(false);
   const [salvando, setSalvando] = useState(false);
-  const [sucesso, setSucesso] = useState(false);
-  const [erro, setErro] = useState<string | null>(null);
-  const [jaRegistrado, setJaRegistrado] = useState(false);
+  const [erroModal, setErroModal] = useState<string | null>(null);
 
-  const carregarAlunos = useCallback(async () => {
-    if (!turmaId) return;
-    setCarregando(true); setSucesso(false); setErro(null);
+  const carregarHistorico = useCallback(async () => {
+    setCarregandoHist(true);
     try {
-      const [ra, rp] = await Promise.all([
-        api.get('/academico/alunos', { params: { turma_id: turmaId } }),
-        api.get('/academico/presenca', { params: { turma_id: turmaId, data } }),
-      ]);
-      setAlunos(ra.data);
-      const inicial: Record<string, boolean> = {};
-      ra.data.forEach((a: Aluno) => { inicial[a.id] = true; });
-      if (rp.data?.length > 0) {
-        setJaRegistrado(true);
-        rp.data.forEach((r: any) => {
-          inicial[r.aluno_id] = r.descricao === 'Presente';
-        });
-      } else {
-        setJaRegistrado(false);
-      }
-      setPresenca(inicial);
-    } catch { setErro('Erro ao carregar alunos da turma.'); }
-    setCarregando(false);
-  }, [turmaId, data]);
+      const params: any = {};
+      if (filtroTurma)   params.turma_id  = filtroTurma;
+      if (filtroDataIni) params.data_ini  = filtroDataIni;
+      if (filtroDataFim) params.data_fim  = filtroDataFim;
+      const r = await api.get('/academico/presenca/sessoes', { params });
+      setSessoes(r.data);
+    } catch { /* silencioso */ }
+    setCarregandoHist(false);
+  }, [filtroTurma, filtroDataIni, filtroDataFim]);
 
-  const toggleTodos = (valor: boolean) => {
-    setPresenca(Object.fromEntries(alunos.map(a => [a.id, valor])));
+  useEffect(() => { carregarHistorico(); }, [carregarHistorico]);
+
+  const toggleDetalhes = async (sessaoId: string) => {
+    if (sessaoExpandida === sessaoId) { setSessaoExpandida(null); return; }
+    setSessaoExpandida(sessaoId);
+    if (!detalhesSessao[sessaoId]) {
+      try {
+        const r = await api.get(`/academico/presenca/sessoes/${sessaoId}/registros`);
+        setDetalhesSessao(p => ({ ...p, [sessaoId]: r.data }));
+      } catch { setDetalhesSessao(p => ({ ...p, [sessaoId]: [] })); }
+    }
   };
 
-  const salvar = async () => {
-    if (!turmaId || alunos.length === 0) return;
-    setSalvando(true); setErro(null);
+  const abrirNovaLista = () => {
+    setFormSessao({ turma_id: '', data: new Date().toISOString().slice(0, 10), tema_aula: '', conteudo_abordado: '' });
+    setAlunosSessao([]); setPresenca({}); setErroModal(null); setEtapa(1);
+    setShowModal(true);
+  };
+
+  const avancarParaChamada = async () => {
+    setErroModal(null);
+    if (!formSessao.turma_id) { setErroModal('Selecione uma turma.'); return; }
+    if (!formSessao.data) { setErroModal('Informe a data da aula.'); return; }
+    if (!formSessao.tema_aula.trim()) { setErroModal('Informe o tema da aula.'); return; }
+    setCarregandoAlunos(true);
     try {
-      await api.post('/academico/presenca', {
-        turma_id: turmaId,
-        data,
-        registros: alunos.map(a => ({ aluno_id: a.id, presente: presenca[a.id] ?? true })),
+      const r = await api.get('/academico/alunos', { params: { turma_id: formSessao.turma_id } });
+      if (!r.data.length) { setErroModal('Nenhum aluno ativo nesta turma.'); setCarregandoAlunos(false); return; }
+      setAlunosSessao(r.data);
+      const init: Record<string, boolean> = {};
+      r.data.forEach((a: Aluno) => { init[a.id] = true; });
+      setPresenca(init);
+      setEtapa(2);
+    } catch { setErroModal('Erro ao carregar alunos da turma.'); }
+    setCarregandoAlunos(false);
+  };
+
+  const salvarLista = async () => {
+    setSalvando(true); setErroModal(null);
+    try {
+      await api.post('/academico/presenca/sessoes', {
+        turma_id:          formSessao.turma_id,
+        data:              formSessao.data,
+        tema_aula:         formSessao.tema_aula,
+        conteudo_abordado: formSessao.conteudo_abordado,
+        registros: alunosSessao.map(a => ({ aluno_id: a.id, presente: presenca[a.id] ?? true })),
       });
-      setSucesso(true); setJaRegistrado(true);
+      setShowModal(false);
+      carregarHistorico();
     } catch (e: any) {
-      const msg = e?.response?.data?.message || e?.message || 'Erro ao salvar presença.';
-      setErro(Array.isArray(msg) ? msg.join(', ') : msg);
+      const msg = e?.response?.data?.message || e?.message || 'Erro ao salvar.';
+      setErroModal(Array.isArray(msg) ? msg.join(', ') : msg);
     }
     setSalvando(false);
   };
 
-  const presentes  = alunos.filter(a => presenca[a.id]).length;
-  const ausentes   = alunos.length - presentes;
-  const turmaSel   = turmas.find(t => t.id === turmaId);
+  const presentes = alunosSessao.filter(a => presenca[a.id]).length;
+  const ausentes  = alunosSessao.length - presentes;
+
+  const fmtData = (v: string) => {
+    if (!v) return '–';
+    const [y, m, d] = v.split('-');
+    return `${d}/${m}/${y}`;
+  };
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap gap-3 items-end bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
-        <div className="flex-1 min-w-[200px]">
+      {/* ─── Cabeçalho ─────────────────────────────────────────────────────── */}
+      <div className="flex flex-wrap items-end gap-3 bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
+        <div className="flex-1 min-w-[180px]">
           <label className="text-[9px] font-black uppercase text-slate-400 mb-1 block">Turma</label>
-          <select value={turmaId} onChange={e => { setTurmaId(e.target.value); setAlunos([]); setPresenca({}); setSucesso(false); }}
+          <select value={filtroTurma} onChange={e => setFiltroTurma(e.target.value)}
             className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white">
-            <option value="">Selecione uma turma...</option>
-            {turmas.map(t => <option key={t.id} value={t.id}>{t.nome}{t.turno ? ` (${t.turno})` : ''}</option>)}
+            <option value="">Todas as turmas</option>
+            {turmas.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
           </select>
         </div>
-        <div className="min-w-[150px]">
-          <label className="text-[9px] font-black uppercase text-slate-400 mb-1 block">Data</label>
-          <input type="date" value={data} onChange={e => { setData(e.target.value); setAlunos([]); setPresenca({}); setSucesso(false); }}
+        <div className="min-w-[140px]">
+          <label className="text-[9px] font-black uppercase text-slate-400 mb-1 block">Data Início</label>
+          <input type="date" value={filtroDataIni} onChange={e => setFiltroDataIni(e.target.value)}
             className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-400" />
         </div>
-        <button onClick={carregarAlunos} disabled={!turmaId || carregando}
-          className="flex items-center gap-2 bg-purple-600 text-white px-5 py-2 rounded-xl font-black text-[10px] uppercase hover:bg-purple-700 disabled:opacity-50 transition-colors">
-          <ClipboardCheck size={13}/> {carregando ? 'Carregando...' : 'Carregar Alunos'}
+        <div className="min-w-[140px]">
+          <label className="text-[9px] font-black uppercase text-slate-400 mb-1 block">Data Fim</label>
+          <input type="date" value={filtroDataFim} onChange={e => setFiltroDataFim(e.target.value)}
+            className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-400" />
+        </div>
+        <button onClick={carregarHistorico} disabled={carregandoHist}
+          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-black uppercase disabled:opacity-50 transition-colors">
+          <RefreshCw size={12} className={carregandoHist ? 'animate-spin' : ''} /> Atualizar
         </button>
+        {podeEditar && (
+          <button onClick={abrirNovaLista}
+            className="flex items-center gap-2 bg-purple-600 text-white px-5 py-2 rounded-xl font-black text-[10px] uppercase hover:bg-purple-700 transition-colors">
+            <ClipboardCheck size={13}/> Nova Lista de Presença
+          </button>
+        )}
       </div>
 
-      {erro && (
-        <div className="bg-red-50 border border-red-200 text-red-700 text-[11px] font-bold rounded-xl px-4 py-3 uppercase tracking-wide">
-          ⚠ {erro}
+      {/* ─── Histórico de Aulas ─────────────────────────────────────────────── */}
+      <div className="bg-white rounded-3xl border border-slate-100 shadow overflow-hidden">
+        <div className="px-5 py-3 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+          <h2 className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Histórico de Aulas Registradas</h2>
+          <span className="text-[9px] font-black text-slate-400">{sessoes.length} registro{sessoes.length !== 1 ? 's' : ''}</span>
         </div>
-      )}
 
-      {alunos.length > 0 && (
-        <>
-          {jaRegistrado && !sucesso && (
-            <div className="bg-amber-50 border border-amber-200 text-amber-700 text-[11px] font-bold rounded-xl px-4 py-2.5 uppercase tracking-wide">
-              ⚠ Presença já registrada para esta turma/data. Salvar irá adicionar novos registros.
-            </div>
-          )}
-          {sucesso && (
-            <div className="bg-green-50 border border-green-200 text-green-700 text-[11px] font-bold rounded-xl px-4 py-2.5 uppercase tracking-wide">
-              ✓ Presença registrada com sucesso! ({presentes} presentes · {ausentes} ausentes)
-            </div>
-          )}
-
-          <div className="bg-white rounded-3xl border border-slate-100 shadow overflow-hidden">
-            <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 border-b border-slate-100 bg-slate-50/50">
-              <div className="flex items-center gap-3">
-                <span className="text-[10px] font-black uppercase text-slate-500">{turmaSel?.nome}</span>
-                <span className="bg-purple-100 text-purple-700 text-[9px] font-black px-2 py-0.5 rounded-full uppercase">{alunos.length} alunos</span>
-                <span className="bg-green-100 text-green-700 text-[9px] font-black px-2 py-0.5 rounded-full uppercase">{presentes} pres.</span>
-                <span className="bg-red-100 text-red-700 text-[9px] font-black px-2 py-0.5 rounded-full uppercase">{ausentes} aus.</span>
-              </div>
-              {podeEditar && (
-                <div className="flex gap-2">
-                  <button onClick={() => toggleTodos(true)}
-                    className="flex items-center gap-1 text-[9px] font-black uppercase text-green-600 hover:text-green-800 border border-green-200 hover:border-green-400 px-2.5 py-1 rounded-lg transition-colors">
-                    <CheckSquare size={11}/> Todos Presentes
-                  </button>
-                  <button onClick={() => toggleTodos(false)}
-                    className="flex items-center gap-1 text-[9px] font-black uppercase text-red-500 hover:text-red-700 border border-red-200 hover:border-red-400 px-2.5 py-1 rounded-lg transition-colors">
-                    <Square size={11}/> Todos Ausentes
-                  </button>
-                </div>
-              )}
-            </div>
-
-            <div className="divide-y divide-slate-50">
-              {alunos.map((a, i) => (
-                <div key={a.id} className={`flex items-center gap-4 px-5 py-3 hover:bg-purple-50/30 transition-colors ${i % 2 === 0 ? '' : 'bg-slate-50/20'}`}>
-                  <button
-                    onClick={() => podeEditar && setPresenca(p => ({ ...p, [a.id]: !p[a.id] }))}
-                    className={`shrink-0 w-8 h-8 rounded-xl border-2 flex items-center justify-center transition-all ${
-                      podeEditar ? 'cursor-pointer' : 'cursor-default'
-                    } ${presenca[a.id]
-                      ? 'bg-green-500 border-green-500 text-white'
-                      : 'bg-white border-slate-300 text-transparent'
-                    }`}>
-                    <CheckSquare size={14}/>
-                  </button>
+        {carregandoHist ? (
+          <div className="py-12 text-center text-sm text-slate-400">Carregando...</div>
+        ) : sessoes.length === 0 ? (
+          <div className="py-16 text-center">
+            <ClipboardCheck size={40} className="mx-auto mb-3 text-slate-200" />
+            <p className="text-sm text-slate-400 font-bold">Nenhuma aula registrada ainda.</p>
+            {podeEditar && <p className="text-xs text-slate-300 mt-1">Clique em "Nova Lista de Presença" para começar.</p>}
+          </div>
+        ) : (
+          <div className="divide-y divide-slate-50">
+            {sessoes.map(s => (
+              <div key={s.id}>
+                <div className="flex flex-wrap items-center gap-3 px-5 py-3 hover:bg-purple-50/20 transition-colors">
                   <div className="flex-1 min-w-0">
-                    <div className="font-bold text-sm text-slate-800 truncate">{a.nome_completo}</div>
-                    <div className="text-[9px] text-slate-400">{a.numero_matricula || a.cpf || a.celular || '–'}</div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-black text-slate-800">{fmtData(s.data)}</span>
+                      <span className="text-[9px] font-black bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full uppercase">{s.turma_nome || '–'}</span>
+                    </div>
+                    {s.tema_aula && (
+                      <p className="text-[11px] font-bold text-slate-600 mt-0.5 flex items-center gap-1">
+                        <FileText size={10} className="text-purple-400 shrink-0" />
+                        {s.tema_aula}
+                      </p>
+                    )}
+                    {s.conteudo_abordado && (
+                      <p className="text-[10px] text-slate-400 mt-0.5 line-clamp-1">{s.conteudo_abordado}</p>
+                    )}
+                    {s.usuario_nome && (
+                      <p className="text-[9px] text-slate-400 mt-0.5">Registrado por: {s.usuario_nome}</p>
+                    )}
                   </div>
-                  <span className={`shrink-0 text-[9px] font-black uppercase px-2.5 py-1 rounded-full ${
-                    presenca[a.id] ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
-                  }`}>
-                    {presenca[a.id] ? 'Presente' : 'Ausente'}
-                  </span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="bg-green-100 text-green-700 text-[9px] font-black px-2 py-0.5 rounded-full uppercase">{s.total_presentes} pres.</span>
+                    <span className="bg-red-100 text-red-600 text-[9px] font-black px-2 py-0.5 rounded-full uppercase">{s.total_ausentes} aus.</span>
+                    <button onClick={() => toggleDetalhes(s.id)}
+                      className="flex items-center gap-1 text-[9px] font-black uppercase text-slate-500 hover:text-purple-600 border border-slate-200 hover:border-purple-300 px-2.5 py-1 rounded-lg transition-colors">
+                      <Eye size={10}/> {sessaoExpandida === s.id ? 'Fechar' : 'Ver Chamada'}
+                      {sessaoExpandida === s.id ? <ChevronUp size={10}/> : <ChevronDown size={10}/>}
+                    </button>
+                  </div>
                 </div>
+                {sessaoExpandida === s.id && (
+                  <div className="bg-slate-50/60 border-t border-slate-100 px-6 py-3">
+                    {s.conteudo_abordado && (
+                      <div className="mb-3 bg-purple-50 border border-purple-100 rounded-xl p-3">
+                        <p className="text-[9px] font-black uppercase text-purple-500 mb-1">Conteúdo Abordado</p>
+                        <p className="text-xs text-slate-700">{s.conteudo_abordado}</p>
+                      </div>
+                    )}
+                    {!detalhesSessao[s.id] ? (
+                      <p className="text-xs text-slate-400">Carregando...</p>
+                    ) : detalhesSessao[s.id].length === 0 ? (
+                      <p className="text-xs text-slate-400">Nenhum registro encontrado.</p>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5">
+                        {detalhesSessao[s.id].map((r: any) => (
+                          <div key={r.id} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold ${
+                            r.descricao === 'Presente' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'
+                          }`}>
+                            <div className={`w-2 h-2 rounded-full shrink-0 ${r.descricao === 'Presente' ? 'bg-green-500' : 'bg-red-400'}`} />
+                            <span className="truncate">{r.aluno_id}</span>
+                            <span className="shrink-0 text-[9px] uppercase">{r.descricao}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ─── Modal Nova Lista de Presença ───────────────────────────────────── */}
+      {showModal && (
+        <div className="fixed inset-0 z-[300] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden max-h-[90vh] flex flex-col">
+            {/* Header */}
+            <div className="flex justify-between items-center p-5 border-b shrink-0">
+              <div>
+                <h3 className="font-black text-sm uppercase tracking-tight text-slate-800">Nova Lista de Presença</h3>
+                <p className="text-[9px] font-black text-slate-400 uppercase mt-0.5">
+                  Etapa {etapa} de 2 — {etapa === 1 ? 'Dados da Aula' : 'Chamada dos Alunos'}
+                </p>
+              </div>
+              <button onClick={() => setShowModal(false)} className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-400"><X size={16}/></button>
+            </div>
+
+            {/* Indicador de etapas */}
+            <div className="flex px-5 pt-4 gap-2 shrink-0">
+              {[1, 2].map(n => (
+                <div key={n} className={`flex-1 h-1.5 rounded-full transition-colors ${etapa >= n ? 'bg-purple-600' : 'bg-slate-200'}`} />
               ))}
             </div>
 
-            {podeEditar && (
-              <div className="px-5 py-4 border-t border-slate-100 flex justify-end">
-                <button onClick={salvar} disabled={salvando}
-                  className="flex items-center gap-2 bg-purple-600 text-white px-8 py-2.5 rounded-xl font-black text-xs uppercase hover:bg-purple-700 disabled:opacity-50 transition-colors">
-                  <ClipboardCheck size={14}/> {salvando ? 'Salvando...' : 'Salvar Presença'}
-                </button>
-              </div>
-            )}
+            <div className="p-5 overflow-y-auto flex-1">
+              {erroModal && (
+                <div className="mb-3 bg-red-50 border border-red-200 text-red-700 text-[11px] font-bold rounded-xl px-4 py-2.5 uppercase tracking-wide">
+                  ⚠ {erroModal}
+                </div>
+              )}
+
+              {/* ─── Etapa 1: Dados da Aula ──────────────────────────────── */}
+              {etapa === 1 && (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black uppercase text-slate-500">Turma *</label>
+                      <select value={formSessao.turma_id} onChange={e => setFormSessao(p => ({ ...p, turma_id: e.target.value }))}
+                        className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white">
+                        <option value="">Selecione...</option>
+                        {turmas.map(t => <option key={t.id} value={t.id}>{t.nome}{t.turno ? ` (${t.turno})` : ''}</option>)}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black uppercase text-slate-500">Data da Aula *</label>
+                      <input type="date" value={formSessao.data} onChange={e => setFormSessao(p => ({ ...p, data: e.target.value }))}
+                        className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400" />
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black uppercase text-slate-500">Tema da Aula *</label>
+                    <input type="text" value={formSessao.tema_aula}
+                      onChange={e => setFormSessao(p => ({ ...p, tema_aula: e.target.value }))}
+                      placeholder="Ex: Introdução à Programação, Matemática Básica..."
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black uppercase text-slate-500">Conteúdo Abordado</label>
+                    <textarea value={formSessao.conteudo_abordado}
+                      onChange={e => setFormSessao(p => ({ ...p, conteudo_abordado: e.target.value }))}
+                      placeholder="Descreva os tópicos, atividades e exercícios realizados na aula..."
+                      rows={4}
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 resize-none" />
+                  </div>
+                  <button onClick={avancarParaChamada} disabled={carregandoAlunos}
+                    className="w-full bg-purple-600 text-white py-2.5 rounded-xl font-black text-xs uppercase hover:bg-purple-700 disabled:opacity-50">
+                    {carregandoAlunos ? 'Carregando alunos...' : 'Iniciar Chamada →'}
+                  </button>
+                </div>
+              )}
+
+              {/* ─── Etapa 2: Chamada ────────────────────────────────────── */}
+              {etapa === 2 && (
+                <div className="space-y-3">
+                  {/* Resumo da sessão */}
+                  <div className="bg-purple-50 border border-purple-100 rounded-xl px-4 py-3 text-xs space-y-0.5">
+                    <p className="font-black text-purple-700 uppercase text-[10px]">{turmas.find(t => t.id === formSessao.turma_id)?.nome} · {fmtData(formSessao.data)}</p>
+                    <p className="text-slate-600"><span className="font-black">Tema:</span> {formSessao.tema_aula}</p>
+                  </div>
+
+                  {/* Controles */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex gap-2">
+                      <span className="bg-green-100 text-green-700 text-[9px] font-black px-2 py-0.5 rounded-full uppercase">{presentes} pres.</span>
+                      <span className="bg-red-100 text-red-600 text-[9px] font-black px-2 py-0.5 rounded-full uppercase">{ausentes} aus.</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => setPresenca(Object.fromEntries(alunosSessao.map(a => [a.id, true])))}
+                        className="flex items-center gap-1 text-[9px] font-black uppercase text-green-600 border border-green-200 px-2.5 py-1 rounded-lg hover:bg-green-50">
+                        <CheckSquare size={10}/> Todos Presentes
+                      </button>
+                      <button onClick={() => setPresenca(Object.fromEntries(alunosSessao.map(a => [a.id, false])))}
+                        className="flex items-center gap-1 text-[9px] font-black uppercase text-red-500 border border-red-200 px-2.5 py-1 rounded-lg hover:bg-red-50">
+                        <Square size={10}/> Todos Ausentes
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Lista de alunos */}
+                  <div className="border border-slate-100 rounded-2xl overflow-hidden divide-y divide-slate-50">
+                    {alunosSessao.map((a, i) => (
+                      <button key={a.id} type="button"
+                        onClick={() => setPresenca(p => ({ ...p, [a.id]: !p[a.id] }))}
+                        className={`w-full flex items-center gap-3 px-4 py-2.5 hover:bg-purple-50/40 transition-colors text-left ${i % 2 === 0 ? '' : 'bg-slate-50/30'}`}>
+                        <div className={`shrink-0 w-7 h-7 rounded-lg border-2 flex items-center justify-center transition-all ${
+                          presenca[a.id] ? 'bg-green-500 border-green-500 text-white' : 'bg-white border-slate-300'
+                        }`}>
+                          {presenca[a.id] && <CheckSquare size={13}/>}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold text-slate-800 truncate">{a.nome_completo}</p>
+                          <p className="text-[9px] text-slate-400">{a.numero_matricula || '–'}</p>
+                        </div>
+                        <span className={`shrink-0 text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
+                          presenca[a.id] ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
+                        }`}>
+                          {presenca[a.id] ? 'Presente' : 'Ausente'}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="flex gap-2 pt-1">
+                    <button onClick={() => setEtapa(1)}
+                      className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-black text-xs uppercase hover:bg-slate-50">
+                      ← Voltar
+                    </button>
+                    <button onClick={salvarLista} disabled={salvando}
+                      className="flex-1 bg-purple-600 text-white py-2.5 rounded-xl font-black text-xs uppercase hover:bg-purple-700 disabled:opacity-50">
+                      {salvando ? 'Salvando...' : 'Confirmar Presença'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
-        </>
-      )}
-
-      {alunos.length === 0 && !carregando && turmaId && (
-        <div className="py-16 text-center text-sm text-slate-400">
-          Nenhum aluno ativo encontrado nesta turma.
-        </div>
-      )}
-
-      {!turmaId && (
-        <div className="py-16 text-center">
-          <ClipboardCheck size={40} className="mx-auto mb-3 text-slate-200" />
-          <p className="text-sm text-slate-400 font-bold">Selecione uma turma e clique em Carregar Alunos</p>
         </div>
       )}
     </div>

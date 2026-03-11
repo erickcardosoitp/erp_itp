@@ -1,58 +1,128 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   Users, GraduationCap, TrendingDown, DollarSign, 
-  MapPin, Heart, Target, TrendingUp, ShieldCheck,
-  AlertTriangle, ArrowUpRight, Calendar
+  MapPin, Heart, TrendingUp, ShieldCheck,
+  AlertTriangle, ArrowUpRight, Calendar, RefreshCw
 } from 'lucide-react';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, 
   ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, LabelList 
 } from 'recharts';
+import api from '@/services/api';
 
-// --- CONFIGURAÇÃO DE DESIGN (Storytelling Colors) ---
-const COLORS = {
-  primary: '#2e1065', // Roxo ITP
-  secondary: '#facc15', // Amarelo Matrículas
-  success: '#22c55e',
-  danger: '#e11d48',
-  accent: '#8b5cf6',
-  muted: '#94a3b8'
-};
+// --- CONFIGURAÇÃO DE DESIGN ---
+const PIE_COLORS = ['#2e1065', '#8b5cf6', '#facc15', '#94a3b8', '#e11d48', '#10b981'];
 
-// --- MOCKS ESTRATÉGICOS (Baseados no seu ecossistema) ---
-const dadosFinanceiros = [
-  { mes: 'Out', realizado: 8200, projetado: 8000 },
-  { mes: 'Nov', realizado: 9100, projetado: 9500 },
-  { mes: 'Dez', realizado: 7500, projetado: 7500 },
-  { mes: 'Jan', realizado: 10200, projetado: 9000 },
-  { mes: 'Fev', realizado: 12400, projetado: 10000 },
-];
+const MESES_ABREV = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
-const dadosBairros = [
-  { name: 'Vaz Lobo', value: 45, color: '#2e1065' },
-  { name: 'Madureira', value: 32, color: '#8b5cf6' },
-  { name: 'D. Caxias', value: 18, color: '#facc15' },
-  { name: 'Outros', value: 12, color: '#94a3b8' },
-];
-
-const dadosCursos = [
-  { nome: 'Jiu-Jitsu', alunos: 85 },
-  { nome: 'Reforço', alunos: 120 },
-  { nome: 'Informática', alunos: 64 },
-  { nome: 'Inglês', alunos: 42 },
-];
+function ultimos6Meses() {
+  const hoje = new Date();
+  return Array.from({ length: 6 }, (_, i) => {
+    const d = new Date(hoje.getFullYear(), hoje.getMonth() - 5 + i, 1);
+    return { key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2,'0')}`, label: MESES_ABREV[d.getMonth()] };
+  });
+}
 
 export default function DashboardEstrategico() {
   const [isMounted, setIsMounted] = useState(false);
+  const [alunos,       setAlunos]       = useState<any[]>([]);
+  const [cursos,       setCursos]       = useState<any[]>([]);
+  const [movimentacoes, setMovimentacoes] = useState<any[]>([]);
+  const [carregando,   setCarregando]   = useState(false);
+
+  const carregar = useCallback(async () => {
+    setCarregando(true);
+    try {
+      const [ra, rc, rm] = await Promise.allSettled([
+        api.get('/academico/alunos'),
+        api.get('/academico/cursos'),
+        api.get('/financeiro/movimentacoes'),
+      ]);
+      if (ra.status === 'fulfilled') setAlunos(ra.value.data ?? []);
+      if (rc.status === 'fulfilled') setCursos(rc.value.data ?? []);
+      if (rm.status === 'fulfilled') setMovimentacoes(rm.value.data ?? []);
+    } catch { /* silencioso */ }
+    setCarregando(false);
+  }, []);
+
+  const dadosFinanceiros = useMemo(() => {
+    const meses = ultimos6Meses();
+    return meses.map(({ key, label }) => {
+      const movMes = movimentacoes.filter(m => {
+        const d = m.data ? String(m.data).slice(0, 7) : '';
+        return d === key;
+      });
+      const entradas = movMes
+        .filter(m => /receita|entrada/i.test(m.tipo_movimentacao ?? ''))
+        .reduce((s, m) => s + Number(m.valor ?? 0), 0);
+      const saidas = movMes
+        .filter(m => /despesa|saída|saida/i.test(m.tipo_movimentacao ?? ''))
+        .reduce((s, m) => s + Number(m.valor ?? 0), 0);
+      return { mes: label, entradas: Math.round(entradas), saidas: Math.round(saidas) };
+    });
+  }, [movimentacoes]);
+
+  const dadosBairros = useMemo(() => {
+    const contagem: Record<string, number> = {};
+    alunos.forEach(a => {
+      const b = (a.bairro || 'Não informado').trim();
+      contagem[b] = (contagem[b] || 0) + 1;
+    });
+    const ordenado = Object.entries(contagem).sort((a, b) => b[1] - a[1]);
+    const top4 = ordenado.slice(0, 4);
+    const outrosTotal = ordenado.slice(4).reduce((s, [, v]) => s + v, 0);
+    const total = alunos.length || 1;
+    const lista = top4.map(([name, v], i) => ({
+      name, value: Math.round((v / total) * 100), color: PIE_COLORS[i],
+    }));
+    if (outrosTotal > 0) lista.push({ name: 'Outros', value: Math.round((outrosTotal / total) * 100), color: '#94a3b8' });
+    return lista;
+  }, [alunos]);
+
+  const dadosCursos = useMemo(() => {
+    const contagem: Record<string, number> = {};
+    alunos.forEach(a => {
+      const raw = a.cursos_matriculados ?? '';
+      if (!raw.trim()) return;
+      raw.split(/[,;/\n]+/).forEach((c: string) => {
+        const nome = c.trim();
+        if (nome) contagem[nome] = (contagem[nome] || 0) + 1;
+      });
+    });
+    return Object.entries(contagem)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 8)
+      .map(([nome, alunos]) => ({ nome, alunos }));
+  }, [alunos]);
+
+  const alunosAtivos  = useMemo(() => alunos.filter(a => a.ativo !== false).length, [alunos]);
+  const cursosAtivos  = useMemo(() => cursos.filter(c => /ativo/i.test(c.status ?? '')).length || cursos.length, [cursos]);
+  const alunosInativos= useMemo(() => alunos.filter(a => a.ativo === false).length, [alunos]);
+  const taxaEvasao    = useMemo(() => alunos.length ? ((alunosInativos / alunos.length) * 100).toFixed(1) + '%' : '–', [alunos, alunosInativos]);
+
+  const saldoMesAtual = useMemo(() => {
+    const hoje = new Date();
+    const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2,'0')}`;
+    const movMes = movimentacoes.filter(m => String(m.data ?? '').slice(0, 7) === mesAtual);
+    const entradas = movMes.filter(m => /receita|entrada/i.test(m.tipo_movimentacao ?? '')).reduce((s, m) => s + Number(m.valor ?? 0), 0);
+    const saidas   = movMes.filter(m => /despesa|saída|saida/i.test(m.tipo_movimentacao ?? '')).reduce((s, m) => s + Number(m.valor ?? 0), 0);
+    const saldo    = entradas - saidas;
+    if (!entradas && !saidas) return null;
+    return { valor: saldo, label: saldo >= 0 ? `+R$ ${(saldo/1000).toFixed(1)}k` : `-R$ ${(Math.abs(saldo)/1000).toFixed(1)}k`, positivo: saldo >= 0 };
+  }, [movimentacoes]);
 
   // Garante que o Recharts só renderize no cliente (evita erro de hidratação/dimensão)
   useEffect(() => {
     setIsMounted(true);
+    carregar();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (!isMounted) return <div className="min-h-screen bg-slate-50 dark:bg-[#131b2e]" />;
+
+  const mesAtual = new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] dark:bg-[#131b2e] p-4 md:p-8 font-sans antialiased text-slate-900 dark:text-slate-100">
@@ -63,11 +133,15 @@ export default function DashboardEstrategico() {
           <div>
             <div className="flex items-center gap-2 mb-2">
               <span className="bg-purple-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-tighter">
-                Live Insights
+                {carregando ? 'Carregando...' : 'Live Insights'}
               </span>
               <span className="text-slate-400 text-[10px] font-bold uppercase tracking-widest flex items-center gap-1">
-                <Calendar size={12} /> Março 2026
+                <Calendar size={12} /> {mesAtual}
               </span>
+              <button onClick={carregar} disabled={carregando}
+                className="flex items-center gap-1 text-[9px] font-black text-slate-400 hover:text-purple-600 uppercase disabled:opacity-50">
+                <RefreshCw size={10} className={carregando ? 'animate-spin' : ''} />
+              </button>
             </div>
             <h1 className="text-4xl font-black text-slate-900 uppercase tracking-tighter italic">
               Dash<span className="text-purple-600">.ITP</span>
@@ -78,16 +152,16 @@ export default function DashboardEstrategico() {
           <div className="flex gap-4 bg-white p-3 rounded-3xl shadow-sm border border-slate-100">
             <HeaderStat label="NPS Comunitário" value="4.9" icon={Heart} color="text-rose-500" />
             <div className="w-[1px] bg-slate-100 h-10 self-center" />
-            <HeaderStat label="Taxa de Retenção" value="97.6%" icon={ShieldCheck} color="text-emerald-500" />
+            <HeaderStat label="Taxa de Retenção" value={alunos.length ? (100 - parseFloat(taxaEvasao)).toFixed(1) + '%' : '–'} icon={ShieldCheck} color="text-emerald-500" />
           </div>
         </header>
 
         {/* LINHA 1: KPIs DE IMPACTO */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-          <KpiCard title="Alunos Ativos" value="142" trend="+12%" icon={Users} color="bg-purple-900" />
-          <KpiCard title="Evasão" value="2.4%" trend="-0.8%" icon={TrendingDown} color="bg-rose-600" isNegative />
-          <KpiCard title="Cursos Ativos" value="08" trend="Estável" icon={GraduationCap} color="bg-amber-500" />
-          <KpiCard title="Desvio Orç." value="+R$ 2.4k" trend="Superávit" icon={DollarSign} color="bg-emerald-600" />
+          <KpiCard title="Alunos Ativos" value={carregando ? '...' : String(alunosAtivos)} trend={alunos.length ? `${alunosAtivos} de ${alunos.length}` : '–'} icon={Users} color="bg-purple-900" />
+          <KpiCard title="Evasão" value={carregando ? '...' : taxaEvasao} trend={alunosInativos ? `-${alunosInativos} alunos` : 'Estável'} icon={TrendingDown} color="bg-rose-600" isNegative />
+          <KpiCard title="Cursos Ativos" value={carregando ? '...' : String(cursosAtivos || '–')} trend="Estável" icon={GraduationCap} color="bg-amber-500" />
+          <KpiCard title="Saldo do Mês" value={carregando ? '...' : (saldoMesAtual?.label ?? (movimentacoes.length ? 'R$ 0' : '–'))} trend={saldoMesAtual?.positivo ? 'Superávit' : (saldoMesAtual ? 'Déficit' : 'Sem dados')} icon={DollarSign} color="bg-emerald-600" isNegative={!saldoMesAtual?.positivo} />
         </div>
 
         {/* LINHA 2: GRÁFICOS ESTRATÉGICOS */}
@@ -98,26 +172,164 @@ export default function DashboardEstrategico() {
             <div className="flex justify-between items-center mb-8 relative z-10">
               <div>
                 <h3 className="text-sm font-black uppercase flex items-center gap-2 italic">
-                  <TrendingUp size={18} className="text-emerald-500" /> Fluxo Financeiro Projetado
+                  <TrendingUp size={18} className="text-emerald-500" /> Fluxo Financeiro — Últimos 6 Meses
                 </h3>
-                <p className="text-[10px] text-slate-400 font-bold uppercase">Realizado vs Meta de Arrecadação</p>
+                <p className="text-[10px] text-slate-400 font-bold uppercase">Entradas vs Saídas por mês</p>
               </div>
               <div className="flex gap-4 text-[10px] font-black uppercase">
-                 <span className="flex items-center gap-1"><div className="w-2 h-2 bg-emerald-500 rounded-full" /> Realizado</span>
-                 <span className="flex items-center gap-1 border-l pl-4"><div className="w-2 h-2 bg-slate-300 rounded-full" /> Projetado</span>
+                 <span className="flex items-center gap-1"><div className="w-2 h-2 bg-emerald-500 rounded-full" /> Entradas</span>
+                 <span className="flex items-center gap-1 border-l pl-4"><div className="w-2 h-2 bg-rose-400 rounded-full" /> Saídas</span>
               </div>
             </div>
             
             <div className="h-[350px] w-full">
+              {movimentacoes.length === 0 && !carregando ? (
+                <div className="flex items-center justify-center h-full text-slate-300 text-sm font-bold">
+                  Nenhuma movimentação registrada ainda.
+                </div>
+              ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={dadosFinanceiros}>
                   <defs>
-                    <linearGradient id="colorReal" x1="0" y1="0" x2="0" y2="1">
+                    <linearGradient id="colorEnt" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#10b981" stopOpacity={0.1}/>
                       <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
                     </linearGradient>
+                    <linearGradient id="colorSai" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#e11d48" stopOpacity={0.1}/>
+                      <stop offset="95%" stopColor="#e11d48" stopOpacity={0}/>
+                    </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis dataKey="mes" axisLine={false} tickLine={false} tick={{fontSize: 12, fontWeight: '900', fill: '#94a3b8'}} />
+                  <YAxis hide />
+                  <Tooltip 
+                    formatter={(v: any) => `R$ ${Number(v).toLocaleString('pt-BR')}`}
+                    contentStyle={{borderRadius: '20px', border: 'none', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)', padding: '15px'}}
+                  />
+                  <Area type="monotone" dataKey="entradas" name="Entradas" stroke="#10b981" strokeWidth={4} fillOpacity={1} fill="url(#colorEnt)" />
+                  <Area type="monotone" dataKey="saidas" name="Saídas" stroke="#e11d48" strokeWidth={2} strokeDasharray="8 8" fillOpacity={1} fill="url(#colorSai)" />
+                </AreaChart>
+              </ResponsiveContainer>
+              )}
+            </div>
+          </section>
+
+          {/* LOCALIZAÇÃO: Onde está o ITP? */}
+          <section className="bg-white p-8 rounded-[40px] shadow-sm border border-slate-100">
+            <h3 className="text-sm font-black uppercase mb-8 flex items-center gap-2 italic">
+              <MapPin size={18} className="text-purple-600" /> Mapa de Presença
+            </h3>
+            {dadosBairros.length === 0 ? (
+              <div className="flex items-center justify-center h-[200px] text-slate-300 text-sm font-bold text-center">
+                {carregando ? 'Carregando...' : 'Sem dados de bairro dos alunos.'}
+              </div>
+            ) : (
+            <>
+            <div className="h-[200px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie 
+                    data={dadosBairros} 
+                    innerRadius={60} 
+                    outerRadius={85} 
+                    paddingAngle={8} 
+                    dataKey="value"
+                    cornerRadius={8}
+                  >
+                    {dadosBairros.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(v: any) => `${v}%`} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              {dadosBairros.map((b) => (
+                <div key={b.name} className="flex items-center gap-2 p-2 bg-slate-50 rounded-xl">
+                  <div className="w-1.5 h-5 rounded-full shrink-0" style={{backgroundColor: b.color}} />
+                  <div className="min-w-0">
+                    <p className="text-[9px] font-black text-slate-400 uppercase leading-none truncate">{b.name}</p>
+                    <p className="text-xs font-black text-slate-800">{b.value}%</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            </>
+            )}
+          </section>
+        </div>
+
+        {/* LINHA 3: CURSOS E ALERTAS */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          
+          {/* ALUNOS POR CURSO */}
+          <section className="bg-white p-8 rounded-[40px] shadow-sm border border-slate-100">
+            <h3 className="text-sm font-black uppercase mb-8 italic">Engajamento por Categoria</h3>
+            {dadosCursos.length === 0 ? (
+              <div className="flex items-center justify-center h-[200px] text-slate-300 text-sm font-bold text-center">
+                {carregando ? 'Carregando...' : 'Nenhum dado de curso nos alunos.'}
+              </div>
+            ) : (
+            <div className="h-[250px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={dadosCursos} layout="vertical" margin={{ left: 20, right: 40 }}>
+                  <XAxis type="number" hide />
+                  <YAxis dataKey="nome" type="category" axisLine={false} tickLine={false} tick={{fontSize: 11, fontWeight: '900'}} width={90} />
+                  <Tooltip cursor={{fill: 'transparent'}} formatter={(v: any) => [`${v} alunos`, 'Alunos']} />
+                  <Bar dataKey="alunos" fill="#2e1065" radius={[0, 10, 10, 0]} barSize={22}>
+                     <LabelList dataKey="alunos" position="right" style={{fontSize: '11px', fontWeight: '900', fill: '#2e1065'}} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            )}
+          </section>
+
+          {/* ALERTAS CRÍTICOS (Social Storytelling) */}
+          <section className="bg-purple-950 p-8 rounded-[40px] shadow-xl text-white">
+            <div className="flex justify-between items-start mb-6">
+              <h3 className="text-sm font-black uppercase flex items-center gap-2 italic">
+                <AlertTriangle size={18} className="text-amber-400" /> Alertas de Atenção Social
+              </h3>
+              <span className="bg-white/10 px-3 py-1 rounded-full text-[9px] font-black">ATENÇÃO</span>
+            </div>
+            
+            <div className="space-y-4">
+              {alunosInativos > 0 && (
+                <AlertItem 
+                  name={`${alunosInativos} aluno${alunosInativos > 1 ? 's' : ''} inativo${alunosInativos > 1 ? 's' : ''}`}
+                  bairro="Status"
+                  msg={`Taxa de evasão: ${taxaEvasao}. Verifique os alunos e entre em contato com as famílias.`} 
+                />
+              )}
+              {alunos.filter(a => a.cuidado_especial && a.cuidado_especial !== 'Não').slice(0, 2).map((a: any) => (
+                <AlertItem 
+                  key={a.id}
+                  name={a.nome_completo}
+                  bairro={a.bairro || '–'}
+                  msg={a.detalhes_cuidado || `Requer atenção especial: ${a.cuidado_especial}.`}
+                />
+              ))}
+              {alunosInativos === 0 && alunos.filter(a => a.cuidado_especial && a.cuidado_especial !== 'Não').length === 0 && (
+                <div className="bg-white/5 border border-white/10 p-4 rounded-3xl text-center">
+                  <p className="text-sm text-slate-300 font-bold">Nenhum alerta no momento.</p>
+                  <p className="text-[11px] text-slate-400 mt-1">Todos os alunos estão ativos.</p>
+                </div>
+              )}
+            </div>
+            
+            <button className="w-full mt-6 py-4 bg-purple-600 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-purple-500 transition-colors">
+              Ver todos os relatórios sociais
+            </button>
+          </section>
+        </div>
+
+      </div>
+    </div>
+  );
+}
                   <XAxis dataKey="mes" axisLine={false} tickLine={false} tick={{fontSize: 12, fontWeight: '900', fill: '#94a3b8'}} />
                   <YAxis hide />
                   <Tooltip 

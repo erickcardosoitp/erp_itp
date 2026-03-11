@@ -1,5 +1,5 @@
 /**
- * Google Apps Script — Formulário de Cadastro de Funcionário
+ * Google Apps Script — Cadastro de Funcionário
  * Instituto Tia Pretinha
  *
  * Envia os dados para o backend ITP que grava no banco.
@@ -22,65 +22,27 @@ function getConf_(key) {
   return PropertiesService.getScriptProperties().getProperty(key) || '';
 }
 
-/** "Sim..." → true | qualquer outra coisa → false */
-function simParaBool_(value) {
-  if (!value) return false;
-  return value.toString().toLowerCase().startsWith('sim');
+function str_(v) {
+  var s = (v || "").toString().trim();
+  return s === "" ? null : s;
 }
 
-/** Retorna string limpa ou null */
-function str_(value) {
-  var v = (value || '').toString().trim();
-  return v === '' ? null : v;
+function simParaBool_(v) {
+  if (!v) return false;
+  return v.toString().toLowerCase().startsWith("sim");
 }
 
-/**
- * Extrai o valor de uma entrada do namedValues (array) ou string já processada.
- */
-function extrair_(raw) {
-  if (!raw) return null;
-  var val = Array.isArray(raw) ? raw[0] : raw;
-  return str_(val);
-}
-
-/**
- * Busca um campo em r (namedValues) com comparação case-insensitive e sem pontuação final.
- * Aceita múltiplas chaves candidatas e retorna a primeira que tiver valor.
- */
-function campo_(r, chaves) {
-  if (!Array.isArray(chaves)) chaves = [chaves];
-  // Tentativa exata primeiro
-  for (var i = 0; i < chaves.length; i++) {
-    var v = extrair_(r[chaves[i]]);
-    if (v) return v;
-  }
-  // Fallback case-insensitive + sem pontuação/espaço no final
-  var normalize = function(s) { return s.toLowerCase().replace(/[:\s]+$/, '').trim(); };
-  var normalizedKeys = chaves.map(normalize);
-  for (var key in r) {
-    var nk = normalize(key);
-    for (var j = 0; j < normalizedKeys.length; j++) {
-      if (nk === normalizedKeys[j]) {
-        var v2 = extrair_(r[key]);
-        if (v2) return v2;
-      }
-    }
-  }
-  return null;
-}
-
-/**
- * Converte data no formato DD/MM/YYYY (Google Forms BR) para YYYY-MM-DD (SQL).
- * Retorna null se não conseguir converter.
- */
 function dataParaISO_(value) {
+
   var v = str_(value);
   if (!v) return null;
-  var partes = v.split('/');
+
+  var partes = v.split("/");
+
   if (partes.length === 3) {
-    return partes[2] + '-' + partes[1] + '-' + partes[0];
+    return partes[2] + "-" + partes[1] + "-" + partes[0];
   }
-  // Tenta retornar como está (já pode estar em ISO)
+
   return v;
 }
 
@@ -88,7 +50,7 @@ function dataParaISO_(value) {
 //  Gatilho principal — executado ao enviar o formulário
 // ─────────────────────────────────────────────────────────────────────
 
-var API_URL_FUNCIONARIO = 'https://api.itp.institutotiapretinha.org/api/funcionarios/webhook';
+var API_URL_FUNCIONARIO = "https://api.itp.institutotiapretinha.org/api/funcionarios/webhook";
 
 function onFormSubmit(e) {
   try {

@@ -163,6 +163,17 @@ export class AcademicoController {
   deletarDiario(@Param('id') id: string) { return this.svc.deletarRegistroDiario(id); }
 
   // ── PRESENÇA ──────────────────────────────────────────────────────────────
+  @Get('presenca/sessoes')
+  getSessoes(@Query() q: any) { return this.svc.listarSessoes(q); }
+
+  @Post('presenca/sessoes')
+  criarSessao(@Body() dto: any, @Req() req: any) {
+    return this.svc.criarSessaoComPresenca(dto, req.user?.userId, req.user?.email);
+  }
+
+  @Get('presenca/sessoes/:id/registros')
+  getRegistrosSessao(@Param('id') id: string) { return this.svc.listarRegistrosSessao(id); }
+
   @Get('presenca')
   getPresenca(@Query() q: any) { return this.svc.listarPresenca(q); }
 

@@ -7,6 +7,7 @@ import { Turma } from './entities/turma.entity';
 import { TurmaAluno } from './entities/turma-aluno.entity';
 import { GradeHoraria } from './entities/grade-horaria.entity';
 import { DiarioAcademico } from './entities/diario.entity';
+import { PresencaSessao } from './entities/presenca-sessao.entity';
 import { Aluno } from '../alunos/aluno.entity';
 
 @Injectable()
@@ -19,6 +20,7 @@ export class AcademicoService {
     @InjectRepository(Turma)           private turmaRepo: Repository<Turma>,
     @InjectRepository(GradeHoraria)    private gradeRepo: Repository<GradeHoraria>,
     @InjectRepository(DiarioAcademico) private diarioRepo: Repository<DiarioAcademico>,
+    @InjectRepository(PresencaSessao)  private sessaoRepo: Repository<PresencaSessao>,
     @InjectRepository(Aluno)           private alunoRepo: Repository<Aluno>,
     @InjectRepository(TurmaAluno)      private turmaAlunoRepo: Repository<TurmaAluno>,
   ) {}
@@ -409,5 +411,77 @@ export class AcademicoService {
     await this.diarioRepo.save(entries);
     this.logger.log(`Presença registrada: ${entries.length} alunos`);
     return { registrados: entries.length };
+  }
+
+  // ── SESSÕES DE PRESENÇA ───────────────────────────────────────────────────
+
+  listarSessoes(filtros: { turma_id?: string; data_ini?: string; data_fim?: string }) {
+    this.logger.log(`Listando sessões de presença filtros=${JSON.stringify(filtros)}`);
+    let qb = this.sessaoRepo.createQueryBuilder('s').orderBy('s.data', 'DESC').addOrderBy('s.created_at', 'DESC');
+    if (filtros.turma_id) qb = qb.andWhere('s.turma_id = :t', { t: filtros.turma_id });
+    if (filtros.data_ini) qb = qb.andWhere('s.data >= :di', { di: filtros.data_ini });
+    if (filtros.data_fim) qb = qb.andWhere('s.data <= :df', { df: filtros.data_fim });
+    return qb.getMany();
+  }
+
+  async criarSessaoComPresenca(
+    dto: {
+      turma_id: string;
+      data: string;
+      tema_aula?: string;
+      conteudo_abordado?: string;
+      registros: { aluno_id: string; presente: boolean }[];
+    },
+    usuarioId?: string,
+    usuarioNome?: string,
+  ) {
+    this.logger.log(`Criando sessão de presença turma=${dto.turma_id} data=${dto.data}`);
+    if (!dto.turma_id)           throw new BadRequestException('turma_id é obrigatório');
+    if (!dto.data)               throw new BadRequestException('data é obrigatória');
+    if (!dto.registros?.length)  throw new BadRequestException('Registros de presença são obrigatórios');
+
+    const turma = await this.turmaRepo.findOneBy({ id: dto.turma_id });
+    if (!turma) throw new NotFoundException('Turma não encontrada');
+
+    const totalPresentes = dto.registros.filter(r => r.presente).length;
+    const totalAusentes  = dto.registros.length - totalPresentes;
+
+    const sessao = await this.sessaoRepo.save(this.sessaoRepo.create({
+      turma_id:          dto.turma_id,
+      turma_nome:        turma.nome,
+      data:              dto.data,
+      tema_aula:         dto.tema_aula,
+      conteudo_abordado: dto.conteudo_abordado,
+      usuario_id:        usuarioId,
+      usuario_nome:      usuarioNome,
+      total_presentes:   totalPresentes,
+      total_ausentes:    totalAusentes,
+    }));
+    this.logger.log(`Sessão criada id=${sessao.id}`);
+
+    const entries = dto.registros.map(r =>
+      this.diarioRepo.create({
+        tipo:         'Presença',
+        aluno_id:     r.aluno_id,
+        turma_id:     dto.turma_id,
+        data:         dto.data,
+        descricao:    r.presente ? 'Presente' : 'Falta',
+        sessao_id:    sessao.id,
+        usuario_id:   usuarioId,
+        usuario_nome: usuarioNome,
+      })
+    );
+    await this.diarioRepo.save(entries);
+    this.logger.log(`Presença por sessão registrada: ${entries.length} alunos`);
+
+    return { sessao, registrados: entries.length };
+  }
+
+  async listarRegistrosSessao(sessaoId: string) {
+    this.logger.log(`Listando registros da sessão id=${sessaoId}`);
+    return this.diarioRepo.find({
+      where: { sessao_id: sessaoId, tipo: 'Presença' },
+      order: { aluno_id: 'ASC' },
+    });
   }
 }

@@ -346,16 +346,9 @@ function FuncionariosTab({ onCount }: { onCount: (n: number) => void }) {
   const abrirCriar  = () => { setForm({ ativo: true }); setModal({ aberto: true, editando: null }); };
   const abrirEditar = (p: Funcionario) => {
     setForm({
-      nome: p.nome, cargo: p.cargo, email: p.email, cpf: p.cpf,
-      data_nascimento: p.data_nascimento, celular: p.celular,
-      sexo: p.sexo, raca_cor: p.raca_cor, escolaridade: p.escolaridade,
-      cep: p.cep, logradouro: p.logradouro, numero_residencia: p.numero_residencia,
-      complemento: p.complemento, bairro: p.bairro, cidade: p.cidade, estado: p.estado,
-      telefone_emergencia_1: p.telefone_emergencia_1, telefone_emergencia_2: p.telefone_emergencia_2,
-      possui_deficiencia: p.possui_deficiencia, deficiencia_descricao: p.deficiencia_descricao,
-      possui_alergias: p.possui_alergias, alergias_descricao: p.alergias_descricao,
-      usa_medicamentos: p.usa_medicamentos, medicamentos_descricao: p.medicamentos_descricao,
-      interesse_cursos: p.interesse_cursos, ativo: p.ativo,
+      ...p,
+      // Garante formato YYYY-MM-DD para o input type="date"
+      data_nascimento: p.data_nascimento ? String(p.data_nascimento).slice(0, 10) : undefined,
     });
     setModal({ aberto: true, editando: p });
   };
@@ -375,7 +368,7 @@ function FuncionariosTab({ onCount }: { onCount: (n: number) => void }) {
   const handleCriarUsuario = async (e: React.FormEvent) => {
     e.preventDefault(); setSalvandoUsuario(true); setErroUsuario('');
     try {
-      const payload: any = { nome: formUsuario.nome, email: formUsuario.email, senha: formUsuario.senha, role: formUsuario.role };
+      const payload: any = { nome: formUsuario.nome, email: formUsuario.email, password: formUsuario.senha, role: formUsuario.role };
       if (formUsuario.grupo_id) payload.grupo_id = formUsuario.grupo_id;
       await api.post('/admin/usuarios', payload);
       fecharModalUsuario();

@@ -30,6 +30,9 @@ export class DiarioAcademico {
   @Column({ name: 'usuario_nome', nullable: true })
   usuario_nome: string;
 
+  @Column({ name: 'sessao_id', nullable: true })
+  sessao_id: string;
+
   @CreateDateColumn({ name: 'created_at' })
   created_at: Date;
 }

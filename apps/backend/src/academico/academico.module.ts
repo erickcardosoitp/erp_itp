@@ -8,11 +8,12 @@ import { Turma } from './entities/turma.entity';
 import { TurmaAluno } from './entities/turma-aluno.entity';
 import { GradeHoraria } from './entities/grade-horaria.entity';
 import { DiarioAcademico } from './entities/diario.entity';
+import { PresencaSessao } from './entities/presenca-sessao.entity';
 import { Aluno } from '../alunos/aluno.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Curso, Professor, Turma, TurmaAluno, GradeHoraria, DiarioAcademico, Aluno]),
+    TypeOrmModule.forFeature([Curso, Professor, Turma, TurmaAluno, GradeHoraria, DiarioAcademico, PresencaSessao, Aluno]),
   ],
   controllers: [AcademicoController],
   providers: [AcademicoService],
