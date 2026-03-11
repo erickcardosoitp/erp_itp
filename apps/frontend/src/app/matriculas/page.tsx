@@ -222,8 +222,9 @@ export default function GestaoMatriculas() {
             )}
             </div>
           </div>
+        </div>
 
-        {/* ── KPIs ─────────────────────────────────────────────────────────────── */}
+        {/* ── KPIs ───────────────────────────────────────────────────────── */}
         <div className="mb-8 space-y-3">
 
           {/* RAIA 1 — Pipeline Ativo */}
