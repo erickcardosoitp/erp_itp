@@ -116,7 +116,7 @@ export class AuthService {
       const { password, ...usuarioSemSenha } = usuario;
       usuarioSemSenha.role = roleLimpa; // Atualiza o objeto de retorno também
 
-      this.logger.log(`✅ Login realizado: ${email} [Cargo: ${roleLimpa}]`);
+      this.logger.log(`✅ Login realizado: ${id} [Cargo: ${roleLimpa}]`);
 
       return {
         access_token: await this.jwtService.signAsync(payload),
