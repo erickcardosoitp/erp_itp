@@ -44,10 +44,13 @@ import { CadastroModule } from './cadastro/cadastro.module';
     // 1. Configuração Global
     ConfigModule.forRoot({ 
       isGlobal: true,
-      envFilePath: [
-        join(process.cwd(), '.env'),            // Procura na pasta atual (apps/backend)
-        join(process.cwd(), '..', '..', '.env') // Procura na raiz do projeto (erp_itp)
-      ],
+      // Na Vercel, as env vars já são injetadas pelo sistema — o envFilePath é apenas para dev local
+      envFilePath: process.env.VERCEL
+        ? undefined
+        : [
+            join(process.cwd(), '.env'),
+            join(process.cwd(), '..', '..', '.env'),
+          ],
       cache: true,
     }),
     

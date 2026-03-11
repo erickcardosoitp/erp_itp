@@ -1,19 +1,26 @@
+import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
-import cookieParser from 'cookie-parser';
+import * as cookieParser from 'cookie-parser';
 import { join } from 'path';
+import { existsSync } from 'fs';
 
 // Mova o logger para o escopo global para que possa ser usado fora de 'bootstrap'
 const logger = new Logger('Bootstrap');
 
 // A função de configuração permanece a mesma
 export const setupApp = async (app: NestExpressApplication) => {
-  app.use(cookieParser());
+  const cookieMiddleware = (cookieParser as any).default || cookieParser;
+  app.use(cookieMiddleware());
   app.setGlobalPrefix('api');
 
-  app.useStaticAssets(join(__dirname, '..', '..', 'public'));
+  // Apenas registra o diretório de assets se ele existir (não existe em serverless)
+  const publicDir = join(__dirname, '..', '..', 'public');
+  if (existsSync(publicDir)) {
+    app.useStaticAssets(publicDir);
+  }
 
   const isDev = process.env.NODE_ENV !== 'production';
 
@@ -56,18 +63,32 @@ export const setupApp = async (app: NestExpressApplication) => {
 
 // Função para inicializar o app (sem o listen)
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    logger: ['error', 'warn', 'log'],
+  });
   await setupApp(app);
-  await app.init(); // Inicializa o app sem escutar em uma porta
+  await app.init();
   return app;
 }
 
 // Crie uma instância do aplicativo NestJS e exporte o handler
 let app: NestExpressApplication;
+let bootstrapError: Error | null = null;
 
 export default async function handler(req: any, res: any) {
+  if (bootstrapError) {
+    res.status(500).json({ error: 'Bootstrap failed', message: bootstrapError.message });
+    return;
+  }
   if (!app) {
-    app = await bootstrap();
+    try {
+      app = await bootstrap();
+    } catch (err: any) {
+      bootstrapError = err;
+      logger.error(`Bootstrap falhou: ${err.message}`, err.stack);
+      res.status(500).json({ error: 'Bootstrap failed', message: err.message });
+      return;
+    }
   }
   const server = app.getHttpAdapter().getInstance();
   return server(req, res);
