@@ -78,7 +78,7 @@ import { CadastroModule } from './cadastro/cadastro.module';
           url: dbUrl,
           entities: [Materia, Usuario, Aluno, Inscricao, InscricaoAnotacao, InscricaoMovimentacao, Grupo, DocumentoInscricao],
           autoLoadEntities: true,
-          synchronize: true,
+          synchronize: false,
           // Para conexões não-locais (produção), apenas habilita o SSL.
           // A modalidade específica ('require', 'verify-full') deve ser controlada
           // pelo parâmetro 'sslmode' na sua variável de ambiente DATABASE_URL.
