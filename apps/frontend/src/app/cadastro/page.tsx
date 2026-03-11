@@ -69,8 +69,9 @@ interface Funcionario {
   medicamentos_descricao?: string;
   interesse_cursos?: boolean;
   ativo?: boolean;
+  matricula?: string;
 }
-interface UsuarioAdmin { id: string; nome: string; email: string; role: string; grupo?: { id: string; nome: string }; }
+interface UsuarioAdmin { id: string; nome: string; email: string; role: string; matricula?: string; grupo?: { id: string; nome: string }; }
 interface Grupo { id: string; nome: string; grupo_permissoes?: any; usuarios?: { id: string; nome: string }[]; }
 interface Curso { id: string; codigo?: string; nome: string; sigla: string; status: string; periodo?: string; descricao?: string; }
 interface Aluno { id: string; numero_matricula: string; nome_completo: string; cpf?: string; celular?: string; data_nascimento?: string; cursos_matriculados?: string; cidade?: string; ativo?: boolean; }
@@ -295,6 +296,7 @@ function FuncionariosTab({ onCount }: { onCount: (n: number) => void }) {
   const { user } = useAuth();
   const [lista, setLista]   = useState<Funcionario[]>([]);
   const [grupos, setGrupos] = useState<Grupo[]>([]);
+  const [usuarios, setUsuarios] = useState<UsuarioAdmin[]>([]);
   const [loading, setLoading] = useState(true);
   const [erro, setErro]     = useState('');
   const [busca, setBusca]   = useState('');
@@ -312,11 +314,12 @@ function FuncionariosTab({ onCount }: { onCount: (n: number) => void }) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [rP, rG] = await Promise.all([
+      const [rP, rG, rU] = await Promise.all([
         api.get('/funcionarios'),
         api.get('/grupos'),
+        api.get('/admin/usuarios'),
       ]);
-      setLista(rP.data); setGrupos(rG.data); onCount(rP.data.length);
+      setLista(rP.data); setGrupos(rG.data); setUsuarios(rU.data); onCount(rP.data.length);
     } catch { setErro('Erro ao carregar funcionários.'); }
     setLoading(false);
   }, [onCount]);
@@ -368,11 +371,21 @@ function FuncionariosTab({ onCount }: { onCount: (n: number) => void }) {
   const handleCriarUsuario = async (e: React.FormEvent) => {
     e.preventDefault(); setSalvandoUsuario(true); setErroUsuario('');
     try {
-      const payload: any = { nome: formUsuario.nome, email: formUsuario.email, password: formUsuario.senha, role: formUsuario.role };
+      const payload: any = {
+        nome: formUsuario.nome,
+        email: formUsuario.email,
+        password: formUsuario.senha,
+        role: formUsuario.role,
+        matricula: modalUsuario.funcionario?.matricula ?? undefined,
+      };
       if (formUsuario.grupo_id) payload.grupo_id = formUsuario.grupo_id;
-      await api.post('/admin/usuarios', payload);
+      const resp = await api.post('/admin/usuarios', payload);
       fecharModalUsuario();
-      alert(`Usuário criado com sucesso para ${formUsuario.nome}!`);
+      load();
+      const mat = resp.data?.matricula || modalUsuario.funcionario?.matricula || '';
+      alert(`✅ Usuário criado para ${formUsuario.nome}!${
+        mat ? `\n\n🧯 Matrícula: ${mat}\n\nUm e-mail com os dados de acesso foi enviado para ${formUsuario.email}.` : ''
+      }`);
     } catch (err: any) {
       setErroUsuario(err.response?.data?.message || 'Erro ao criar usuário.');
     }
@@ -396,6 +409,8 @@ function FuncionariosTab({ onCount }: { onCount: (n: number) => void }) {
   };
 
   const podeCriarUsuario = ROLES_CRIAR_USUARIO.includes(user?.role ?? '');
+  // Conjunto de e-mails que já possuem usuário cadastrado
+  const emailsComUsuario = new Set(usuarios.map(u => (u.email ?? '').toLowerCase()));
   const filtrados = lista.filter(p =>
     p.nome.toLowerCase().includes(busca.toLowerCase()) ||
     (p.cargo ?? '').toLowerCase().includes(busca.toLowerCase()),
@@ -416,6 +431,7 @@ function FuncionariosTab({ onCount }: { onCount: (n: number) => void }) {
             <th className="text-left px-6 py-4">Nome</th>
             <th className="text-left px-6 py-4">Cargo / Especialidade</th>
             <th className="text-left px-6 py-4">E-mail</th>
+            <th className="text-left px-6 py-4">Matrícula</th>
             <th className="text-center px-6 py-4">Status</th>
             <th className="text-right px-6 py-4">Ações</th>
           </tr>
@@ -431,6 +447,13 @@ function FuncionariosTab({ onCount }: { onCount: (n: number) => void }) {
               </td>
               <td className="px-6 py-4 text-xs text-slate-500">{p.cargo || '–'}</td>
               <td className="px-6 py-4 text-xs text-slate-500">{p.email || '–'}</td>
+              <td className="px-6 py-4">
+                {p.matricula ? (
+                  <span className="font-mono text-[10px] font-bold bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-2 py-0.5 rounded-lg border border-purple-100 dark:border-purple-800">
+                    {p.matricula}
+                  </span>
+                ) : <span className="text-slate-300 text-xs">–</span>}
+              </td>
               <td className="px-6 py-4 text-center">
                 <StatusBadge ativo={p.ativo !== false} />
               </td>
@@ -439,8 +462,13 @@ function FuncionariosTab({ onCount }: { onCount: (n: number) => void }) {
                   {podeCriarUsuario && (
                     <button
                       onClick={() => abrirCriarUsuario(p)}
-                      title="Criar conta de usuário para este funcionário"
-                      className="p-1.5 rounded-lg bg-blue-500 hover:bg-blue-600 text-white transition-colors"
+                      disabled={!!p.email && emailsComUsuario.has((p.email ?? '').toLowerCase())}
+                      title={
+                        p.email && emailsComUsuario.has((p.email ?? '').toLowerCase())
+                          ? 'Já possui conta de usuário'
+                          : 'Criar conta de usuário'
+                      }
+                      className="p-1.5 rounded-lg bg-blue-500 hover:bg-blue-600 text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       <UserPlus size={11} />
                     </button>
@@ -458,6 +486,14 @@ function FuncionariosTab({ onCount }: { onCount: (n: number) => void }) {
         <Modal title={`Criar Usuário — ${modalUsuario.funcionario?.nome ?? ''}`} onClose={fecharModalUsuario}>
           <form onSubmit={handleCriarUsuario} className="space-y-4">
             {erroUsuario && <ErroBanner msg={erroUsuario} />}
+            {modalUsuario.funcionario?.matricula && (
+              <div className="flex items-center gap-3 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 rounded-xl px-4 py-3">
+                <span className="text-xs text-purple-700 dark:text-purple-300 font-semibold">🪪 Matrícula que será vinculada:</span>
+                <span className="font-mono text-sm font-black text-purple-800 dark:text-purple-200 bg-purple-100 dark:bg-purple-900/50 px-3 py-0.5 rounded-lg">
+                  {modalUsuario.funcionario.matricula}
+                </span>
+              </div>
+            )}
             <p className="text-xs text-slate-500 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-xl px-4 py-3">
               Isso criará uma conta de acesso ao sistema vinculada a este funcionário.
               Informe a senha inicial — o usuário poderá alterá-la depois.
@@ -662,7 +698,7 @@ function UsuariosTab({ onCount }: { onCount: (n: number) => void }) {
 
   const abrirCriar  = () => { setForm({ role: 'assist' }); setMostrarSenha(false); setModal({ aberto: true, editando: null }); };
   const abrirEditar = (u: UsuarioAdmin) => {
-    setForm({ nome: u.nome, role: u.role, grupo_id: u.grupo?.id ?? '' });
+    setForm({ nome: u.nome, role: u.role, grupo_id: u.grupo?.id ?? '', matricula: u.matricula ?? '' });
     setModal({ aberto: true, editando: u });
   };
   const fecharModal = () => { setModal({ aberto: false, editando: null }); setForm({ role: 'assist' }); setErro(''); };
@@ -673,6 +709,7 @@ function UsuariosTab({ onCount }: { onCount: (n: number) => void }) {
       if (modal.editando) {
         await api.patch(`/admin/usuarios/${modal.editando.id}`, {
           nome: form.nome, role: form.role, grupo_id: form.grupo_id || null,
+          matricula: form.matricula || null,
           ...(form.nova_senha ? { nova_senha: form.nova_senha } : {}),
         });
       } else {
@@ -706,6 +743,7 @@ function UsuariosTab({ onCount }: { onCount: (n: number) => void }) {
           <tr className="text-[9px] font-black uppercase text-slate-400 tracking-widest">
             <th className="text-left px-6 py-4">Usuário</th>
             <th className="text-left px-6 py-4">E-mail</th>
+            <th className="text-left px-6 py-4">Matrícula</th>
             <th className="text-center px-6 py-4">Cargo</th>
             <th className="text-center px-6 py-4">Grupo</th>
             <th className="text-right px-6 py-4">Ações</th>
@@ -721,6 +759,11 @@ function UsuariosTab({ onCount }: { onCount: (n: number) => void }) {
                 </div>
               </td>
               <td className="px-6 py-4 text-xs text-slate-500">{u.email}</td>
+              <td className="px-6 py-4">
+                {u.matricula
+                  ? <span className="font-mono text-[10px] bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-100 dark:border-purple-700 px-2 py-0.5 rounded-md">{u.matricula}</span>
+                  : <span className="text-slate-300 dark:text-slate-600 text-xs">–</span>}
+              </td>
               <td className="px-6 py-4 text-center">
                 <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase border ${u.role === 'admin' ? 'bg-purple-50 text-purple-600 border-purple-100' : 'bg-slate-50 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border-slate-100 dark:border-slate-600'}`}>
                   {roleLabel(u.role)}
@@ -737,14 +780,20 @@ function UsuariosTab({ onCount }: { onCount: (n: number) => void }) {
 
       {modal.aberto && (
         <Modal title={modal.editando ? 'Editar Usuário' : 'Novo Usuário'} onClose={fecharModal}>
-          <form onSubmit={handleSalvar} className="space-y-3">
+          <form onSubmit={handleSalvar} className="space-y-4">
             {erro && <ErroBanner msg={erro} />}
-            <FieldInput label="Nome *" value={form.nome ?? ''} onChange={v => setForm((p: any) => ({ ...p, nome: v }))} required />
+
+            {/* — Identificação — */}
+            <div className="flex items-center gap-2 mb-1">
+              <span className="bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full">Identificação</span>
+            </div>
+            <FieldInput label="Nome completo *" value={form.nome ?? ''} onChange={v => setForm((p: any) => ({ ...p, nome: v }))} required />
+
             {!modal.editando && (
               <>
                 <FieldInput label="E-mail *" type="email" value={form.email ?? ''} onChange={v => setForm((p: any) => ({ ...p, email: v }))} required />
                 <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400">Senha *</label>
+                  <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">Senha * <span className="normal-case font-normal text-slate-400">(mín. 8 caracteres)</span></label>
                   <div className="relative">
                     <input type={mostrarSenha ? 'text' : 'password'} value={form.password ?? ''}
                       onChange={e => setForm((p: any) => ({ ...p, password: e.target.value }))} required placeholder="Mínimo 8 caracteres"
@@ -756,32 +805,65 @@ function UsuariosTab({ onCount }: { onCount: (n: number) => void }) {
                 </div>
               </>
             )}
-            <FieldSelect label="Cargo *" value={form.role ?? 'assist'} onChange={v => setForm((p: any) => ({ ...p, role: v }))}>
-              {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-            </FieldSelect>
-            <FieldSelect label="Grupo / Perfil de Acesso" value={form.grupo_id ?? ''} onChange={v => setForm((p: any) => ({ ...p, grupo_id: v }))}>
-              <option value="">Sem grupo</option>
-              {grupos.map(g => <option key={g.id} value={g.id}>{g.nome}</option>)}
-            </FieldSelect>
+
+            {/* — Permissões — */}
+            <div className="flex items-center gap-2 mt-2 mb-1">
+              <span className="bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full">Permissões</span>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <FieldSelect label="Cargo *" value={form.role ?? 'assist'} onChange={v => setForm((p: any) => ({ ...p, role: v }))}>
+                {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+              </FieldSelect>
+              <FieldSelect label="Grupo / Perfil" value={form.grupo_id ?? ''} onChange={v => setForm((p: any) => ({ ...p, grupo_id: v }))}>
+                <option value="">Sem grupo</option>
+                {grupos.map(g => <option key={g.id} value={g.id}>{g.nome}</option>)}
+              </FieldSelect>
+            </div>
+
+            {/* — Matrícula — */}
+            <div className="flex items-center gap-2 mt-2 mb-1">
+              <span className="bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300 text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full">Matrícula</span>
+            </div>
+            <div className="relative">
+              <FieldInput
+                label={`Matrícula${form.role === 'admin' ? ' ★ (obrigatória para Admin)' : ' (opcional — usada para login)'}`}
+                value={form.matricula ?? ''}
+                onChange={v => setForm((p: any) => ({ ...p, matricula: v.toUpperCase() }))}
+                placeholder="Ex: ITP-FUNC-202601-001"
+              />
+              {form.matricula && (
+                <span className="absolute right-3 top-8 font-mono text-[10px] bg-violet-50 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-700 px-2 py-0.5 rounded-md">
+                  {form.matricula}
+                </span>
+              )}
+            </div>
+
+            {/* — Alterar Senha (edição) — */}
             {modal.editando && (
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  Nova Senha <span className="text-slate-400 normal-case">(deixe vazio para manter a atual)</span>
-                </label>
-                <div className="relative">
-                  <input type={mostrarSenha ? 'text' : 'password'} value={form.nova_senha ?? ''}
-                    onChange={e => setForm((p: any) => ({ ...p, nova_senha: e.target.value }))}
-                    placeholder="Mínimo 6 caracteres"
-                    className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-400 pr-10" />
-                  <button type="button" onClick={() => setMostrarSenha(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">
-                    {mostrarSenha ? <EyeOff size={14} /> : <Eye size={14} />}
-                  </button>
+              <>
+                <div className="flex items-center gap-2 mt-2 mb-1">
+                  <span className="bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full">Segurança</span>
                 </div>
-              </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    Nova Senha <span className="text-slate-400 normal-case font-normal">(deixe vazio para manter a atual)</span>
+                  </label>
+                  <div className="relative">
+                    <input type={mostrarSenha ? 'text' : 'password'} value={form.nova_senha ?? ''}
+                      onChange={e => setForm((p: any) => ({ ...p, nova_senha: e.target.value }))}
+                      placeholder="Mínimo 6 caracteres"
+                      className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-400 pr-10" />
+                    <button type="button" onClick={() => setMostrarSenha(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">
+                      {mostrarSenha ? <EyeOff size={14} /> : <Eye size={14} />}
+                    </button>
+                  </div>
+                </div>
+              </>
             )}
-            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/30 rounded-xl p-2.5">
-              <p className="text-[9px] text-blue-700 dark:text-blue-300 font-bold">
-                💡 <strong>Contas separadas:</strong> Para ter conta de Admin e conta de Professor, crie dois usuários com e-mails diferentes e cargos distintos. Ex: <em>nome@itp.org</em> (Admin) e <em>nome.prof@itp.org</em> (Professor).
+
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/30 rounded-xl p-2.5 mt-1">
+              <p className="text-[9px] text-blue-700 dark:text-blue-300">
+                💡 <strong>Contas separadas:</strong> Para admin e professor, crie dois usuários com e-mails diferentes. A matrícula pode ser usada como identificador de login no lugar do e-mail.
               </p>
             </div>
             <BtnSalvar salvando={salvando} editando={!!modal.editando} label={modal.editando ? 'Salvar Alterações' : 'Criar Usuário'} />

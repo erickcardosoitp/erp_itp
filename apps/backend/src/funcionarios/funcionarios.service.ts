@@ -17,9 +17,17 @@ export class FuncionariosService {
 
   async criar(dto: Partial<Funcionario>) {
     if (!dto.nome) throw new BadRequestException('Nome é obrigatório');
-    const funcionario = this.funcionarioRepo.create(dto);
+
+    // Gera matrícula única: ITP-FUNC-YYYYMM-NNN
+    const now = new Date();
+    const yyyymm = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const total = await this.funcionarioRepo.count();
+    const seq = String(total + 1).padStart(3, '0');
+    const matricula = `ITP-FUNC-${yyyymm}-${seq}`;
+
+    const funcionario = this.funcionarioRepo.create({ ...dto, matricula });
     const salvo = await this.funcionarioRepo.save(funcionario);
-    this.logger.log(`Funcionário criado: ${salvo.id} - ${salvo.nome}`);
+    this.logger.log(`Funcionário criado: ${salvo.id} - ${salvo.nome} | Matrícula: ${matricula}`);
     return salvo;
   }
 

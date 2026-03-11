@@ -17,8 +17,10 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ) {
     try {
-      const { email, password } = body;
-      const result = await this.authService.login(email, password);
+      const { email, matricula, password } = body;
+      // Aceita e-mail ou matrícula como identificador
+      const identifier = (matricula || email || '').toString();
+      const result = await this.authService.login(identifier, password);
 
       const isProd = process.env.NODE_ENV === 'production';
 

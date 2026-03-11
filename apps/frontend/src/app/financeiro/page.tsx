@@ -30,15 +30,15 @@ interface LookupItem { id: string; nome: string; ativo?: boolean; }
 
 // ─── Helpers de formatação ────────────────────────────────────────────────────
 
-function moeda(v?: number) {
+function moeda(v?: number | string) {
   if (v == null) return 'R$ 0,00';
-  return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  return Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
 function dataFmt(d?: string) {
   if (!d) return '–';
-  const dt = new Date(d);
-  return dt.toLocaleDateString('pt-BR');
+  const [year, month, day] = d.slice(0, 10).split('-');
+  return `${day}/${month}/${year}`;
 }
 
 // ─── Página Principal ─────────────────────────────────────────────────────────
@@ -133,8 +133,8 @@ export default function FinanceiroPage() {
   if (!isMounted) return <div className="min-h-screen bg-[#F8FAFC] dark:bg-[#131b2e]" />;
 
   // KPIs
-  const totalEntradas = lista.filter(m => m.tipo_movimentacao === 'Entrada').reduce((s, m) => s + (m.valor ?? 0), 0);
-  const totalSaidas = lista.filter(m => m.tipo_movimentacao === 'Saída').reduce((s, m) => s + (m.valor ?? 0), 0);
+  const totalEntradas = lista.filter(m => m.tipo_movimentacao === 'Entrada').reduce((s, m) => s + Number(m.valor ?? 0), 0);
+  const totalSaidas = lista.filter(m => m.tipo_movimentacao === 'Saída').reduce((s, m) => s + Number(m.valor ?? 0), 0);
   const saldo = totalEntradas - totalSaidas;
 
   const filtrados = lista.filter(m =>
@@ -330,7 +330,7 @@ export default function FinanceiroPage() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <FInput label="Competência" value={form.competencia ?? ''} onChange={v => setForm(p => ({ ...p, competencia: v }))} placeholder="Ex: Jun/2025" />
-                    <FInput label="Valor *" type="number" value={String(form.valor ?? '')} onChange={v => setForm(p => ({ ...p, valor: v ? Number(v) : undefined }))} placeholder="0.00" required />
+                    <FInput label="Valor *" type="number" step="0.01" value={String(form.valor ?? '')} onChange={v => setForm(p => ({ ...p, valor: v ? Number(v) : undefined }))} placeholder="0.00" required />
                   </div>
 
                   <FInput label="Descrição" value={form.descricao ?? ''} onChange={v => setForm(p => ({ ...p, descricao: v }))} />
@@ -391,14 +391,14 @@ export default function FinanceiroPage() {
 
 // ─── Sub-Componentes ──────────────────────────────────────────────────────────
 
-function FInput({ label, value, onChange, type = 'text', required, placeholder }: {
+function FInput({ label, value, onChange, type = 'text', required, placeholder, step }: {
   label: string; value: string; onChange: (v: string) => void;
-  type?: string; required?: boolean; placeholder?: string;
+  type?: string; required?: boolean; placeholder?: string; step?: string;
 }) {
   return (
     <div>
       <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">{label}</label>
-      <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} required={required}
+      <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} required={required} step={step}
         className="w-full border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-400 transition-shadow" />
     </div>
   );

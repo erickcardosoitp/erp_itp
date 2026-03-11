@@ -25,14 +25,17 @@ function LoginForm() {
     setIsLoading(true);
     setError('');
 
+    const isEmail = email.includes('@');
+
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001/api'}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include', 
-        body: JSON.stringify({ 
-          email: email.trim().toLowerCase(), 
-          password: password.trim() 
+        body: JSON.stringify({
+          // Envia como 'email' se parecer e-mail, como 'matricula' caso contrário
+          ...(isEmail ? { email: email.trim().toLowerCase() } : { matricula: email.trim().toUpperCase() }),
+          password: password.trim(),
         }),
       });
 
@@ -102,12 +105,12 @@ function LoginForm() {
 
             <form onSubmit={handleLogin} className="space-y-6">
               <div className="space-y-2 text-left">
-                <label className="text-[10px] font-black uppercase text-slate-400 ml-4 tracking-widest">Usuário Administrativo</label>
+                <label className="text-[10px] font-black uppercase text-slate-400 ml-4 tracking-widest">E-mail ou Matrícula</label>
                 <div className="relative group">
                   <User className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-purple-600 transition-colors" size={20} />
                   <input 
-                    type="email" 
-                    placeholder="exemplo@itp.org"
+                    type="text" 
+                    placeholder="exemplo@itp.org ou ITP-FUNC-202601-001"
                     className="w-full pl-14 pr-6 py-5 bg-slate-50 border-2 border-slate-50 rounded-[24px] outline-none focus:border-purple-600 focus:bg-white transition-all text-slate-900 font-bold"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}

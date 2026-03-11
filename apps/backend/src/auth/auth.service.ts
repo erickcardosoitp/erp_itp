@@ -55,29 +55,38 @@ export class AuthService {
   }
 
   /**
-   * LOGIN: Autentica e anexa dados de Hierarquia no JWT.
+   * LOGIN: Autentica com e-mail OU matrícula (ITP-...).
    * ✅ Corrigido para evitar o erro "argument name is invalid"
    */
-  async login(email: string, pass: string) {
-    // 1. Validação de Pré-voo (Impede que valores vazios cheguem ao bcrypt)
-    if (!email || !pass || email.trim() === '' || pass.trim() === '') {
-      throw new UnauthorizedException('E-mail e senha devem ser preenchidos.');
+  async login(identifier: string, pass: string) {
+    // 1. Validação de Pré-voo
+    if (!identifier || !pass || identifier.trim() === '' || pass.trim() === '') {
+      throw new UnauthorizedException('Identificador e senha devem ser preenchidos.');
     }
 
-    const usuario = await this.usuarioRepository.createQueryBuilder('user')
-      .addSelect('user.password') // Necessário para carregar a senha (excluída por padrão no TypeORM)
-      .leftJoinAndSelect('user.grupo', 'grupo')
-      .where('LOWER(user.email) = LOWER(:email)', { email: email.trim() })
-      .getOne();
+    const id = identifier.trim();
+    const isEmail = id.includes('@');
+
+    const qb = this.usuarioRepository.createQueryBuilder('user')
+      .addSelect('user.password')
+      .leftJoinAndSelect('user.grupo', 'grupo');
+
+    if (isEmail) {
+      qb.where('LOWER(user.email) = LOWER(:email)', { email: id });
+    } else {
+      qb.where('user.matricula = :matricula', { matricula: id });
+    }
+
+    const usuario = await qb.getOne();
 
     if (!usuario) {
-      this.logger.warn(`Tentativa de login falhou: Usuário ${email} não existe.`);
+      this.logger.warn(`Tentativa de login falhou: usuário '${id}' não encontrado.`);
       throw new UnauthorizedException('Credenciais incorretas.');
     }
 
     // 2. Verificação de Integridade do Hash
     if (!usuario.password) {
-      this.logger.error(`❌ Usuário ${email} está sem senha definida no banco de dados!`);
+      this.logger.error(`❌ Usuário '${id}' está sem senha definida no banco de dados!`);
       throw new UnauthorizedException('Problema na conta de acesso. Contate o administrador.');
     }
 

@@ -83,6 +83,9 @@ export class Funcionario {
   @Column({ nullable: true, default: true })
   ativo: boolean;
 
+  @Column({ type: 'text', nullable: true, unique: true })
+  matricula: string;
+
   @CreateDateColumn()
   created_at: Date;
 

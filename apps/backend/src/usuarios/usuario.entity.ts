@@ -30,6 +30,10 @@ export class Usuario {
   @Column({ name: 'foto_url', nullable: true })
   fotoUrl: string;
 
+  // Matrícula do funcionário vinculado — usada também como identificador de login
+  @Column({ nullable: true, unique: true })
+  matricula: string;
+
   // ✅ Relação ManyToOne com Grupo
   @ManyToOne(() => Grupo, (grupo) => grupo.usuarios, { 
     nullable: true, 

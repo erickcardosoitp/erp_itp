@@ -1,11 +1,15 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, Logger } from '@nestjs/common';
 import { UsersService } from './users.service';
+import { EmailService } from '../../email.service';
 
 @Controller('admin/usuarios')
 export class UsersController {
   private readonly logger = new Logger(UsersController.name);
 
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly emailService: EmailService,
+  ) {}
 
   @Get()
   listar() {
@@ -14,9 +18,18 @@ export class UsersController {
   }
 
   @Post()
-  criar(@Body() body: any) {
+  async criar(@Body() body: any) {
     this.logger.log(`Admin: criando usuário ${body.email}`);
-    return this.usersService.criar(body);
+    const usuario = await this.usersService.criar(body);
+    // Envia e-mail com a matrícula se o funcionário tiver e-mail e matrícula
+    if (usuario.matricula && body.email) {
+      try {
+        await this.emailService.enviarMatriculaFuncionario(body.email, body.nome || '', usuario.matricula);
+      } catch (err: any) {
+        this.logger.warn(`Não foi possível enviar e-mail de matrícula: ${err.message}`);
+      }
+    }
+    return usuario;
   }
 
   @Patch(':id')

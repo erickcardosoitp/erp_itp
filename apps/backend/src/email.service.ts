@@ -276,4 +276,87 @@ export class EmailService implements OnModuleInit {
       this.logger.warn('─────────────────────────────────────────────────────');
     }
   }
+
+  /**
+   * MATRÍCULA DE FUNCIONÁRIO: Envia a matrícula e dados de acesso por e-mail.
+   */
+  async enviarMatriculaFuncionario(email: string, nome: string, matricula: string): Promise<void> {
+    if (!this.transporter) {
+      this.logger.warn(`📧 [SEM-SMTP] Matrícula de funcionário para ${nome} <${email}>`);
+      this.logger.warn(`🪪 Matrícula: ${matricula}`);
+      return;
+    }
+
+    const primeiroNome = nome.split(' ')[0];
+    const html = `
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Matrícula ITP – Instituto Tia Pretinha</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f6f9;font-family:Arial,sans-serif">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f9;padding:40px 20px">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,0.08)">
+        <tr>
+          <td style="background:#1e3a5f;padding:32px 40px;text-align:center">
+            <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:700">Instituto Tia Pretinha</h1>
+            <p style="margin:6px 0 0;color:#a8c4e0;font-size:14px">CNPJ nº 11.759.851/0001-39</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:40px">
+            <p style="margin:0 0 16px;color:#374151;font-size:16px">Olá, <strong>${primeiroNome}</strong>!</p>
+            <p style="margin:0 0 24px;color:#6b7280;font-size:15px;line-height:1.6">
+              Bem-vindo(a) à equipe do Instituto Tia Pretinha! 🎉<br><br>
+              Sua conta de acesso ao sistema foi criada. Abaixo estão suas informações de acesso:
+            </p>
+            <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px">
+              <tr>
+                <td style="background:#f0fdf4;border:2px solid #86efac;border-radius:12px;padding:24px;text-align:center">
+                  <p style="margin:0 0 8px;color:#15803d;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:1px">Sua Matrícula</p>
+                  <p style="margin:0;color:#14532d;font-size:28px;font-weight:900;letter-spacing:3px;font-family:monospace">${matricula}</p>
+                </td>
+              </tr>
+            </table>
+            <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px">
+              <tr>
+                <td style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:16px">
+                  <p style="margin:0;color:#1e40af;font-size:13px;line-height:1.8">
+                    ℹ️ Use sua <strong>matrícula</strong> ou <strong>e-mail</strong> para entrar no sistema.<br>
+                    🔒 Sua senha inicial foi definida pelo administrador — altere-a no primeiro acesso.
+                  </p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:24px 40px;text-align:center">
+            <p style="margin:0;color:#9ca3af;font-size:12px">
+              Instituto Tia Pretinha — Sistema Interno de Gestão
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`.trim();
+
+    const info = await this.transporter.sendMail({
+      from: `"Instituto Tia Pretinha" <${this.config.get<string>('SMTP_FROM_ADDRESS') || this.config.get<string>('SMTP_USER')}>`,
+      to: email,
+      subject: `🪪 Sua matrícula ITP: ${matricula}`,
+      html,
+    });
+
+    this.logger.log(`📧 E-mail de matrícula enviado para ${email} | Matrícula: ${matricula}`);
+
+    if (this.isEthereal) {
+      this.logger.warn(`👁️  Preview: ${nodemailer.getTestMessageUrl(info)}`);
+    }
+  }
 }

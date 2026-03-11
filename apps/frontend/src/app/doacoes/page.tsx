@@ -28,14 +28,15 @@ interface Movimentacao {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function moeda(v?: number) {
+function moeda(v?: number | string) {
   if (v == null) return 'R$ 0,00';
-  return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  return Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
 function dataFmt(d?: string) {
   if (!d) return '–';
-  return new Date(d).toLocaleDateString('pt-BR');
+  const [year, month, day] = d.slice(0, 10).split('-');
+  return `${day}/${month}/${year}`;
 }
 
 // ─── Página Principal ─────────────────────────────────────────────────────────
@@ -62,9 +63,9 @@ export default function DoacoesPage() {
   if (!isMounted) return <div className="min-h-screen bg-[#F8FAFC] dark:bg-[#131b2e]" />;
 
   // KPIs
-  const totalDoacoes = lista.reduce((s, m) => s + (m.valor ?? 0), 0);
-  const totalConfirmadas = lista.filter(m => m.status === 'Pago' || m.status === 'Confirmado').reduce((s, m) => s + (m.valor ?? 0), 0);
-  const totalPendentes = lista.filter(m => m.status === 'Pendente').reduce((s, m) => s + (m.valor ?? 0), 0);
+  const totalDoacoes = lista.reduce((s, m) => s + Number(m.valor ?? 0), 0);
+  const totalConfirmadas = lista.filter(m => m.status === 'Pago' || m.status === 'Confirmado').reduce((s, m) => s + Number(m.valor ?? 0), 0);
+  const totalPendentes = lista.filter(m => m.status === 'Pendente').reduce((s, m) => s + Number(m.valor ?? 0), 0);
 
   const filtrados = lista.filter(m =>
     m.nome.toLowerCase().includes(busca.toLowerCase()) ||
