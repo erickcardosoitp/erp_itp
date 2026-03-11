@@ -79,7 +79,9 @@ import { CadastroModule } from './cadastro/cadastro.module';
           // Para conexões não-locais (produção), apenas habilita o SSL.
           // A modalidade específica ('require', 'verify-full') deve ser controlada
           // pelo parâmetro 'sslmode' na sua variável de ambiente DATABASE_URL.
-          ssl: !(dbUrl.includes('localhost') || dbUrl.includes('127.0.0.1')),
+          ssl: (dbUrl.includes('localhost') || dbUrl.includes('127.0.0.1'))
+            ? false
+            : { rejectUnauthorized: false },
         };
       },
     }),
