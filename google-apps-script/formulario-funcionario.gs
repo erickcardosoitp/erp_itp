@@ -88,7 +88,7 @@ function dataParaISO_(value) {
 //  Gatilho principal — executado ao enviar o formulário
 // ─────────────────────────────────────────────────────────────────────
 
-var API_URL_FUNCIONARIO = 'https://api.itp.institutotiapretinha.org/api/academico/professores/webhook';
+var API_URL_FUNCIONARIO = 'https://api.itp.institutotiapretinha.org/api/funcionarios/webhook';
 
 function onFormSubmit(e) {
   try {

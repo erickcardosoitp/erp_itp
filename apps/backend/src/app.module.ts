@@ -38,6 +38,7 @@ import { GruposModule } from './grupos/grupos.module';
 import { UsersModule } from './modules/users/users.module'; 
 import { AcademicoModule } from './academico/academico.module';
 import { CadastroModule } from './cadastro/cadastro.module';
+import { FuncionariosModule } from './funcionarios/funcionarios.module';
 
 @Module({
   imports: [
@@ -97,6 +98,7 @@ import { CadastroModule } from './cadastro/cadastro.module';
     UsersModule,
     AcademicoModule,
     CadastroModule,
+    FuncionariosModule,
   ],
   controllers: [
     AppController, 
