@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Funcionario } from './entities/funcionario.entity';
+import { Funcionario } from '../academico/entities/funcionario.entity';
 
 @Injectable()
 export class FuncionariosService {
