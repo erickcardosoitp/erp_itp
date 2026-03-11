@@ -214,11 +214,17 @@ export class AcademicoService {
   async listarAlunos(filtros: any) {
     this.logger.log(`Listando alunos filtros=${JSON.stringify(filtros)}`);
     let qb = this.alunoRepo.createQueryBuilder('a').where('a.ativo = true');
-    if (filtros.nome)   qb = qb.andWhere('LOWER(a.nome_completo) LIKE :nome', { nome: `%${filtros.nome.toLowerCase()}%` });
-    if (filtros.cpf)    qb = qb.andWhere('a.cpf LIKE :cpf', { cpf: `%${filtros.cpf.replace(/\D/g, '')}%` });
-    if (filtros.cidade) qb = qb.andWhere('a.cidade = :cidade', { cidade: filtros.cidade });
-    if (filtros.turno)  qb = qb.andWhere('a.turno_escolar = :turno', { turno: filtros.turno });
-    if (filtros.curso)  qb = qb.andWhere('LOWER(a.cursos_matriculados) LIKE :curso', { curso: `%${filtros.curso.toLowerCase()}%` });
+    if (filtros.nome)     qb = qb.andWhere('LOWER(a.nome_completo) LIKE :nome', { nome: `%${filtros.nome.toLowerCase()}%` });
+    if (filtros.cpf)      qb = qb.andWhere('a.cpf LIKE :cpf', { cpf: `%${filtros.cpf.replace(/\D/g, '')}%` });
+    if (filtros.cidade)   qb = qb.andWhere('a.cidade = :cidade', { cidade: filtros.cidade });
+    if (filtros.turno)    qb = qb.andWhere('a.turno_escolar = :turno', { turno: filtros.turno });
+    if (filtros.curso)    qb = qb.andWhere('LOWER(a.cursos_matriculados) LIKE :curso', { curso: `%${filtros.curso.toLowerCase()}%` });
+    if (filtros.turma_id) {
+      qb = qb
+        .innerJoin('turma_alunos', 'ta', 'ta.aluno_id = a.id')
+        .andWhere('ta.turma_id = :turmaId', { turmaId: filtros.turma_id })
+        .andWhere('ta.status = :taStatus', { taStatus: 'ativo' });
+    }
     return qb.orderBy('a.nome_completo', 'ASC').getMany();
   }
 
@@ -360,5 +366,48 @@ export class AcademicoService {
   async deletarRegistroDiario(id: string) {
     this.logger.warn(`Deletando registro diário id=${id}`);
     await this.diarioRepo.delete(id);
+  }
+
+  // ── PRESENÇA ──────────────────────────────────────────────────────────────
+
+  listarPresenca(filtros: { turma_id?: string; data?: string }) {
+    this.logger.log(`Listando presença filtros=${JSON.stringify(filtros)}`);
+    let qb = this.diarioRepo
+      .createQueryBuilder('d')
+      .where('d.tipo = :tipo', { tipo: 'Presença' })
+      .orderBy('d.data', 'DESC')
+      .addOrderBy('d.created_at', 'DESC');
+    if (filtros.turma_id) qb = qb.andWhere('d.turma_id = :t', { t: filtros.turma_id });
+    if (filtros.data)     qb = qb.andWhere('d.data = :d', { d: filtros.data });
+    return qb.getMany();
+  }
+
+  async registrarPresenca(
+    dto: { turma_id: string; data: string; registros: { aluno_id: string; presente: boolean }[] },
+    usuarioId?: string,
+    usuarioNome?: string,
+  ) {
+    this.logger.log(`Registrando presença turma=${dto.turma_id} data=${dto.data} registros=${dto.registros?.length}`);
+    if (!dto.turma_id)        throw new BadRequestException('turma_id é obrigatório');
+    if (!dto.data)            throw new BadRequestException('data é obrigatória');
+    if (!dto.registros?.length) throw new BadRequestException('Registros de presença são obrigatórios');
+
+    const turma = await this.turmaRepo.findOneBy({ id: dto.turma_id });
+    if (!turma) throw new NotFoundException('Turma não encontrada');
+
+    const entries = dto.registros.map(r =>
+      this.diarioRepo.create({
+        tipo:         'Presença',
+        aluno_id:     r.aluno_id,
+        turma_id:     dto.turma_id,
+        data:         dto.data,
+        descricao:    r.presente ? 'Presente' : 'Falta',
+        usuario_id:   usuarioId,
+        usuario_nome: usuarioNome,
+      })
+    );
+    await this.diarioRepo.save(entries);
+    this.logger.log(`Presença registrada: ${entries.length} alunos`);
+    return { registrados: entries.length };
   }
 }

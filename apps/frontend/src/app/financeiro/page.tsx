@@ -158,10 +158,6 @@ export default function FinanceiroPage() {
     <div className="min-h-screen bg-[#F8FAFC] dark:bg-[#131b2e] p-4 md:p-8 font-sans antialiased text-slate-900 dark:text-slate-100">
       <div className="max-w-[1600px] mx-auto">
 
-        <div className="fixed -right-12 top-10 rotate-45 bg-yellow-400 text-purple-950 px-12 py-1 font-black text-[10px] uppercase tracking-[0.3em] shadow-xl z-50 border-b-2 border-yellow-600 select-none">
-          Ambiente Protótipo
-        </div>
-
         {/* HEADER */}
         <header className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-6">
           <div>

@@ -161,4 +161,13 @@ export class AcademicoController {
 
   @Delete('diario/:id')
   deletarDiario(@Param('id') id: string) { return this.svc.deletarRegistroDiario(id); }
+
+  // ── PRESENÇA ──────────────────────────────────────────────────────────────
+  @Get('presenca')
+  getPresenca(@Query() q: any) { return this.svc.listarPresenca(q); }
+
+  @Post('presenca')
+  registrarPresenca(@Body() dto: any, @Req() req: any) {
+    return this.svc.registrarPresenca(dto, req.user?.userId, req.user?.email);
+  }
 }

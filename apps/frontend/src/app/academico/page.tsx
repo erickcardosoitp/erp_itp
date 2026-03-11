@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   GraduationCap, Users, BookOpen, LayoutGrid, History,
   Plus, Trash2, Search, X, ClipboardList,
-  Edit3, Coffee, UserPlus, RefreshCw,
+  Edit3, Coffee, UserPlus, RefreshCw, ClipboardCheck, CheckSquare, Square,
 } from 'lucide-react';
 import api from '@/services/api';
 import { useAuth } from '@/context/auth-context';
@@ -127,6 +127,7 @@ function GradeTab({ podeEditar, turmas }: { podeEditar: boolean; turmas: Turma[]
   const [showModal, setShowModal] = useState(false);
   const [dragCard, setDragCard] = useState<GradeCard | null>(null);
   const [form, setForm] = useState<Partial<GradeCard>>({ cor: '#7c3aed' });
+  const [erroGrade, setErroGrade] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try { const r = await api.get('/academico/grade'); setGrade(r.data); } catch {}
@@ -148,6 +149,8 @@ function GradeTab({ podeEditar, turmas }: { podeEditar: boolean; turmas: Turma[]
 
   const handleCriar = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErroGrade(null);
+    if (!form.turma_id) { setErroGrade('Selecione uma turma para continuar.'); return; }
     try {
       await api.post('/academico/grade', {
         ...form,
@@ -155,7 +158,10 @@ function GradeTab({ podeEditar, turmas }: { podeEditar: boolean; turmas: Turma[]
         horario_fim:    form.horario_fim    ? form.horario_fim    + ':00' : undefined,
       });
       setShowModal(false); setForm({ cor: '#7c3aed' }); await load();
-    } catch {}
+    } catch (e: any) {
+      const msg = e?.response?.data?.message || e?.message || 'Erro ao salvar horário.';
+      setErroGrade(Array.isArray(msg) ? msg.join(', ') : msg);
+    }
   };
 
   const handleDeletar = async (id: string) => {
@@ -245,8 +251,11 @@ function GradeTab({ podeEditar, turmas }: { podeEditar: boolean; turmas: Turma[]
       )}
 
       {showModal && (
-        <Modal title="Adicionar Horário na Grade" onClose={() => { setShowModal(false); setForm({ cor: '#7c3aed' }); }}>
+        <Modal title="Adicionar Horário na Grade" onClose={() => { setShowModal(false); setForm({ cor: '#7c3aed' }); setErroGrade(null); }}>
           <form onSubmit={handleCriar} className="space-y-3">
+            <FieldSelect label="Turma *" value={form.turma_id ?? ''}
+              onChange={v => setForm(p => ({ ...p, turma_id: v }))}
+              options={turmas.map(t => ({ value: t.id, label: t.nome }))} required />
             <FieldSelect label="Dia da Semana" value={String(form.dia_semana ?? '')}
               onChange={v => setForm(p => ({ ...p, dia_semana: Number(v) }))}
               options={DIAS_SEMANA.map((d, i) => ({ value: String(i+1), label: d }))} required />
@@ -258,13 +267,6 @@ function GradeTab({ podeEditar, turmas }: { podeEditar: boolean; turmas: Turma[]
                 onChange={v => setForm(p => ({ ...p, horario_fim: v }))}
                 options={HORARIOS.filter(h => h.value).map(h => ({ value: h.value!, label: h.label }))} required />
             </div>
-            <FieldInput label="Nome do Curso" value={form.nome_curso} onChange={v => setForm(p => ({ ...p, nome_curso: v }))} required />
-            <FieldInput label="Nome do Professor" value={form.nome_professor} onChange={v => setForm(p => ({ ...p, nome_professor: v }))} />
-            {turmas.length > 0 && (
-              <FieldSelect label="Turma (opcional)" value={form.turma_id ?? ''}
-                onChange={v => setForm(p => ({ ...p, turma_id: v }))}
-                options={turmas.map(t => ({ value: t.id, label: t.nome }))} />
-            )}
             <FieldInput label="Sala (opcional)" value={form.sala} onChange={v => setForm(p => ({ ...p, sala: v }))} />
             <div className="space-y-1">
               <label className="text-[10px] font-black uppercase text-slate-500">Cor do Card</label>
@@ -276,6 +278,11 @@ function GradeTab({ podeEditar, turmas }: { podeEditar: boolean; turmas: Turma[]
                 ))}
               </div>
             </div>
+            {erroGrade && (
+              <div className="bg-red-50 border border-red-200 text-red-700 text-[11px] font-bold rounded-xl px-4 py-2.5 uppercase tracking-wide">
+                ⚠ {erroGrade}
+              </div>
+            )}
             <button type="submit" className="w-full bg-purple-600 text-white py-2.5 rounded-xl font-black text-xs uppercase hover:bg-purple-700">
               Confirmar
             </button>
@@ -288,26 +295,32 @@ function GradeTab({ podeEditar, turmas }: { podeEditar: boolean; turmas: Turma[]
 
 // ─── Tab: Alunos ──────────────────────────────────────────────────────────────
 
-function AlunosTab() {
+function AlunosTab({ cursos, turmas }: { cursos: Curso[]; turmas: Turma[] }) {
   const [alunos, setAlunos] = useState<Aluno[]>([]);
   const [loading, setLoading] = useState(true);
   const [filtroNome, setFiltroNome] = useState('');
-  const [filtroCurso, setFiltroCurso] = useState('');
-  const [filtroTurno, setFiltroTurno] = useState('');
+  const [filtroCursoNome, setFiltroCursoNome] = useState('');
+  const [filtroTurmaId, setFiltroTurmaId] = useState('');
   const [fichaAluno, setFichaAluno] = useState<any>(null);
+
+  const turmasDoCurso = turmas.filter(t => {
+    if (!filtroCursoNome) return false;
+    const curso = cursos.find(c => c.nome === filtroCursoNome);
+    return curso ? t.curso_id === curso.id : false;
+  });
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const params: Record<string, string> = {};
-      if (filtroNome)  params.nome  = filtroNome;
-      if (filtroCurso) params.curso = filtroCurso;
-      if (filtroTurno) params.turno = filtroTurno;
+      if (filtroNome)      params.nome     = filtroNome;
+      if (filtroCursoNome) params.curso    = filtroCursoNome;
+      if (filtroTurmaId)   params.turma_id = filtroTurmaId;
       const r = await api.get('/academico/alunos', { params });
       setAlunos(r.data);
     } catch {}
     setLoading(false);
-  }, [filtroNome, filtroCurso, filtroTurno]);
+  }, [filtroNome, filtroCursoNome, filtroTurmaId]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -328,18 +341,23 @@ function AlunosTab() {
         </div>
         <div className="min-w-[160px]">
           <label className="text-[9px] font-black uppercase text-slate-400 mb-1 block">Curso</label>
-          <input value={filtroCurso} onChange={e => setFiltroCurso(e.target.value)} placeholder="Ex: Ballet"
-            className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-400" />
-        </div>
-        <div className="min-w-[140px]">
-          <label className="text-[9px] font-black uppercase text-slate-400 mb-1 block">Turno</label>
-          <select value={filtroTurno} onChange={e => setFiltroTurno(e.target.value)}
+          <select value={filtroCursoNome} onChange={e => { setFiltroCursoNome(e.target.value); setFiltroTurmaId(''); }}
             className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white">
-            <option value="">Todos</option>
-            <option>Manhã</option><option>Tarde</option><option>Noite</option>
+            <option value="">Todos os cursos</option>
+            {cursos.map(c => <option key={c.id} value={c.nome}>{c.nome}</option>)}
           </select>
         </div>
-        <button onClick={() => { setFiltroNome(''); setFiltroCurso(''); setFiltroTurno(''); }}
+        {filtroCursoNome && turmasDoCurso.length > 0 && (
+          <div className="min-w-[160px]">
+            <label className="text-[9px] font-black uppercase text-slate-400 mb-1 block">Turma</label>
+            <select value={filtroTurmaId} onChange={e => setFiltroTurmaId(e.target.value)}
+              className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white">
+              <option value="">Todas as turmas</option>
+              {turmasDoCurso.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
+            </select>
+          </div>
+        )}
+        <button onClick={() => { setFiltroNome(''); setFiltroCursoNome(''); setFiltroTurmaId(''); }}
           className="text-[10px] font-black uppercase text-red-400 hover:text-red-600 flex items-center gap-1">
           <X size={11}/> Limpar
         </button>
@@ -891,6 +909,185 @@ function DiarioTab({ turmas, alunos }: { turmas: Turma[]; alunos: Aluno[] }) {
   );
 }
 
+// ─── Tab: Presença ───────────────────────────────────────────────────────────
+
+function PresencaTab({ turmas, podeEditar }: { turmas: Turma[]; podeEditar: boolean }) {
+  const [turmaId, setTurmaId] = useState('');
+  const [data, setData] = useState(new Date().toISOString().slice(0, 10));
+  const [alunos, setAlunos] = useState<Aluno[]>([]);
+  const [presenca, setPresenca] = useState<Record<string, boolean>>({});
+  const [carregando, setCarregando] = useState(false);
+  const [salvando, setSalvando] = useState(false);
+  const [sucesso, setSucesso] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const [jaRegistrado, setJaRegistrado] = useState(false);
+
+  const carregarAlunos = useCallback(async () => {
+    if (!turmaId) return;
+    setCarregando(true); setSucesso(false); setErro(null);
+    try {
+      const [ra, rp] = await Promise.all([
+        api.get('/academico/alunos', { params: { turma_id: turmaId } }),
+        api.get('/academico/presenca', { params: { turma_id: turmaId, data } }),
+      ]);
+      setAlunos(ra.data);
+      const inicial: Record<string, boolean> = {};
+      ra.data.forEach((a: Aluno) => { inicial[a.id] = true; });
+      if (rp.data?.length > 0) {
+        setJaRegistrado(true);
+        rp.data.forEach((r: any) => {
+          inicial[r.aluno_id] = r.descricao === 'Presente';
+        });
+      } else {
+        setJaRegistrado(false);
+      }
+      setPresenca(inicial);
+    } catch { setErro('Erro ao carregar alunos da turma.'); }
+    setCarregando(false);
+  }, [turmaId, data]);
+
+  const toggleTodos = (valor: boolean) => {
+    setPresenca(Object.fromEntries(alunos.map(a => [a.id, valor])));
+  };
+
+  const salvar = async () => {
+    if (!turmaId || alunos.length === 0) return;
+    setSalvando(true); setErro(null);
+    try {
+      await api.post('/academico/presenca', {
+        turma_id: turmaId,
+        data,
+        registros: alunos.map(a => ({ aluno_id: a.id, presente: presenca[a.id] ?? true })),
+      });
+      setSucesso(true); setJaRegistrado(true);
+    } catch (e: any) {
+      const msg = e?.response?.data?.message || e?.message || 'Erro ao salvar presença.';
+      setErro(Array.isArray(msg) ? msg.join(', ') : msg);
+    }
+    setSalvando(false);
+  };
+
+  const presentes  = alunos.filter(a => presenca[a.id]).length;
+  const ausentes   = alunos.length - presentes;
+  const turmaSel   = turmas.find(t => t.id === turmaId);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-3 items-end bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
+        <div className="flex-1 min-w-[200px]">
+          <label className="text-[9px] font-black uppercase text-slate-400 mb-1 block">Turma</label>
+          <select value={turmaId} onChange={e => { setTurmaId(e.target.value); setAlunos([]); setPresenca({}); setSucesso(false); }}
+            className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white">
+            <option value="">Selecione uma turma...</option>
+            {turmas.map(t => <option key={t.id} value={t.id}>{t.nome}{t.turno ? ` (${t.turno})` : ''}</option>)}
+          </select>
+        </div>
+        <div className="min-w-[150px]">
+          <label className="text-[9px] font-black uppercase text-slate-400 mb-1 block">Data</label>
+          <input type="date" value={data} onChange={e => { setData(e.target.value); setAlunos([]); setPresenca({}); setSucesso(false); }}
+            className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-400" />
+        </div>
+        <button onClick={carregarAlunos} disabled={!turmaId || carregando}
+          className="flex items-center gap-2 bg-purple-600 text-white px-5 py-2 rounded-xl font-black text-[10px] uppercase hover:bg-purple-700 disabled:opacity-50 transition-colors">
+          <ClipboardCheck size={13}/> {carregando ? 'Carregando...' : 'Carregar Alunos'}
+        </button>
+      </div>
+
+      {erro && (
+        <div className="bg-red-50 border border-red-200 text-red-700 text-[11px] font-bold rounded-xl px-4 py-3 uppercase tracking-wide">
+          ⚠ {erro}
+        </div>
+      )}
+
+      {alunos.length > 0 && (
+        <>
+          {jaRegistrado && !sucesso && (
+            <div className="bg-amber-50 border border-amber-200 text-amber-700 text-[11px] font-bold rounded-xl px-4 py-2.5 uppercase tracking-wide">
+              ⚠ Presença já registrada para esta turma/data. Salvar irá adicionar novos registros.
+            </div>
+          )}
+          {sucesso && (
+            <div className="bg-green-50 border border-green-200 text-green-700 text-[11px] font-bold rounded-xl px-4 py-2.5 uppercase tracking-wide">
+              ✓ Presença registrada com sucesso! ({presentes} presentes · {ausentes} ausentes)
+            </div>
+          )}
+
+          <div className="bg-white rounded-3xl border border-slate-100 shadow overflow-hidden">
+            <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 border-b border-slate-100 bg-slate-50/50">
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] font-black uppercase text-slate-500">{turmaSel?.nome}</span>
+                <span className="bg-purple-100 text-purple-700 text-[9px] font-black px-2 py-0.5 rounded-full uppercase">{alunos.length} alunos</span>
+                <span className="bg-green-100 text-green-700 text-[9px] font-black px-2 py-0.5 rounded-full uppercase">{presentes} pres.</span>
+                <span className="bg-red-100 text-red-700 text-[9px] font-black px-2 py-0.5 rounded-full uppercase">{ausentes} aus.</span>
+              </div>
+              {podeEditar && (
+                <div className="flex gap-2">
+                  <button onClick={() => toggleTodos(true)}
+                    className="flex items-center gap-1 text-[9px] font-black uppercase text-green-600 hover:text-green-800 border border-green-200 hover:border-green-400 px-2.5 py-1 rounded-lg transition-colors">
+                    <CheckSquare size={11}/> Todos Presentes
+                  </button>
+                  <button onClick={() => toggleTodos(false)}
+                    className="flex items-center gap-1 text-[9px] font-black uppercase text-red-500 hover:text-red-700 border border-red-200 hover:border-red-400 px-2.5 py-1 rounded-lg transition-colors">
+                    <Square size={11}/> Todos Ausentes
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="divide-y divide-slate-50">
+              {alunos.map((a, i) => (
+                <div key={a.id} className={`flex items-center gap-4 px-5 py-3 hover:bg-purple-50/30 transition-colors ${i % 2 === 0 ? '' : 'bg-slate-50/20'}`}>
+                  <button
+                    onClick={() => podeEditar && setPresenca(p => ({ ...p, [a.id]: !p[a.id] }))}
+                    className={`shrink-0 w-8 h-8 rounded-xl border-2 flex items-center justify-center transition-all ${
+                      podeEditar ? 'cursor-pointer' : 'cursor-default'
+                    } ${presenca[a.id]
+                      ? 'bg-green-500 border-green-500 text-white'
+                      : 'bg-white border-slate-300 text-transparent'
+                    }`}>
+                    <CheckSquare size={14}/>
+                  </button>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-sm text-slate-800 truncate">{a.nome_completo}</div>
+                    <div className="text-[9px] text-slate-400">{a.numero_matricula || a.cpf || a.celular || '–'}</div>
+                  </div>
+                  <span className={`shrink-0 text-[9px] font-black uppercase px-2.5 py-1 rounded-full ${
+                    presenca[a.id] ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
+                  }`}>
+                    {presenca[a.id] ? 'Presente' : 'Ausente'}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {podeEditar && (
+              <div className="px-5 py-4 border-t border-slate-100 flex justify-end">
+                <button onClick={salvar} disabled={salvando}
+                  className="flex items-center gap-2 bg-purple-600 text-white px-8 py-2.5 rounded-xl font-black text-xs uppercase hover:bg-purple-700 disabled:opacity-50 transition-colors">
+                  <ClipboardCheck size={14}/> {salvando ? 'Salvando...' : 'Salvar Presença'}
+                </button>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {alunos.length === 0 && !carregando && turmaId && (
+        <div className="py-16 text-center text-sm text-slate-400">
+          Nenhum aluno ativo encontrado nesta turma.
+        </div>
+      )}
+
+      {!turmaId && (
+        <div className="py-16 text-center">
+          <ClipboardCheck size={40} className="mx-auto mb-3 text-slate-200" />
+          <p className="text-sm text-slate-400 font-bold">Selecione uma turma e clique em Carregar Alunos</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Página principal ─────────────────────────────────────────────────────────
 
 export default function AcademicoPage() {
@@ -930,11 +1127,12 @@ export default function AcademicoPage() {
   if (!isMounted) return null;
 
   const TABS = [
-    { id: 'grade',  label: 'Grade',  Icon: LayoutGrid },
-    { id: 'alunos', label: 'Alunos', Icon: Users },
-    { id: 'cursos', label: 'Cursos', Icon: BookOpen },
-    { id: 'turmas', label: 'Turmas', Icon: ClipboardList },
-    { id: 'diario', label: 'Diário', Icon: History },
+    { id: 'grade',    label: 'Grade',    Icon: LayoutGrid },
+    { id: 'alunos',   label: 'Alunos',   Icon: Users },
+    { id: 'presenca', label: 'Presença', Icon: ClipboardCheck },
+    { id: 'cursos',   label: 'Cursos',   Icon: BookOpen },
+    { id: 'turmas',   label: 'Turmas',   Icon: ClipboardList },
+    { id: 'diario',   label: 'Diário',   Icon: History },
   ];
 
   return (
@@ -969,11 +1167,12 @@ export default function AcademicoPage() {
           </div>
         </header>
         <main>
-          {activeTab === 'grade'  && <GradeTab podeEditar={podeEditar} turmas={turmas} />}
-          {activeTab === 'alunos' && <AlunosTab />}
-          {activeTab === 'cursos' && <CursosTab />}
-          {activeTab === 'turmas' && <TurmasTab cursos={cursos} professores={professores} alunos={alunos} />}
-          {activeTab === 'diario' && <DiarioTab turmas={turmas} alunos={alunos} />}
+          {activeTab === 'grade'    && <GradeTab podeEditar={podeEditar} turmas={turmas} />}
+          {activeTab === 'alunos'   && <AlunosTab cursos={cursos} turmas={turmas} />}
+          {activeTab === 'presenca' && <PresencaTab turmas={turmas} podeEditar={podeEditar} />}
+          {activeTab === 'cursos'   && <CursosTab />}
+          {activeTab === 'turmas'   && <TurmasTab cursos={cursos} professores={professores} alunos={alunos} />}
+          {activeTab === 'diario'   && <DiarioTab turmas={turmas} alunos={alunos} />}
         </main>
       </div>
     </div>
