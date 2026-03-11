@@ -1,6 +1,6 @@
 import { 
   Controller, Patch, UseInterceptors, UploadedFile, 
-  Body, HttpCode, HttpStatus, Req 
+  Body, HttpCode, HttpStatus, Req, Get
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
@@ -10,13 +10,20 @@ import { AuthService } from '../auth/auth.service';
 @Controller('usuarios')
 export class UsuariosController {
   constructor(private readonly authService: AuthService) {}
+
+  @Get('perfil')
+  @HttpCode(HttpStatus.OK)
+  async getProfile(@Req() req: any) {
+    // Busca o usuário completo no banco (com nome e fotoUrl) usando o email do JWT
+    return this.authService.getProfile(req.user.email);
+  }
   
   @Patch('perfil')
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(FileInterceptor('foto', {
     storage: diskStorage({
       // ✅ Salva o arquivo fisicamente na pasta public
-      destination: join(process.cwd(), 'public/uploads/perfil'), 
+      destination: join(__dirname, '..', '..', '..', 'public', 'uploads', 'perfil'), 
       filename: (req: any, file: any, cb: any) => {
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
         cb(null, `${uniqueSuffix}${extname(file.originalname)}`);

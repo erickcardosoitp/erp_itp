@@ -1,8 +1,10 @@
 import knex from 'knex';
 import dotenv from 'dotenv';
+import path from 'path';
 
-// Carrega as variáveis de ambiente
+// Carrega as variáveis de ambiente (Tenta local, depois tenta na raiz do projeto)
 dotenv.config();
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 const connectionString = process.env.DATABASE_URL;
 
@@ -16,8 +18,8 @@ export const db = knex({
   connection: {
     connectionString: connectionString,
     // Opcional: Melhora a compatibilidade com instâncias Neon/Render
-    ssl: connectionString.includes('localhost') 
-      ? false 
+    ssl: connectionString.includes('localhost') || connectionString.includes('127.0.0.1')
+      ? false
       : { rejectUnauthorized: false }
   },
   pool: { 

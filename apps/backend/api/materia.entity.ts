@@ -27,10 +27,7 @@ export class Materia {
   @Column()
   periodo: string; // Ex: '2026.1'
 
-  @Column({ type: 'int' })
-  cargaHorariaEmenta: number;
-
-  @Column()
+  @Column({ name: 'professor_id', nullable: true })
   professor: string;
 
   @Column({ default: 'Pendente' })
