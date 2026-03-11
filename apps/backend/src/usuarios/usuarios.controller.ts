@@ -5,6 +5,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname, join } from 'path';
+import { existsSync, mkdirSync } from 'fs';
 import { AuthService } from '../auth/auth.service';
 
 @Controller('usuarios')
@@ -22,8 +23,14 @@ export class UsuariosController {
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(FileInterceptor('foto', {
     storage: diskStorage({
-      // ✅ Salva o arquivo fisicamente na pasta public
-      destination: join(__dirname, '..', '..', '..', 'public', 'uploads', 'perfil'), 
+      destination: (_req: any, _file: any, cb: any) => {
+        // Em serverless (Vercel) o filesystem é read-only exceto /tmp
+        const dir = process.env.VERCEL
+          ? '/tmp/uploads/perfil'
+          : join(__dirname, '..', '..', '..', 'public', 'uploads', 'perfil');
+        if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+        cb(null, dir);
+      },
       filename: (req: any, file: any, cb: any) => {
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
         cb(null, `${uniqueSuffix}${extname(file.originalname)}`);
