@@ -2,19 +2,19 @@
  * Google Apps Script — Formulário de Inscrição de Candidato
  * Instituto Tia Pretinha
  *
- * Grava diretamente no banco Neon via Data API (REST/PostgREST).
- * Não depende de nenhuma API ou backend do projeto.
+ * Envia os dados para o backend ITP que grava no banco.
  *
  * Configure o gatilho: Extensões → Apps Script → Gatilhos
  *   → Adicionar gatilho → aoEnviarFormulario → Do formulário → Ao enviar formulário
  *
  * Propriedades do script (Projeto → Configurações → Propriedades do script):
- *   NEON_API_URL  = https://ep-wispy-tooth-aihlvt7v.apirest.c-4.us-east-1.aws.neon.tech/neondb/rest/v1
- *   DB_USER       = neondb_owner
- *   DB_PASSWORD   = npg_qEAt05zJicRn
  *   EMAIL_VENDAS  = karina.livia.sales@gmail.com,gabrielagracianobezerra@gmail.com
  *   EMAIL_SUPORTE = goncalvecardoso@gmail.com
+ *
+ * A URL da API já está fixa no script abaixo.
  */
+
+var API_URL_CANDIDATO = 'https://api.itp.institutotiapretinha.org/api/matriculas/inscricao';
 
 // ─────────────────────────────────────────────────────────────────────
 //  Utilitários
@@ -154,50 +154,58 @@ function aoEnviarFormulario(e) {
   // ── Salva na planilha (independente do banco) ─────────────────────
   salvarNaPlanilha_(dados);
 
-  // ── POST para a Neon Data API (REST) ────────────────────────────
+  // ── POST para o backend ITP ───────────────────────────────────────
   var sucesso = false;
   var erroMsg = '';
 
   try {
-    // Adiciona campos de metadados
-    dados.status_matricula = 'Pendente';
-    dados.origem_inscricao = 'Forms';
-    dados.data_inscricao   = new Date().toISOString();
-
-    // Remove campos null/vazios (mantém booleans)
-    var body = {};
-    for (var k in dados) {
-      if (dados[k] !== null && dados[k] !== undefined && dados[k] !== '') {
-        body[k] = dados[k];
-      }
-    }
-    body['maior_18_anos']   = dados.maior_18_anos;
-    body['lgpd_aceito']     = dados.lgpd_aceito;
-    body['autoriza_imagem'] = dados.autoriza_imagem;
-
-    var baseUrl = getConf_('NEON_API_URL') || 'https://ep-wispy-tooth-aihlvt7v.apirest.c-4.us-east-1.aws.neon.tech/neondb/rest/v1';
-    var dbUser  = getConf_('DB_USER')      || 'neondb_owner';
-    var dbPass  = getConf_('DB_PASSWORD')  || '';
-    var auth    = Utilities.base64Encode(dbUser + ':' + dbPass);
-
-    var options = {
-      method: 'post',
-      contentType: 'application/json',
-      headers: {
-        'Authorization': 'Basic ' + auth,
-        'Prefer': 'return=minimal',
-      },
-      payload: JSON.stringify(body),
-      muteHttpExceptions: true,
+    var body = {
+      nome_completo:        dados.nome_completo,
+      email:                dados.email,
+      cpf:                  dados.cpf,
+      celular:              dados.celular,
+      data_nascimento:      dados.data_nascimento,
+      idade:                dados.idade,
+      sexo:                 dados.sexo,
+      escolaridade:         dados.escolaridade,
+      turno_escolar:        dados.turno_escolar,
+      maior_18_anos:        dados.maior_18_anos,
+      logradouro:           dados.logradouro,
+      numero:               dados.numero,
+      complemento:          dados.complemento,
+      bairro:               dados.bairro,
+      cidade:               dados.cidade,
+      estado_uf:            dados.estado_uf,
+      cep:                  dados.cep,
+      nome_responsavel:     dados.nome_responsavel,
+      grau_parentesco:      dados.grau_parentesco,
+      cpf_responsavel:      dados.cpf_responsavel,
+      telefone_alternativo: dados.telefone_alternativo,
+      possui_alergias:      dados.possui_alergias,
+      cuidado_especial:     dados.cuidado_especial,
+      detalhes_cuidado:     dados.detalhes_cuidado,
+      uso_medicamento:      dados.uso_medicamento,
+      cursos_desejados:     dados.cursos_desejados,
+      lgpd_aceito:          dados.lgpd_aceito,
+      autoriza_imagem:      dados.autoriza_imagem,
+      status_matricula:     'Pendente',
+      origem_inscricao:     'Forms',
+      data_inscricao:       new Date().toISOString(),
     };
 
-    var response = UrlFetchApp.fetch(baseUrl + '/inscricoes', options);
-    var code     = response.getResponseCode();
-    var text     = response.getContentText();
+    var response = UrlFetchApp.fetch(API_URL_CANDIDATO, {
+      method: 'post',
+      contentType: 'application/json',
+      payload: JSON.stringify(body),
+      muteHttpExceptions: true,
+    });
 
-    if (code === 201 || code === 200) {
+    var code = response.getResponseCode();
+    var text = response.getContentText();
+
+    if (code >= 200 && code < 300) {
       sucesso = true;
-      Logger.log('✅ Candidato gravado no banco: ' + dados.nome_completo);
+      Logger.log('✅ Candidato cadastrado: ' + dados.nome_completo + ' (HTTP ' + code + ')');
     } else {
       erroMsg = 'HTTP ' + code + ' — ' + text;
       Logger.log('❌ ' + erroMsg);
@@ -205,7 +213,7 @@ function aoEnviarFormulario(e) {
 
   } catch (err) {
     erroMsg = err.toString();
-    Logger.log('❌ Erro REST: ' + erroMsg);
+    Logger.log('❌ Erro: ' + erroMsg);
   }
 
   notificarEquipe_(dados, sucesso, erroMsg);

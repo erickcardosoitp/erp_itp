@@ -2,17 +2,16 @@
  * Google Apps Script — Formulário de Cadastro de Funcionário
  * Instituto Tia Pretinha
  *
- * Grava diretamente no banco Neon via Data API (REST/PostgREST).
- * Não depende de nenhuma API ou backend do projeto.
+ * Envia os dados para o backend ITP que grava no banco.
  *
  * Configure o gatilho: Extensões → Apps Script → Gatilhos
  *   → Adicionar gatilho → onFormSubmit → Do formulário → Ao enviar formulário
  *
  * Propriedades do script (Projeto → Configurações → Propriedades do script):
- *   NEON_API_URL = https://ep-wispy-tooth-aihlvt7v.apirest.c-4.us-east-1.aws.neon.tech/neondb/rest/v1
- *   DB_USER      = neondb_owner
- *   DB_PASSWORD  = npg_qEAt05zJicRn
- *   EMAIL_ERROS  = seuemail@dominio.com   (opcional)
+ *   WEBHOOK_SECRET = itp-forms-2026
+ *   EMAIL_ERROS    = seuemail@dominio.com   (opcional)
+ *
+ * A URL da API já está fixa no script abaixo.
  */
 
 // ─────────────────────────────────────────────────────────────────────
@@ -54,17 +53,17 @@ function dataParaISO_(value) {
 //  Gatilho principal — executado ao enviar o formulário
 // ─────────────────────────────────────────────────────────────────────
 
+var API_URL_FUNCIONARIO = 'https://api.itp.institutotiapretinha.org/api/academico/professores/webhook';
+
 function onFormSubmit(e) {
   try {
-    // Normaliza respostas: { "Título da Pergunta": "resposta" }
     var r = {};
     var values = e.namedValues || {};
     for (var key in values) {
       r[key] = (values[key][0] || '').toString().trim();
     }
 
-    // ── Monta o payload com os campos do formulário ───────────────
-    var payload = {
+    var body = {
       nome:                   str_(r['Nome Completo']),
       email:                  str_(r['E-mail (Obrigatório)'])  || str_(r['E-mail']),
       cpf:                    str_(r['CPF (Obrigatório)'])     || str_(r['CPF']),
@@ -89,46 +88,24 @@ function onFormSubmit(e) {
       ativo:                  true,
     };
 
-    // Remove campos null para não sobrescrever defaults do banco
-    // (booleans permanecem mesmo se false)
-    var body = {};
-    for (var k in payload) {
-      if (payload[k] !== null && payload[k] !== undefined && payload[k] !== '') {
-        body[k] = payload[k];
-      }
-    }
-    body['possui_deficiencia']  = payload['possui_deficiencia'];
-    body['possui_alergias']     = payload['possui_alergias'];
-    body['usa_medicamentos']    = payload['usa_medicamentos'];
-    body['interesse_cursos']    = payload['interesse_cursos'];
-    body['ativo']               = true;
+    var secret = getConf_('WEBHOOK_SECRET') || 'itp-forms-2026';
 
-    // ── POST para a Neon Data API (REST) ──────────────────────────
-    var baseUrl = getConf_('NEON_API_URL') || 'https://ep-wispy-tooth-aihlvt7v.apirest.c-4.us-east-1.aws.neon.tech/neondb/rest/v1';
-    var dbUser  = getConf_('DB_USER')      || 'neondb_owner';
-    var dbPass  = getConf_('DB_PASSWORD')  || '';
-    var auth    = Utilities.base64Encode(dbUser + ':' + dbPass);
-
-    var options = {
+    var response = UrlFetchApp.fetch(API_URL_FUNCIONARIO, {
       method: 'post',
       contentType: 'application/json',
-      headers: {
-        'Authorization': 'Basic ' + auth,
-        'Prefer': 'return=minimal',
-      },
+      headers: { 'x-itp-webhook-secret': secret },
       payload: JSON.stringify(body),
       muteHttpExceptions: true,
-    };
+    });
 
-    var response = UrlFetchApp.fetch(baseUrl + '/professores', options);
-    var code     = response.getResponseCode();
-    var text     = response.getContentText();
+    var code = response.getResponseCode();
+    var text = response.getContentText();
 
-    if (code === 201 || code === 200) {
-      Logger.log('[OK] Funcionário cadastrado: ' + payload.nome);
+    if (code >= 200 && code < 300) {
+      Logger.log('[OK] Funcionário cadastrado: ' + body.nome + ' (HTTP ' + code + ')');
     } else {
       Logger.log('[ERRO] HTTP ' + code + ' — ' + text);
-      notificarErro_('HTTP ' + code + '\n' + text, payload.nome);
+      notificarErro_('HTTP ' + code + '\n' + text, body.nome);
     }
 
   } catch (err) {
