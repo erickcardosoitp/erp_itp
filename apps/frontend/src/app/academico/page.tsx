@@ -1060,7 +1060,7 @@ function PresencaTab({ turmas, podeEditar }: { turmas: Turma[]; podeEditar: bool
           <div className="py-16 text-center">
             <ClipboardCheck size={40} className="mx-auto mb-3 text-slate-200" />
             <p className="text-sm text-slate-400 font-bold">Nenhuma aula registrada ainda.</p>
-            {podeEditar && <p className="text-xs text-slate-300 mt-1">Clique em "Nova Lista de Presença" para começar.</p>}
+            {podeEditar && <p className="text-xs text-slate-300 mt-1">Clique em &quot;Nova Lista de Presença&quot; para começar.</p>}
           </div>
         ) : (
           <div className="divide-y divide-slate-50">
