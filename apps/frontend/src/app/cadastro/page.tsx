@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Users, Briefcase, ShieldCheck, GraduationCap, UserCheck,
   Package, Heart, Landmark,
