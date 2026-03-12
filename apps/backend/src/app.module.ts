@@ -1,9 +1,10 @@
-import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
+import { Module, OnModuleInit, Logger } from '@nestjs/common';
+import { TypeOrmModule, InjectDataSource } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { APP_GUARD } from '@nestjs/core';
 import { join } from 'path';
+import { DataSource } from 'typeorm';
 
 // Core & Auth
 import { AppController } from './app.controller';
@@ -121,4 +122,40 @@ import { FinanceiroModule } from './financeiro/financeiro.module';
     { provide: APP_GUARD, useClass: RolesGuard },
   ],
 })
-export class AppModule {}
+export class AppModule implements OnModuleInit {
+  private readonly logger = new Logger('AppModule');
+
+  constructor(@InjectDataSource() private readonly dataSource: DataSource) {}
+
+  async onModuleInit() {
+    try {
+      // Migrations idempotentes — executam na inicialização em produção ou dev
+      await this.dataSource.query(`ALTER TABLE funcionarios ADD COLUMN IF NOT EXISTS matricula TEXT UNIQUE`);
+      await this.dataSource.query(`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS matricula TEXT UNIQUE`);
+      this.logger.log('✅ Migrations de matrícula aplicadas (IF NOT EXISTS)');
+
+      // Auto-atribuir matrícula a usuários existentes que não possuem
+      const semMatricula: { id: string; role: string; createdAt: Date }[] = await this.dataSource.query(
+        `SELECT id, role, "createdAt" FROM usuarios WHERE matricula IS NULL ORDER BY "createdAt" ASC`
+      );
+      if (semMatricula.length > 0) {
+        this.logger.log(`🔄 Atribuindo matrícula a ${semMatricula.length} usuário(s) sem matrícula...`);
+        for (let i = 0; i < semMatricula.length; i++) {
+          const u = semMatricula[i];
+          const d = u.createdAt ? new Date(u.createdAt) : new Date();
+          const yyyymm = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`;
+          const prefix = u.role === 'admin' ? 'ITP-ADM' : 'ITP-USR';
+          const seq = String(i + 1).padStart(3, '0');
+          const matricula = `${prefix}-${yyyymm}-${seq}`;
+          await this.dataSource.query(
+            `UPDATE usuarios SET matricula = $1 WHERE id = $2 AND matricula IS NULL`,
+            [matricula, u.id]
+          );
+        }
+        this.logger.log('✅ Matrículas atribuídas aos usuários existentes.');
+      }
+    } catch (err: any) {
+      this.logger.error(`❌ Erro nas migrations automáticas: ${err.message}`);
+    }
+  }
+}
