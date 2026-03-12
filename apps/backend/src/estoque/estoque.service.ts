@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { Produto } from './entities/produto.entity';
 import { MovimentoEstoque } from './entities/movimento-estoque.entity';
 import { CategoriaInsumo } from './entities/categoria-insumo.entity';
+import { NotificacoesService } from '../notificacoes/notificacoes.service';
 
 @Injectable()
 export class EstoqueService {
@@ -13,6 +14,7 @@ export class EstoqueService {
     @InjectRepository(Produto) private produtoRepo: Repository<Produto>,
     @InjectRepository(MovimentoEstoque) private movimentoRepo: Repository<MovimentoEstoque>,
     @InjectRepository(CategoriaInsumo) private categoriaRepo: Repository<CategoriaInsumo>,
+    private readonly notificacoes: NotificacoesService,
   ) {}
 
   // ── Produtos ──────────────────────────────────────────────────────────────
@@ -44,6 +46,13 @@ export class EstoqueService {
     produto.codigo_interno = `ITP-INSM-${yyyymm}-${seq}`;
     const salvo = await this.produtoRepo.save(produto);
     this.logger.log(`📦 Produto criado: ${salvo.nome} (${salvo.id})`);
+    await this.notificacoes.criar({
+      tipo: 'sistema',
+      titulo: `Produto cadastrado: ${salvo.nome}`,
+      mensagem: `Novo produto "${salvo.nome}" foi adicionado ao estoque (${salvo.codigo_interno}).`,
+      referencia_id: salvo.id,
+      referencia_tipo: 'produto',
+    });
     return salvo;
   }
 
@@ -117,6 +126,15 @@ export class EstoqueService {
       this.movimentoRepo.create({ produto_id: id, tipo: 'baixa', quantidade, observacao, usuario_nome: usuarioNome }),
     );
     this.logger.log(`➖ Baixa: -${quantidade} ${p.unidade_medida} | ${p.nome}`);
+    // Dispara alerta de estoque mínimo se necessário
+    if (produtoAtualizado.estoque_minimo > 0 && Number(produtoAtualizado.quantidade_atual) <= Number(produtoAtualizado.estoque_minimo)) {
+      await this.notificacoes.gerarAlertasEstoqueMinimo([{
+        id: produtoAtualizado.id,
+        nome: produtoAtualizado.nome,
+        quantidade_atual: Number(produtoAtualizado.quantidade_atual),
+        estoque_minimo: Number(produtoAtualizado.estoque_minimo),
+      }]).catch(() => {});
+    }
     return { produto: produtoAtualizado, movimento: mov };
   }
 

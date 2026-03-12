@@ -42,13 +42,8 @@ import { CadastroModule } from './cadastro/cadastro.module';
 import { FuncionariosModule } from './funcionarios/funcionarios.module';
 import { FinanceiroModule } from './financeiro/financeiro.module';
 import { EstoqueModule } from './estoque/estoque.module';
-
-@Module({
-  imports: [
-    // 1. Configuração Global
-    ConfigModule.forRoot({ 
-      isGlobal: true,
-      // Na Vercel, as env vars já são injetadas pelo sistema — o envFilePath é apenas para dev local
+import { NotificacoesModule } from './notificacoes/notificacoes.module';
+import { RelatoriosModule } from './relatorios/relatorios.module';
       envFilePath: process.env.VERCEL
         ? undefined
         : [
@@ -104,6 +99,8 @@ import { EstoqueModule } from './estoque/estoque.module';
     FuncionariosModule,
     FinanceiroModule,
     EstoqueModule,
+    NotificacoesModule,
+    RelatoriosModule,
   ],
   controllers: [
     AppController, 
@@ -257,6 +254,22 @@ export class AppModule implements OnModuleInit {
       `);
       this.logger.log('✅ Tabelas acadêmicas criadas/verificadas (IF NOT EXISTS)');
       this.logger.log('✅ Tabelas de estoque criadas (IF NOT EXISTS)');
+
+      // ── Tabela de Notificações ─────────────────────────────────────────────
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS notificacoes (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          tipo TEXT NOT NULL,
+          titulo TEXT NOT NULL,
+          mensagem TEXT NOT NULL,
+          lida BOOLEAN NOT NULL DEFAULT false,
+          referencia_id TEXT,
+          referencia_tipo TEXT,
+          usuario_id TEXT,
+          criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `);
+      this.logger.log('✅ Tabela notificacoes criada/verificada');
 
       // Auto-atribuir matrícula a usuários existentes que não possuem
       const semMatricula: { id: string; role: string; createdAt: Date }[] = await this.dataSource.query(

@@ -1,5 +1,6 @@
 'use client';
 import { useAuth } from '@/context/auth-context';
+import NotificationBell from './NotificationBell';
 
 const ROLE_LABELS: Record<string, string> = {
   ADMIN:           'Administrador',
@@ -33,7 +34,9 @@ export default function UserHeader() {
   const inicial = nome.charAt(0).toUpperCase();
 
   return (
-    <div className="flex items-center gap-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-4 py-1.5 rounded-full shadow-md">
+    <div className="flex items-center gap-2">
+      <NotificationBell />
+      <div className="flex items-center gap-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-4 py-1.5 rounded-full shadow-md">
       <div className="flex flex-col items-end text-right">
         <span className="text-sm font-black text-slate-900 dark:text-slate-100 uppercase italic leading-none">
           {nome}
@@ -49,6 +52,7 @@ export default function UserHeader() {
         ) : (
           <span className="text-white font-black text-xs">{inicial}</span>
         )}
+      </div>
       </div>
     </div>
   );

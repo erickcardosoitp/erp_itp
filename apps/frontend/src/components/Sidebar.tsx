@@ -7,7 +7,7 @@ import { useAuth } from '@/context/auth-context';
 import { 
   LayoutDashboard, UserPlus, ClipboardList, 
   LogOut, Settings, PanelLeftClose, PanelLeftOpen,
-  GraduationCap, DollarSign, Heart, Package, Loader2 
+  GraduationCap, DollarSign, Heart, Package, Loader2, BarChart2
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -24,6 +24,7 @@ const PATH_TO_MODULE: Record<string, string> = {
   '/financeiro': 'financeiro',
   '/doacoes': 'doacoes',
   '/estoque': 'estoque',
+  '/relatorios': 'relatorios',
 };
 
 export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
@@ -41,6 +42,7 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
     { name: 'Financeiro', path: '/financeiro', icon: DollarSign },
     { name: 'Doações', path: '/doacoes', icon: Heart },
     { name: 'Estoque', path: '/estoque', icon: Package },
+    { name: 'Relatórios', path: '/relatorios', icon: BarChart2 },
   ];
 
   // Filtra módulos com base nas permissões do grupo

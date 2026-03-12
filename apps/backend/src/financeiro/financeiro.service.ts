@@ -8,6 +8,7 @@ import { TipoPessoa } from './entities/tipo-pessoa.entity';
 import { FormaPagamento } from './entities/forma-pagamento.entity';
 import { Recorrencia } from './entities/recorrencia.entity';
 import { MovimentacaoFinanceira } from './entities/movimentacao-financeira.entity';
+import { NotificacoesService } from '../notificacoes/notificacoes.service';
 
 @Injectable()
 export class FinanceiroService {
@@ -19,6 +20,7 @@ export class FinanceiroService {
     @InjectRepository(FormaPagamento)          private formaPagRepo: Repository<FormaPagamento>,
     @InjectRepository(Recorrencia)             private recorrenciaRepo: Repository<Recorrencia>,
     @InjectRepository(MovimentacaoFinanceira)  private movRepo: Repository<MovimentacaoFinanceira>,
+    private readonly notificacoes: NotificacoesService,
   ) {}
 
   // ── TIPOS DE MOVIMENTAÇÃO ─────────────────────────────────────────────────
@@ -170,7 +172,27 @@ export class FinanceiroService {
   async criarMovimentacao(dto: Partial<MovimentacaoFinanceira>) {
     if (!dto.nome) throw new BadRequestException('Nome é obrigatório');
     if (!dto.valor && dto.valor !== 0) throw new BadRequestException('Valor é obrigatório');
-    return this.movRepo.save(this.movRepo.create(dto));
+    const mov = await this.movRepo.save(this.movRepo.create(dto));
+    // Notificações automáticas por tipo de movimentação
+    const valor = Number(mov.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    if (mov.categoria?.toLowerCase().includes('doação') || mov.categoria?.toLowerCase() === 'doacao') {
+      await this.notificacoes.criar({
+        tipo: 'nova_doacao',
+        titulo: `💚 Nova doação: ${valor}`,
+        mensagem: `Uma nova doação de ${valor} foi registrada em nome de "${mov.nome}"${mov.data ? ` em ${mov.data}` : ''}.`,
+        referencia_id: mov.id,
+        referencia_tipo: 'movimentacao',
+      }).catch(() => {});
+    } else if (mov.forma_pagamento?.toUpperCase() === 'PIX') {
+      await this.notificacoes.criar({
+        tipo: 'pix_recebido',
+        titulo: `🟢 PIX recebido: ${valor}`,
+        mensagem: `Um pagamento via PIX de ${valor} foi registrado (${mov.nome}).`,
+        referencia_id: mov.id,
+        referencia_tipo: 'movimentacao',
+      }).catch(() => {});
+    }
+    return mov;
   }
 
   async editarMovimentacao(id: string, dto: Partial<MovimentacaoFinanceira>) {

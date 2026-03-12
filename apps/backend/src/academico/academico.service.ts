@@ -9,6 +9,7 @@ import { GradeHoraria } from './entities/grade-horaria.entity';
 import { DiarioAcademico } from './entities/diario.entity';
 import { PresencaSessao } from './entities/presenca-sessao.entity';
 import { Aluno } from '../alunos/aluno.entity';
+import { NotificacoesService } from '../notificacoes/notificacoes.service';
 
 @Injectable()
 export class AcademicoService {
@@ -23,6 +24,7 @@ export class AcademicoService {
     @InjectRepository(PresencaSessao)  private sessaoRepo: Repository<PresencaSessao>,
     @InjectRepository(Aluno)           private alunoRepo: Repository<Aluno>,
     @InjectRepository(TurmaAluno)      private turmaAlunoRepo: Repository<TurmaAluno>,
+    private readonly notificacoes: NotificacoesService,
   ) {}
 
   // ── UTILITÁRIOS ───────────────────────────────────────────────────────────
@@ -282,6 +284,13 @@ export class AcademicoService {
     // Adiciona ao backlog automaticamente
     await this.turmaAlunoRepo.save(this.turmaAlunoRepo.create({ aluno_id: salvo.id, status: 'backlog' }));
     this.logger.log(`Aluno criado diretamente: ${salvo.numero_matricula} – ${salvo.nome_completo}`);
+    await this.notificacoes.criar({
+      tipo: 'novo_aluno',
+      titulo: `Novo aluno cadastrado: ${salvo.nome_completo}`,
+      mensagem: `O aluno "${salvo.nome_completo}" foi cadastrado com matrícula ${salvo.numero_matricula}.`,
+      referencia_id: salvo.id,
+      referencia_tipo: 'aluno',
+    }).catch(() => {});
     return salvo;
   }
 

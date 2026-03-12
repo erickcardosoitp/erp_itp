@@ -9,6 +9,7 @@ import { Recorrencia } from './entities/recorrencia.entity';
 import { MovimentacaoFinanceira } from './entities/movimentacao-financeira.entity';
 import { FinanceiroService } from './financeiro.service';
 import { FinanceiroController } from './financeiro.controller';
+import { NotificacoesModule } from '../notificacoes/notificacoes.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { FinanceiroController } from './financeiro.controller';
       Recorrencia,
       MovimentacaoFinanceira,
     ]),
+    NotificacoesModule,
   ],
   controllers: [FinanceiroController],
   providers: [FinanceiroService],

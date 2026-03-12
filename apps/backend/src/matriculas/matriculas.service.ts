@@ -12,6 +12,7 @@ import { Aluno } from '../alunos/aluno.entity';
 import { Usuario } from '../usuarios/usuario.entity';
 import { EmailService } from '../email.service';
 import { TurmaAluno } from '../academico/entities/turma-aluno.entity';
+import { NotificacoesService } from '../notificacoes/notificacoes.service';
 
 /** Tipos obrigatórios que devem estar presentes para considerar o envio completo. */
 const TIPOS_OBRIGATORIOS = [
@@ -47,6 +48,7 @@ export class MatriculasService {
     private readonly emailService: EmailService,
     @InjectRepository(TurmaAluno)
     private readonly turmaAlunoRepository: Repository<TurmaAluno>,
+    private readonly notificacoes: NotificacoesService,
   ) {}
 
   /**
@@ -435,6 +437,13 @@ export class MatriculasService {
 
       await queryRunner.commitTransaction();
       this.logger.log(`🎉 Matrícula efetivada: ${alunoSalvo.numero_matricula} – ${alunoSalvo.nome_completo}`);
+      await this.notificacoes.criar({
+        tipo: 'nova_matricula',
+        titulo: `Nova matrícula: ${alunoSalvo.nome_completo}`,
+        mensagem: `O aluno "${alunoSalvo.nome_completo}" foi matriculado com o nº ${alunoSalvo.numero_matricula} nos cursos: ${alunoSalvo.cursos_matriculados}.`,
+        referencia_id: String(alunoSalvo.id),
+        referencia_tipo: 'aluno',
+      }).catch(() => {});
       return alunoSalvo;
     } catch (err: any) {
       await queryRunner.rollbackTransaction();
