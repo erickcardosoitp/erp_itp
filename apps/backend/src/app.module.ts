@@ -44,6 +44,12 @@ import { FinanceiroModule } from './financeiro/financeiro.module';
 import { EstoqueModule } from './estoque/estoque.module';
 import { NotificacoesModule } from './notificacoes/notificacoes.module';
 import { RelatoriosModule } from './relatorios/relatorios.module';
+
+@Module({
+  imports: [
+    // 1. Config - Variáveis de Ambiente
+    ConfigModule.forRoot({
+      isGlobal: true,
       envFilePath: process.env.VERCEL
         ? undefined
         : [

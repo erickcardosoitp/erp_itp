@@ -25,7 +25,7 @@ export class NotificacoesService {
   async listar(params: { pagina?: number; limite?: number; apenasNaoLidas?: boolean } = {}) {
     const { pagina = 1, limite = 50, apenasNaoLidas = false } = params;
     const skip = (pagina - 1) * limite;
-    const where: Partial<Notificacao> = apenasNaoLidas ? { lida: false } : {};
+    const where = apenasNaoLidas ? { lida: false as const } : {};
     const [items, total] = await this.repo.findAndCount({
       where,
       order: { criado_em: 'DESC' },
