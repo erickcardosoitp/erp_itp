@@ -174,6 +174,12 @@ export class AppModule implements OnModuleInit {
         VALUES ('Insumos - Cozinha'), ('Insumos - Limpeza'), ('Insumos - Material')
         ON CONFLICT (nome) DO NOTHING
       `);
+      // Garante colunas adicionadas em versões posteriores (migrations idempotentes)
+      await this.dataSource.query(`
+        ALTER TABLE IF EXISTS estoque_movimentos
+          ADD COLUMN IF NOT EXISTS usuario_nome TEXT,
+          ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+      `);
       this.logger.log('✅ Tabelas de estoque criadas (IF NOT EXISTS)');
 
       // Auto-atribuir matrícula a usuários existentes que não possuem

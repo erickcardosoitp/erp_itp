@@ -118,7 +118,7 @@ export class EstoqueService {
     const qb = this.movimentoRepo
       .createQueryBuilder('m')
       .leftJoinAndSelect('m.produto', 'p')
-      .orderBy('m."createdAt"', 'DESC')
+      .orderBy('m.createdAt', 'DESC')
       .take(limit);
     if (produtoId) qb.where('m.produto_id = :produtoId', { produtoId });
     return qb.getMany();
