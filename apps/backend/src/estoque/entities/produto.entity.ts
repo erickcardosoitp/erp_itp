@@ -8,7 +8,7 @@ export class Produto {
   @Column({ type: 'text' })
   nome: string;
 
-  @Column({ type: 'text', nullable: true, default: 'Insumos - Cozinha' })
+  @Column({ type: 'text', nullable: true, default: 'Geral' })
   categoria: string;
 
   @Column({ type: 'text', default: 'un' })

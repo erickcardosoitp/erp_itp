@@ -18,7 +18,7 @@ type Movimento = {
 };
 
 const UN_MEDIDAS = ['un', 'kg', 'g', 'L', 'mL', 'cx', 'pct', 'saco', 'par', 'fardo', 'rolo', 'ds'];
-const CATEGORIAS = ['Insumos - Cozinha', 'Insumos - Limpeza', 'Insumos - Material'];
+const CAT_SUGERIDAS = ['Insumos - Cozinha', 'Insumos - Limpeza', 'Insumos - Material'];
 
 function fmt(n: number | string) {
   const v = Number(n);
@@ -48,7 +48,7 @@ export default function EstoquePage() {
   // Modais
   const [modalProduto, setModalProduto] = useState<{ aberto: boolean; editando: Produto | null }>({ aberto: false, editando: null });
   const [modalMov, setModalMov] = useState<{ aberto: boolean; tipo: 'entrada' | 'baixa'; produto: Produto | null }>({ aberto: false, tipo: 'entrada', produto: null });
-  const [formProduto, setFormProduto] = useState<any>({ categoria: CATEGORIAS[0], unidade_medida: 'un', estoque_minimo: 0, quantidade_atual: 0 });
+  const [formProduto, setFormProduto] = useState<any>({ categoria: '', unidade_medida: 'un', estoque_minimo: 0, quantidade_atual: 0 });
   const [formMov, setFormMov] = useState<any>({ quantidade: '', observacao: '' });
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState('');
@@ -65,7 +65,7 @@ export default function EstoquePage() {
 
   useEffect(() => { load(); }, [load]);
 
-  const categorias = CATEGORIAS;
+  const categorias = useMemo(() => [...new Set([...CAT_SUGERIDAS, ...produtos.map(p => p.categoria).filter(Boolean)])].sort(), [produtos]);
   const alertas = useMemo(() => produtos.filter(p => p.ativo && emAlerta(p)), [produtos]);
 
   const produtosFiltrados = useMemo(() => {
@@ -85,10 +85,10 @@ export default function EstoquePage() {
       const d = new Date(m.createdAt); const hoje = new Date();
       return d.getDate() === hoje.getDate() && d.getMonth() === hoje.getMonth() && d.getFullYear() === hoje.getFullYear();
     }).length,
-  }), [produtos, alertas, movimentos]);
+  }), [produtos, alertas, categorias, movimentos]);
 
   // ── Produto CRUD ──────────────────────────────────────────────────────────
-  const abrirNovo = () => { setFormProduto({ categoria: CATEGORIAS[0], unidade_medida: 'un', estoque_minimo: 0, quantidade_atual: 0 }); setErro(''); setModalProduto({ aberto: true, editando: null }); };
+  const abrirNovo = () => { setFormProduto({ categoria: '', unidade_medida: 'un', estoque_minimo: 0, quantidade_atual: 0 }); setErro(''); setModalProduto({ aberto: true, editando: null }); };
   const abrirEditar = (p: Produto) => { setFormProduto({ nome: p.nome, categoria: p.categoria, unidade_medida: p.unidade_medida, estoque_minimo: p.estoque_minimo, quantidade_atual: p.quantidade_atual }); setErro(''); setModalProduto({ aberto: true, editando: p }); };
 
   const salvarProduto = async (e: React.FormEvent) => {
@@ -379,10 +379,11 @@ export default function EstoquePage() {
               <FInput label="Nome *" value={formProduto.nome ?? ''} onChange={v => setFormProduto((p: any) => ({ ...p, nome: v }))} required />
               <div>
                 <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Categoria</label>
-                <select value={formProduto.categoria ?? CATEGORIAS[0]} onChange={e => setFormProduto((p: any) => ({ ...p, categoria: e.target.value }))}
-                  className="w-full border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-green-400">
-                  {CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
+                <input type="text" list="cat-sugestoes" value={formProduto.categoria ?? ''} onChange={e => setFormProduto((p: any) => ({ ...p, categoria: e.target.value }))} placeholder="Ex: Insumos - Cozinha, Equipamentos..."
+                  className="w-full border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-green-400 transition-shadow" />
+                <datalist id="cat-sugestoes">
+                  {categorias.map(c => <option key={c} value={c} />)}
+                </datalist>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
