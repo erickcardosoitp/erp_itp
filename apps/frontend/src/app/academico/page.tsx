@@ -17,7 +17,7 @@ interface Professor { id: string; nome: string; especialidade?: string; email?: 
 interface Turma { id: string; nome: string; curso_id?: string; professor_id?: string; turno?: string; ano?: string; max_alunos?: number; ativo?: boolean; hora_inicio?: string; hora_fim?: string; }
 interface TurmaAlunoRecord { id: string; turma_id: string | null; aluno_id: string; status: string; created_at: string; }
 interface GradeCard { id: string; dia_semana: number; horario_inicio: string; horario_fim: string; nome_curso?: string; nome_professor?: string; turma_id?: string; sala?: string; cor?: string; }
-interface DiarioEntry { id: string; tipo: string; titulo?: string; descricao?: string; aluno_id?: string; turma_id?: string; data: string; usuario_nome?: string; created_at: string; }
+interface DiarioEntry { id: string; tipo: string; titulo?: string; descricao?: string; aluno_id?: string; aluno_nome?: string; turma_id?: string; data: string; usuario_nome?: string; created_at: string; }
 interface Aluno { id: string; nome_completo: string; numero_matricula?: string; cpf?: string; celular?: string; email?: string; sexo?: string; data_nascimento?: string; cidade?: string; bairro?: string; cursos_matriculados?: string; turno_escolar?: string; ativo?: boolean; data_matricula?: string; }
 interface PresencaSessao { id: string; turma_id: string; turma_nome?: string; data: string; tema_aula?: string; conteudo_abordado?: string; usuario_nome?: string; total_presentes: number; total_ausentes: number; created_at: string; }
 
@@ -1114,7 +1114,7 @@ function PresencaTab({ turmas, podeEditar }: { turmas: Turma[]; podeEditar: bool
                             r.descricao === 'Presente' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'
                           }`}>
                             <div className={`w-2 h-2 rounded-full shrink-0 ${r.descricao === 'Presente' ? 'bg-green-500' : 'bg-red-400'}`} />
-                            <span className="truncate">{r.aluno_id}</span>
+                            <span className="truncate">{r.aluno_nome || r.aluno_id}</span>
                             <span className="shrink-0 text-[9px] uppercase">{r.descricao}</span>
                           </div>
                         ))}

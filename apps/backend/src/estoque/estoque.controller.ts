@@ -11,7 +11,6 @@ import { Public } from '../auth/decorators/public.decorator';
 import { EstoqueService } from './estoque.service';
 
 @Controller('estoque')
-@UseGuards(JwtAuthGuard, RolesGuard)
 export class EstoqueController {
   private readonly logger = new Logger(EstoqueController.name);
 

@@ -197,6 +197,65 @@ export class AppModule implements OnModuleInit {
           ADD COLUMN IF NOT EXISTS reset_token TEXT,
           ADD COLUMN IF NOT EXISTS reset_token_expires TIMESTAMPTZ
       `);
+      await this.dataSource.query(`
+        ALTER TABLE IF EXISTS estoque_produtos
+          ADD COLUMN IF NOT EXISTS codigo_interno TEXT UNIQUE
+      `);
+
+      // ── Tabelas do módulo Acadêmico ───────────────────────────────────────
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS grade_horaria (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          dia_semana INT,
+          horario_inicio TIME NOT NULL,
+          horario_fim TIME NOT NULL,
+          materia_id TEXT,
+          nome_curso TEXT,
+          professor_id TEXT,
+          nome_professor TEXT,
+          turma_id TEXT,
+          sala TEXT,
+          cor TEXT NOT NULL DEFAULT '#7c3aed'
+        )
+      `);
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS presenca_sessoes (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          turma_id TEXT NOT NULL,
+          turma_nome TEXT,
+          data DATE NOT NULL,
+          tema_aula TEXT,
+          conteudo_abordado TEXT,
+          usuario_id TEXT,
+          usuario_nome TEXT,
+          total_presentes INT NOT NULL DEFAULT 0,
+          total_ausentes INT NOT NULL DEFAULT 0,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `);
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS diario_academico (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          tipo TEXT NOT NULL,
+          titulo TEXT,
+          descricao TEXT,
+          aluno_id TEXT,
+          aluno_nome TEXT,
+          turma_id TEXT,
+          data DATE NOT NULL DEFAULT CURRENT_DATE,
+          usuario_id TEXT,
+          usuario_nome TEXT,
+          sessao_id TEXT,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `);
+      // Garante colunas adicionais em instâncias existentes
+      await this.dataSource.query(`
+        ALTER TABLE IF EXISTS diario_academico
+          ADD COLUMN IF NOT EXISTS sessao_id TEXT,
+          ADD COLUMN IF NOT EXISTS aluno_nome TEXT
+      `);
+      this.logger.log('✅ Tabelas acadêmicas criadas/verificadas (IF NOT EXISTS)');
       this.logger.log('✅ Tabelas de estoque criadas (IF NOT EXISTS)');
 
       // Auto-atribuir matrícula a usuários existentes que não possuem

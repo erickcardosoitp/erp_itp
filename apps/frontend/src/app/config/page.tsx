@@ -193,9 +193,58 @@ function MeuPerfilTab() {
 // ─────────────────────────────────────────────────────────────
 // ABA: ACESSIBILIDADE
 // ─────────────────────────────────────────────────────────────
+const FONT_SIZES = [
+  { value: 'sm', label: 'Pequeno' },
+  { value: 'base', label: 'Normal' },
+  { value: 'lg', label: 'Grande' },
+] as const;
+
+type FontSize = typeof FONT_SIZES[number]['value'];
+
+function applySettings(fontSize: FontSize, reducedMotion: boolean, compact: boolean) {
+  const root = document.documentElement;
+  root.classList.remove('font-size-sm', 'font-size-base', 'font-size-lg');
+  root.classList.add(`font-size-${fontSize}`);
+  root.classList.toggle('reduce-motion', reducedMotion);
+  root.classList.toggle('compact', compact);
+}
+
 function AcessibilidadeTab() {
   const { theme, setTheme } = useTheme();
   const isDark = theme === 'dark';
+
+  const [fontSize, setFontSize]         = React.useState<FontSize>('base');
+  const [reducedMotion, setReducedMotion] = React.useState(false);
+  const [compact, setCompact]           = React.useState(false);
+
+  // Carregar preferências salvas
+  React.useEffect(() => {
+    const fs = (localStorage.getItem('itp_font_size') as FontSize) || 'base';
+    const rm = localStorage.getItem('itp_reduce_motion') === 'true';
+    const cp = localStorage.getItem('itp_compact') === 'true';
+    setFontSize(fs);
+    setReducedMotion(rm);
+    setCompact(cp);
+    applySettings(fs, rm, cp);
+  }, []);
+
+  const handleFontSize = (v: FontSize) => {
+    setFontSize(v);
+    localStorage.setItem('itp_font_size', v);
+    applySettings(v, reducedMotion, compact);
+  };
+
+  const handleReducedMotion = (v: boolean) => {
+    setReducedMotion(v);
+    localStorage.setItem('itp_reduce_motion', String(v));
+    applySettings(fontSize, v, compact);
+  };
+
+  const handleCompact = (v: boolean) => {
+    setCompact(v);
+    localStorage.setItem('itp_compact', String(v));
+    applySettings(fontSize, reducedMotion, v);
+  };
 
   return (
     <div className="space-y-8">
@@ -239,24 +288,64 @@ function AcessibilidadeTab() {
         </div>
       </div>
 
-      {/* Opções em breve */}
+      {/* Tamanho da Fonte */}
+      <div>
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Tamanho da Fonte</p>
+        <div className="flex items-center gap-3 bg-slate-100 p-1.5 rounded-2xl w-fit">
+          {FONT_SIZES.map(fs => (
+            <button
+              key={fs.value}
+              onClick={() => handleFontSize(fs.value)}
+              className={`px-5 py-3 rounded-xl font-black text-[11px] uppercase tracking-tighter transition-all duration-200 ${
+                fontSize === fs.value
+                  ? 'bg-white text-slate-900 shadow-md'
+                  : 'text-slate-400 hover:text-slate-600'
+              }`}
+            >
+              {fs.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Toggles */}
       <div>
         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Mais Opções</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {[
-            { label: 'Tamanho da Fonte',    desc: 'Ajuste o tamanho do texto da plataforma.' },
-            { label: 'Alto Contraste',      desc: 'Melhora a legibilidade para baixa visão.' },
-            { label: 'Reduzir Animações',   desc: 'Diminui efeitos de movimento da interface.' },
-            { label: 'Compactar Layout',    desc: 'Exibe mais informações com menos espaçamento.' },
-          ].map(({ label, desc }) => (
-            <div key={label} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 opacity-50 cursor-not-allowed select-none">
-              <div>
-                <p className="text-xs font-black uppercase tracking-tighter text-slate-700">{label}</p>
-                <p className="text-[10px] font-bold text-slate-400 mt-0.5">{desc}</p>
-              </div>
-              <span className="text-[8px] font-black uppercase bg-slate-200 text-slate-500 px-2 py-1 rounded-lg">Em Breve</span>
+          {/* Reduzir Animações */}
+          <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+            <div>
+              <p className="text-xs font-black uppercase tracking-tighter text-slate-700">Reduzir Animações</p>
+              <p className="text-[10px] font-bold text-slate-400 mt-0.5">Diminui efeitos de movimento da interface.</p>
             </div>
-          ))}
+            <button
+              onClick={() => handleReducedMotion(!reducedMotion)}
+              className={`relative w-12 h-6 rounded-full transition-colors duration-200 shrink-0 ${
+                reducedMotion ? 'bg-purple-600' : 'bg-slate-300'
+              }`}
+            >
+              <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${
+                reducedMotion ? 'translate-x-7' : 'translate-x-1'
+              }`} />
+            </button>
+          </div>
+          {/* Compactar Layout */}
+          <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+            <div>
+              <p className="text-xs font-black uppercase tracking-tighter text-slate-700">Compactar Layout</p>
+              <p className="text-[10px] font-bold text-slate-400 mt-0.5">Exibe mais informações com menos espaçamento.</p>
+            </div>
+            <button
+              onClick={() => handleCompact(!compact)}
+              className={`relative w-12 h-6 rounded-full transition-colors duration-200 shrink-0 ${
+                compact ? 'bg-purple-600' : 'bg-slate-300'
+              }`}
+            >
+              <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${
+                compact ? 'translate-x-7' : 'translate-x-1'
+              }`} />
+            </button>
+          </div>
         </div>
       </div>
     </div>

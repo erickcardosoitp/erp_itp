@@ -20,6 +20,9 @@ export class Produto {
   @Column({ type: 'decimal', precision: 12, scale: 3, default: 0 })
   estoque_minimo: number;
 
+  @Column({ name: 'codigo_interno', type: 'text', nullable: true, unique: true })
+  codigo_interno: string | null;
+
   @Column({ default: true })
   ativo: boolean;
 

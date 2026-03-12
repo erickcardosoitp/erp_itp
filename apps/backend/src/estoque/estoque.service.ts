@@ -36,6 +36,12 @@ export class EstoqueService {
       estoque_minimo: Number(dados.estoque_minimo ?? 0),
       quantidade_atual: Number(dados.quantidade_atual ?? 0),
     });
+    // Gera código interno único: ITP-INSM-YYYYMM-NNN
+    const now = new Date();
+    const yyyymm = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const total = await this.produtoRepo.count();
+    const seq = String(total + 1).padStart(3, '0');
+    produto.codigo_interno = `ITP-INSM-${yyyymm}-${seq}`;
     const salvo = await this.produtoRepo.save(produto);
     this.logger.log(`📦 Produto criado: ${salvo.nome} (${salvo.id})`);
     return salvo;

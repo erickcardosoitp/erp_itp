@@ -49,11 +49,11 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
 
   const filteredMenu = primaryMenu.filter(item => {
     if (isAdmin) return true; // Admin vê tudo
-    if (!modulosVisiveis) return true; // Sem permissões definidas → mostra tudo (fallback)
+    if (!user?.grupo) return false; // Sem grupo = acesso restrito
+    if (!modulosVisiveis) return false; // Grupo sem config = sem acesso
     const key = PATH_TO_MODULE[item.path];
-    if (!key) return true;
-    // Se a chave não existe no objeto, mostra por padrão (backward compat)
-    return modulosVisiveis[key] === true || !(key in modulosVisiveis);
+    if (!key) return false;
+    return modulosVisiveis[key] === true; // Apenas módulos explicitamente permitidos
   });
 
   /**

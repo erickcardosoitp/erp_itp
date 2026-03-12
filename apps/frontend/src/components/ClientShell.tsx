@@ -8,6 +8,7 @@ import Sidebar from './Sidebar';
 import UserHeader from './UserHeader';
 import { Toaster } from '@/components/ui/sonner';
 import PwaInstall from './PwaInstall';
+import SettingsApplier from './SettingsApplier';
 
 export default function ClientShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -50,6 +51,7 @@ export default function ClientShell({ children }: { children: React.ReactNode })
 
         <Toaster richColors />
         <PwaInstall />
+        <SettingsApplier />
       </ThemeProvider>
     </AuthProvider>
   );

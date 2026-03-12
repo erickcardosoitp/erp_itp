@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { Curso } from './entities/curso.entity';
 import { Professor } from './entities/professor.entity';
 import { Turma } from './entities/turma.entity';
@@ -479,9 +479,14 @@ export class AcademicoService {
 
   async listarRegistrosSessao(sessaoId: string) {
     this.logger.log(`Listando registros da sessão id=${sessaoId}`);
-    return this.diarioRepo.find({
+    const registros = await this.diarioRepo.find({
       where: { sessao_id: sessaoId, tipo: 'Presença' },
       order: { aluno_id: 'ASC' },
     });
+    const alunoIds = [...new Set(registros.map(r => r.aluno_id).filter(Boolean))];
+    if (!alunoIds.length) return registros;
+    const alunos = await this.alunoRepo.findBy({ id: In(alunoIds as string[]) });
+    const nomeMap = Object.fromEntries(alunos.map(a => [a.id, a.nome_completo]));
+    return registros.map(r => ({ ...r, aluno_nome: nomeMap[r.aluno_id] || null }));
   }
 }
