@@ -180,6 +180,23 @@ export class AppModule implements OnModuleInit {
           ADD COLUMN IF NOT EXISTS usuario_nome TEXT,
           ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now()
       `);
+      await this.dataSource.query(`
+        ALTER TABLE IF EXISTS estoque_categorias
+          ADD COLUMN IF NOT EXISTS codigo TEXT UNIQUE
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE IF EXISTS doadores
+          ADD COLUMN IF NOT EXISTS codigo_interno TEXT UNIQUE
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE IF EXISTS contas_bancarias
+          ADD COLUMN IF NOT EXISTS codigo_interno TEXT UNIQUE
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE IF EXISTS usuarios
+          ADD COLUMN IF NOT EXISTS reset_token TEXT,
+          ADD COLUMN IF NOT EXISTS reset_token_expires TIMESTAMPTZ
+      `);
       this.logger.log('✅ Tabelas de estoque criadas (IF NOT EXISTS)');
 
       // Auto-atribuir matrícula a usuários existentes que não possuem

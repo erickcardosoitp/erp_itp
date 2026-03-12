@@ -10,7 +10,11 @@ import { Toaster } from '@/components/ui/sonner';
 
 export default function ClientShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const isPublicPage = pathname === '/login' || pathname?.startsWith('/lgpd') || pathname?.startsWith('/estoque/coletor');
+  const isPublicPage = pathname === '/login'
+    || pathname?.startsWith('/lgpd')
+    || pathname?.startsWith('/estoque/coletor')
+    || pathname?.startsWith('/esqueci-senha')
+    || pathname?.startsWith('/reset-senha');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [mounted, setMounted] = useState(false);
 

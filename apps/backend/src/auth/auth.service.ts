@@ -1,9 +1,11 @@
-import { Injectable, ConflictException, UnauthorizedException, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, ConflictException, UnauthorizedException, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Usuario } from '../usuarios/usuario.entity';
 import { JwtService } from '@nestjs/jwt';
+import { EmailService } from '../email.service';
 import * as bcrypt from 'bcryptjs';
+import * as crypto from 'crypto';
 
 @Injectable()
 export class AuthService {
@@ -13,6 +15,7 @@ export class AuthService {
     @InjectRepository(Usuario)
     private readonly usuarioRepository: Repository<Usuario>,
     private readonly jwtService: JwtService,
+    private readonly emailService: EmailService,
   ) {}
 
   /**
@@ -167,5 +170,72 @@ export class AuthService {
 
     const { password, ...usuarioSemSenha } = usuario;
     return usuarioSemSenha;
+  }
+
+  /**
+   * ESQUECI SENHA: Gera token de reset e envia por e-mail.
+   * Por segurança, sempre retorna a mesma mensagem (não confirma se o e-mail existe).
+   */
+  async solicitarReset(email: string): Promise<{ message: string }> {
+    const usuario = await this.usuarioRepository
+      .createQueryBuilder('u')
+      .addSelect('u.resetToken')
+      .addSelect('u.resetTokenExpires')
+      .where('LOWER(u.email) = LOWER(:email)', { email: email.trim() })
+      .getOne();
+
+    if (usuario) {
+      const token = crypto.randomBytes(32).toString('hex');
+      const expires = new Date(Date.now() + 60 * 60 * 1000); // 1 hora
+
+      await this.usuarioRepository.update(usuario.id, {
+        resetToken: token,
+        resetTokenExpires: expires,
+      });
+
+      try {
+        await this.emailService.enviarResetSenha(usuario.email, usuario.nome, token);
+      } catch (err: any) {
+        this.logger.error(`Falha ao enviar e-mail de reset: ${err.message}`);
+      }
+      this.logger.log(`🔑 Token de reset gerado para: ${usuario.email}`);
+    }
+
+    return { message: 'Se este e-mail estiver cadastrado, você receberá as instruções em breve.' };
+  }
+
+  /**
+   * RESETAR SENHA: Valida o token e atualiza a senha.
+   */
+  async resetarSenha(token: string, novaSenha: string): Promise<{ message: string }> {
+    if (!token || !novaSenha || novaSenha.length < 6) {
+      throw new BadRequestException('Token e nova senha (mínimo 6 caracteres) são obrigatórios.');
+    }
+
+    const usuario = await this.usuarioRepository
+      .createQueryBuilder('u')
+      .addSelect('u.resetToken')
+      .addSelect('u.resetTokenExpires')
+      .where('u.resetToken = :token', { token })
+      .getOne();
+
+    if (!usuario || !usuario.resetToken || !usuario.resetTokenExpires) {
+      throw new BadRequestException('Link de recuperação inválido ou expirado.');
+    }
+
+    if (new Date() > new Date(usuario.resetTokenExpires)) {
+      throw new BadRequestException('Este link de recuperação expirou. Solicite um novo.');
+    }
+
+    const hashedPassword = await bcrypt.hash(novaSenha, 10);
+
+    await this.usuarioRepository.update(usuario.id, {
+      password: hashedPassword,
+      resetToken: null as any,
+      resetTokenExpires: null as any,
+    });
+
+    this.logger.log(`✅ Senha redefinida para usuário: ${usuario.email}`);
+    return { message: 'Senha redefinida com sucesso! Você já pode fazer login.' };
   }
 }

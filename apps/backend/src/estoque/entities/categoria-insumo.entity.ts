@@ -8,6 +8,10 @@ export class CategoriaInsumo {
   @Column({ type: 'text', unique: true })
   nome: string;
 
+  /** Código-prefixo curto definido pelo usuário (ex: CZNH, ALIM, HGNE) */
+  @Column({ type: 'text', nullable: true, unique: true })
+  codigo: string | null;
+
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
 }

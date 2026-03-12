@@ -28,6 +28,9 @@ export function middleware(request: NextRequest) {
   ];
   // Rota pública do coletor — não exige autenticação
   if (pathname.startsWith('/estoque/coletor')) return NextResponse.next();
+  // Rotas públicas de recuperação de senha
+  if (pathname.startsWith('/esqueci-senha')) return NextResponse.next();
+  if (pathname.startsWith('/reset-senha')) return NextResponse.next();
 
   const isPrivateRoute = privateRoutes.some(route => pathname.startsWith(route));
 

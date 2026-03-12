@@ -76,8 +76,8 @@ interface Grupo { id: string; nome: string; grupo_permissoes?: any; usuarios?: {
 interface Curso { id: string; codigo?: string; nome: string; sigla: string; status: string; periodo?: string; descricao?: string; }
 interface Aluno { id: string; numero_matricula: string; nome_completo: string; cpf?: string; celular?: string; data_nascimento?: string; cursos_matriculados?: string; cidade?: string; ativo?: boolean; }
 interface Insumo { id: string; nome: string; categoria?: string; quantidade?: number; unidade?: string; fornecedor?: string; status?: string; }
-interface Doador { id: string; nome: string; tipo?: string; cpf_cnpj?: string; email?: string; telefone?: string; cidade?: string; ativo?: boolean; }
-interface ContaBancaria { id: string; banco: string; agencia?: string; conta: string; tipo?: string; titular: string; pix?: string; ativo?: boolean; }
+interface Doador { id: string; nome: string; tipo?: string; cpf_cnpj?: string; email?: string; telefone?: string; cidade?: string; ativo?: boolean; codigo_interno?: string | null; }
+interface ContaBancaria { id: string; banco: string; agencia?: string; conta: string; tipo?: string; titular: string; pix?: string; ativo?: boolean; codigo_interno?: string | null; }
 
 const ROLES = [
   { value: 'user',    label: 'Usuário Comum' },
@@ -1123,6 +1123,7 @@ function CursosTab({ onCount }: { onCount: (n: number) => void }) {
       <Tabela loading={loading} vazio={filtrados.length === 0} msgVazio="Nenhum curso encontrado.">
         <thead className="bg-slate-50 dark:bg-slate-700/50 border-b border-slate-100 dark:border-slate-600">
           <tr className="text-[9px] font-black uppercase text-slate-400 tracking-widest">
+            <th className="text-left px-6 py-4">Cód. Interno</th>
             <th className="text-left px-6 py-4">Sigla</th>
             <th className="text-left px-6 py-4">Nome do Curso</th>
             <th className="text-center px-6 py-4">Período</th>
@@ -1133,6 +1134,13 @@ function CursosTab({ onCount }: { onCount: (n: number) => void }) {
         <tbody className="divide-y divide-slate-50 dark:divide-slate-700">
           {filtrados.map(c => (
             <tr key={c.id} className="hover:bg-amber-50/30 dark:hover:bg-amber-900/20 transition-colors">
+              <td className="px-6 py-4">
+                {c.codigo ? (
+                  <span className="font-mono text-[10px] font-bold bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 px-2 py-0.5 rounded-lg border border-amber-100 dark:border-amber-800">
+                    {c.codigo}
+                  </span>
+                ) : <span className="text-slate-300 text-xs">–</span>}
+              </td>
               <td className="px-6 py-4">
                 <span className="font-mono font-black text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-900/30 px-2 py-1 rounded-lg text-xs">{c.sigla}</span>
               </td>
@@ -1295,7 +1303,7 @@ function AlunosTab({ onCount }: { onCount: (n: number) => void }) {
 
 // ─── Tab: Insumos (Categorias de Estoque) ────────────────────────────────────
 
-type CategoriaEstoque = { id: string; nome: string; createdAt: string };
+type CategoriaEstoque = { id: string; nome: string; codigo?: string | null; createdAt: string };
 
 function InsumosTab({ onCount }: { onCount: (n: number) => void }) {
   const [lista, setLista]     = useState<CategoriaEstoque[]>([]);
@@ -1305,6 +1313,7 @@ function InsumosTab({ onCount }: { onCount: (n: number) => void }) {
   const [busca, setBusca]     = useState('');
   const [modal, setModal]     = useState<{ aberto: boolean; editando: CategoriaEstoque | null }>({ aberto: false, editando: null });
   const [formNome, setFormNome] = useState('');
+  const [formCodigo, setFormCodigo] = useState('');
   const [salvando, setSalvando] = useState(false);
 
   const load = useCallback(async () => {
@@ -1325,9 +1334,9 @@ function InsumosTab({ onCount }: { onCount: (n: number) => void }) {
 
   useEffect(() => { load(); }, [load]);
 
-  const abrirCriar  = () => { setFormNome(''); setErro(''); setModal({ aberto: true, editando: null }); };
-  const abrirEditar = (c: CategoriaEstoque) => { setFormNome(c.nome); setErro(''); setModal({ aberto: true, editando: c }); };
-  const fecharModal = () => { setModal({ aberto: false, editando: null }); setFormNome(''); setErro(''); };
+  const abrirCriar  = () => { setFormNome(''); setFormCodigo(''); setErro(''); setModal({ aberto: true, editando: null }); };
+  const abrirEditar = (c: CategoriaEstoque) => { setFormNome(c.nome); setFormCodigo(c.codigo ?? ''); setErro(''); setModal({ aberto: true, editando: c }); };
+  const fecharModal = () => { setModal({ aberto: false, editando: null }); setFormNome(''); setFormCodigo(''); setErro(''); };
 
   const handleSalvar = async (e: React.FormEvent) => {
     e.preventDefault(); setSalvando(true); setErro('');

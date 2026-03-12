@@ -359,4 +359,56 @@ export class EmailService implements OnModuleInit {
       this.logger.warn(`👁️  Preview: ${nodemailer.getTestMessageUrl(info)}`);
     }
   }
+
+  async enviarResetSenha(email: string, nome: string, token: string): Promise<void> {
+    const appUrl = (this.config.get<string>('APP_URL') || 'http://localhost:3000').replace(/\/$/, '');
+    const link = `${appUrl}/reset-senha/${token}`;
+    const primeiroNome = nome.split(' ')[0];
+
+    if (!this.transporter) {
+      this.logger.warn(`📧 [SEM-SMTP] Reset de senha para ${nome} <${email}>`);
+      this.logger.warn(`🔗 Link de reset: ${link}`);
+      return;
+    }
+
+    const html = `
+<!DOCTYPE html><html lang="pt-br"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /></head>
+<body style="margin:0;padding:0;background:#f4f4f8;font-family:sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:40px 16px;">
+    <table width="560" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08);">
+      <tr><td style="background:#1e293b;padding:32px;text-align:center;">
+        <p style="margin:0;font-size:28px;font-weight:900;color:#fff;letter-spacing:-1px;">SISTEMA<span style="color:#a855f7;">.ITP</span></p>
+        <p style="margin:8px 0 0;font-size:11px;color:#94a3b8;letter-spacing:3px;text-transform:uppercase;">Instituto Tia Pretinha</p>
+      </td></tr>
+      <tr><td style="padding:40px 32px;">
+        <p style="font-size:22px;font-weight:800;color:#1e293b;margin:0 0 8px;">Olá, ${primeiroNome}!</p>
+        <p style="color:#64748b;font-size:14px;line-height:1.6;margin:0 0 24px;">
+          Recebemos uma solicitação para redefinir a senha da sua conta no Sistema ITP.
+          Clique no botão abaixo para criar uma nova senha. Este link é válido por <strong>1 hora</strong>.
+        </p>
+        <div style="text-align:center;margin:32px 0;">
+          <a href="${link}" style="display:inline-block;background:#7c3aed;color:#fff;font-weight:800;font-size:14px;text-decoration:none;padding:16px 40px;border-radius:50px;letter-spacing:1px;">Redefinir Minha Senha</a>
+        </div>
+        <p style="color:#94a3b8;font-size:12px;line-height:1.6;border-top:1px solid #f1f5f9;padding-top:20px;margin:0;">
+          Se você não solicitou a redefinição de senha, ignore este e-mail. Sua senha permanece inalterada.<br />
+          O link expira automaticamente em 1 hora por segurança.
+        </p>
+      </td></tr>
+    </table>
+  </td></tr></table>
+</body></html>`.trim();
+
+    const info = await this.transporter.sendMail({
+      from: `"Instituto Tia Pretinha" <${this.config.get<string>('SMTP_FROM_ADDRESS') || this.config.get<string>('SMTP_USER')}>`,
+      to: email,
+      subject: '🔑 Redefinição de Senha — Sistema ITP',
+      html,
+    });
+
+    this.logger.log(`📧 E-mail de reset de senha enviado para ${email}`);
+
+    if (this.isEthereal) {
+      this.logger.warn(`👁️  Preview: ${nodemailer.getTestMessageUrl(info)}`);
+    }
+  }
 }

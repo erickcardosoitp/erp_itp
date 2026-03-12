@@ -43,9 +43,17 @@ export class Usuario {
   grupo: Grupo;
 
   // ✅ Ajustado para snake_case 'created_at' para bater com a tabela grupos e Neon
-  @CreateDateColumn({ name: 'created_at' }) 
+  @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
-  @UpdateDateColumn({ name: 'updated_at' }) 
+  @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
+
+  /** Token de reset de senha (UUID, expira em 1h) */
+  @Column({ name: 'reset_token', nullable: true, select: false })
+  resetToken: string;
+
+  /** Data de expiração do token de reset */
+  @Column({ name: 'reset_token_expires', type: 'timestamptz', nullable: true, select: false })
+  resetTokenExpires: Date;
 }

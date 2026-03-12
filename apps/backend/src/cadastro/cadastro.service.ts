@@ -47,7 +47,12 @@ export class CadastroService {
 
   async criarDoador(dto: Partial<Doador>) {
     if (!dto.nome) throw new BadRequestException('Nome é obrigatório');
-    const doador = this.doadorRepo.create(dto);
+    const now = new Date();
+    const yyyymm = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const total = await this.doadorRepo.count();
+    const seq = String(total + 1).padStart(3, '0');
+    const codigo_interno = `ITP-DOAD-${yyyymm}-${seq}`;
+    const doador = this.doadorRepo.create({ ...dto, codigo_interno });
     return this.doadorRepo.save(doador);
   }
 
@@ -75,7 +80,12 @@ export class CadastroService {
     if (!dto.banco || !dto.conta || !dto.titular) {
       throw new BadRequestException('Banco, conta e titular são obrigatórios');
     }
-    const conta = this.contaRepo.create(dto);
+    const now = new Date();
+    const yyyymm = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const total = await this.contaRepo.count();
+    const seq = String(total + 1).padStart(3, '0');
+    const codigo_interno = `ITP-BNCO-${yyyymm}-${seq}`;
+    const conta = this.contaRepo.create({ ...dto, codigo_interno });
     return this.contaRepo.save(conta);
   }
 

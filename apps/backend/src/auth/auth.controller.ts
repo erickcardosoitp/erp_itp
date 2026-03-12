@@ -56,4 +56,18 @@ export class AuthController {
     res.clearCookie('itp_token');
     return { message: 'Sessão encerrada' };
   }
+
+  @Public()
+  @Post('esqueci-senha')
+  @HttpCode(HttpStatus.OK)
+  async esqueciSenha(@Body() body: { email: string }) {
+    return this.authService.solicitarReset(body.email || '');
+  }
+
+  @Public()
+  @Post('resetar-senha')
+  @HttpCode(HttpStatus.OK)
+  async resetarSenha(@Body() body: { token: string; senha: string }) {
+    return this.authService.resetarSenha(body.token, body.senha);
+  }
 }

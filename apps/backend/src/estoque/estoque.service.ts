@@ -140,21 +140,23 @@ export class EstoqueService {
     return this.categoriaRepo.find({ order: { nome: 'ASC' } });
   }
 
-  async criarCategoria(nome: string): Promise<CategoriaInsumo> {
+  async criarCategoria(nome: string, codigo?: string): Promise<CategoriaInsumo> {
     const nomeLimpo = nome?.trim();
     if (!nomeLimpo) throw new BadRequestException('Nome da categoria é obrigatório.');
     const existe = await this.categoriaRepo.findOneBy({ nome: nomeLimpo });
     if (existe) throw new ConflictException(`Categoria "${nomeLimpo}" já existe.`);
-    const cat = this.categoriaRepo.create({ nome: nomeLimpo });
+    const codigoLimpo = codigo?.trim().toUpperCase() || null;
+    const cat = this.categoriaRepo.create({ nome: nomeLimpo, codigo: codigoLimpo });
     return this.categoriaRepo.save(cat);
   }
 
-  async atualizarCategoria(id: string, nome: string): Promise<CategoriaInsumo> {
+  async atualizarCategoria(id: string, nome: string, codigo?: string): Promise<CategoriaInsumo> {
     const c = await this.categoriaRepo.findOneBy({ id });
     if (!c) throw new NotFoundException('Categoria não encontrada.');
     const nomeLimpo = nome?.trim();
     if (!nomeLimpo) throw new BadRequestException('Nome é obrigatório.');
     c.nome = nomeLimpo;
+    if (codigo !== undefined) c.codigo = codigo?.trim().toUpperCase() || null;
     return this.categoriaRepo.save(c);
   }
 

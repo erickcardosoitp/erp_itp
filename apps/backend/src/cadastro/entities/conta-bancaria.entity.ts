@@ -26,6 +26,10 @@ export class ContaBancaria {
   @Column({ default: true })
   ativo: boolean;
 
+  /** Código interno gerado automaticamente: ITP-BNCO-YYYYMM-NNN */
+  @Column({ type: 'text', nullable: true, unique: true })
+  codigo_interno: string | null;
+
   @CreateDateColumn()
   created_at: Date;
 
