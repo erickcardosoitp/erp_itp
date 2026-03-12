@@ -51,7 +51,7 @@ export default function EstoquePage() {
   const [showInativos, setShowInativos] = useState(false);
   const [mostrarColetor, setMostrarColetor] = useState(false);
   const coletorUrl = typeof window !== 'undefined'
-    ? `${window.location.origin}/estoque/coletor?token=${process.env.NEXT_PUBLIC_COLETOR_TOKEN || 'configure-COLETOR_TOKEN'}`
+    ? `${window.location.origin}/estoque/coletor?token=${process.env.NEXT_PUBLIC_COLETOR_TOKEN || 'itp-coletor-2026'}`
     : '';
 
   const [modalProduto, setModalProduto] = useState<{ aberto: boolean; editando: Produto | null }>({ aberto: false, editando: null });

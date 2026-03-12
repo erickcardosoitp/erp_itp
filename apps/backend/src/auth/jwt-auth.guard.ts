@@ -33,9 +33,18 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
 
   /**
    * Customização do tratamento de erro para fornecer logs mais claros.
+   * O 4º parâmetro (context) é suportado pelo NestJS Passport desde v9.
    */
-  handleRequest(err: any, user: any, info: any) {
-    // Se houver erro ou o usuário não for encontrado (cookie ausente ou inválido)
+  handleRequest(err: any, user: any, info: any, context?: ExecutionContext) {
+    // Rotas @Public() não exigem usuário — nunca deve chegar aqui, mas como
+    // salvaguarda para o ambiente serverless Vercel, garantimos que não lança.
+    if (context) {
+      const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
+        context.getHandler(),
+        context.getClass(),
+      ]);
+      if (isPublic) return user ?? null;
+    }
     if (err || !user) {
       throw err || new UnauthorizedException('Acesso negado: Sessão inválida ou expirada.');
     }
