@@ -7,6 +7,7 @@ import { ThemeProvider } from 'next-themes';
 import Sidebar from './Sidebar';
 import UserHeader from './UserHeader';
 import { Toaster } from '@/components/ui/sonner';
+import PwaInstall from './PwaInstall';
 
 export default function ClientShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -48,6 +49,7 @@ export default function ClientShell({ children }: { children: React.ReactNode })
         </main>
 
         <Toaster richColors />
+        <PwaInstall />
       </ThemeProvider>
     </AuthProvider>
   );

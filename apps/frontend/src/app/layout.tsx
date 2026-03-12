@@ -6,8 +6,17 @@ const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata = {
-  title: 'Instituto Tia Pretinha',
-  description: 'Sistema de Gestão ERP',
+  title: 'Sistema ITP — Instituto Tia Pretinha',
+  description: 'Sistema de Gestão ERP do Instituto Tia Pretinha',
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'Sistema ITP',
+  },
+  other: {
+    'mobile-web-app-capable': 'yes',
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

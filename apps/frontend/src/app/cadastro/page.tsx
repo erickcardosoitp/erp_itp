@@ -1341,8 +1341,8 @@ function InsumosTab({ onCount }: { onCount: (n: number) => void }) {
   const handleSalvar = async (e: React.FormEvent) => {
     e.preventDefault(); setSalvando(true); setErro('');
     try {
-      if (modal.editando) await api.patch(`/estoque/categorias/${modal.editando.id}`, { nome: formNome });
-      else await api.post('/estoque/categorias', { nome: formNome });
+      if (modal.editando) await api.patch(`/estoque/categorias/${modal.editando.id}`, { nome: formNome, codigo: formCodigo || undefined });
+      else await api.post('/estoque/categorias', { nome: formNome, codigo: formCodigo || undefined });
       fecharModal(); load();
     } catch (e: any) { setErro(e.response?.data?.message || 'Erro ao salvar.'); }
     setSalvando(false);
@@ -1387,6 +1387,7 @@ function InsumosTab({ onCount }: { onCount: (n: number) => void }) {
         <thead className="bg-slate-50 dark:bg-slate-700/50 border-b border-slate-100 dark:border-slate-600">
           <tr className="text-[9px] font-black uppercase text-slate-400 tracking-widest">
             <th className="text-left px-6 py-4">Nome da Categoria</th>
+            <th className="text-left px-6 py-4">Código</th>
             <th className="text-center px-6 py-4">Produtos Vinculados</th>
             <th className="text-left px-6 py-4">Cadastrado em</th>
             <th className="text-right px-6 py-4">Ações</th>
@@ -1400,6 +1401,11 @@ function InsumosTab({ onCount }: { onCount: (n: number) => void }) {
             return (
               <tr key={c.id} className="hover:bg-orange-50/30 dark:hover:bg-orange-900/20 transition-colors">
                 <td className="px-6 py-4 font-bold text-slate-800 dark:text-slate-100 text-sm">{c.nome}</td>
+                <td className="px-6 py-4">
+                  {c.codigo
+                    ? <span className="font-mono text-[11px] bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-700/40 px-2 py-0.5 rounded">{c.codigo}</span>
+                    : <span className="text-slate-300 text-xs">—</span>}
+                </td>
                 <td className="px-6 py-4 text-center">
                   <span className={`px-3 py-1 rounded-full text-[10px] font-black border ${
                     total > 0
@@ -1430,8 +1436,14 @@ function InsumosTab({ onCount }: { onCount: (n: number) => void }) {
               required
               placeholder="Ex: Insumos - Cozinha"
             />
+            <FieldInput
+              label="Código (opcional)"
+              value={formCodigo}
+              onChange={v => setFormCodigo(v.toUpperCase())}
+              placeholder="Ex: ALIM, HGNE, COZINHA"
+            />
             <p className="text-[10px] text-slate-400 dark:text-slate-500">
-              O nome será exibido no seletor de categoria ao cadastrar produtos no módulo Estoque.
+              O nome será exibido no seletor de categoria ao cadastrar produtos no módulo Estoque. O código é um identificador curto definido por você.
             </p>
             <BtnSalvar salvando={salvando} editando={!!modal.editando} cor="orange" />
           </form>
@@ -1501,6 +1513,7 @@ function DoadoresTab({ onCount }: { onCount: (n: number) => void }) {
         <thead className="bg-slate-50 dark:bg-slate-700/50 border-b border-slate-100 dark:border-slate-600">
           <tr className="text-[9px] font-black uppercase text-slate-400 tracking-widest">
             <th className="text-left px-6 py-4">Nome</th>
+            <th className="text-left px-6 py-4">Cód. Interno</th>
             <th className="text-center px-6 py-4">Tipo</th>
             <th className="text-left px-6 py-4">CPF / CNPJ</th>
             <th className="text-left px-6 py-4">Contato</th>
@@ -1516,6 +1529,11 @@ function DoadoresTab({ onCount }: { onCount: (n: number) => void }) {
                   <Avatar nome={d.nome} cor="rose" />
                   <span className="font-bold text-slate-800 dark:text-slate-100 text-sm">{d.nome}</span>
                 </div>
+              </td>
+              <td className="px-6 py-4">
+                {d.codigo_interno
+                  ? <span className="font-mono text-[11px] bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-700/40 px-2 py-0.5 rounded">{d.codigo_interno}</span>
+                  : <span className="text-slate-300 text-xs">—</span>}
               </td>
               <td className="px-6 py-4 text-center">
                 <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase border ${d.tipo === 'PJ' ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-violet-50 text-violet-600 border-violet-100'}`}>
@@ -1621,6 +1639,7 @@ function ContasTab({ onCount }: { onCount: (n: number) => void }) {
         <thead className="bg-slate-50 dark:bg-slate-700/50 border-b border-slate-100 dark:border-slate-600">
           <tr className="text-[9px] font-black uppercase text-slate-400 tracking-widest">
             <th className="text-left px-6 py-4">Banco</th>
+            <th className="text-left px-6 py-4">Cód. Interno</th>
             <th className="text-left px-6 py-4">Titular</th>
             <th className="text-left px-6 py-4">Agência / Conta</th>
             <th className="text-center px-6 py-4">Tipo</th>
@@ -1633,6 +1652,11 @@ function ContasTab({ onCount }: { onCount: (n: number) => void }) {
           {filtrados.map(c => (
             <tr key={c.id} className="hover:bg-indigo-50/30 dark:hover:bg-indigo-900/20 transition-colors">
               <td className="px-6 py-4 font-bold text-slate-800 dark:text-slate-100 text-sm">{c.banco}</td>
+              <td className="px-6 py-4">
+                {c.codigo_interno
+                  ? <span className="font-mono text-[11px] bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-700/40 px-2 py-0.5 rounded">{c.codigo_interno}</span>
+                  : <span className="text-slate-300 text-xs">—</span>}
+              </td>
               <td className="px-6 py-4 text-sm text-slate-700 dark:text-slate-300">{c.titular}</td>
               <td className="px-6 py-4 text-xs text-slate-500 font-mono">
                 <div>{c.agencia ? `Ag: ${c.agencia}` : '–'}</div>
