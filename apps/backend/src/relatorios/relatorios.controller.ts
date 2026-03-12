@@ -96,4 +96,20 @@ export class RelatoriosController {
     const fim = data_fim || new Date().toISOString().slice(0, 10);
     return this.svc.relatorioMovimentoEstoque(ini, fim);
   }
+
+  // ── DRE ────────────────────────────────────────────────────────────────────
+
+  @Get('financeiro/dre')
+  dre(
+    @Query('ano')     ano?: string,
+    @Query('mes_ini') mes_ini?: string,
+    @Query('mes_fim') mes_fim?: string,
+  ) {
+    const now = new Date();
+    return this.svc.dre(
+      Number(ano)     || now.getFullYear(),
+      Number(mes_ini) || 1,
+      Number(mes_fim) || 12,
+    );
+  }
 }

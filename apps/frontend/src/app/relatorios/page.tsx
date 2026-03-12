@@ -17,7 +17,8 @@ function moeda(v: number) {
 }
 
 function exportarExcel(dados: Record<string, unknown>[], nomeArquivo: string) {
-  import('xlsx').then(XLSX => {
+  import('xlsx').then(mod => {
+    const XLSX = (mod.default ?? mod) as typeof import('xlsx');
     const ws = XLSX.utils.json_to_sheet(dados);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Relatório');
@@ -27,7 +28,7 @@ function exportarExcel(dados: Record<string, unknown>[], nomeArquivo: string) {
 
 const CORES_PIZZA = ['#7c3aed', '#a855f7', '#c084fc', '#d8b4fe', '#ede9fe', '#4f46e5', '#818cf8'];
 
-type AbaId = 'financeiro' | 'academico' | 'social' | 'estoque';
+type AbaId = 'financeiro' | 'academico' | 'social' | 'estoque' | 'dre';
 
 /* ════════════════════════════════════════════════════════
    ABAS FINANCEIRO
@@ -664,11 +665,244 @@ function AbaEstoque() {
 }
 
 /* ════════════════════════════════════════════════════════
+   DRE — Demonstração de Resultado do Exercício
+═══════════════════════════════════════════════════════════ */
+
+interface DreLinha { conta: string; valor: number }
+interface DreGrupoDespesa { grupo: string; itens: DreLinha[]; subtotal: number }
+interface DreDado {
+  periodo: { ano: number; mes_ini: number; mes_fim: number };
+  receitasBrutas: DreLinha[];
+  totalReceitasBrutas: number;
+  deducoes: DreLinha[];
+  totalDeducoes: number;
+  receitaLiquida: number;
+  gruposDespesas: DreGrupoDespesa[];
+  totalDespesas: number;
+  resultadoOperacional: number;
+  resultadoFinanceiro: number;
+  resultadoExercicio: number;
+  margem: string;
+  evolucaoMensal: { mes: number; receita: number; despesa: number; resultado: number }[];
+}
+
+const MESES_PT = ['','Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+
+function LinhaDRE({ descricao, valor, nivel = 1, negrito = false, destaque = false, inverter = false }: {
+  descricao: string; valor: number; nivel?: number;
+  negrito?: boolean; destaque?: boolean; inverter?: boolean;
+}) {
+  const cor = destaque
+    ? valor >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'
+    : inverter
+      ? 'text-red-500 dark:text-red-400'
+      : 'text-slate-700 dark:text-slate-300';
+  return (
+    <tr className={`border-b border-slate-100 dark:border-slate-800 ${
+      destaque ? 'bg-slate-50 dark:bg-slate-800/60' : ''
+    }`}>
+      <td className={`py-2 ${nivel === 1 ? 'pl-4' : nivel === 2 ? 'pl-8' : 'pl-12'} text-xs ${
+        negrito ? 'font-black text-slate-800 dark:text-slate-100 uppercase tracking-wide' : 'text-slate-600 dark:text-slate-400'
+      }`}>{descricao}</td>
+      <td className={`py-2 pr-4 text-right text-xs font-bold ${cor}`}>
+        {moeda(valor)}
+      </td>
+    </tr>
+  );
+}
+
+function AbaDRE() {
+  const anoAtual = new Date().getFullYear();
+  const [dre, setDre]       = useState<DreDado | null>(null);
+  const [ano, setAno]       = useState(String(anoAtual));
+  const [mesIni, setMesIni] = useState('1');
+  const [mesFim, setMesFim] = useState('12');
+  const [carregando, setCarregando] = useState(false);
+
+  const carregar = useCallback(async () => {
+    setCarregando(true);
+    try {
+      const { data } = await api.get<DreDado>(`/relatorios/financeiro/dre?ano=${ano}&mes_ini=${mesIni}&mes_fim=${mesFim}`);
+      setDre(data);
+    } catch {/* silencia */} finally { setCarregando(false); }
+  }, [ano, mesIni, mesFim]);
+
+  const exportar = () => {
+    if (!dre) return;
+    const linhas: Record<string, unknown>[] = [
+      { conta: '1. RECEITAS BRUTAS', valor: '' },
+      ...dre.receitasBrutas.map(r => ({ conta: `   ${r.conta}`, valor: r.valor })),
+      { conta: 'TOTAL RECEITAS BRUTAS', valor: dre.totalReceitasBrutas },
+      { conta: '(-) Deduções', valor: -dre.totalDeducoes },
+      { conta: '= RECEITA LÍQUIDA', valor: dre.receitaLiquida },
+      { conta: '' , valor: '' },
+      { conta: '2. DESPESAS', valor: '' },
+      ...dre.gruposDespesas.flatMap(g => [
+        { conta: `   ${g.grupo}`, valor: '' },
+        ...g.itens.map(i => ({ conta: `      ${i.conta}`, valor: -i.valor })),
+        { conta: `   Subtotal ${g.grupo}`, valor: -g.subtotal },
+      ]),
+      { conta: 'TOTAL DESPESAS', valor: -dre.totalDespesas },
+      { conta: '' , valor: '' },
+      { conta: '= RESULTADO OPERACIONAL', valor: dre.resultadoOperacional },
+      { conta: '± Resultado Financeiro', valor: dre.resultadoFinanceiro },
+      { conta: '= RESULTADO DO EXERCÍCIO', valor: dre.resultadoExercicio },
+      { conta: 'Margem (%)', valor: `${dre.margem}%` },
+    ];
+    exportarExcel(linhas, `DRE_${ano}`);
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Filtros */}
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 p-4 flex flex-wrap gap-3 items-end">
+        <div>
+          <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">Ano</label>
+          <input type="number" value={ano} onChange={e => setAno(e.target.value)} min="2020" max="2099"
+            className="border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-sm w-24 bg-white dark:bg-slate-800 dark:text-slate-100" />
+        </div>
+        <div>
+          <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">Mês Inicial</label>
+          <select value={mesIni} onChange={e => setMesIni(e.target.value)}
+            className="border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-slate-800 dark:text-slate-100">
+            {MESES_PT.slice(1).map((m,i) => <option key={i+1} value={String(i+1)}>{m}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">Mês Final</label>
+          <select value={mesFim} onChange={e => setMesFim(e.target.value)}
+            className="border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-slate-800 dark:text-slate-100">
+            {MESES_PT.slice(1).map((m,i) => <option key={i+1} value={String(i+1)}>{m}</option>)}
+          </select>
+        </div>
+        <button onClick={carregar} disabled={carregando}
+          className="px-4 py-2 text-xs font-black bg-purple-600 text-white rounded-xl hover:bg-purple-700 flex items-center gap-2 disabled:opacity-50">
+          {carregando ? <RefreshCw size={13} className="animate-spin" /> : <Filter size={13} />} Gerar DRE
+        </button>
+        {dre && (
+          <button onClick={exportar}
+            className="px-4 py-2 text-xs font-black border border-slate-200 dark:border-slate-600 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2">
+            <Download size={13} /> Exportar Excel
+          </button>
+        )}
+      </div>
+
+      {dre && (
+        <>
+          {/* KPIs */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: 'Receita Bruta',    valor: dre.totalReceitasBrutas, cor: 'text-blue-600' },
+              { label: 'Receita Líquida',  valor: dre.receitaLiquida,     cor: 'text-green-600' },
+              { label: 'Total Despesas',   valor: -dre.totalDespesas,     cor: 'text-red-500' },
+              { label: 'Resultado Final',  valor: dre.resultadoExercicio,  cor: dre.resultadoExercicio >= 0 ? 'text-emerald-600' : 'text-red-500' },
+            ].map(k => (
+              <div key={k.label} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 text-center shadow-sm">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">{k.label}</p>
+                <p className={`text-lg font-black mt-1 ${k.cor}`}>{moeda(k.valor)}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* DRE Table */}
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-sm">
+            <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+              <h3 className="font-black text-sm uppercase tracking-widest text-slate-700 dark:text-slate-200">
+                DRE — {MESES_PT[dre.periodo.mes_ini]}/{dre.periodo.ano} a {MESES_PT[dre.periodo.mes_fim]}/{dre.periodo.ano}
+              </h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-slate-50 dark:bg-slate-800">
+                    <th className="px-4 py-2.5 text-left text-[10px] font-black text-slate-500 uppercase tracking-wider">Descrição</th>
+                    <th className="px-4 py-2.5 text-right text-[10px] font-black text-slate-500 uppercase tracking-wider">Valor (R$)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {/* Receitas */}
+                  <LinhaDRE descricao="1. RECEITAS OPERACIONAIS" valor={0} nivel={1} negrito />
+                  {dre.receitasBrutas.map((r,i) => (
+                    <LinhaDRE key={i} descricao={r.conta} valor={r.valor} nivel={2} />
+                  ))}
+                  <LinhaDRE descricao="TOTAL RECEITAS BRUTAS" valor={dre.totalReceitasBrutas} nivel={1} negrito />
+
+                  {dre.deducoes.length > 0 && (
+                    <>
+                      <LinhaDRE descricao="(-) DEDUÇÕES DE RECEITAS" valor={0} nivel={1} negrito />
+                      {dre.deducoes.map((d,i) => (
+                        <LinhaDRE key={i} descricao={d.conta} valor={-d.valor} nivel={2} inverter />
+                      ))}
+                    </>
+                  )}
+
+                  <LinhaDRE descricao="= RECEITA LÍQUIDA" valor={dre.receitaLiquida} nivel={1} negrito destaque />
+
+                  {/* Despesas */}
+                  <LinhaDRE descricao="2. DESPESAS" valor={0} nivel={1} negrito />
+                  {dre.gruposDespesas.map((g, gi) => (
+                    <React.Fragment key={gi}>
+                      <LinhaDRE descricao={g.grupo} valor={0} nivel={2} negrito />
+                      {g.itens.map((it, ii) => (
+                        <LinhaDRE key={ii} descricao={it.conta} valor={-it.valor} nivel={3} inverter />
+                      ))}
+                      <LinhaDRE descricao={`Subtotal ${g.grupo}`} valor={-g.subtotal} nivel={2} negrito inverter />
+                    </React.Fragment>
+                  ))}
+                  <LinhaDRE descricao="TOTAL DESPESAS" valor={-dre.totalDespesas} nivel={1} negrito inverter />
+
+                  {/* Resultados */}
+                  <LinhaDRE descricao="= RESULTADO OPERACIONAL" valor={dre.resultadoOperacional} nivel={1} negrito destaque />
+
+                  {dre.resultadoFinanceiro !== 0 && (
+                    <LinhaDRE descricao="± Resultado Financeiro" valor={dre.resultadoFinanceiro} nivel={2} />
+                  )}
+
+                  <LinhaDRE descricao="= RESULTADO DO EXERCÍCIO" valor={dre.resultadoExercicio} nivel={1} negrito destaque />
+                  <tr className="bg-purple-50 dark:bg-purple-900/20">
+                    <td className="py-2 pl-4 text-xs font-black text-purple-700 dark:text-purple-300 uppercase tracking-wide">Margem (%)</td>
+                    <td className="py-2 pr-4 text-right text-xs font-black text-purple-700 dark:text-purple-300">{dre.margem}%</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Gráfico evolução */}
+          {dre.evolucaoMensal.length > 0 && (
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-sm">
+              <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+                <h3 className="font-black text-sm uppercase tracking-widest text-slate-700 dark:text-slate-200">Evolução Mensal do Resultado</h3>
+              </div>
+              <div className="p-5">
+                <ResponsiveContainer width="100%" height={260}>
+                  <LineChart data={dre.evolucaoMensal.map(m => ({ ...m, mes: MESES_PT[m.mes] }))}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
+                    <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `R$${(v/1000).toFixed(0)}k`} />
+                    <Tooltip formatter={(v: number) => moeda(v)} />
+                    <Legend />
+                    <Line type="monotone" dataKey="receita" name="Receita" stroke="#7c3aed" strokeWidth={2} dot={false} />
+                    <Line type="monotone" dataKey="despesa" name="Despesa" stroke="#f87171" strokeWidth={2} dot={false} />
+                    <Line type="monotone" dataKey="resultado" name="Resultado" stroke="#10b981" strokeWidth={2.5} strokeDasharray="5 5" dot={false} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════
    PÁGINA PRINCIPAL
 ═══════════════════════════════════════════════════════════ */
 
 const ABAS: { id: AbaId; label: string; icon: React.ElementType; color: string }[] = [
   { id: 'financeiro', label: 'Financeiro',  icon: DollarSign, color: 'text-green-600' },
+  { id: 'dre',        label: 'DRE',         icon: TrendingUp, color: 'text-purple-600' },
   { id: 'academico',  label: 'Acadêmico',   icon: BookOpen,   color: 'text-blue-600' },
   { id: 'social',     label: 'Social',      icon: Globe,      color: 'text-emerald-600' },
   { id: 'estoque',    label: 'Estoque',     icon: Package,    color: 'text-orange-500' },
@@ -715,6 +949,7 @@ export default function RelatoriosPage() {
 
         {/* Conteúdo */}
         {aba === 'financeiro' && <AbaFinanceiro />}
+        {aba === 'dre'        && <AbaDRE />}
         {aba === 'academico'  && <AbaAcademico />}
         {aba === 'social'     && <AbaSocial />}
         {aba === 'estoque'    && <AbaEstoque />}

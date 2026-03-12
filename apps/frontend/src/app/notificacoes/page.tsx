@@ -53,9 +53,10 @@ export default function NotificacoesPage() {
   const carregar = useCallback(async () => {
     setCarregando(true);
     try {
-      const { data } = await api.get<Notificacao[]>('/notificacoes?limite=100');
-      setNotificacoes(data);
-      setTotalNaoLidas(data.filter(n => !n.lida).length);
+      const { data } = await api.get<{ items: Notificacao[]; total: number }>('/notificacoes?limite=100');
+      const lista = data.items ?? [];
+      setNotificacoes(lista);
+      setTotalNaoLidas(lista.filter(n => !n.lida).length);
     } catch {
       /* silencia erros de rede */
     } finally {

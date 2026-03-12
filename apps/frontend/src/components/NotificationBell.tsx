@@ -59,8 +59,8 @@ export default function NotificationBell() {
   const carregarNotificacoes = useCallback(async () => {
     setCarregando(true);
     try {
-      const { data } = await api.get<Notificacao[]>('/notificacoes?limite=10');
-      setNotificacoes(data);
+      const { data } = await api.get<{ items: Notificacao[] }>('/notificacoes?limite=10');
+      setNotificacoes(data.items ?? []);
     } catch {
       // silencia erros de rede
     } finally {

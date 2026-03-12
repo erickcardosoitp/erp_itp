@@ -452,4 +452,115 @@ export class RelatoriosService {
     }
     return Object.entries(map).map(([k, v]) => ({ [campo]: k, total: v }));
   }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  //  DRE — Demonstração de Resultado do Exercício
+  // ══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * DRE completo no formato padrão de entidade sem fins lucrativos:
+   * Receitas brutas → Deduções → Receita líquida → Despesas por grupo
+   * → Resultado operacional → Resultado final
+   */
+  async dre(ano: number, mes_ini: number, mes_fim: number) {
+    const rows: any[] = await this.db.query(`
+      SELECT
+        tipo_movimentacao,
+        categoria,
+        plano_contas,
+        SUM(valor) AS total
+      FROM movimentacoes_financeiras
+      WHERE EXTRACT(YEAR FROM data) = $1
+        AND EXTRACT(MONTH FROM data) BETWEEN $2 AND $3
+        AND status = 'Pago'
+      GROUP BY tipo_movimentacao, categoria, plano_contas
+      ORDER BY tipo_movimentacao, plano_contas, categoria
+    `, [ano, mes_ini, mes_fim]);
+
+    // Separação receitas x despesas
+    const isReceita  = (r: any) => r.tipo_movimentacao === 'Receita' || r.tipo_movimentacao === 'Entrada';
+    const isDespesa  = (r: any) => r.tipo_movimentacao === 'Despesa' || r.tipo_movimentacao === 'Saída';
+    const isDeducao  = (r: any) => r.tipo_movimentacao === 'Dedução'  || r.categoria?.toLowerCase().includes('devolução') || r.categoria?.toLowerCase().includes('desconto');
+
+    // ── GRUPO: Receitas Operacionais ──────────────────────────────────────
+    const receitasBrutas = rows
+      .filter(r => isReceita(r) && !isDeducao(r))
+      .map(r => ({ conta: r.plano_contas || r.categoria || 'Receitas', valor: this.num(r.total) }));
+
+    const deducoes = rows
+      .filter(r => isDeducao(r))
+      .map(r => ({ conta: r.plano_contas || r.categoria || 'Deduções', valor: this.num(r.total) }));
+
+    const totalReceitasBrutas  = receitasBrutas.reduce((s, i) => s + i.valor, 0);
+    const totalDeducoes        = deducoes.reduce((s, i) => s + i.valor, 0);
+    const receitaLiquida       = totalReceitasBrutas - totalDeducoes;
+
+    // ── GRUPO: Despesas (agrupadas por plano_contas ou categoria) ─────────
+    const despesasMap: Record<string, { itens: { conta: string; valor: number }[]; subtotal: number }> = {};
+
+    for (const r of rows.filter(r => isDespesa(r))) {
+      const grupo = r.plano_contas || 'Outras Despesas';
+      if (!despesasMap[grupo]) despesasMap[grupo] = { itens: [], subtotal: 0 };
+      despesasMap[grupo].itens.push({ conta: r.categoria || grupo, valor: this.num(r.total) });
+      despesasMap[grupo].subtotal += this.num(r.total);
+    }
+
+    const gruposDespesas = Object.entries(despesasMap).map(([grupo, v]) => ({
+      grupo,
+      itens: v.itens,
+      subtotal: v.subtotal,
+    }));
+
+    const totalDespesas = gruposDespesas.reduce((s, g) => s + g.subtotal, 0);
+
+    // ── RESULTADO ─────────────────────────────────────────────────────────
+    const resultadoOperacional = receitaLiquida - totalDespesas;
+
+    // Receitas/Despesas financeiras (juros, rendimentos)
+    const recFinanceiras  = rows.filter(r => isReceita(r) && (r.categoria?.toLowerCase().includes('juros') || r.categoria?.toLowerCase().includes('rendimento')));
+    const despFinanceiras = rows.filter(r => isDespesa(r)  && (r.categoria?.toLowerCase().includes('juros') || r.categoria?.toLowerCase().includes('multa')));
+    const resultadoFinanceiro = recFinanceiras.reduce((s, r) => s + this.num(r.total), 0)
+                              - despFinanceiras.reduce((s, r) => s + this.num(r.total), 0);
+
+    const resultadoExercicio = resultadoOperacional + resultadoFinanceiro;
+
+    // ── MENSAL para gráfico ───────────────────────────────────────────────
+    const mensal: any[] = await this.db.query(`
+      SELECT
+        EXTRACT(MONTH FROM data)::INT AS mes,
+        SUM(valor) FILTER (WHERE tipo_movimentacao IN ('Receita','Entrada')) AS receita,
+        SUM(valor) FILTER (WHERE tipo_movimentacao IN ('Despesa','Saída'))   AS despesa
+      FROM movimentacoes_financeiras
+      WHERE EXTRACT(YEAR FROM data) = $1
+        AND EXTRACT(MONTH FROM data) BETWEEN $2 AND $3
+        AND status = 'Pago'
+      GROUP BY mes ORDER BY mes
+    `, [ano, mes_ini, mes_fim]);
+
+    const meses = Array.from({ length: mes_fim - mes_ini + 1 }, (_, i) => {
+      const m = mes_ini + i;
+      const row = mensal.find(r => r.mes === m);
+      const rec  = this.num(row?.receita);
+      const desp = this.num(row?.despesa);
+      return { mes: m, receita: rec, despesa: desp, resultado: rec - desp };
+    });
+
+    return {
+      periodo: { ano, mes_ini, mes_fim },
+      receitasBrutas,
+      totalReceitasBrutas,
+      deducoes,
+      totalDeducoes,
+      receitaLiquida,
+      gruposDespesas,
+      totalDespesas,
+      resultadoOperacional,
+      resultadoFinanceiro,
+      resultadoExercicio,
+      margem: receitaLiquida > 0
+        ? ((resultadoExercicio / receitaLiquida) * 100).toFixed(2)
+        : '0.00',
+      evolucaoMensal: meses,
+    };
+  }
 }
