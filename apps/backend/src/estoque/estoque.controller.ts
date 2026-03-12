@@ -95,6 +95,32 @@ export class EstoqueController {
     );
   }
 
+  // ── Categorias ────────────────────────────────────────────────────────────
+
+  @Get('categorias')
+  @Roles(Role.ADMIN, Role.VP, Role.DRT, Role.DRT_ADJ, Role.ASSIST, Role.CZNH, Role.MNT, Role.PROF)
+  listarCategorias() {
+    return this.svc.listarCategorias();
+  }
+
+  @Post('categorias')
+  @Roles(Role.ADMIN, Role.VP, Role.DRT, Role.DRT_ADJ)
+  criarCategoria(@Body() body: { nome: string }) {
+    return this.svc.criarCategoria(body.nome);
+  }
+
+  @Patch('categorias/:id')
+  @Roles(Role.ADMIN, Role.VP, Role.DRT, Role.DRT_ADJ)
+  atualizarCategoria(@Param('id') id: string, @Body() body: { nome: string }) {
+    return this.svc.atualizarCategoria(id, body.nome);
+  }
+
+  @Delete('categorias/:id')
+  @Roles(Role.ADMIN, Role.DRT)
+  deletarCategoria(@Param('id') id: string) {
+    return this.svc.deletarCategoria(id);
+  }
+
   private validarTokenColetor(token?: string) {
     const esperado = process.env.COLETOR_TOKEN;
     if (!esperado) {

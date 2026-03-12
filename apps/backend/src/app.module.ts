@@ -161,6 +161,19 @@ export class AppModule implements OnModuleInit {
           "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now()
         )
       `);
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS estoque_categorias (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          nome TEXT NOT NULL UNIQUE,
+          "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `);
+      // Seed categorias padrão se a tabela estiver vazia
+      await this.dataSource.query(`
+        INSERT INTO estoque_categorias (nome)
+        VALUES ('Insumos - Cozinha'), ('Insumos - Limpeza'), ('Insumos - Material')
+        ON CONFLICT (nome) DO NOTHING
+      `);
       this.logger.log('✅ Tabelas de estoque criadas (IF NOT EXISTS)');
 
       // Auto-atribuir matrícula a usuários existentes que não possuem

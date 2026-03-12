@@ -1,8 +1,9 @@
-import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Produto } from './entities/produto.entity';
 import { MovimentoEstoque } from './entities/movimento-estoque.entity';
+import { CategoriaInsumo } from './entities/categoria-insumo.entity';
 
 @Injectable()
 export class EstoqueService {
@@ -11,6 +12,7 @@ export class EstoqueService {
   constructor(
     @InjectRepository(Produto) private produtoRepo: Repository<Produto>,
     @InjectRepository(MovimentoEstoque) private movimentoRepo: Repository<MovimentoEstoque>,
+    @InjectRepository(CategoriaInsumo) private categoriaRepo: Repository<CategoriaInsumo>,
   ) {}
 
   // ── Produtos ──────────────────────────────────────────────────────────────
@@ -130,5 +132,38 @@ export class EstoqueService {
       where: { ativo: true },
       order: { categoria: 'ASC', nome: 'ASC' },
     });
+  }
+
+  // ── Categorias ────────────────────────────────────────────────────────────
+
+  async listarCategorias(): Promise<CategoriaInsumo[]> {
+    return this.categoriaRepo.find({ order: { nome: 'ASC' } });
+  }
+
+  async criarCategoria(nome: string): Promise<CategoriaInsumo> {
+    const nomeLimpo = nome?.trim();
+    if (!nomeLimpo) throw new BadRequestException('Nome da categoria é obrigatório.');
+    const existe = await this.categoriaRepo.findOneBy({ nome: nomeLimpo });
+    if (existe) throw new ConflictException(`Categoria "${nomeLimpo}" já existe.`);
+    const cat = this.categoriaRepo.create({ nome: nomeLimpo });
+    return this.categoriaRepo.save(cat);
+  }
+
+  async atualizarCategoria(id: string, nome: string): Promise<CategoriaInsumo> {
+    const c = await this.categoriaRepo.findOneBy({ id });
+    if (!c) throw new NotFoundException('Categoria não encontrada.');
+    const nomeLimpo = nome?.trim();
+    if (!nomeLimpo) throw new BadRequestException('Nome é obrigatório.');
+    c.nome = nomeLimpo;
+    return this.categoriaRepo.save(c);
+  }
+
+  async deletarCategoria(id: string): Promise<{ ok: boolean }> {
+    const c = await this.categoriaRepo.findOneBy({ id });
+    if (!c) throw new NotFoundException('Categoria não encontrada.');
+    const usada = await this.produtoRepo.findOneBy({ categoria: c.nome, ativo: true });
+    if (usada) throw new BadRequestException(`A categoria "${c.nome}" está em uso e não pode ser excluída.`);
+    await this.categoriaRepo.remove(c);
+    return { ok: true };
   }
 }
