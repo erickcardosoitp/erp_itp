@@ -26,6 +26,9 @@ export function middleware(request: NextRequest) {
     '/estoque',
     '/relatorios',
   ];
+  // Rota pública do coletor — não exige autenticação
+  if (pathname.startsWith('/estoque/coletor')) return NextResponse.next();
+
   const isPrivateRoute = privateRoutes.some(route => pathname.startsWith(route));
 
   if (isPrivateRoute && !hasValidToken) {

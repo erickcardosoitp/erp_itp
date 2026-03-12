@@ -41,6 +41,7 @@ import { AcademicoModule } from './academico/academico.module';
 import { CadastroModule } from './cadastro/cadastro.module';
 import { FuncionariosModule } from './funcionarios/funcionarios.module';
 import { FinanceiroModule } from './financeiro/financeiro.module';
+import { EstoqueModule } from './estoque/estoque.module';
 
 @Module({
   imports: [
@@ -102,6 +103,7 @@ import { FinanceiroModule } from './financeiro/financeiro.module';
     CadastroModule,
     FuncionariosModule,
     FinanceiroModule,
+    EstoqueModule,
   ],
   controllers: [
     AppController, 
@@ -133,6 +135,33 @@ export class AppModule implements OnModuleInit {
       await this.dataSource.query(`ALTER TABLE funcionarios ADD COLUMN IF NOT EXISTS matricula TEXT UNIQUE`);
       await this.dataSource.query(`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS matricula TEXT UNIQUE`);
       this.logger.log('✅ Migrations de matrícula aplicadas (IF NOT EXISTS)');
+
+      // Tabelas de Estoque
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS estoque_produtos (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          nome TEXT NOT NULL,
+          categoria TEXT DEFAULT 'Geral',
+          unidade_medida TEXT NOT NULL DEFAULT 'un',
+          quantidade_atual NUMERIC(12,3) NOT NULL DEFAULT 0,
+          estoque_minimo NUMERIC(12,3) NOT NULL DEFAULT 0,
+          ativo BOOLEAN NOT NULL DEFAULT true,
+          "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+          "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `);
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS estoque_movimentos (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          produto_id UUID NOT NULL REFERENCES estoque_produtos(id) ON DELETE CASCADE,
+          tipo TEXT NOT NULL CHECK (tipo IN ('entrada', 'baixa')),
+          quantidade NUMERIC(12,3) NOT NULL,
+          observacao TEXT,
+          usuario_nome TEXT,
+          "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `);
+      this.logger.log('✅ Tabelas de estoque criadas (IF NOT EXISTS)');
 
       // Auto-atribuir matrícula a usuários existentes que não possuem
       const semMatricula: { id: string; role: string; createdAt: Date }[] = await this.dataSource.query(
