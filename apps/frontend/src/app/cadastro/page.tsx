@@ -153,7 +153,7 @@ export default function CadastroBasicoPage() {
       ['grupos',       '/grupos'],
       ['cursos',       '/academico/cursos'],
       ['alunos',       '/academico/alunos'],
-      ['insumos',      '/cadastro/insumos'],
+      ['insumos',      '/estoque/categorias'],
       ['doadores',     '/cadastro/doadores'],
       ['contas',       '/cadastro/contas-bancarias'],
       ['fin_tipos_mov',    '/financeiro/tipos-movimentacao'],
@@ -1293,137 +1293,137 @@ function AlunosTab({ onCount }: { onCount: (n: number) => void }) {
   );
 }
 
-// ─── Tab: Insumos ─────────────────────────────────────────────────────────────
+// ─── Tab: Insumos (Categorias de Estoque) ────────────────────────────────────
+
+type CategoriaEstoque = { id: string; nome: string; createdAt: string };
 
 function InsumosTab({ onCount }: { onCount: (n: number) => void }) {
-  const [lista, setLista]   = useState<Insumo[]>([]);
+  const [lista, setLista]     = useState<CategoriaEstoque[]>([]);
+  const [produtos, setProdutos] = useState<{ id: string; categoria: string; ativo: boolean }[]>([]);
   const [loading, setLoading] = useState(true);
-  const [erro, setErro]     = useState('');
-  const [busca, setBusca]   = useState('');
-  const [modal, setModal]   = useState<{ aberto: boolean; editando: Insumo | null }>({ aberto: false, editando: null });
-  const [form, setForm]     = useState<Partial<Insumo>>({ unidade: 'un', status: 'ok', quantidade: 0 });
+  const [erro, setErro]       = useState('');
+  const [busca, setBusca]     = useState('');
+  const [modal, setModal]     = useState<{ aberto: boolean; editando: CategoriaEstoque | null }>({ aberto: false, editando: null });
+  const [formNome, setFormNome] = useState('');
   const [salvando, setSalvando] = useState(false);
 
   const load = useCallback(async () => {
-    setLoading(true);
+    setLoading(true); setErro('');
     try {
-      const r = await api.get('/cadastro/insumos');
-      setLista(r.data); onCount(r.data.length);
-    } catch { setErro('Erro ao carregar insumos.'); }
+      const [rC, rP] = await Promise.allSettled([
+        api.get('/estoque/categorias'),
+        api.get('/estoque/produtos'),
+      ]);
+      const cats: CategoriaEstoque[] = rC.status === 'fulfilled' ? rC.value.data : [];
+      const prods = rP.status === 'fulfilled' ? rP.value.data : [];
+      setLista(cats);
+      setProdutos(prods);
+      onCount(cats.length);
+    } catch { setErro('Erro ao carregar categorias.'); }
     setLoading(false);
   }, [onCount]);
 
   useEffect(() => { load(); }, [load]);
 
-  const abrirCriar  = () => { setForm({ unidade: 'un', status: 'ok', quantidade: 0 }); setModal({ aberto: true, editando: null }); };
-  const abrirEditar = (i: Insumo) => {
-    setForm({ nome: i.nome, categoria: i.categoria, quantidade: i.quantidade, unidade: i.unidade, fornecedor: i.fornecedor, status: i.status });
-    setModal({ aberto: true, editando: i });
-  };
-  const fecharModal = () => { setModal({ aberto: false, editando: null }); setForm({ unidade: 'un', status: 'ok', quantidade: 0 }); setErro(''); };
+  const abrirCriar  = () => { setFormNome(''); setErro(''); setModal({ aberto: true, editando: null }); };
+  const abrirEditar = (c: CategoriaEstoque) => { setFormNome(c.nome); setErro(''); setModal({ aberto: true, editando: c }); };
+  const fecharModal = () => { setModal({ aberto: false, editando: null }); setFormNome(''); setErro(''); };
 
   const handleSalvar = async (e: React.FormEvent) => {
     e.preventDefault(); setSalvando(true); setErro('');
     try {
-      if (modal.editando) await api.patch(`/cadastro/insumos/${modal.editando.id}`, form);
-      else await api.post('/cadastro/insumos', form);
+      if (modal.editando) await api.patch(`/estoque/categorias/${modal.editando.id}`, { nome: formNome });
+      else await api.post('/estoque/categorias', { nome: formNome });
       fecharModal(); load();
     } catch (e: any) { setErro(e.response?.data?.message || 'Erro ao salvar.'); }
     setSalvando(false);
   };
 
-  const handleDeletar = async (id: string) => {
-    if (!confirm('Confirmar exclusão do insumo?')) return;
-    try { await api.delete(`/cadastro/insumos/${id}`); load(); }
+  const handleDeletar = async (c: CategoriaEstoque) => {
+    const total = produtos.filter(p => p.ativo && p.categoria === c.nome).length;
+    if (total > 0) {
+      alert(`A categoria "${c.nome}" possui ${total} produto${total > 1 ? 's' : ''} ativo${total > 1 ? 's' : ''} vinculado${total > 1 ? 's' : ''} no estoque e não pode ser excluída.`);
+      return;
+    }
+    if (!confirm(`Excluir categoria "${c.nome}"?`)) return;
+    try { await api.delete(`/estoque/categorias/${c.id}`); load(); }
     catch (e: any) { alert(e.response?.data?.message || 'Erro ao excluir.'); }
   };
 
-  const statusCor = (s?: string) => {
-    if (s === 'ok') return 'bg-emerald-50 text-emerald-600 border-emerald-100';
-    if (s === 'alerta') return 'bg-amber-50 text-amber-600 border-amber-100';
-    return 'bg-rose-50 text-rose-500 border-rose-100';
-  };
-
-  const filtrados = lista.filter(i =>
-    i.nome.toLowerCase().includes(busca.toLowerCase()) ||
-    (i.categoria ?? '').toLowerCase().includes(busca.toLowerCase()),
+  const filtrados = lista.filter(c =>
+    c.nome.toLowerCase().includes(busca.toLowerCase()),
   );
+
+  const totalProdutos = (nome: string) =>
+    produtos.filter(p => p.ativo && p.categoria === nome).length;
 
   return (
     <div className="space-y-4">
       {erro && <Banner tipo="erro" msg={erro} onClose={() => setErro('')} />}
 
-      {/* ── Protótipo de Numeração para Validação ── */}
-      <div className="bg-purple-50 dark:bg-purple-900/20 border-2 border-dashed border-purple-300 dark:border-purple-700 rounded-2xl p-4 space-y-3">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="bg-purple-600 text-white text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider animate-pulse">PROTÓTIPO EM VALIDAÇÃO</span>
-          <p className="text-xs font-black text-purple-800 dark:text-purple-300 uppercase tracking-wide">Proposta de Numeração Automática por Tipo de Cadastro</p>
+      {/* Info — contexto */}
+      <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-700/40 rounded-2xl px-5 py-3 flex items-start gap-3">
+        <Package size={16} className="text-orange-500 flex-shrink-0 mt-0.5" />
+        <div>
+          <p className="text-xs font-black text-orange-700 dark:text-orange-300 uppercase tracking-wide">Categorias de Insumos — Estoque</p>
+          <p className="text-[11px] text-orange-600 dark:text-orange-400 mt-0.5">
+            Estas categorias são usadas no módulo Estoque para classificar os produtos. Cada categoria criada aqui fica disponível automaticamente no cadastro e visão geral de estoque.
+          </p>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-          {PROTO_NUMERACAO.filter(n => CATEGORIAS_INSUMO.includes(n.cat)).map(n => (
-            <div key={n.cat} className="bg-white dark:bg-slate-800 rounded-xl px-3 py-2 border border-purple-100 dark:border-purple-800/30 space-y-0.5">
-              <div className="text-[9px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-wider">{n.cat}</div>
-              <code className="text-[10px] font-mono font-bold text-slate-700 dark:text-slate-300 block">{n.exemplo}</code>
-            </div>
-          ))}
-        </div>
-        <p className="text-[9px] text-purple-600 dark:text-purple-400 font-semibold">
-          Formato: ITP - [CÓDIGO CATEGORIA] - [ANO][MÊS] - [SEQ]. X = sequencial mensal (reset todo mês). Valide e confirme para implementar no backend.
-        </p>
       </div>
 
-      <BarraAcao busca={busca} setBusca={setBusca} placeholder="Buscar insumo ou categoria..." btnLabel="Novo Insumo" btnCor="orange" onClick={abrirCriar} />
+      <BarraAcao busca={busca} setBusca={setBusca} placeholder="Buscar categoria..." btnLabel="Nova Categoria" btnCor="orange" onClick={abrirCriar} />
 
-      <Tabela loading={loading} vazio={filtrados.length === 0} msgVazio="Nenhum insumo encontrado.">
+      <Tabela loading={loading} vazio={filtrados.length === 0} msgVazio="Nenhuma categoria cadastrada.">
         <thead className="bg-slate-50 dark:bg-slate-700/50 border-b border-slate-100 dark:border-slate-600">
           <tr className="text-[9px] font-black uppercase text-slate-400 tracking-widest">
-            <th className="text-left px-6 py-4">Nome</th>
-            <th className="text-left px-6 py-4">Categoria</th>
-            <th className="text-center px-6 py-4">Quantidade</th>
-            <th className="text-left px-6 py-4">Fornecedor</th>
-            <th className="text-center px-6 py-4">Status</th>
+            <th className="text-left px-6 py-4">Nome da Categoria</th>
+            <th className="text-center px-6 py-4">Produtos Vinculados</th>
+            <th className="text-left px-6 py-4">Cadastrado em</th>
             <th className="text-right px-6 py-4">Ações</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-50 dark:divide-slate-700">
-          {filtrados.map(i => (
-            <tr key={i.id} className="hover:bg-orange-50/30 dark:hover:bg-orange-900/20 transition-colors">
-              <td className="px-6 py-4 font-bold text-slate-800 dark:text-slate-100 text-sm">{i.nome}</td>
-              <td className="px-6 py-4 text-xs text-slate-500">{i.categoria || '–'}</td>
-              <td className="px-6 py-4 text-center text-xs font-bold text-slate-700 dark:text-slate-300">
-                {i.quantidade ?? 0} {i.unidade || ''}
-              </td>
-              <td className="px-6 py-4 text-xs text-slate-500">{i.fornecedor || '–'}</td>
-              <td className="px-6 py-4 text-center">
-                <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase border ${statusCor(i.status)}`}>
-                  {i.status || 'ok'}
-                </span>
-              </td>
-              <td className="px-6 py-4 text-right">
-                <AcoesBotoes onEdit={() => abrirEditar(i)} onDelete={() => handleDeletar(i.id)} cor="orange" />
-              </td>
-            </tr>
-          ))}
+          {filtrados.map(c => {
+            const total = totalProdutos(c.nome);
+            const data = new Date(c.createdAt);
+            const dataFmt = isNaN(data.getTime()) ? '—' : data.toLocaleDateString('pt-BR');
+            return (
+              <tr key={c.id} className="hover:bg-orange-50/30 dark:hover:bg-orange-900/20 transition-colors">
+                <td className="px-6 py-4 font-bold text-slate-800 dark:text-slate-100 text-sm">{c.nome}</td>
+                <td className="px-6 py-4 text-center">
+                  <span className={`px-3 py-1 rounded-full text-[10px] font-black border ${
+                    total > 0
+                      ? 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border-green-100 dark:border-green-800/40'
+                      : 'bg-slate-50 dark:bg-slate-700 text-slate-400 border-slate-100 dark:border-slate-600'
+                  }`}>
+                    {total} produto{total !== 1 ? 's' : ''}
+                  </span>
+                </td>
+                <td className="px-6 py-4 text-xs text-slate-400 font-mono">{dataFmt}</td>
+                <td className="px-6 py-4 text-right">
+                  <AcoesBotoes onEdit={() => abrirEditar(c)} onDelete={() => handleDeletar(c)} cor="orange" />
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </Tabela>
 
       {modal.aberto && (
-        <Modal title={modal.editando ? 'Editar Insumo' : 'Novo Insumo'} onClose={fecharModal}>
+        <Modal title={modal.editando ? 'Editar Categoria' : 'Nova Categoria de Insumo'} onClose={fecharModal}>
           <form onSubmit={handleSalvar} className="space-y-3">
             {erro && <ErroBanner msg={erro} />}
-            <FieldInput label="Nome *" value={form.nome ?? ''} onChange={v => setForm(p => ({ ...p, nome: v }))} required />
-            <FieldSelect label="Categoria" value={form.categoria ?? ''} onChange={v => setForm(p => ({ ...p, categoria: v }))}>
-              <option value="">Selecione...</option>
-              {CATEGORIAS_INSUMO.map(c => <option key={c} value={c}>{c}</option>)}
-            </FieldSelect>
-            <div className="grid grid-cols-2 gap-3">
-              <FieldInput label="Quantidade" type="number" value={String(form.quantidade ?? 0)} onChange={v => setForm(p => ({ ...p, quantidade: Number(v) }))} />
-              <FieldInput label="Unidade" value={form.unidade ?? 'un'} onChange={v => setForm(p => ({ ...p, unidade: v }))} placeholder="un, kg, caixa..." />
-            </div>
-            <FieldInput label="Fornecedor" value={form.fornecedor ?? ''} onChange={v => setForm(p => ({ ...p, fornecedor: v }))} />
-            <FieldSelect label="Status" value={form.status ?? 'ok'} onChange={v => setForm(p => ({ ...p, status: v }))}>
-              {STATUS_INSUMO.map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
-            </FieldSelect>
+            <FieldInput
+              label="Nome da Categoria *"
+              value={formNome}
+              onChange={setFormNome}
+              required
+              placeholder="Ex: Insumos - Cozinha"
+            />
+            <p className="text-[10px] text-slate-400 dark:text-slate-500">
+              O nome será exibido no seletor de categoria ao cadastrar produtos no módulo Estoque.
+            </p>
             <BtnSalvar salvando={salvando} editando={!!modal.editando} cor="orange" />
           </form>
         </Modal>
