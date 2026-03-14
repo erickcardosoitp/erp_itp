@@ -204,12 +204,14 @@ export class AuthService {
         resetTokenExpires: expires,
       });
 
-      try {
-        await this.emailService.enviarResetSenha(usuario.email, usuario.nome, token);
-      } catch (err: any) {
-        this.logger.error(`Falha ao enviar e-mail de reset: ${err.message}`);
+      if (usuario.email) {
+        try {
+          await this.emailService.enviarResetSenha(usuario.email, usuario.nome, token);
+        } catch (err: any) {
+          this.logger.error(`Falha ao enviar e-mail de reset: ${err.message}`);
+        }
+        this.logger.log(`🔑 Token de reset gerado para: ${usuario.email}`);
       }
-      this.logger.log(`🔑 Token de reset gerado para: ${usuario.email}`);
     }
 
     return { message: 'Se este e-mail estiver cadastrado, você receberá as instruções em breve.' };
