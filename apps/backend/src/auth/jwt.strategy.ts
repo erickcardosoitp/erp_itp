@@ -25,8 +25,12 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         },
       ]),
       ignoreExpiration: false,
-      secretOrKey: secret || 'FALLBACK_PARA_DEV',
+      secretOrKey: secret,
     });
+
+    if (!secret) {
+      throw new Error('JWT_SECRET não está configurado. Defina a variável de ambiente JWT_SECRET.');
+    }
 
     this.logger.log(`🛡️ JwtStrategy sincronizada com o cookie: itp_token`);
   }

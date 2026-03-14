@@ -15,9 +15,15 @@ async function executarCarga() {
   await db.connect();
   console.log("✅ Conectado ao banco.");
 
-  // ── TRUNCAR ──────────────────────────────────────────────────
-  await db.query('TRUNCATE TABLE inscricoes RESTART IDENTITY CASCADE');
-  console.log("🗑️  Tabela inscricoes limpa.");
+  // ── LIMPAR BASE (alunos + inscrições + dependentes + notificações relacionadas) ──
+  // Quebra a FK circular inscricoes.aluno_id ↔ alunos.inscricao_id antes de truncar
+  await db.query('UPDATE inscricoes SET aluno_id = NULL WHERE aluno_id IS NOT NULL');
+  await db.query('UPDATE alunos SET inscricao_id = NULL WHERE inscricao_id IS NOT NULL');
+  await db.query('DELETE FROM turma_alunos');
+  await db.query('DELETE FROM alunos');
+  await db.query('TRUNCATE TABLE inscricoes, inscricao_anotacoes, inscricao_movimentacoes, documentos_inscricao RESTART IDENTITY CASCADE');
+  await db.query("DELETE FROM notificacoes WHERE referencia_tipo IN ('inscricao', 'aluno', 'carga')");
+  console.log("🗑️  Base limpa: alunos, inscrições e registros vinculados removidos.");
 
   // ── LER CSV ──────────────────────────────────────────────────
   if (!fs.existsSync(CSV_PATH)) {
@@ -64,14 +70,14 @@ async function executarCarga() {
     const parseDate = (val: string | undefined): string | null => {
       if (!val) return null;
       const clean = val.trim();
-      // DD/MM/YYYY
+      // MM/DD/YYYY (Google Forms export format)
       const s = clean.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-      if (s) return `${s[3]}-${s[2].padStart(2, '0')}-${s[1].padStart(2, '0')}`;
-      // DD/MM/YY (2-digit year)
+      if (s) return `${s[3]}-${s[1].padStart(2, '0')}-${s[2].padStart(2, '0')}`;
+      // MM/DD/YY (2-digit year)
       const s2 = clean.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2})$/);
       if (s2) {
         const year = parseInt(s2[3]) < 30 ? `20${s2[3]}` : `19${s2[3]}`;
-        return `${year}-${s2[2].padStart(2, '0')}-${s2[1].padStart(2, '0')}`;
+        return `${year}-${s2[1].padStart(2, '0')}-${s2[2].padStart(2, '0')}`;
       }
       // DDMMYYYY (sem separador)
       const n = clean.match(/^(\d{2})(\d{2})(\d{4})$/);
@@ -118,7 +124,7 @@ async function executarCarga() {
       nome_assinatura_imagem: row["Se a sua resposta anterior for SIM, preencha por favor seu nome completo:"] || null,
       data_inscricao: parseTimestamp(row["Carimbo de data/hora"]),
       status_matricula: "Pendente",
-      origem_inscricao: "Carga",
+      origem_inscricao: "AUTOMÁTICO",
       lgpd_aceito: false,
     };
 
@@ -153,6 +159,19 @@ async function executarCarga() {
       console.error(`❌ [${i+1}/${records.length}] "${nomeCandidato}": ${err.message}`);
       erros++;
     }
+  }
+
+  // ── NOTIFICAÇÃO ÚNICA DE CARGA ────────────────────────────────
+  if (sucessos > 0) {
+    await db.query(
+      `INSERT INTO notificacoes (tipo, titulo, mensagem, lida, referencia_tipo, criado_em)
+       VALUES ($1, $2, $3, false, 'carga', NOW())`,
+      [
+        'sistema',
+        '📥 Carga Realizada de Cadastro',
+        `Carga automática concluída: ${sucessos} inscrição(ões) importada(s) com status Pendente. Duplicados ignorados: ${duplicados}. Falhas: ${erros}.`,
+      ]
+    );
   }
 
   await db.end();

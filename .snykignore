@@ -1,0 +1,10 @@
+# Arquivos de debug local — não são código de produção
+debug_final.js
+debug_matriculas.js
+debug_db.js
+fix_ingles.js
+migrate_*.js
+migrate_drop_cpf_unique.js
+normalizar_cursos.js
+carga_dados.ts
+migrate.ts

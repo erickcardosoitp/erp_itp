@@ -2,7 +2,7 @@ import { Injectable, NotFoundException, BadRequestException, InternalServerError
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, Not, In } from 'typeorm';
 import { randomUUID } from 'crypto';
-import { extname, join } from 'path';
+import { extname, join, resolve } from 'path';
 import { existsSync, mkdirSync, unlinkSync } from 'fs';
 import { Inscricao, StatusMatricula } from './inscricao.entity';
 import { InscricaoAnotacao } from './inscricao-anotacao.entity';
@@ -13,6 +13,16 @@ import { Usuario } from '../usuarios/usuario.entity';
 import { EmailService } from '../email.service';
 import { TurmaAluno } from '../academico/entities/turma-aluno.entity';
 import { NotificacoesService } from '../notificacoes/notificacoes.service';
+
+/** Valida que o caminho de arquivo do banco não escapa do diretório público (path traversal). */
+function safePublicPath(urlArquivo: string): string {
+  const base = resolve(join(process.cwd(), 'public'));
+  const full = resolve(join(base, urlArquivo));
+  if (!full.startsWith(base + require('path').sep) && full !== base) {
+    throw new Error('Caminho de arquivo fora do diretório permitido.');
+  }
+  return full;
+}
 
 /** Tipos obrigatórios que devem estar presentes para considerar o envio completo. */
 const TIPOS_OBRIGATORIOS = [
@@ -730,7 +740,7 @@ export class MatriculasService {
         where: { inscricao_id: inscricao.id, tipo },
       });
       if (anterior) {
-        const oldPath = join(process.cwd(), 'public', anterior.url_arquivo);
+        const oldPath = safePublicPath(anterior.url_arquivo);
         if (existsSync(oldPath)) unlinkSync(oldPath);
         await this.documentoRepository.remove(anterior);
       }
@@ -784,7 +794,7 @@ export class MatriculasService {
   async removerDocumento(docId: string): Promise<void> {
     const doc = await this.documentoRepository.findOneBy({ id: docId });
     if (!doc) throw new NotFoundException('Documento não encontrado.');
-    const filePath = join(process.cwd(), 'public', doc.url_arquivo);
+    const filePath = safePublicPath(doc.url_arquivo);
     if (existsSync(filePath)) unlinkSync(filePath);
     await this.documentoRepository.remove(doc);
   }

@@ -10,6 +10,17 @@ import {
 const API_ORIGIN = (process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:3001/api')
   .replace(/\/api$/, '')
   .replace(/\/backend-api$/, '');
+
+/** Garante que URLs da API usem apenas esquemas seguros (evita DOM XSS via javascript:). */
+const safeUrl = (url: string): string => {
+  try {
+    const u = new URL(url, window.location.origin);
+    if (u.protocol === 'http:' || u.protocol === 'https:') return url;
+  } catch { /* URL relativa ou inválida */ }
+  // Para caminhos relativos (/uploads/...) retorna diretamente
+  if (url.startsWith('/')) return url;
+  return '#';
+};
 import api from '@/services/api';
 
 interface Materia { id: string; nome: string; }
@@ -624,7 +635,7 @@ export default function DossieCandidato({ aluno, onClose, onSuccess }: DossiePro
                           </div>
                         </div>
                         <a
-                          href={fileUrl}
+                          href={safeUrl(fileUrl)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex items-center gap-1 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-[9px] font-black uppercase text-gray-600 hover:bg-purple-600 hover:text-white hover:border-purple-600 transition-all shrink-0"
@@ -910,7 +921,7 @@ function DocItem({
   if (!url) return null;
   return (
     <a
-      href={url}
+      href={safeUrl(url)}
       target="_blank"
       rel="noopener noreferrer"
       className="flex items-center gap-3 p-4 bg-gray-50 hover:bg-purple-50 rounded-2xl border border-gray-100 hover:border-purple-200 transition-all group"

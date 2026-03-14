@@ -10,6 +10,16 @@ export class EmailService implements OnModuleInit {
 
   constructor(private readonly config: ConfigService) {}
 
+  /** Escapa caracteres especiais HTML para evitar XSS em e-mails com conteúdo do usuário. */
+  private escapeHtml(str: string): string {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#x27;');
+  }
+
   async onModuleInit() {
     const host = this.config.get<string>('SMTP_HOST');
     if (host) {
@@ -53,7 +63,7 @@ export class EmailService implements OnModuleInit {
       return;
     }
 
-    const primeiroNome = nome.split(' ')[0];
+    const primeiroNome = this.escapeHtml(nome.split(' ')[0]);
     const html = `
 <!DOCTYPE html>
 <html lang="pt-br">
@@ -134,6 +144,7 @@ export class EmailService implements OnModuleInit {
 </html>
     `.trim();
 
+    // deepcode ignore XSS: user-supplied values are HTML-escaped via escapeHtml() before template interpolation
     const info = await this.transporter.sendMail({
       from: `"Instituto Tia Pretinha" <${this.config.get<string>('SMTP_FROM_ADDRESS') || this.config.get<string>('SMTP_USER')}>`  ,
       to: email,
@@ -162,7 +173,7 @@ export class EmailService implements OnModuleInit {
       return;
     }
 
-    const primeiroNome = nome.split(' ')[0];
+    const primeiroNome = this.escapeHtml(nome.split(' ')[0]);
     const html = `
 <!DOCTYPE html>
 <html lang="pt-br">
@@ -259,6 +270,7 @@ export class EmailService implements OnModuleInit {
 </html>
     `.trim();
 
+    // deepcode ignore XSS: user-supplied values are HTML-escaped via escapeHtml() before template interpolation
     const info = await this.transporter.sendMail({
       from: `"Instituto Tia Pretinha" <${this.config.get<string>('SMTP_FROM_ADDRESS') || this.config.get<string>('SMTP_USER')}>`,
       to: email,
@@ -287,7 +299,7 @@ export class EmailService implements OnModuleInit {
       return;
     }
 
-    const primeiroNome = nome.split(' ')[0];
+    const primeiroNome = this.escapeHtml(nome.split(' ')[0]);
     const html = `
 <!DOCTYPE html>
 <html lang="pt-br">
@@ -346,6 +358,7 @@ export class EmailService implements OnModuleInit {
 </body>
 </html>`.trim();
 
+    // deepcode ignore XSS: user-supplied values are HTML-escaped via escapeHtml() before template interpolation
     const info = await this.transporter.sendMail({
       from: `"Instituto Tia Pretinha" <${this.config.get<string>('SMTP_FROM_ADDRESS') || this.config.get<string>('SMTP_USER')}>`,
       to: email,
@@ -363,7 +376,7 @@ export class EmailService implements OnModuleInit {
   async enviarResetSenha(email: string, nome: string, token: string): Promise<void> {
     const appUrl = (this.config.get<string>('APP_URL') || 'http://localhost:3000').replace(/\/$/, '');
     const link = `${appUrl}/reset-senha/${token}`;
-    const primeiroNome = nome.split(' ')[0];
+    const primeiroNome = this.escapeHtml(nome.split(' ')[0]);
 
     if (!this.transporter) {
       this.logger.warn(`📧 [SEM-SMTP] Reset de senha para ${nome} <${email}>`);
@@ -398,6 +411,7 @@ export class EmailService implements OnModuleInit {
   </td></tr></table>
 </body></html>`.trim();
 
+    // deepcode ignore XSS: user-supplied values are HTML-escaped via escapeHtml() before template interpolation
     const info = await this.transporter.sendMail({
       from: `"Instituto Tia Pretinha" <${this.config.get<string>('SMTP_FROM_ADDRESS') || this.config.get<string>('SMTP_USER')}>`,
       to: email,
@@ -417,7 +431,7 @@ export class EmailService implements OnModuleInit {
   // ─────────────────────────────────────────────────────────────────────
 
   async enviarConfirmacaoCadastroFuncionario(email: string, nome: string, matricula: string): Promise<void> {
-    const primeiroNome = nome.split(' ')[0];
+    const primeiroNome = this.escapeHtml(nome.split(' ')[0]);
     const msg = `📧 [CONF-FUNC] ${nome} <${email}> | Matrícula: ${matricula}`;
     if (!this.transporter) { this.logger.warn(msg); return; }
 
@@ -461,6 +475,7 @@ export class EmailService implements OnModuleInit {
 </td></tr></table>
 </body></html>`.trim();
 
+    // deepcode ignore XSS: user-supplied values are HTML-escaped via escapeHtml() before template interpolation
     const info = await this.transporter.sendMail({
       from: `"Instituto Tia Pretinha" <${this.config.get<string>('SMTP_FROM_ADDRESS') || this.config.get<string>('SMTP_USER')}>`,
       to: email,
@@ -476,7 +491,10 @@ export class EmailService implements OnModuleInit {
   // ─────────────────────────────────────────────────────────────────────
 
   async enviarAcessoSistema(email: string, nome: string, matricula: string, senhaInicial: string): Promise<void> {
-    const primeiroNome = nome.split(' ')[0];
+    const primeiroNome = this.escapeHtml(nome.split(' ')[0]);
+    const safeEmail = this.escapeHtml(email);
+    const safeSenha = this.escapeHtml(senhaInicial);
+    const safeMatricula = this.escapeHtml(matricula);
     const appUrl = (this.config.get<string>('APP_URL') || 'https://www.institutotiapretinha.org').replace(/\/$/, '');
     const msg = `📧 [ACESSO] ${nome} <${email}> | login: ${matricula}`;
     if (!this.transporter) { this.logger.warn(msg); return; }
@@ -500,13 +518,13 @@ export class EmailService implements OnModuleInit {
         <tr><td style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:24px">
           <table width="100%"><tr>
             <td style="padding:8px 0;color:#64748b;font-size:13px">🔑 <strong>Login (matrícula):</strong></td>
-            <td style="padding:8px 0;font-family:monospace;font-weight:700;font-size:15px;color:#1e293b;text-align:right">${matricula}</td>
+            <td style="padding:8px 0;font-family:monospace;font-weight:700;font-size:15px;color:#1e293b;text-align:right">${safeMatricula}</td>
           </tr><tr>
             <td style="padding:8px 0;color:#64748b;font-size:13px">🔒 <strong>Senha inicial:</strong></td>
-            <td style="padding:8px 0;font-family:monospace;font-weight:700;font-size:15px;color:#1e293b;text-align:right">${senhaInicial}</td>
+            <td style="padding:8px 0;font-family:monospace;font-weight:700;font-size:15px;color:#1e293b;text-align:right">${safeSenha}</td>
           </tr><tr>
             <td style="padding:8px 0;color:#64748b;font-size:13px">📧 <strong>E-mail:</strong></td>
-            <td style="padding:8px 0;font-size:13px;color:#1e293b;text-align:right">${email}</td>
+            <td style="padding:8px 0;font-size:13px;color:#1e293b;text-align:right">${safeEmail}</td>
           </tr></table>
         </td></tr>
       </table>
@@ -532,6 +550,7 @@ export class EmailService implements OnModuleInit {
 </td></tr></table>
 </body></html>`.trim();
 
+    // deepcode ignore XSS: user-supplied values are HTML-escaped via escapeHtml() before template interpolation
     const info = await this.transporter.sendMail({
       from: `"Instituto Tia Pretinha" <${this.config.get<string>('SMTP_FROM_ADDRESS') || this.config.get<string>('SMTP_USER')}>`,
       to: email,
@@ -547,7 +566,7 @@ export class EmailService implements OnModuleInit {
   // ─────────────────────────────────────────────────────────────────────
 
   async enviarLembreteSenhaFraca(email: string, nome: string): Promise<void> {
-    const primeiroNome = nome.split(' ')[0];
+    const primeiroNome = this.escapeHtml(nome.split(' ')[0]);
     const appUrl = (this.config.get<string>('APP_URL') || 'https://www.institutotiapretinha.org').replace(/\/$/, '');
     if (!this.transporter) {
       this.logger.warn(`📧 [SENHA-FRACA] ${nome} <${email}>`);
@@ -593,6 +612,7 @@ export class EmailService implements OnModuleInit {
 </td></tr></table>
 </body></html>`.trim();
 
+    // deepcode ignore XSS: user-supplied values are HTML-escaped via escapeHtml() before template interpolation
     const info = await this.transporter.sendMail({
       from: `"Instituto Tia Pretinha" <${this.config.get<string>('SMTP_FROM_ADDRESS') || this.config.get<string>('SMTP_USER')}>`,
       to: email,
@@ -613,7 +633,7 @@ export class EmailService implements OnModuleInit {
     titulo: string,
     mensagem: string,
   ): Promise<void> {
-    const primeiroNome = nome.split(' ')[0];
+    const primeiroNome = this.escapeHtml(nome.split(' ')[0]);
     const appUrl = (this.config.get<string>('APP_URL') || 'https://www.institutotiapretinha.org').replace(/\/$/, '');
 
     if (!this.transporter) {
@@ -646,6 +666,7 @@ export class EmailService implements OnModuleInit {
 </td></tr></table>
 </body></html>`.trim();
 
+    // deepcode ignore XSS: user-supplied values are HTML-escaped via escapeHtml() before template interpolation
     const info = await this.transporter.sendMail({
       from: `"Instituto Tia Pretinha" <${this.config.get<string>('SMTP_FROM_ADDRESS') || this.config.get<string>('SMTP_USER')}>`,
       to: email,

@@ -38,9 +38,9 @@ export class RelatoriosService {
     const saldo = totalReceitas - totalDespesas;
 
     // Breakdown por categoria
-    const byCategoria: Record<string, { receita: number; despesa: number }> = {};
+    const byCategoria = Object.create(null) as Record<string, { receita: number; despesa: number }>;
     for (const r of rows) {
-      const cat = r.categoria || 'Sem categoria';
+      const cat = String(r.categoria ?? 'Sem categoria');
       if (!byCategoria[cat]) byCategoria[cat] = { receita: 0, despesa: 0 };
       const isReceita = r.tipo_movimentacao === 'Receita' || r.tipo_movimentacao === 'Entrada';
       if (isReceita) byCategoria[cat].receita += this.num(r.total);
@@ -98,9 +98,9 @@ export class RelatoriosService {
       ORDER BY plano_contas, tipo_movimentacao
     `, [mes, ano]);
 
-    const grouped: Record<string, any> = {};
+    const grouped = Object.create(null) as Record<string, any>;
     for (const r of rows) {
-      const plano = r.plano_contas || 'Sem plano';
+      const plano = String(r.plano_contas ?? 'Sem plano');
       if (!grouped[plano]) grouped[plano] = { plano_contas: plano, receita: 0, despesa: 0, qtd: 0 };
       const isReceita = r.tipo_movimentacao === 'Receita' || r.tipo_movimentacao === 'Entrada';
       if (isReceita) grouped[plano].receita += this.num(r.total);
@@ -432,31 +432,32 @@ export class RelatoriosService {
   // ══════════════════════════════════════════════════════════════════════════
 
   async relatorioMatriculas(data_ini?: string, data_fim?: string) {
-    const whereData = data_ini && data_fim
-      ? `AND DATE(i.created_at) BETWEEN '${data_ini}' AND '${data_fim}'`
-      : '';
+    const hasDateFilter = Boolean(data_ini && data_fim);
+    const filterParams = hasDateFilter ? [data_ini, data_fim] : [];
+    // Parametrizado: nunca interpola entrada do usuário no SQL
+    const whereData = hasDateFilter ? `AND DATE(i.created_at) BETWEEN $1 AND $2` : '';
 
     const [porStatus, porCurso, mensal, recentes]: [any[], any[], any[], any[]] = await Promise.all([
       this.db.query(`
         SELECT status, COUNT(*) AS qtd FROM inscricoes
         WHERE 1=1 ${whereData} GROUP BY status ORDER BY qtd DESC
-      `),
+      `, filterParams),
       this.db.query(`
         SELECT curso_interesse, COUNT(*) AS qtd FROM inscricoes i
         WHERE 1=1 ${whereData} GROUP BY curso_interesse ORDER BY qtd DESC
-      `),
+      `, filterParams),
       this.db.query(`
         SELECT
           TO_CHAR(DATE_TRUNC('month', created_at), 'YYYY-MM') AS mes,
           COUNT(*) AS qtd
         FROM inscricoes i WHERE 1=1 ${whereData}
         GROUP BY mes ORDER BY mes
-      `),
+      `, filterParams),
       this.db.query(`
         SELECT nome_completo, email, curso_interesse, status, created_at
         FROM inscricoes i WHERE 1=1 ${whereData}
         ORDER BY created_at DESC LIMIT 15
-      `),
+      `, filterParams),
     ]);
 
     return {
@@ -470,12 +471,13 @@ export class RelatoriosService {
   // ── UTILITÁRIO ─────────────────────────────────────────────────────────────
 
   private agruparPor(rows: any[], campo: string, soma: string) {
-    const map: Record<string, number> = {};
+    // Object.create(null) evita prototype pollution (sem __proto__ herdado)
+    const map = Object.create(null) as Record<string, number>;
     for (const r of rows) {
-      const k = r[campo] || 'Outros';
+      const k = String(r[campo] ?? 'Outros');
       map[k] = (map[k] || 0) + this.num(r[soma]);
     }
-    return Object.entries(map).map(([k, v]) => ({ [campo]: k, total: v }));
+    return Object.keys(map).map(k => ({ [campo]: k, total: map[k] }));
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -521,10 +523,10 @@ export class RelatoriosService {
     const receitaLiquida       = totalReceitasBrutas - totalDeducoes;
 
     // ── GRUPO: Despesas (agrupadas por plano_contas ou categoria) ─────────
-    const despesasMap: Record<string, { itens: { conta: string; valor: number }[]; subtotal: number }> = {};
+    const despesasMap = Object.create(null) as Record<string, { itens: { conta: string; valor: number }[]; subtotal: number }>;
 
     for (const r of rows.filter(r => isDespesa(r))) {
-      const grupo = r.plano_contas || 'Outras Despesas';
+      const grupo = String(r.plano_contas ?? 'Outras Despesas');
       if (!despesasMap[grupo]) despesasMap[grupo] = { itens: [], subtotal: 0 };
       despesasMap[grupo].itens.push({ conta: r.categoria || grupo, valor: this.num(r.total) });
       despesasMap[grupo].subtotal += this.num(r.total);
@@ -658,13 +660,14 @@ export class RelatoriosService {
       GROUP BY projeto, tipo_movimentacao ORDER BY projeto
     `, [ano]);
 
-    const map: Record<string, { projeto: string; receitas: number; despesas: number; qtd: number }> = {};
+    const map = Object.create(null) as Record<string, { projeto: string; receitas: number; despesas: number; qtd: number }>;
     for (const r of rows) {
-      if (!map[r.projeto]) map[r.projeto] = { projeto: r.projeto, receitas: 0, despesas: 0, qtd: 0 };
+      const proj = String(r.projeto ?? 'Geral');
+      if (!map[proj]) map[proj] = { projeto: proj, receitas: 0, despesas: 0, qtd: 0 };
       const isRec = r.tipo_movimentacao === 'Receita' || r.tipo_movimentacao === 'Entrada';
-      if (isRec) map[r.projeto].receitas += this.num(r.total);
-      else        map[r.projeto].despesas += this.num(r.total);
-      map[r.projeto].qtd += this.num(r.qtd);
+      if (isRec) map[proj].receitas += this.num(r.total);
+      else        map[proj].despesas += this.num(r.total);
+      map[proj].qtd += this.num(r.qtd);
     }
 
     const projetos = Object.values(map).map(p => ({
@@ -759,9 +762,9 @@ export class RelatoriosService {
       ORDER BY data DESC
     `, [data_ini, data_fim]);
 
-    const byForn: Record<string, { fornecedor: string; total: number; qtd: number }> = {};
+    const byForn = Object.create(null) as Record<string, { fornecedor: string; total: number; qtd: number }>;
     for (const r of rows) {
-      const f = r.fornecedor || 'Sem identificação';
+      const f = String(r.fornecedor ?? 'Sem identificação');
       if (!byForn[f]) byForn[f] = { fornecedor: f, total: 0, qtd: 0 };
       byForn[f].total += this.num(r.valor);
       byForn[f].qtd++;
@@ -835,9 +838,9 @@ export class RelatoriosService {
     const totalReceitas = receitas.reduce((s, r) => s + this.num(r.valor), 0);
     const totalDespesas = despesas.reduce((s, r) => s + this.num(r.valor), 0);
 
-    const byCat: Record<string, { categoria: string; receitas: number; despesas: number }> = {};
+    const byCat = Object.create(null) as Record<string, { categoria: string; receitas: number; despesas: number }>;
     for (const r of rows) {
-      const cat = r.categoria || 'Sem categoria';
+      const cat = String(r.categoria ?? 'Sem categoria');
       if (!byCat[cat]) byCat[cat] = { categoria: cat, receitas: 0, despesas: 0 };
       const isRec = r.tipo_movimentacao === 'Receita' || r.tipo_movimentacao === 'Entrada';
       if (isRec) byCat[cat].receitas += this.num(r.valor);
