@@ -48,9 +48,6 @@ export class MatriculasController {
   @Post('inscricao')
   @Public()
   async receberInscricao(@Body() dados: any) {
-    if (!dados?.nome_completo || !dados?.cpf) {
-      throw new BadRequestException('Campos obrigatórios (nome, cpf) ausentes.');
-    }
     return await this.matriculasService.receberInscricao(dados);
   }
 

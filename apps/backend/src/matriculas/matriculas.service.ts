@@ -195,13 +195,34 @@ export class MatriculasService {
    * Criação de nova inscrição com sanitização de CPF.
    */
   async receberInscricao(dados: any): Promise<Inscricao> {
-    const cpfLimpo = String(dados.cpf).replace(/\D/g, '');
+    const cpfLimpo = String(dados.cpf ?? '').replace(/\D/g, '');
+
+    // ── Validações com notificação amigável em caso de falha ──────────
+    if (!dados.nome_completo || !cpfLimpo) {
+      const motivo = !dados.nome_completo ? 'Nome completo ausente' : 'CPF ausente ou inválido';
+      this.notificacoes.criar({
+        tipo: 'alerta',
+        titulo: '⚠️ Inscrição recusada — dados incompletos',
+        mensagem: `Uma inscrição chegou com dados obrigatórios faltando (${motivo}). Origem: ${dados.origem_inscricao || 'não identificada'}. Verifique o formulário.`,
+        referencia_tipo: 'inscricao',
+      }).catch(() => {});
+      throw new BadRequestException(`Campos obrigatórios ausentes: ${motivo}.`);
+    }
     
     const STATUS_INATIVOS = [StatusMatricula.DESISTENTE, StatusMatricula.CANCELADA];
     const existente = await this.inscricaoRepository.findOne({
       where: { cpf: cpfLimpo, status_matricula: Not(In(STATUS_INATIVOS)) },
     });
-    if (existente) throw new BadRequestException('Este CPF já possui uma inscrição ativa.');
+    if (existente) {
+      this.notificacoes.criar({
+        tipo: 'alerta',
+        titulo: '⚠️ Inscrição duplicada',
+        mensagem: `Nova tentativa de inscrição para o CPF ${cpfLimpo} (${dados.nome_completo}), mas já existe uma inscrição ativa com status "${existente.status_matricula}". Verifique se é necessário atualizar o status existente antes de aceitar uma nova inscrição.`,
+        referencia_id: String(existente.id),
+        referencia_tipo: 'inscricao',
+      }).catch(() => {});
+      throw new BadRequestException('Este CPF já possui uma inscrição ativa.');
+    }
 
     const novaInscricao = this.inscricaoRepository.create({
       ...dados,
@@ -211,8 +232,21 @@ export class MatriculasService {
       data_inscricao: dados.data_inscricao ? new Date(dados.data_inscricao) : new Date(),
     });
 
-    // Cast duplo para resolver ambiguidade do TypeORM (Promise<Inscricao | Inscricao[]>)
-    const salva = (await this.inscricaoRepository.save(novaInscricao)) as any as Inscricao;
+    let salva: Inscricao;
+    try {
+      // Cast duplo para resolver ambiguidade do TypeORM (Promise<Inscricao | Inscricao[]>)
+      salva = (await this.inscricaoRepository.save(novaInscricao)) as any as Inscricao;
+    } catch (err: any) {
+      this.logger.error(`Erro ao salvar inscrição de ${dados.nome_completo}: ${err.message}`);
+      this.notificacoes.criar({
+        tipo: 'alerta',
+        titulo: '🚨 Falha ao gravar inscrição no banco',
+        mensagem: `Não foi possível salvar a inscrição de ${dados.nome_completo} (CPF: ${cpfLimpo}). Erro: ${err.message}. Verifique os logs do servidor imediatamente.`,
+        referencia_tipo: 'inscricao',
+      }).catch(() => {});
+      throw new InternalServerErrorException('Erro ao salvar inscrição. Tente novamente ou contate o suporte.');
+    }
+
     this.logger.log(`📥 Nova inscrição recebida: ${salva.nome_completo} (ID: ${salva.id})`);
 
     // Notifica a equipe no sistema sobre a nova inscrição

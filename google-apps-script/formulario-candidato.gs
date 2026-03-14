@@ -127,20 +127,101 @@ function salvarNaPlanilha_(dados) {
 //  Notificações por e-mail
 // ─────────────────────────────────────────────────────────────────────
 
+/**
+ * Classifica o erro técnico em uma categoria amigável.
+ * Retorna { titulo, orientacao } para compor o e-mail de forma compreensível.
+ */
+function classificarErro_(detalhe) {
+  var d = (detalhe || '').toLowerCase();
+
+  if (d.indexOf('já possui uma inscrição ativa') !== -1 || d.indexOf('cpf') !== -1 && d.indexOf('400') !== -1) {
+    return {
+      titulo: 'Inscrição duplicada (CPF já cadastrado)',
+      orientacao: 'Este CPF já possui uma inscrição ativa no sistema. Verifique se o candidato já foi cadastrado anteriormente ou se precisa ter seu status atualizado (ex: Desistente) antes de uma nova inscrição.',
+    };
+  }
+  if (d.indexOf('campos obrigatórios') !== -1 || d.indexOf('nome') !== -1 || d.indexOf('400') !== -1) {
+    return {
+      titulo: 'Dados incompletos no formulário',
+      orientacao: 'O formulário não enviou todos os campos obrigatórios (nome completo e CPF são exigidos). Verifique se as perguntas obrigatórias do Google Forms estão marcadas corretamente.',
+    };
+  }
+  if (d.indexOf('401') !== -1 || d.indexOf('403') !== -1) {
+    return {
+      titulo: 'Erro de autenticação na API',
+      orientacao: 'A rota da API parece ter sido protegida por autenticação. Verifique se o endpoint /api/matriculas/inscricao ainda está marcado como @Public() no backend.',
+    };
+  }
+  if (d.indexOf('404') !== -1) {
+    return {
+      titulo: 'Endpoint da API não encontrado',
+      orientacao: 'A URL configurada no script não foi encontrada no servidor. Verifique se a API está em funcionamento e se o endereço está correto.',
+    };
+  }
+  if (d.indexOf('500') !== -1 || d.indexOf('502') !== -1 || d.indexOf('503') !== -1) {
+    return {
+      titulo: 'Erro interno no servidor',
+      orientacao: 'Houve uma falha inesperada no servidor no momento do envio. O dado pode não ter sido gravado. Verifique os logs do backend e confirme se a inscrição consta no sistema.',
+    };
+  }
+  if (d.indexOf('urlfetch') !== -1 || d.indexOf('timeout') !== -1 || d.indexOf('network') !== -1 || d.indexOf('connection') !== -1) {
+    return {
+      titulo: 'Falha de conexão com a API',
+      orientacao: 'O script não conseguiu alcançar o servidor. Pode ser uma instabilidade momentânea de rede ou o servidor pode estar fora do ar. Aguarde alguns minutos e verifique o status da API.',
+    };
+  }
+  return {
+    titulo: 'Erro inesperado ao gravar inscrição',
+    orientacao: 'Ocorreu um erro não identificado. Verifique os logs do Apps Script e do backend para mais detalhes.',
+  };
+}
+
 function notificarEquipe_(dados, sucesso, detalhe) {
   var emailVendas  = getConf_('EMAIL_VENDAS')  || 'karina.livia.sales@gmail.com,gabrielagracianobezerra@gmail.com';
   var emailSuporte = getConf_('EMAIL_SUPORTE') || 'goncalvecardoso@gmail.com';
 
-  var resumo = '👤 Nome: ' + dados.nome_completo +
-               '\n📄 CPF: ' + dados.cpf +
-               '\n📚 Cursos: ' + dados.cursos_desejados +
-               '\n📱 Celular: ' + dados.celular;
+  var resumo = '👤 Nome: '    + (dados.nome_completo   || '(não informado)') +
+               '\n📄 CPF: '   + (dados.cpf             || '(não informado)') +
+               '\n📱 Celular: ' + (dados.celular        || '(não informado)') +
+               '\n📚 Cursos: ' + (dados.cursos_desejados|| '(não informado)') +
+               '\n📧 E-mail: ' + (dados.email           || '(não informado)');
 
   if (sucesso) {
-    MailApp.sendEmail(emailVendas, '✅ Nova Inscrição ITP', resumo + '\nStatus: ✅ Gravado no banco');
+    MailApp.sendEmail(
+      emailVendas,
+      '✅ Nova Inscrição ITP — ' + dados.nome_completo,
+      resumo + '\n\nStatus: ✅ Inscrição gravada com sucesso no sistema.\n' +
+      'Acesse o painel para dar continuidade ao processo de matrícula:\n' +
+      'https://www.institutotiapretinha.org/matriculas'
+    );
   } else {
-    MailApp.sendEmail(emailSuporte, '🚨 ALERTA TÉCNICO ITP', 'Erro ao gravar inscrição:\n' + detalhe + '\n\nDados:\n' + JSON.stringify(dados, null, 2));
-    MailApp.sendEmail(emailVendas, '⚠️ Pendência na Inscrição', 'A inscrição de ' + dados.nome_completo + ' foi recebida mas houve um erro ao gravar no sistema. O suporte técnico já foi avisado.');
+    var classificacao = classificarErro_(detalhe);
+
+    // E-mail técnico para o suporte
+    MailApp.sendEmail(
+      emailSuporte,
+      '🚨 ALERTA TÉCNICO ITP — ' + classificacao.titulo,
+      '⚠️ Falha ao gravar inscrição no banco de dados.\n\n' +
+      '🔎 Categoria do erro: ' + classificacao.titulo + '\n\n' +
+      '💡 Orientação: ' + classificacao.orientacao + '\n\n' +
+      '─────────────────────────\n' +
+      'Detalhe técnico:\n' + detalhe + '\n\n' +
+      'Dados do candidato:\n' + resumo + '\n\n' +
+      'Data/hora: ' + new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
+    );
+
+    // E-mail amigável para a equipe de vendas/matrículas
+    MailApp.sendEmail(
+      emailVendas,
+      '⚠️ Atenção — Inscrição com pendência: ' + dados.nome_completo,
+      'Olá!\n\n' +
+      'A inscrição abaixo foi recebida pelo formulário, mas houve um problema ao salvá-la no sistema.\n\n' +
+      resumo + '\n\n' +
+      '❗ Motivo: ' + classificacao.titulo + '\n\n' +
+      '👣 Próximo passo sugerido:\n' + classificacao.orientacao + '\n\n' +
+      'O suporte técnico já foi notificado automaticamente.\n\n' +
+      'Para dúvidas, entre em contato com: ' + emailSuporte
+    );
   }
 }
 
