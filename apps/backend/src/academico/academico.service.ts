@@ -439,6 +439,8 @@ export class AcademicoService {
     dto: {
       turma_id: string;
       data: string;
+      hora_inicio?: string;
+      hora_fim?: string;
       tema_aula?: string;
       conteudo_abordado?: string;
       registros: { aluno_id: string; presente: boolean }[];
@@ -461,6 +463,8 @@ export class AcademicoService {
       turma_id:          dto.turma_id,
       turma_nome:        turma.nome,
       data:              dto.data,
+      hora_inicio:       dto.hora_inicio,
+      hora_fim:          dto.hora_fim,
       tema_aula:         dto.tema_aula,
       conteudo_abordado: dto.conteudo_abordado,
       usuario_id:        usuarioId,

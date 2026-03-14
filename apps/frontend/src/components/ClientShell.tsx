@@ -9,6 +9,7 @@ import UserHeader from './UserHeader';
 import { Toaster } from '@/components/ui/sonner';
 import PwaInstall from './PwaInstall';
 import SettingsApplier from './SettingsApplier';
+import LaunchPad from './LaunchPad';
 import { Menu } from 'lucide-react';
 
 export default function ClientShell({ children }: { children: React.ReactNode }) {
@@ -16,7 +17,6 @@ export default function ClientShell({ children }: { children: React.ReactNode })
   const isPublicPage = pathname === '/login'
     || pathname?.startsWith('/lgpd')
     || pathname?.startsWith('/estoque/coletor')
-    || pathname?.startsWith('/academico/chamada')
     || pathname?.startsWith('/esqueci-senha')
     || pathname?.startsWith('/reset-senha')
     || pathname?.startsWith('/trocar-senha');
@@ -81,6 +81,9 @@ export default function ClientShell({ children }: { children: React.ReactNode })
 
         {/* ── Bottom Navigation (mobile only) ──────────────────────────── */}
         {!isPublicPage && <MobileBottomNav />}
+
+        {/* ── LaunchPad flutuante ──────────────────────────────────────── */}
+        {!isPublicPage && <LaunchPad />}
 
         <Toaster
           richColors
