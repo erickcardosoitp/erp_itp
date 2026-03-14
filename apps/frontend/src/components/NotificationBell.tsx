@@ -2,7 +2,9 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Bell, Package, Heart, DollarSign, UserPlus, ClipboardList, Info, Check, Trash2, X } from 'lucide-react';
+import { toast } from 'sonner';
 import api from '@/services/api';
 
 function tempoRelativo(dataStr: string): string {
@@ -38,23 +40,70 @@ const TIPO_CONFIG: Record<string, { icon: React.ElementType; color: string }> = 
   nova_matricula:  { icon: ClipboardList, color: 'text-purple-500' },
   presenca_pendente: { icon: Bell,        color: 'text-yellow-500' },
   sistema:         { icon: Info,          color: 'text-slate-500' },
+  alerta:          { icon: Info,          color: 'text-red-500' },
 };
 
+/** Retorna a rota do sistema correspondente a uma notificação. */
+function getLinkParaNotificacao(n: Notificacao): string | null {
+  if (n.referencia_tipo === 'inscricao') return '/matriculas';
+  if (n.referencia_tipo === 'produto')   return '/estoque';
+  const TIPO_LINKS: Record<string, string> = {
+    nova_matricula:    '/matriculas',
+    alerta:            '/matriculas',
+    estoque_minimo:    '/estoque',
+    nova_doacao:       '/doacoes',
+    pix_recebido:      '/financeiro',
+    novo_aluno:        '/matriculas',
+    presenca_pendente: '/academico',
+  };
+  return TIPO_LINKS[n.tipo] ?? null;
+}
+
 export default function NotificationBell() {
+  const router = useRouter();
   const [notificacoes, setNotificacoes] = useState<Notificacao[]>([]);
   const [totalNaoLidas, setTotalNaoLidas] = useState(0);
   const [aberto, setAberto] = useState(false);
   const [carregando, setCarregando] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  // Rastreia a última contagem conhecida para detectar novas notificações
+  const prevCountRef = useRef<number | null>(null);
 
   const carregarContagem = useCallback(async () => {
     try {
       const { data } = await api.get<{ total: number }>('/notificacoes/count');
-      setTotalNaoLidas(data.total);
+      const novoTotal = data.total;
+
+      // Se já inicializou e a contagem aumentou → mostra toast(s) para as novas
+      if (prevCountRef.current !== null && novoTotal > prevCountRef.current) {
+        const diff = novoTotal - prevCountRef.current;
+        api.get<{ items: Notificacao[] }>(`/notificacoes?limite=${Math.min(diff, 5)}&nao_lidas=true`)
+          .then(({ data: nd }) => {
+            (nd.items ?? []).slice(0, diff).forEach(n => {
+              const cfg = TIPO_CONFIG[n.tipo] ?? TIPO_CONFIG.sistema;
+              const link = getLinkParaNotificacao(n);
+              toast(n.titulo, {
+                description: n.mensagem,
+                icon: React.createElement(cfg.icon, { size: 16, className: cfg.color }),
+                duration: 6000,
+                action: link ? {
+                  label: 'Ver',
+                  onClick: () => router.push(link),
+                } : undefined,
+              });
+            });
+          })
+          .catch(() => {
+            toast.info(`${diff} nova${diff > 1 ? 's' : ''} notificaç${diff > 1 ? 'ões' : 'ão'}`);
+          });
+      }
+
+      setTotalNaoLidas(novoTotal);
+      prevCountRef.current = novoTotal;
     } catch {
       // silencia erros de rede
     }
-  }, []);
+  }, [router]);
 
   const carregarNotificacoes = useCallback(async () => {
     setCarregando(true);
@@ -173,14 +222,23 @@ export default function NotificationBell() {
               const cfg = TIPO_CONFIG[n.tipo] ?? TIPO_CONFIG.sistema;
               const Icon = cfg.icon;
               const tempo = tempoRelativo(n.criado_em);
+              const link = getLinkParaNotificacao(n);
 
               return (
                 <div
                   key={n.id}
-                  className={`flex gap-3 px-4 py-3 group transition-colors cursor-pointer ${
+                  className={`flex gap-3 px-4 py-3 group transition-colors ${
+                    link ? 'cursor-pointer' : 'cursor-default'
+                  } ${
                     n.lida ? 'opacity-60' : 'bg-purple-50/40 dark:bg-purple-900/10'
                   } hover:bg-slate-50 dark:hover:bg-slate-800/60`}
-                  onClick={() => !n.lida && marcarLida(n.id)}
+                  onClick={() => {
+                    if (!n.lida) marcarLida(n.id);
+                    if (link) {
+                      setAberto(false);
+                      router.push(link);
+                    }
+                  }}
                 >
                   <div className={`mt-0.5 shrink-0 ${cfg.color}`}>
                     <Icon size={18} />
