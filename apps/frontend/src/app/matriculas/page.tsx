@@ -225,7 +225,7 @@ export default function GestaoMatriculas() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-[#131b2e] p-8 font-sans antialiased text-slate-900 dark:text-slate-100">
+    <div className="min-h-screen bg-gray-50 dark:bg-[#131b2e] p-4 md:p-8 font-sans antialiased text-slate-900 dark:text-slate-100">
       <div className="max-w-[1600px] mx-auto">
         
         {/* HEADER */}
@@ -297,7 +297,7 @@ export default function GestaoMatriculas() {
             </button>
 
             {showMoreKPIs && (
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <KPICard title="Incompletos" value={stats.incompletos} icon={<AlertCircle size={18}/>} color="#dc2626" onClick={() => { setPagina(1); setFiltroStatus('Incompleto'); }} isActive={filtroStatus === 'Incompleto'} />
                 <KPICard title="Desistentes" value={stats.desistentes} icon={<UserX size={18}/>} color="#64748b" onClick={() => { setPagina(1); setFiltroStatus('Desistente'); }} isActive={filtroStatus === 'Desistente'} />
                 <KPICard title="Cancelados" value={stats.cancelados} icon={<Ban size={18}/>} color="#7f1d1d" onClick={() => { setPagina(1); setFiltroStatus('Cancelado'); }} isActive={filtroStatus === 'Cancelado'} />
@@ -381,14 +381,7 @@ export default function GestaoMatriculas() {
         {/* TABELA */}
         <div className="bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-left table-fixed">
-              <colgroup>
-                <col className="w-[30%]" />
-                <col className="w-[18%]" />
-                <col className="w-[12%]" />
-                <col className="w-[18%]" />
-                <col className="w-[22%]" />
-              </colgroup>
+            <table className="min-w-[600px] w-full text-left">
               <thead>
                 <tr className="bg-gray-50 text-gray-500 uppercase text-[10px] font-black tracking-widest border-b border-gray-100">
                   <SortTh label="Candidato / CPF" sortKey="nome_completo" current={sortKey} asc={sortAsc} onSort={handleSort} />

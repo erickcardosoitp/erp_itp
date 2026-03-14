@@ -1,0 +1,22 @@
+{
+  "health": {
+    "status": 200,
+    "body": "{\"status\":\"ok\",\"timestamp\":\"2026-03-14T16:56:55.664Z\",\"env\":{\"hasDatabase\":true,\"hasJwt\":true,\"nodeVersion\":\"v24.13.0\"}}"
+  },
+  "login": {
+    "status": 500,
+    "body": "A server error has occurred\n\nFUNCTION_INVOCATION_FAILED\n\ngru1::tvk24-1773507415756-c7a23a624294\n"
+  },
+  "profile": {
+    "status": 500,
+    "body": "A server error has occurred\n\nFUNCTION_INVOCATION_FAILED\n\ngru1::smv5p-1773507441625-acdff24df411\n"
+  },
+  "frontendLogin": {
+    "status": 500,
+    "body": "A server error has occurred\n\nFUNCTION_INVOCATION_FAILED\n\ngru1:gru1::xpgrx-1773507468170-b03a4165c0f8\n"
+  },
+  "frontendProfile": {
+    "status": 500,
+    "body": "A server error has occurred\n\nFUNCTION_INVOCATION_FAILED\n\ngru1:gru1::xpgrx-1773507494040-9311ab2841f6\n"
+  }
+}

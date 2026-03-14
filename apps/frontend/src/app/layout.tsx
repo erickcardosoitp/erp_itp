@@ -6,13 +6,20 @@ const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata = {
-  title: 'Sistema ITP — Instituto Tia Pretinha',
+  title: {
+    template: 'ITP - %s',
+    default: 'ITP - Instituto Tia Pretinha',
+  },
   description: 'Sistema de Gestão ERP do Instituto Tia Pretinha',
   manifest: '/manifest.json',
+  icons: {
+    icon: '/logo.jpg',
+    apple: '/logo.jpg',
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
-    title: 'Sistema ITP',
+    title: 'ITP ERP',
   },
   other: {
     'mobile-web-app-capable': 'yes',

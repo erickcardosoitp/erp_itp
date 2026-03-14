@@ -997,6 +997,15 @@ function AbaDRE() {
 
       {dre && (
         <div ref={dreRef} className="space-y-6 bg-white dark:bg-slate-950 p-1 rounded-2xl">
+          {/* Cabeçalho do relatório (aparece no PDF/PNG) */}
+          <div className="flex items-center gap-4 px-4 pt-4 pb-2 border-b border-slate-100 dark:border-slate-800">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo.jpg" alt="ITP" className="h-14 w-14 rounded-full object-cover border-2 border-purple-200" />
+            <div>
+              <p className="text-lg font-black text-purple-900 dark:text-purple-200 uppercase tracking-tight leading-none">Instituto Tia Pretinha</p>
+              <p className="text-[11px] text-slate-500 mt-0.5">Demonstrativo do Resultado do Exercício</p>
+            </div>
+          </div>
           {/* KPIs */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {[
@@ -1446,7 +1455,7 @@ export default function RelatoriosPage() {
   const [aba, setAba] = useState<AbaId>('financeiro');
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-6">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-6">
       <div className="max-w-6xl mx-auto space-y-6">
 
         {/* Header */}

@@ -7,12 +7,14 @@ import { useAuth } from '@/context/auth-context';
 import { 
   LayoutDashboard, UserPlus, ClipboardList, 
   LogOut, Settings, PanelLeftClose, PanelLeftOpen,
-  GraduationCap, DollarSign, Heart, Package, Loader2, BarChart2
+  GraduationCap, DollarSign, Heart, Package, Loader2, BarChart2, X
 } from 'lucide-react';
 
 interface SidebarProps {
   isCollapsed: boolean;
   setIsCollapsed: (value: boolean) => void;
+  mobileOpen: boolean;
+  setMobileOpen: (v: boolean) => void;
 }
 
 // Mapeia path → chave de modulos_visiveis
@@ -27,7 +29,7 @@ const PATH_TO_MODULE: Record<string, string> = {
   '/relatorios': 'relatorios',
 };
 
-export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
+export default function Sidebar({ isCollapsed, setIsCollapsed, mobileOpen, setMobileOpen }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { user } = useAuth();
@@ -91,22 +93,39 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
 
   return (
     <aside 
-      className={`fixed left-0 top-0 h-screen text-white flex flex-col shadow-2xl transition-all duration-300 z-50 ${
-        isCollapsed ? 'w-20' : 'w-64'
-      }`} 
-      style={{ backgroundColor: '#1a0b2e' }} // Roxo profundo (Purple 950)
+      className={`fixed left-0 top-0 h-screen text-white flex flex-col shadow-2xl transition-all duration-300 z-50
+        ${
+          /* desktop: recolhida ou expandida */
+          `lg:${isCollapsed ? 'w-20' : 'w-64'}`
+        }
+        /* mobile: drawer slide-in */
+        w-72
+        ${
+          mobileOpen ? 'translate-x-0' : '-translate-x-full'
+        } lg:translate-x-0
+      `}
+      style={{ backgroundColor: '#1a0b2e' }}
     >
       
       {/* Header com Logo e Toggle */}
-      <div className="p-6 flex items-center justify-between border-b border-purple-900/50">
-        {!isCollapsed && (
-          <h1 className="text-2xl font-black italic tracking-tighter">
+      <div className="p-4 lg:p-6 flex items-center justify-between border-b border-purple-900/50">
+        {/* X close – só no mobile */}
+        <button
+          onClick={() => setMobileOpen(false)}
+          className="lg:hidden p-1.5 hover:bg-purple-800 rounded-lg transition-colors text-purple-300"
+          aria-label="Fechar menu"
+        >
+          <X size={20} />
+        </button>
+        {(!isCollapsed || mobileOpen) && (
+          <h1 className="text-xl font-black italic tracking-tighter">
             ITP <span className="text-yellow-400">ERP</span>
           </h1>
         )}
+        {/* Collapse toggle – só no desktop */}
         <button 
           onClick={() => setIsCollapsed(!isCollapsed)}
-          className="p-1 hover:bg-purple-800 rounded-lg transition-colors text-purple-300 focus:outline-none focus:ring-2 focus:ring-purple-500"
+          className="hidden lg:flex p-1 hover:bg-purple-800 rounded-lg transition-colors text-purple-300 focus:outline-none focus:ring-2 focus:ring-purple-500"
           aria-label={isCollapsed ? "Expandir menu" : "Recolher menu"}
         >
           {isCollapsed ? <PanelLeftOpen size={24} /> : <PanelLeftClose size={20} />}
@@ -124,11 +143,12 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
               key={item.path} 
               href={item.path} 
               title={isCollapsed ? item.name : ''}
+              onClick={() => setMobileOpen(false)}
               className={`flex items-center gap-4 px-4 py-3 rounded-xl font-bold transition-all duration-200 group
                 ${isActive ? 'bg-yellow-400 text-purple-950 shadow-lg' : 'hover:bg-purple-900/40 text-purple-200'}`}
             >
               <Icon size={22} className={`shrink-0 ${isActive ? '' : 'group-hover:scale-110 transition-transform'}`} />
-              {!isCollapsed && (
+              {(!isCollapsed || mobileOpen) && (
                 <span className="uppercase text-[10px] font-black tracking-widest whitespace-nowrap">
                   {item.name}
                 </span>
@@ -143,11 +163,12 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
         <Link 
           href="/config" 
           title={isCollapsed ? "Configurações" : ""}
+          onClick={() => setMobileOpen(false)}
           className={`flex items-center gap-4 px-4 py-3 rounded-xl font-bold transition-all
             ${pathname === '/config' ? 'bg-yellow-400 text-purple-950' : 'text-purple-300 hover:bg-purple-900/40'}`}
         >
           <Settings size={22} />
-          {!isCollapsed && <span className="uppercase text-[10px] font-black tracking-widest">Configurações</span>}
+          {(!isCollapsed || mobileOpen) && <span className="uppercase text-[10px] font-black tracking-widest">Configurações</span>}
         </Link>
         
         <button 
@@ -160,7 +181,7 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
           ) : (
             <LogOut size={22} className="group-hover:translate-x-1 transition-transform" />
           )}
-          {!isCollapsed && (
+          {(!isCollapsed || mobileOpen) && (
             <span className="uppercase text-[10px] font-black tracking-widest text-left">
               {isLoggingOut ? 'Saindo...' : 'Sair'}
             </span>

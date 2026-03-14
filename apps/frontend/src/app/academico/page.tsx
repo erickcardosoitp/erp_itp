@@ -1316,7 +1316,7 @@ export default function AcademicoPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-[#131b2e] p-6 lg:p-8 font-sans antialiased text-slate-900 dark:text-slate-100">
+    <div className="min-h-screen bg-gray-50 dark:bg-[#131b2e] p-4 md:p-6 lg:p-8 font-sans antialiased text-slate-900 dark:text-slate-100">
       <div className="max-w-[1600px] mx-auto space-y-6">
         <header className="flex flex-col md:flex-row justify-between items-center bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm gap-4">
           <div className="flex items-center gap-4">

@@ -176,7 +176,7 @@ export default function EstoquePage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-[#131b2e] p-6 font-sans antialiased text-slate-900 dark:text-slate-100">
+    <div className="min-h-screen bg-gray-50 dark:bg-[#131b2e] p-4 md:p-6 font-sans antialiased text-slate-900 dark:text-slate-100">
       <div className="max-w-[1400px] mx-auto space-y-6">
 
         {/* HEADER */}
