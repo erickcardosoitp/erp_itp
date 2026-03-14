@@ -211,6 +211,16 @@ export class MatriculasService {
     // Cast duplo para resolver ambiguidade do TypeORM (Promise<Inscricao | Inscricao[]>)
     const salva = (await this.inscricaoRepository.save(novaInscricao)) as any as Inscricao;
     this.logger.log(`📥 Nova inscrição recebida: ${salva.nome_completo} (ID: ${salva.id})`);
+
+    // Notifica a equipe no sistema sobre a nova inscrição
+    this.notificacoes.criar({
+      tipo: 'nova_matricula',
+      titulo: `Nova inscrição: ${salva.nome_completo}`,
+      mensagem: `Inscrição recebida via ${salva.origem_inscricao || 'sistema'} para os cursos: ${salva.cursos_desejados || 'não informado'}. Aguardando análise.`,
+      referencia_id: String(salva.id),
+      referencia_tipo: 'inscricao',
+    }).catch(err => this.logger.warn(`Falha ao criar notificação de inscrição: ${err.message}`));
+
     return salva;
   }
   

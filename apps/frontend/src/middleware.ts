@@ -1,38 +1,64 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
+// Espelha o mapeamento do Sidebar — path → chave de modulos_visiveis
+const PATH_TO_MODULE: Record<string, string> = {
+  '/cadastro':   'cadastro_basico',
+  '/matriculas': 'matriculas',
+  '/academico':  'academico',
+  '/financeiro': 'financeiro',
+  '/doacoes':    'doacoes',
+  '/estoque':    'estoque',
+  '/relatorios': 'relatorios',
+};
+
+// Cargos que bypassam verificação de módulo e têm acesso total ao sistema
+const ROLES_FULL_ACCESS = ['admin', 'prt'];
+
+// Cargos mínimos para acessar /config (gestão de acesso)
+const ROLES_CONFIG = ['admin', 'prt', 'vp', 'drt'];
+
+/**
+ * Decodifica o payload de um JWT (base64url) sem verificar assinatura.
+ * A verificação real ocorre no backend a cada chamada de API.
+ */
+function decodeJwtPayload(token: string): Record<string, any> | null {
+  try {
+    const clean = token.replace(/"/g, '');
+    const base64 = clean.split('.')[1];
+    if (!base64) return null;
+    const decoded = atob(base64.replace(/-/g, '+').replace(/_/g, '/'));
+    return JSON.parse(decoded);
+  } catch {
+    return null;
+  }
+}
+
 export function middleware(request: NextRequest) {
-  // Nome do cookie sincronizado com o backend (auth.controller.ts)
   const token = request.cookies.get('itp_token')?.value;
   const hasValidToken = !!token;
   const { pathname } = request.nextUrl;
 
-  // Redirecionamento da Raiz
+  // ── Redirecionamento da Raiz ──────────────────────────────────────────────
   if (pathname === '/') {
     const url = request.nextUrl.clone();
     url.pathname = hasValidToken ? '/dashboard' : '/login';
     return NextResponse.redirect(url);
   }
 
-  // Proteção de Rotas Privadas
-  const privateRoutes = [
-    '/dashboard',
-    '/matriculas',
-    '/academico',
-    '/financeiro',
-    '/cadastro',
-    '/config',
-    '/doacoes',
-    '/estoque',
-    '/relatorios',
-  ];
-  // Rota pública do coletor — não exige autenticação
+  // ── Rotas sempre públicas ─────────────────────────────────────────────────
   if (pathname.startsWith('/estoque/coletor')) return NextResponse.next();
-  // Rotas públicas de recuperação de senha
-  if (pathname.startsWith('/esqueci-senha')) return NextResponse.next();
-  if (pathname.startsWith('/reset-senha')) return NextResponse.next();
+  if (pathname.startsWith('/esqueci-senha'))   return NextResponse.next();
+  if (pathname.startsWith('/reset-senha'))     return NextResponse.next();
+  if (pathname.startsWith('/lgpd'))            return NextResponse.next();
 
-  const isPrivateRoute = privateRoutes.some(route => pathname.startsWith(route));
+  // ── Proteção: exige autenticação ──────────────────────────────────────────
+  const privateRoutes = [
+    '/dashboard', '/matriculas', '/academico', '/financeiro',
+    '/cadastro',  '/config',     '/doacoes',   '/estoque', '/relatorios',
+    '/notificacoes',
+  ];
+  const isPrivateRoute = privateRoutes.some(r => pathname.startsWith(r));
 
   if (isPrivateRoute && !hasValidToken) {
     const loginUrl = new URL('/login', request.url);
@@ -40,7 +66,34 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // Impedir usuário logado de acessar a página de Login
+  // ── Proteção: permissões de módulo por grupo ──────────────────────────────
+  if (isPrivateRoute && hasValidToken) {
+    const payload = decodeJwtPayload(token!);
+    const role    = (payload?.role ?? '').toLowerCase().trim();
+
+    // Dashboard é sempre acessível para usuários autenticados
+    if (!pathname.startsWith('/dashboard') && !pathname.startsWith('/notificacoes')) {
+
+      // /config: restrito a DRT ou superior
+      if (pathname.startsWith('/config')) {
+        if (!ROLES_CONFIG.includes(role)) {
+          return NextResponse.redirect(new URL('/dashboard', request.url));
+        }
+      } else if (!ROLES_FULL_ACCESS.includes(role)) {
+        // Verifica modulos_visiveis do grupo para as demais rotas
+        const segment = `/${pathname.split('/').filter(Boolean)[0] ?? ''}`;
+        const moduloKey = PATH_TO_MODULE[segment];
+        if (moduloKey) {
+          const modulosVisiveis = payload?.permissoes?.modulos_visiveis as Record<string, boolean> | undefined;
+          if (!modulosVisiveis || modulosVisiveis[moduloKey] !== true) {
+            return NextResponse.redirect(new URL('/dashboard', request.url));
+          }
+        }
+      }
+    }
+  }
+
+  // ── Impedir acesso ao Login se já autenticado ─────────────────────────────
   if (pathname.startsWith('/login') && hasValidToken) {
     return NextResponse.redirect(new URL('/dashboard', request.url));
   }

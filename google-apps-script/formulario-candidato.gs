@@ -86,8 +86,26 @@ function campo_(r, chaves) {
 
 function salvarNaPlanilha_(dados) {
   try {
-    var ss  = SpreadsheetApp.getActiveSpreadsheet();
-    var aba = ss.getSheetByName('Respostas');
+    var ss;
+
+    // Se o script está vinculado ao FORM (não à planilha),
+    // getActiveSpreadsheet() retorna null. Tenta via Form destination.
+    try { ss = SpreadsheetApp.getActiveSpreadsheet(); } catch(ex) { ss = null; }
+
+    if (!ss) {
+      try {
+        var form  = FormApp.getActiveForm();
+        var destId = form ? form.getDestinationId() : null;
+        if (destId) ss = SpreadsheetApp.openById(destId);
+      } catch(ex2) { ss = null; }
+    }
+
+    if (!ss) {
+      Logger.log('[Planilha] Nenhuma planilha vinculada — etapa ignorada.');
+      return;
+    }
+
+    var aba = ss.getSheetByName('Respostas') || ss.getSheets()[0];
     if (!aba) return;
     var linha = [
       new Date(),
@@ -130,15 +148,57 @@ function notificarEquipe_(dados, sucesso, detalhe) {
 //  Gatilho principal — executado ao enviar o formulário
 // ─────────────────────────────────────────────────────────────────────
 
+/**
+ * Reconstrói namedValues a partir de qualquer tipo de evento do Forms/Sheets.
+ *
+ * Caso 1 - Trigger vinculado à PLANILHA  → e.namedValues já existe.
+ * Caso 2 - Trigger vinculado ao FORM     → e.response é um FormResponse;
+ *          precisamos iterar getItemResponses() para montar o namedValues.
+ * Caso 3 - Trigger da planilha sem namedValues → reconstrói via e.values + e.range.
+ */
+function reconstruirNamedValues_(e) {
+  // Caso 1: planilha com namedValues pronto
+  if (e && e.namedValues) return e.namedValues;
+
+  var r = {};
+
+  // Caso 2: trigger do Forms — e.response é um FormResponse object
+  if (e && e.response && typeof e.response.getItemResponses === 'function') {
+    var itemResponses = e.response.getItemResponses();
+    for (var i = 0; i < itemResponses.length; i++) {
+      var item   = itemResponses[i];
+      var titulo = item.getItem().getTitle();
+      var resp   = item.getResponse();
+      // Caixas de seleção multipla retornam array → join
+      r[titulo]  = [Array.isArray(resp) ? resp.join(', ') : (resp || '')];
+    }
+    return r;
+  }
+
+  // Caso 3: trigger da planilha sem namedValues (e.values + e.range)
+  if (e && e.values && e.range) {
+    var sheet   = e.range.getSheet();
+    var headers = sheet.getRange(1, 1, 1, e.values.length).getValues()[0];
+    for (var j = 0; j < headers.length; j++) {
+      r[headers[j]] = [e.values[j]];
+    }
+    return r;
+  }
+
+  return r;
+}
+
 function aoEnviarFormulario(e) {
   Logger.log('🚀 Pipeline ITP iniciado');
 
-  if (!e || !e.namedValues) {
-    Logger.log('❌ Evento vazio ou inválido');
+  var r = reconstruirNamedValues_(e);
+
+  if (Object.keys(r).length === 0) {
+    Logger.log('❌ Evento vazio — nenhum campo extraído. Verifique o tipo de gatilho.');
     return;
   }
 
-  var r = e.namedValues; // { "Título": ["resposta"] }
+  Logger.log('Campos recebidos: ' + Object.keys(r).join(' | '));
 
   // ── Leitura dos campos do formulário ──────────────────────────────
   var dados = {
