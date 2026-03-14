@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -690,10 +690,11 @@ interface DreDado {
 
 const MESES_PT = ['','Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
-function LinhaDRE({ descricao, valor, nivel = 1, negrito = false, destaque = false, inverter = false }: {
+function LinhaDRE({ descricao, valor, nivel = 1, negrito = false, destaque = false, inverter = false, ocultar = false }: {
   descricao: string; valor: number; nivel?: number;
-  negrito?: boolean; destaque?: boolean; inverter?: boolean;
+  negrito?: boolean; destaque?: boolean; inverter?: boolean; ocultar?: boolean;
 }) {
+  if (ocultar) return null;
   const cor = destaque
     ? valor >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'
     : inverter
@@ -713,13 +714,33 @@ function LinhaDRE({ descricao, valor, nivel = 1, negrito = false, destaque = fal
   );
 }
 
+interface DreFiltros {
+  receitasDetalhes: boolean;
+  deducoes: boolean;
+  despesasDetalhes: boolean;
+  resultadoFinanceiro: boolean;
+  grafico: boolean;
+}
+
 function AbaDRE() {
   const anoAtual = new Date().getFullYear();
+  const dreRef = React.useRef<HTMLDivElement>(null);
   const [dre, setDre]       = useState<DreDado | null>(null);
   const [ano, setAno]       = useState(String(anoAtual));
   const [mesIni, setMesIni] = useState('1');
   const [mesFim, setMesFim] = useState('12');
   const [carregando, setCarregando] = useState(false);
+  const [exportando, setExportando] = useState<'pdf' | 'png' | null>(null);
+  const [filtros, setFiltros] = useState<DreFiltros>({
+    receitasDetalhes: true,
+    deducoes: true,
+    despesasDetalhes: true,
+    resultadoFinanceiro: true,
+    grafico: true,
+  });
+
+  const toggleFiltro = (k: keyof DreFiltros) =>
+    setFiltros(prev => ({ ...prev, [k]: !prev[k] }));
 
   const carregar = useCallback(async () => {
     setCarregando(true);
@@ -729,74 +750,149 @@ function AbaDRE() {
     } catch {/* silencia */} finally { setCarregando(false); }
   }, [ano, mesIni, mesFim]);
 
-  const exportar = () => {
+  const exportarXlsx = () => {
     if (!dre) return;
+    const instituicao = 'Instituto Tia Pretinha';
+    const periodo = `${MESES_PT[dre.periodo.mes_ini]}/${dre.periodo.ano} a ${MESES_PT[dre.periodo.mes_fim]}/${dre.periodo.ano}`;
     const linhas: Record<string, unknown>[] = [
-      { conta: '1. RECEITAS BRUTAS', valor: '' },
-      ...dre.receitasBrutas.map(r => ({ conta: `   ${r.conta}`, valor: r.valor })),
-      { conta: 'TOTAL RECEITAS BRUTAS', valor: dre.totalReceitasBrutas },
-      { conta: '(-) Deduções', valor: -dre.totalDeducoes },
-      { conta: '= RECEITA LÍQUIDA', valor: dre.receitaLiquida },
-      { conta: '' , valor: '' },
-      { conta: '2. DESPESAS', valor: '' },
-      ...dre.gruposDespesas.flatMap(g => [
-        { conta: `   ${g.grupo}`, valor: '' },
-        ...g.itens.map(i => ({ conta: `      ${i.conta}`, valor: -i.valor })),
-        { conta: `   Subtotal ${g.grupo}`, valor: -g.subtotal },
-      ]),
-      { conta: 'TOTAL DESPESAS', valor: -dre.totalDespesas },
-      { conta: '' , valor: '' },
-      { conta: '= RESULTADO OPERACIONAL', valor: dre.resultadoOperacional },
-      { conta: '± Resultado Financeiro', valor: dre.resultadoFinanceiro },
-      { conta: '= RESULTADO DO EXERCÍCIO', valor: dre.resultadoExercicio },
-      { conta: 'Margem (%)', valor: `${dre.margem}%` },
+      { 'Descrição': instituicao, 'Valor (R$)': '' },
+      { 'Descrição': `DRE — ${periodo}`, 'Valor (R$)': '' },
+      { 'Descrição': '', 'Valor (R$)': '' },
+      { 'Descrição': '1. RECEITAS OPERACIONAIS', 'Valor (R$)': '' },
+      ...dre.receitasBrutas.map(r => ({ 'Descrição': `   ${r.conta}`, 'Valor (R$)': r.valor })),
+      { 'Descrição': 'TOTAL RECEITAS BRUTAS', 'Valor (R$)': dre.totalReceitasBrutas },
     ];
-    exportarExcel(linhas, `DRE_${ano}`);
+    if (dre.deducoes.length > 0) {
+      linhas.push({ 'Descrição': '(-) DEDUÇÕES DE RECEITAS', 'Valor (R$)': '' });
+      dre.deducoes.forEach(d => linhas.push({ 'Descrição': `   ${d.conta}`, 'Valor (R$)': -d.valor }));
+      linhas.push({ 'Descrição': 'TOTAL DEDUÇÕES', 'Valor (R$)': -dre.totalDeducoes });
+    }
+    linhas.push({ 'Descrição': '= RECEITA LÍQUIDA', 'Valor (R$)': dre.receitaLiquida });
+    linhas.push({ 'Descrição': '', 'Valor (R$)': '' });
+    linhas.push({ 'Descrição': '2. DESPESAS', 'Valor (R$)': '' });
+    dre.gruposDespesas.forEach(g => {
+      linhas.push({ 'Descrição': `   ${g.grupo}`, 'Valor (R$)': '' });
+      g.itens.forEach(i => linhas.push({ 'Descrição': `      ${i.conta}`, 'Valor (R$)': -i.valor }));
+      linhas.push({ 'Descrição': `   Subtotal ${g.grupo}`, 'Valor (R$)': -g.subtotal });
+    });
+    linhas.push({ 'Descrição': 'TOTAL DESPESAS', 'Valor (R$)': -dre.totalDespesas });
+    linhas.push({ 'Descrição': '', 'Valor (R$)': '' });
+    linhas.push({ 'Descrição': '= RESULTADO OPERACIONAL', 'Valor (R$)': dre.resultadoOperacional });
+    if (dre.resultadoFinanceiro !== 0)
+      linhas.push({ 'Descrição': '± Resultado Financeiro', 'Valor (R$)': dre.resultadoFinanceiro });
+    linhas.push({ 'Descrição': '= RESULTADO DO EXERCÍCIO', 'Valor (R$)': dre.resultadoExercicio });
+    linhas.push({ 'Descrição': 'Margem (%)', 'Valor (R$)': `${dre.margem}%` });
+
+    import('xlsx').then(mod => {
+      const XLSX = (mod.default ?? mod) as typeof import('xlsx');
+      const ws = XLSX.utils.json_to_sheet(linhas);
+      ws['!cols'] = [{ wch: 50 }, { wch: 18 }];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'DRE');
+      XLSX.writeFile(wb, `DRE_${ano}_${MESES_PT[Number(mesIni)]}-${MESES_PT[Number(mesFim)]}.xlsx`);
+    });
   };
+
+  const exportarImagem = async (formato: 'pdf' | 'png') => {
+    if (!dreRef.current) return;
+    setExportando(formato);
+    try {
+      const html2canvas = (await import('html2canvas')).default;
+      const canvas = await html2canvas(dreRef.current, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
+      if (formato === 'png') {
+        const link = document.createElement('a');
+        link.download = `DRE_${ano}_${MESES_PT[Number(mesIni)]}-${MESES_PT[Number(mesFim)]}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+      } else {
+        const { jsPDF } = await import('jspdf');
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jsPDF({ orientation: canvas.width > canvas.height ? 'landscape' : 'portrait', unit: 'px', format: [canvas.width, canvas.height] });
+        pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+        pdf.save(`DRE_${ano}_${MESES_PT[Number(mesIni)]}-${MESES_PT[Number(mesFim)]}.pdf`);
+      }
+    } catch {/* silencia */} finally { setExportando(null); }
+  };
+
+  const LABELS: { key: keyof DreFiltros; label: string }[] = [
+    { key: 'receitasDetalhes', label: 'Detalhes Receitas' },
+    { key: 'deducoes',         label: 'Deduções' },
+    { key: 'despesasDetalhes', label: 'Detalhes Despesas' },
+    { key: 'resultadoFinanceiro', label: 'Resultado Financeiro' },
+    { key: 'grafico',          label: 'Gráfico Evolução' },
+  ];
 
   return (
     <div className="space-y-6">
       {/* Filtros */}
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 p-4 flex flex-wrap gap-3 items-end">
-        <div>
-          <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">Ano</label>
-          <input type="number" value={ano} onChange={e => setAno(e.target.value)} min="2020" max="2099"
-            className="border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-sm w-24 bg-white dark:bg-slate-800 dark:text-slate-100" />
-        </div>
-        <div>
-          <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">Mês Inicial</label>
-          <select value={mesIni} onChange={e => setMesIni(e.target.value)}
-            className="border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-slate-800 dark:text-slate-100">
-            {MESES_PT.slice(1).map((m,i) => <option key={i+1} value={String(i+1)}>{m}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">Mês Final</label>
-          <select value={mesFim} onChange={e => setMesFim(e.target.value)}
-            className="border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-slate-800 dark:text-slate-100">
-            {MESES_PT.slice(1).map((m,i) => <option key={i+1} value={String(i+1)}>{m}</option>)}
-          </select>
-        </div>
-        <button onClick={carregar} disabled={carregando}
-          className="px-4 py-2 text-xs font-black bg-purple-600 text-white rounded-xl hover:bg-purple-700 flex items-center gap-2 disabled:opacity-50">
-          {carregando ? <RefreshCw size={13} className="animate-spin" /> : <Filter size={13} />} Gerar DRE
-        </button>
-        {dre && (
-          <button onClick={exportar}
-            className="px-4 py-2 text-xs font-black border border-slate-200 dark:border-slate-600 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2">
-            <Download size={13} /> Exportar Excel
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 p-4 space-y-3">
+        <div className="flex flex-wrap gap-3 items-end">
+          <div>
+            <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">Ano</label>
+            <input type="number" value={ano} onChange={e => setAno(e.target.value)} min="2020" max="2099"
+              className="border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-sm w-24 bg-white dark:bg-slate-800 dark:text-slate-100" />
+          </div>
+          <div>
+            <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">Mês Inicial</label>
+            <select value={mesIni} onChange={e => setMesIni(e.target.value)}
+              className="border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-slate-800 dark:text-slate-100">
+              {MESES_PT.slice(1).map((m,i) => <option key={i+1} value={String(i+1)}>{m}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">Mês Final</label>
+            <select value={mesFim} onChange={e => setMesFim(e.target.value)}
+              className="border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-slate-800 dark:text-slate-100">
+              {MESES_PT.slice(1).map((m,i) => <option key={i+1} value={String(i+1)}>{m}</option>)}
+            </select>
+          </div>
+          <button onClick={carregar} disabled={carregando}
+            className="px-4 py-2 text-xs font-black bg-purple-600 text-white rounded-xl hover:bg-purple-700 flex items-center gap-2 disabled:opacity-50">
+            {carregando ? <RefreshCw size={13} className="animate-spin" /> : <Filter size={13} />} Gerar DRE
           </button>
+          {dre && (
+            <>
+              <button onClick={exportarXlsx}
+                className="px-3 py-2 text-xs font-black border border-slate-200 dark:border-slate-600 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-1.5">
+                <Download size={13} /> Excel
+              </button>
+              <button onClick={() => exportarImagem('pdf')} disabled={exportando === 'pdf'}
+                className="px-3 py-2 text-xs font-black border border-red-200 text-red-600 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-1.5 disabled:opacity-50">
+                {exportando === 'pdf' ? <RefreshCw size={13} className="animate-spin" /> : <Download size={13} />} PDF
+              </button>
+              <button onClick={() => exportarImagem('png')} disabled={exportando === 'png'}
+                className="px-3 py-2 text-xs font-black border border-blue-200 text-blue-600 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/20 flex items-center gap-1.5 disabled:opacity-50">
+                {exportando === 'png' ? <RefreshCw size={13} className="animate-spin" /> : <Download size={13} />} PNG
+              </button>
+            </>
+          )}
+        </div>
+        {/* Filtros por nível */}
+        {dre && (
+          <div className="flex flex-wrap gap-2 pt-1 border-t border-slate-100 dark:border-slate-800">
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider self-center">Exibir:</span>
+            {LABELS.map(({ key, label }) => (
+              <button key={key} onClick={() => toggleFiltro(key)}
+                className={`px-2.5 py-1 rounded-full text-[10px] font-black border transition-all ${
+                  filtros[key]
+                    ? 'bg-purple-600 text-white border-purple-600'
+                    : 'bg-white dark:bg-slate-800 text-slate-400 border-slate-200 dark:border-slate-700'
+                }`}>
+                {label}
+              </button>
+            ))}
+          </div>
         )}
       </div>
 
       {dre && (
-        <>
+        <div ref={dreRef} className="space-y-6 bg-white dark:bg-slate-950 p-1 rounded-2xl">
           {/* KPIs */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {[
               { label: 'Receita Bruta',    valor: dre.totalReceitasBrutas, cor: 'text-blue-600' },
               { label: 'Receita Líquida',  valor: dre.receitaLiquida,     cor: 'text-green-600' },
-              { label: 'Total Despesas',   valor: -dre.totalDespesas,     cor: 'text-red-500' },
+              { label: 'Total Despesas',   valor: dre.totalDespesas,      cor: 'text-red-500' },
               { label: 'Resultado Final',  valor: dre.resultadoExercicio,  cor: dre.resultadoExercicio >= 0 ? 'text-emerald-600' : 'text-red-500' },
             ].map(k => (
               <div key={k.label} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 text-center shadow-sm">
@@ -823,26 +919,30 @@ function AbaDRE() {
                 </thead>
                 <tbody>
                   {/* Receitas */}
-                  <LinhaDRE descricao="1. RECEITAS OPERACIONAIS" valor={0} nivel={1} negrito />
-                  {dre.receitasBrutas.map((r,i) => (
+                  <LinhaDRE descricao="1. RECEITAS OPERACIONAIS" valor={dre.totalReceitasBrutas} nivel={1} negrito />
+                  {filtros.receitasDetalhes && dre.receitasBrutas.map((r,i) => (
                     <LinhaDRE key={i} descricao={r.conta} valor={r.valor} nivel={2} />
                   ))}
-                  <LinhaDRE descricao="TOTAL RECEITAS BRUTAS" valor={dre.totalReceitasBrutas} nivel={1} negrito />
+                  {filtros.receitasDetalhes && (
+                    <LinhaDRE descricao="TOTAL RECEITAS BRUTAS" valor={dre.totalReceitasBrutas} nivel={1} negrito />
+                  )}
 
-                  {dre.deducoes.length > 0 && (
+                  {/* Deduções */}
+                  {filtros.deducoes && dre.deducoes.length > 0 && (
                     <>
                       <LinhaDRE descricao="(-) DEDUÇÕES DE RECEITAS" valor={0} nivel={1} negrito />
                       {dre.deducoes.map((d,i) => (
                         <LinhaDRE key={i} descricao={d.conta} valor={-d.valor} nivel={2} inverter />
                       ))}
+                      <LinhaDRE descricao="TOTAL DEDUÇÕES" valor={-dre.totalDeducoes} nivel={1} negrito inverter />
                     </>
                   )}
 
                   <LinhaDRE descricao="= RECEITA LÍQUIDA" valor={dre.receitaLiquida} nivel={1} negrito destaque />
 
                   {/* Despesas */}
-                  <LinhaDRE descricao="2. DESPESAS" valor={0} nivel={1} negrito />
-                  {dre.gruposDespesas.map((g, gi) => (
+                  <LinhaDRE descricao="2. DESPESAS" valor={dre.totalDespesas} nivel={1} negrito />
+                  {filtros.despesasDetalhes && dre.gruposDespesas.map((g, gi) => (
                     <React.Fragment key={gi}>
                       <LinhaDRE descricao={g.grupo} valor={0} nivel={2} negrito />
                       {g.itens.map((it, ii) => (
@@ -856,7 +956,7 @@ function AbaDRE() {
                   {/* Resultados */}
                   <LinhaDRE descricao="= RESULTADO OPERACIONAL" valor={dre.resultadoOperacional} nivel={1} negrito destaque />
 
-                  {dre.resultadoFinanceiro !== 0 && (
+                  {filtros.resultadoFinanceiro && dre.resultadoFinanceiro !== 0 && (
                     <LinhaDRE descricao="± Resultado Financeiro" valor={dre.resultadoFinanceiro} nivel={2} />
                   )}
 
@@ -871,7 +971,7 @@ function AbaDRE() {
           </div>
 
           {/* Gráfico evolução */}
-          {dre.evolucaoMensal.length > 0 && (
+          {filtros.grafico && dre.evolucaoMensal.length > 0 && (
             <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-sm">
               <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800">
                 <h3 className="font-black text-sm uppercase tracking-widest text-slate-700 dark:text-slate-200">Evolução Mensal do Resultado</h3>
@@ -892,7 +992,7 @@ function AbaDRE() {
               </div>
             </div>
           )}
-        </>
+        </div>
       )}
     </div>
   );
