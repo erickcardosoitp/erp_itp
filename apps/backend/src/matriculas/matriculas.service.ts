@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, InternalServerErrorException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource } from 'typeorm';
+import { Repository, DataSource, Not, In } from 'typeorm';
 import { randomUUID } from 'crypto';
 import { extname, join } from 'path';
 import { existsSync, mkdirSync, unlinkSync } from 'fs';
@@ -197,7 +197,10 @@ export class MatriculasService {
   async receberInscricao(dados: any): Promise<Inscricao> {
     const cpfLimpo = String(dados.cpf).replace(/\D/g, '');
     
-    const existente = await this.inscricaoRepository.findOneBy({ cpf: cpfLimpo });
+    const STATUS_INATIVOS = [StatusMatricula.DESISTENTE, StatusMatricula.CANCELADA];
+    const existente = await this.inscricaoRepository.findOne({
+      where: { cpf: cpfLimpo, status_matricula: Not(In(STATUS_INATIVOS)) },
+    });
     if (existente) throw new BadRequestException('Este CPF já possui uma inscrição ativa.');
 
     const novaInscricao = this.inscricaoRepository.create({

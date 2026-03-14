@@ -29,7 +29,7 @@ export class Inscricao {
   @Column({ name: 'nome_completo' }) 
   nome_completo: string;
 
-  @Column({ unique: true }) 
+  @Column()
   cpf: string;
 
   @Column() 
