@@ -33,6 +33,7 @@ export class RolesGuard implements CanActivate {
       'adjunto': 5,
       'drt': 8,
       'vp': 9,
+      'prt': 10,   // Presidente (mesmo nível de admin)
       'admin': 10,
       'aadmin': 10 // 👈 Escudo contra erro de concatenação
     };

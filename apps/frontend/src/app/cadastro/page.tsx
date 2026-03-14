@@ -411,6 +411,8 @@ function FuncionariosTab({ onCount }: { onCount: (n: number) => void }) {
   const podeCriarUsuario = ROLES_CRIAR_USUARIO.includes(user?.role ?? '');
   // Conjunto de e-mails que já possuem usuário cadastrado
   const emailsComUsuario = new Set(usuarios.map(u => (u.email ?? '').toLowerCase()));
+  // Matrícula do usuário vinculado pelo e-mail (fallback quando funcionário não tem matrícula própria)
+  const matriculaPorEmail = new Map(usuarios.map(u => [(u.email ?? '').toLowerCase(), u.matricula]));
   const filtrados = lista.filter(p =>
     p.nome.toLowerCase().includes(busca.toLowerCase()) ||
     (p.cargo ?? '').toLowerCase().includes(busca.toLowerCase()),
@@ -437,7 +439,9 @@ function FuncionariosTab({ onCount }: { onCount: (n: number) => void }) {
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-50 dark:divide-slate-700">
-          {filtrados.map(p => (
+          {filtrados.map(p => {
+            const matriculaExibida = p.matricula || matriculaPorEmail.get((p.email ?? '').toLowerCase());
+            return (
             <tr key={p.id} className="hover:bg-purple-50/30 dark:hover:bg-purple-900/20 transition-colors">
               <td className="px-6 py-4">
                 <div className="flex items-center gap-3">
@@ -448,9 +452,9 @@ function FuncionariosTab({ onCount }: { onCount: (n: number) => void }) {
               <td className="px-6 py-4 text-xs text-slate-500">{p.cargo || '–'}</td>
               <td className="px-6 py-4 text-xs text-slate-500">{p.email || '–'}</td>
               <td className="px-6 py-4">
-                {p.matricula ? (
+                {matriculaExibida ? (
                   <span className="font-mono text-[10px] font-bold bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-2 py-0.5 rounded-lg border border-purple-100 dark:border-purple-800">
-                    {p.matricula}
+                    {matriculaExibida}
                   </span>
                 ) : <span className="text-slate-300 text-xs">–</span>}
               </td>
@@ -477,7 +481,8 @@ function FuncionariosTab({ onCount }: { onCount: (n: number) => void }) {
                 </div>
               </td>
             </tr>
-          ))}
+            );
+          })}
         </tbody>
       </Tabela>
 

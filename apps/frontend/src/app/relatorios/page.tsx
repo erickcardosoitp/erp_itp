@@ -8,6 +8,7 @@ import {
 import {
   BarChart2, Download, TrendingUp, Users, BookOpen,
   Package, Heart, DollarSign, Globe, Filter, RefreshCw,
+  Leaf, HandHeart,
 } from 'lucide-react';
 import api from '@/services/api';
 
@@ -28,7 +29,7 @@ function exportarExcel(dados: Record<string, unknown>[], nomeArquivo: string) {
 
 const CORES_PIZZA = ['#7c3aed', '#a855f7', '#c084fc', '#d8b4fe', '#ede9fe', '#4f46e5', '#818cf8'];
 
-type AbaId = 'financeiro' | 'academico' | 'social' | 'estoque' | 'dre';
+type AbaId = 'financeiro' | 'academico' | 'social' | 'estoque' | 'dre' | 'ong';
 
 /* ════════════════════════════════════════════════════════
    ABAS FINANCEIRO
@@ -117,6 +118,7 @@ function AbaFinanceiro() {
         </div>
         {resumo && (
           <div className="p-5 space-y-4">
+            {/* ── 3 KPIs ── */}
             <div className="grid grid-cols-3 gap-3">
               {[
                 { label: 'Receitas', value: moeda(Number(resumo.total_receitas)), color: 'text-green-600' },
@@ -333,7 +335,7 @@ function AbaAcademico() {
               {[
                 { label: 'Total Ativos', value: String(alunos.total_ativos) },
                 { label: 'Total Inativos', value: String(alunos.total_inativos) },
-                { label: 'Infantil', value: String((alunos.turnos as Record<string, unknown>[] | undefined)?.find((t) => t.turno_escolar === 'Manhã')?.total ?? 0) },
+                { label: 'Manhã', value: String((alunos.turnos as Record<string, unknown>[] | undefined)?.find((t) => t.turno_escolar === 'Manhã')?.total ?? 0) },
                 { label: 'Noturno', value: String((alunos.turnos as Record<string, unknown>[] | undefined)?.find((t) => t.turno_escolar === 'Noite')?.total ?? 0) },
               ].map(c => (
                 <div key={c.label} className="bg-slate-50 dark:bg-slate-800 rounded-xl p-4 text-center">
@@ -395,8 +397,8 @@ function AbaAcademico() {
               {[
                 { label: 'Cursos', value: String(academico.total_cursos) },
                 { label: 'Professores', value: String(academico.total_professores) },
-                { label: 'Turmas Ativas', value: String(academico.turmas_ativas) },
-                { label: 'Cards Grade', value: String(academico.cards_grade) },
+                { label: 'Alunos em Turmas', value: String(academico.turmas_ativas) },
+                { label: 'Aulas na Grade', value: String(academico.cards_grade) },
               ].map(c => (
                 <div key={c.label} className="bg-slate-50 dark:bg-slate-800 rounded-xl p-4 text-center">
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">{c.label}</p>
@@ -569,8 +571,8 @@ function AbaEstoque() {
                 <p className="text-xl font-black text-red-500 mt-1">{String(posicao.total_criticos)}</p>
               </div>
               <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-4 text-center">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Valor Total</p>
-                <p className="text-xl font-black text-slate-700 dark:text-slate-200 mt-1">{moeda(Number(posicao.valor_total_estoque))}</p>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Categorias</p>
+                <p className="text-xl font-black text-slate-700 dark:text-slate-200 mt-1">{Array.isArray(posicao.por_categoria) ? String((posicao.por_categoria as unknown[]).length) : '—'}</p>
               </div>
             </div>
             {Array.isArray(posicao.produtos) && posicao.produtos.length > 0 && (
@@ -897,12 +899,331 @@ function AbaDRE() {
 }
 
 /* ════════════════════════════════════════════════════════
+   ONG — Relatórios do Terceiro Setor
+═══════════════════════════════════════════════════════════ */
+
+function AbaONG() {
+  const anoAtual = new Date().getFullYear();
+  const [dataIni, setDataIni] = useState(`${anoAtual}-01-01`);
+  const [dataFim, setDataFim] = useState(`${anoAtual}-12-31`);
+  const [ano, setAno] = useState(String(anoAtual));
+
+  const [sustentabilidade, setSustentabilidade] = useState<Record<string, unknown> | null>(null);
+  const [origRecursos, setOrigRecursos] = useState<Record<string, unknown> | null>(null);
+  const [diversificacao, setDiversificacao] = useState<Record<string, unknown> | null>(null);
+  const [despCat, setDespCat] = useState<Record<string, unknown> | null>(null);
+  const [custoBenef, setCustoBenef] = useState<Record<string, unknown> | null>(null);
+  const [anual, setAnual] = useState<Record<string, unknown> | null>(null);
+  const [carregando, setCarregando] = useState<string | null>(null);
+
+  const carregar = useCallback(async (tipo: string) => {
+    setCarregando(tipo);
+    try {
+      if (tipo === 'sustentabilidade') {
+        const { data } = await api.get('/relatorios/financeiro/sustentabilidade');
+        setSustentabilidade(data);
+      } else if (tipo === 'origem') {
+        const { data } = await api.get(`/relatorios/financeiro/origem-recursos?data_ini=${dataIni}&data_fim=${dataFim}`);
+        setOrigRecursos(data);
+      } else if (tipo === 'diversificacao') {
+        const { data } = await api.get(`/relatorios/financeiro/diversificacao-receitas?data_ini=${dataIni}&data_fim=${dataFim}`);
+        setDiversificacao(data);
+      } else if (tipo === 'despcat') {
+        const { data } = await api.get(`/relatorios/financeiro/despesas-categoria?data_ini=${dataIni}&data_fim=${dataFim}`);
+        setDespCat(data);
+      } else if (tipo === 'custo') {
+        const { data } = await api.get(`/relatorios/social/custo-beneficiario?data_ini=${dataIni}&data_fim=${dataFim}`);
+        setCustoBenef(data);
+      } else if (tipo === 'anual') {
+        const { data } = await api.get(`/relatorios/financeiro/anual?ano=${ano}`);
+        setAnual(data);
+      }
+    } catch { /* silencia */ } finally { setCarregando(null); }
+  }, [dataIni, dataFim, ano]);
+
+  return (
+    <div className="space-y-6">
+      {/* Filtros */}
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 p-4 flex flex-wrap gap-3 items-end">
+        <div>
+          <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">De</label>
+          <input type="date" value={dataIni} onChange={e => setDataIni(e.target.value)}
+            className="border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-slate-800 dark:text-slate-100" />
+        </div>
+        <div>
+          <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">Até</label>
+          <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)}
+            className="border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-slate-800 dark:text-slate-100" />
+        </div>
+        <div>
+          <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">Ano</label>
+          <input type="number" value={ano} onChange={e => setAno(e.target.value)} min="2020" max="2099"
+            className="border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-sm w-24 bg-white dark:bg-slate-800 dark:text-slate-100" />
+        </div>
+      </div>
+
+      {/* Sustentabilidade Financeira */}
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+          <h3 className="font-black text-sm uppercase tracking-widest text-slate-700 dark:text-slate-200 flex items-center gap-2">
+            <Leaf size={16} className="text-green-600" /> Sustentabilidade Financeira
+          </h3>
+          <button onClick={() => carregar('sustentabilidade')} disabled={carregando === 'sustentabilidade'}
+            className="px-3 py-1.5 text-xs font-bold bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-1 disabled:opacity-50">
+            {carregando === 'sustentabilidade' ? <RefreshCw size={12} className="animate-spin" /> : <Filter size={12} />} Calcular
+          </button>
+        </div>
+        {sustentabilidade && (
+          <div className="p-5">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {[
+                { label: 'Saldo Atual', value: moeda(Number(sustentabilidade.saldo_atual)), color: 'text-green-600' },
+                { label: 'Média Mensal Desp.', value: moeda(Number(sustentabilidade.media_desp_mensal)), color: 'text-red-500' },
+                { label: 'Meses de Operação', value: String(sustentabilidade.meses_operacao), color: sustentabilidade.cor === 'green' ? 'text-green-600' : sustentabilidade.cor === 'yellow' ? 'text-yellow-500' : 'text-red-500' },
+                { label: 'Situação', value: String(sustentabilidade.nivel), color: sustentabilidade.cor === 'green' ? 'text-green-600' : sustentabilidade.cor === 'yellow' ? 'text-yellow-500' : 'text-red-500' },
+              ].map(k => (
+                <div key={k.label} className="bg-slate-50 dark:bg-slate-800 rounded-xl p-4 text-center">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">{k.label}</p>
+                  <p className={`text-lg font-black mt-1 ${k.color}`}>{k.value}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Origem de Recursos */}
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+          <h3 className="font-black text-sm uppercase tracking-widest text-slate-700 dark:text-slate-200 flex items-center gap-2">
+            <DollarSign size={16} className="text-blue-600" /> Origem de Recursos
+          </h3>
+          <div className="flex gap-2">
+            <button onClick={() => carregar('origem')} disabled={carregando === 'origem'}
+              className="px-3 py-1.5 text-xs font-bold bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-1 disabled:opacity-50">
+              {carregando === 'origem' ? <RefreshCw size={12} className="animate-spin" /> : <Filter size={12} />} Gerar
+            </button>
+            {origRecursos && (
+              <button onClick={() => exportarExcel((origRecursos.fontes as Record<string, unknown>[]), 'origem_recursos')}
+                className="px-3 py-1.5 text-xs font-bold border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-1">
+                <Download size={12} /> Excel
+              </button>
+            )}
+          </div>
+        </div>
+        {origRecursos && Array.isArray(origRecursos.fontes) && (
+          <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <ResponsiveContainer width="100%" height={240}>
+              <PieChart>
+                <Pie data={origRecursos.fontes as Record<string, unknown>[]} dataKey="total" nameKey="fonte"
+                  cx="50%" cy="50%" outerRadius={90}
+                  label={({ name, value }: { name: string; value: number }) => `${name}: ${moeda(value)}`}>
+                  {(origRecursos.fontes as unknown[]).map((_, i) => <Cell key={i} fill={CORES_PIZZA[i % CORES_PIZZA.length]} />)}
+                </Pie>
+                <Tooltip formatter={(v: number) => moeda(v)} />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="space-y-2">
+              {(origRecursos.fontes as Record<string, unknown>[]).map((f, i) => (
+                <div key={i} className="flex items-center justify-between p-2 bg-slate-50 dark:bg-slate-800 rounded-lg">
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300">{String(f.fonte)}</span>
+                  <div className="text-right">
+                    <p className="text-xs font-black" style={{ color: CORES_PIZZA[i % CORES_PIZZA.length] }}>{moeda(Number(f.total))}</p>
+                    <p className="text-[10px] text-slate-400">{String(f.percentual)}%</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Diversificação de Receitas */}
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+          <h3 className="font-black text-sm uppercase tracking-widest text-slate-700 dark:text-slate-200 flex items-center gap-2">
+            <BarChart2 size={16} className="text-indigo-600" /> Diversificação de Receitas
+          </h3>
+          <button onClick={() => carregar('diversificacao')} disabled={carregando === 'diversificacao'}
+            className="px-3 py-1.5 text-xs font-bold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center gap-1 disabled:opacity-50">
+            {carregando === 'diversificacao' ? <RefreshCw size={12} className="animate-spin" /> : <Filter size={12} />} Gerar
+          </button>
+        </div>
+        {diversificacao && (
+          <div className="p-5 space-y-3">
+            <div className="flex gap-4">
+              <div className="bg-slate-50 dark:bg-slate-800 rounded-xl px-4 py-3 text-center">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Índice HHI</p>
+                <p className="text-lg font-black text-indigo-600">{String(diversificacao.hhi)}</p>
+              </div>
+              <div className={`rounded-xl px-4 py-3 text-center ${diversificacao.nivel_diversificacao === 'Diversificado' ? 'bg-green-50 dark:bg-green-900/20' : diversificacao.nivel_diversificacao === 'Moderado' ? 'bg-yellow-50 dark:bg-yellow-900/20' : 'bg-red-50 dark:bg-red-900/20'}`}>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Nível</p>
+                <p className={`text-lg font-black ${diversificacao.nivel_diversificacao === 'Diversificado' ? 'text-green-600' : diversificacao.nivel_diversificacao === 'Moderado' ? 'text-yellow-600' : 'text-red-500'}`}>
+                  {String(diversificacao.nivel_diversificacao)}
+                </p>
+              </div>
+            </div>
+            {Array.isArray(diversificacao.fontes) && (
+              <div className="space-y-1.5">
+                {(diversificacao.fontes as Record<string, unknown>[]).map((f, i) => (
+                  <div key={i} className="flex items-center gap-3">
+                    <span className="text-xs text-slate-600 dark:text-slate-400 w-36 truncate">{String(f.fonte)}</span>
+                    <div className="flex-1 bg-slate-100 dark:bg-slate-800 rounded-full h-2">
+                      <div className="h-2 rounded-full" style={{ width: `${f.percentual}%`, backgroundColor: CORES_PIZZA[i % CORES_PIZZA.length] }} />
+                    </div>
+                    <span className="text-xs font-black text-slate-700 dark:text-slate-300 w-10 text-right">{String(f.percentual)}%</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Despesas por Categoria */}
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+          <h3 className="font-black text-sm uppercase tracking-widest text-slate-700 dark:text-slate-200 flex items-center gap-2">
+            <Package size={16} className="text-orange-500" /> Despesas por Categoria / Plano de Contas
+          </h3>
+          <div className="flex gap-2">
+            <button onClick={() => carregar('despcat')} disabled={carregando === 'despcat'}
+              className="px-3 py-1.5 text-xs font-bold bg-orange-500 text-white rounded-lg hover:bg-orange-600 flex items-center gap-1 disabled:opacity-50">
+              {carregando === 'despcat' ? <RefreshCw size={12} className="animate-spin" /> : <Filter size={12} />} Gerar
+            </button>
+            {despCat && (
+              <button onClick={() => exportarExcel((despCat.categorias as Record<string, unknown>[]), 'despesas_categoria')}
+                className="px-3 py-1.5 text-xs font-bold border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-1">
+                <Download size={12} /> Excel
+              </button>
+            )}
+          </div>
+        </div>
+        {despCat && Array.isArray(despCat.categorias) && (
+          <div className="p-5">
+            <p className="text-xs text-slate-500 mb-3">Total: <span className="font-black text-red-500">{moeda(Number(despCat.total_despesas))}</span></p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-slate-50 dark:bg-slate-800">
+                    <th className="px-3 py-2 text-left font-black text-slate-500 uppercase tracking-wider">Categoria</th>
+                    <th className="px-3 py-2 text-right font-black text-slate-500 uppercase tracking-wider">Total</th>
+                    <th className="px-3 py-2 text-right font-black text-slate-500 uppercase tracking-wider">%</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {(despCat.categorias as Record<string, unknown>[]).map((c, i) => (
+                    <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                      <td className="px-3 py-2 text-slate-700 dark:text-slate-300">{String(c.categoria)}</td>
+                      <td className="px-3 py-2 text-right text-red-500 font-bold">{moeda(Number(c.total))}</td>
+                      <td className="px-3 py-2 text-right text-slate-500">{String(c.percentual)}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Custo por Beneficiário */}
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+          <h3 className="font-black text-sm uppercase tracking-widest text-slate-700 dark:text-slate-200 flex items-center gap-2">
+            <HandHeart size={16} className="text-pink-600" /> Custo por Beneficiário
+          </h3>
+          <div className="flex gap-2">
+            <button onClick={() => carregar('custo')} disabled={carregando === 'custo'}
+              className="px-3 py-1.5 text-xs font-bold bg-pink-600 text-white rounded-lg hover:bg-pink-700 flex items-center gap-1 disabled:opacity-50">
+              {carregando === 'custo' ? <RefreshCw size={12} className="animate-spin" /> : <Filter size={12} />} Calcular
+            </button>
+            {custoBenef && (
+              <button onClick={() => exportarExcel((custoBenef.por_projeto as Record<string, unknown>[]), 'custo_beneficiario')}
+                className="px-3 py-1.5 text-xs font-bold border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-1">
+                <Download size={12} /> Excel
+              </button>
+            )}
+          </div>
+        </div>
+        {custoBenef && (
+          <div className="p-5">
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                { label: 'Total Investido', value: moeda(Number(custoBenef.total_investido)), color: 'text-red-500' },
+                { label: 'Beneficiários', value: String(custoBenef.total_beneficiarios), color: 'text-blue-600' },
+                { label: 'Custo Médio', value: moeda(Number(custoBenef.custo_medio)), color: 'text-purple-600' },
+              ].map(k => (
+                <div key={k.label} className="bg-slate-50 dark:bg-slate-800 rounded-xl p-3 text-center">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">{k.label}</p>
+                  <p className={`text-base font-black mt-1 ${k.color}`}>{k.value}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Relatório Financeiro Anual */}
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+          <h3 className="font-black text-sm uppercase tracking-widest text-slate-700 dark:text-slate-200 flex items-center gap-2">
+            <TrendingUp size={16} className="text-emerald-600" /> Relatório Financeiro Anual
+          </h3>
+          <div className="flex gap-2">
+            <button onClick={() => carregar('anual')} disabled={carregando === 'anual'}
+              className="px-3 py-1.5 text-xs font-bold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 flex items-center gap-1 disabled:opacity-50">
+              {carregando === 'anual' ? <RefreshCw size={12} className="animate-spin" /> : <Filter size={12} />} Gerar
+            </button>
+            {anual && (
+              <button onClick={() => exportarExcel((anual.meses as Record<string, unknown>[]), `relatorio_anual_${ano}`)}
+                className="px-3 py-1.5 text-xs font-bold border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-1">
+                <Download size={12} /> Excel
+              </button>
+            )}
+          </div>
+        </div>
+        {anual && (
+          <div className="p-5 space-y-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              {[
+                { label: 'Total Receitas', value: moeda(Number(anual.total_receitas)), color: 'text-green-600' },
+                { label: 'Total Despesas', value: moeda(Number(anual.total_despesas)), color: 'text-red-500' },
+                { label: 'Saldo Final', value: moeda(Number(anual.saldo_final)), color: Number(anual.saldo_final) >= 0 ? 'text-emerald-600' : 'text-red-500' },
+              ].map(k => (
+                <div key={k.label} className="bg-slate-50 dark:bg-slate-800 rounded-xl p-4 text-center">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">{k.label}</p>
+                  <p className={`text-lg font-black mt-1 ${k.color}`}>{k.value}</p>
+                </div>
+              ))}
+            </div>
+            {Array.isArray(anual.meses) && (
+              <ResponsiveContainer width="100%" height={240}>
+                <BarChart data={anual.meses as Record<string, unknown>[]}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
+                  <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => `R$${(v / 1000).toFixed(0)}k`} />
+                  <Tooltip formatter={(v: number) => moeda(v)} />
+                  <Legend />
+                  <Bar dataKey="receitas" name="Receitas" fill="#10b981" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="despesas" name="Despesas" fill="#f87171" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════
    PÁGINA PRINCIPAL
 ═══════════════════════════════════════════════════════════ */
 
 const ABAS: { id: AbaId; label: string; icon: React.ElementType; color: string }[] = [
   { id: 'financeiro', label: 'Financeiro',  icon: DollarSign, color: 'text-green-600' },
   { id: 'dre',        label: 'DRE',         icon: TrendingUp, color: 'text-purple-600' },
+  { id: 'ong',        label: 'ONG',          icon: Leaf,       color: 'text-emerald-700' },
   { id: 'academico',  label: 'Acadêmico',   icon: BookOpen,   color: 'text-blue-600' },
   { id: 'social',     label: 'Social',      icon: Globe,      color: 'text-emerald-600' },
   { id: 'estoque',    label: 'Estoque',     icon: Package,    color: 'text-orange-500' },
@@ -950,6 +1271,7 @@ export default function RelatoriosPage() {
         {/* Conteúdo */}
         {aba === 'financeiro' && <AbaFinanceiro />}
         {aba === 'dre'        && <AbaDRE />}
+        {aba === 'ong'        && <AbaONG />}
         {aba === 'academico'  && <AbaAcademico />}
         {aba === 'social'     && <AbaSocial />}
         {aba === 'estoque'    && <AbaEstoque />}

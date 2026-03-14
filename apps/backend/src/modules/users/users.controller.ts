@@ -1,8 +1,11 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, Logger } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { EmailService } from '../../email.service';
+import { Roles } from '../../auth/decorators/roles.decorator';
+import { Role } from '../../auth/constants/roles.enum';
 
 @Controller('admin/usuarios')
+@Roles(Role.DRT) // Mínimo: Diretor (nível 8). RolesGuard global aplica a hierarquia.
 export class UsersController {
   private readonly logger = new Logger(UsersController.name);
 
