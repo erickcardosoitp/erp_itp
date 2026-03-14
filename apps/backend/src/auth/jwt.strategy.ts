@@ -10,6 +10,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(private configService: ConfigService) {
     const secret = configService.get<string>('JWT_SECRET');
 
+    if (!secret) {
+      throw new Error('JWT_SECRET não está configurado. Defina a variável de ambiente JWT_SECRET.');
+    }
+
     super({
       jwtFromRequest: ExtractJwt.fromExtractors([
         // ✅ Prioridade 1: Header (Enviado pelo interceptor do Axios)
@@ -27,10 +31,6 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       ignoreExpiration: false,
       secretOrKey: secret,
     });
-
-    if (!secret) {
-      throw new Error('JWT_SECRET não está configurado. Defina a variável de ambiente JWT_SECRET.');
-    }
 
     this.logger.log(`🛡️ JwtStrategy sincronizada com o cookie: itp_token`);
   }
