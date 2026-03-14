@@ -143,11 +143,11 @@ export class AuthService {
   }
 
   /**
-   * PERFIL: Retorna os dados completos do usuário pelo email.
+   * PERFIL: Retorna os dados completos do usuário pelo ID (sub do JWT).
    */
-  async getProfile(email: string) {
+  async getProfile(userId: string) {
     const usuario = await this.usuarioRepository.findOne({
-      where: { email: email.toLowerCase().trim() },
+      where: { id: userId },
       relations: ['grupo'],
     });
 
@@ -162,9 +162,9 @@ export class AuthService {
   /**
    * ATUALIZAÇÃO DE PERFIL: Nome e Foto.
    */
-  async updateProfile(email: string, data: { nome?: string; fotoUrl?: string }) {
+  async updateProfile(userId: string, data: { nome?: string; fotoUrl?: string }) {
     const usuario = await this.usuarioRepository.findOne({
-      where: { email: email.toLowerCase().trim() },
+      where: { id: userId },
       relations: ['grupo'], 
     });
 
@@ -177,7 +177,7 @@ export class AuthService {
 
     await this.usuarioRepository.save(usuario);
     
-    this.logger.log(`Perfil atualizado: ${email}`);
+    this.logger.log(`Perfil atualizado: ${usuario.matricula}`);
 
     const { password, ...usuarioSemSenha } = usuario;
     return usuarioSemSenha;

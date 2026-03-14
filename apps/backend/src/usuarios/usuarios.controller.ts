@@ -15,8 +15,8 @@ export class UsuariosController {
   @Get('perfil')
   @HttpCode(HttpStatus.OK)
   async getProfile(@Req() req: any) {
-    // Busca o usuário completo no banco (com nome e fotoUrl) usando o email do JWT
-    return this.authService.getProfile(req.user.email);
+    // Busca o usuário completo no banco usando o ID do JWT (sub)
+    return this.authService.getProfile(req.user.sub);
   }
   
   @Patch('perfil')
@@ -45,14 +45,13 @@ export class UsuariosController {
     // 🔍 Caminho relativo da foto para salvar no banco
     const fotoUrl = file ? `/uploads/perfil/${file.filename}` : undefined;
 
-    // ✅ PERSISTÊNCIA REAL: Salva no Neon através do AuthService
-    // O e-mail é usado como chave para encontrar o usuário
-    const usuarioAtualizado = await this.authService.updateProfile(data.email, {
+    // ✅ PERSISTÊNCIA REAL: Salva no Neon via AuthService — usa o ID do JWT como chave
+    const usuarioAtualizado = await this.authService.updateProfile(req.user.sub, {
       nome: data.nome,
       fotoUrl: fotoUrl,
     });
 
-    console.log(`[ITP LOG] Perfil persistido no banco para: ${data.email}`);
+    console.log(`[ITP LOG] Perfil persistido no banco para: ${req.user.sub}`);
 
     // Retorna o usuário completo (com grupo e permissões) para o Frontend
     return usuarioAtualizado;
