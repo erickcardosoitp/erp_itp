@@ -17,8 +17,8 @@ export class Usuario {
   @Column()
   nome: string;
 
-  @Column({ unique: true })
-  email: string;
+  @Column({ unique: true, nullable: true })
+  email: string | null;
 
   @Column({ select: false }) // Proteção contra vazamento de hash
   password: string;

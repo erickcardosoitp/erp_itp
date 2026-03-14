@@ -376,7 +376,7 @@ function FuncionariosTab({ onCount }: { onCount: (n: number) => void }) {
         email: formUsuario.email,
         password: formUsuario.senha,
         role: formUsuario.role,
-        matricula: modalUsuario.funcionario?.matricula ?? undefined,
+        // Não passa a matrícula FUNC do funcionário — o backend gera uma baseada no cargo
       };
       if (formUsuario.grupo_id) payload.grupo_id = formUsuario.grupo_id;
       const resp = await api.post('/admin/usuarios', payload);

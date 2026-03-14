@@ -87,6 +87,12 @@ export class AuthService {
       throw new UnauthorizedException('Credenciais incorretas.');
     }
 
+    // Conta ADMIN só pode entrar via matrícula — nunca por e-mail
+    if (isEmail && usuario.role === 'admin') {
+      this.logger.warn(`⛔ Tentativa de login ADM por e-mail bloqueada: ${id}`);
+      throw new UnauthorizedException('Conta administrativa. Use a matrícula para entrar.');
+    }
+
     // 2. Verificação de Integridade do Hash
     if (!usuario.password) {
       this.logger.error(`❌ Usuário '${id}' está sem senha definida no banco de dados!`);
@@ -319,12 +325,17 @@ export class AuthService {
     const emailExiste = await this.usuarioRepository.findOneBy({ email: func.email.toLowerCase() });
     if (emailExiste) throw new ConflictException(`O e-mail ${func.email} já está cadastrado no sistema.`);
 
-    // Gera matrícula USR única
+    // Gera matrícula com prefixo que reflete o cargo na hierarquia
     const now = new Date();
     const yyyymm = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
     const total = await this.usuarioRepository.count();
     const seq = String(total + 1).padStart(3, '0');
-    const matricula = `ITP-USR-${yyyymm}-${seq}`;
+    const rolePrefix: Record<string, string> = {
+      admin: 'ITP-ADM', vp: 'ITP-VP', drt: 'ITP-DRT', adjunto: 'ITP-ADJ',
+      prof: 'ITP-PROF', monitor: 'ITP-MNT', assist: 'ITP-AST', cozinha: 'ITP-CZNH',
+    };
+    const prefix = rolePrefix[dto.role?.toLowerCase() ?? ''] ?? 'ITP-USR';
+    const matricula = `${prefix}-${yyyymm}-${seq}`;
 
     // Senha inicial = YYYYMMDD da data de nascimento ou data atual
     let senhaInicial = now.toISOString().slice(0, 10).replace(/-/g, '');

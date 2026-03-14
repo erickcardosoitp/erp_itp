@@ -205,6 +205,7 @@ function onFormSubmit(e) {
 
   var dados = {
     nome:                   campo_(r, ['Nome Completo', 'Nome completo', 'Nome']),
+    cargo:                  campo_(r, ['Cargo / Função', 'Cargo/Função', 'Cargo', 'Função', 'Especialidade', 'Cargo / Especialidade']),
     email:                  campo_(r, ['E-mail (Obrigatório)', 'E-mail', 'Email', 'Endereço de e-mail']),
     cpf:                    campo_(r, ['CPF (Obrigatório)', 'CPF']),
     data_nascimento:        dataParaISO_(campo_(r, ['Data de Nascimento (Obrigatório)', 'Data de Nascimento', 'Data de nascimento'])),
@@ -219,11 +220,11 @@ function onFormSubmit(e) {
     cidade:                 campo_(r, ['Cidade']),
     estado:                 campo_(r, ['Estado (Ex: RJ, SP)', 'Estado (UF)', 'Estado', 'UF']),
     // Perfil
-    raca:                   campo_(r, ['Raça/Cor', 'Raça / Cor', 'Raça', 'Raca/Cor']),
+    raca:                   campo_(r, ['Raça/Cor', 'Raça / Cor', 'Raça', 'Raca/Cor', 'Raça/Cor (Obrigatório)', 'Etnia', 'Raça / Etnia']),
     escolaridade:           campo_(r, ['Escolaridade']),
     // Emergência
-    telefone_emergencia_1:  campo_(r, ['Telefone de Emergência 1 (Obrigatório)', 'Telefone de Emergência 1', 'Telefone emergência 1']),
-    telefone_emergencia_2:  campo_(r, ['Telefone de Emergência 2 (Opcional)', 'Telefone de Emergência 2', 'Telefone emergência 2']),
+    telefone_emergencia_1:  campo_(r, ['Telefone de Emergência 1 (Obrigatório)', 'Telefone de Emergência 1', 'Telefone emergência 1', 'Tel. Emergência 1', 'Contato de Emergência 1', 'Emergência 1']),
+    telefone_emergencia_2:  campo_(r, ['Telefone de Emergência 2 (Opcional)', 'Telefone de Emergência 2', 'Telefone emergência 2', 'Tel. Emergência 2', 'Contato de Emergência 2', 'Emergência 2']),
     // Saúde
     possui_deficiencia:     simParaBool_(campo_(r, ['Possui algum tipo de deficiência?', 'Possui deficiência?'])),
     descricao_deficiencia:  campo_(r, ['Se sim, qual(is) deficiência(s) possui? (Descreva)', 'Descreva a deficiência', 'Qual deficiência?']),

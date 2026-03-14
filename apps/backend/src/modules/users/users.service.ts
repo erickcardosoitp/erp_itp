@@ -19,12 +19,29 @@ export class UsersService {
   }
 
   async criar(dados: { nome: string; email?: string; password: string; role?: string; grupo_id?: string; matricula?: string }) {
-    if (!dados.email || !dados.password) {
-      throw new BadRequestException('E-mail e senha são obrigatórios.');
+    if (!dados.password) {
+      throw new BadRequestException('Senha é obrigatória.');
     }
-    const emailNorm = dados.email.toLowerCase().trim();
-    const existe = await this.usuarioRepo.findOneBy({ email: emailNorm });
-    if (existe) throw new ConflictException('E-mail já cadastrado no sistema.');
+    const emailNorm = dados.email ? dados.email.toLowerCase().trim() : null;
+    if (emailNorm) {
+      const existe = await this.usuarioRepo.findOneBy({ email: emailNorm });
+      if (existe) throw new ConflictException('E-mail já cadastrado no sistema.');
+    }
+
+    // Gera matrícula com prefixo que reflete a hierarquia do cargo
+    const rolePrefix: Record<string, string> = {
+      admin: 'ITP-ADM', vp: 'ITP-VP', drt: 'ITP-DRT', adjunto: 'ITP-ADJ',
+      prof: 'ITP-PROF', monitor: 'ITP-MNT', assist: 'ITP-AST', cozinha: 'ITP-CZNH',
+    };
+    let matricula = dados.matricula || null;
+    if (!matricula) {
+      const now = new Date();
+      const yyyymm = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
+      const total = await this.usuarioRepo.count();
+      const seq = String(total + 1).padStart(3, '0');
+      const prefix = rolePrefix[dados.role?.toLowerCase() ?? ''] ?? 'ITP-USR';
+      matricula = `${prefix}-${yyyymm}-${seq}`;
+    }
 
     const hashedPassword = await bcrypt.hash(dados.password, 10);
     const usuario = this.usuarioRepo.create({
@@ -32,7 +49,7 @@ export class UsersService {
       email: emailNorm,
       password: hashedPassword,
       role: dados.role || 'assist',
-      ...(dados.matricula ? { matricula: dados.matricula } : {}),
+      matricula,
     });
     if (dados.grupo_id) {
       (usuario as any).grupo = { id: dados.grupo_id };

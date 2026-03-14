@@ -287,7 +287,11 @@ export class AppModule implements OnModuleInit {
           const u = semMatricula[i];
           const d = u.createdAt ? new Date(u.createdAt) : new Date();
           const yyyymm = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`;
-          const prefix = u.role === 'admin' ? 'ITP-ADM' : 'ITP-USR';
+          const rolePrefix: Record<string, string> = {
+            admin: 'ITP-ADM', vp: 'ITP-VP', drt: 'ITP-DRT', adjunto: 'ITP-ADJ',
+            prof: 'ITP-PROF', monitor: 'ITP-MNT', assist: 'ITP-AST', cozinha: 'ITP-CZNH',
+          };
+          const prefix = rolePrefix[u.role?.toLowerCase()] ?? 'ITP-USR';
           const seq = String(i + 1).padStart(3, '0');
           const matricula = `${prefix}-${yyyymm}-${seq}`;
           await this.dataSource.query(
@@ -311,6 +315,8 @@ export class AppModule implements OnModuleInit {
           ADD COLUMN IF NOT EXISTS funcionario_id UUID UNIQUE,
           ADD COLUMN IF NOT EXISTS deve_trocar_senha BOOLEAN NOT NULL DEFAULT false
       `);
+      // Email pode ser NULL para contas admin que só acessam via matrícula
+      await this.dataSource.query(`ALTER TABLE IF EXISTS usuarios ALTER COLUMN email DROP NOT NULL`);
       this.logger.log('✅ Migrations de funcionários/usuários (novas colunas) aplicadas');
 
     } catch (err: any) {
