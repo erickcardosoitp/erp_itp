@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToOne, JoinColumn } from 'typeorm';
 
 @Entity('funcionarios')
 export class Funcionario {
@@ -78,6 +78,15 @@ export class Funcionario {
   medicamentos_descricao: string;
 
   @Column({ type: 'boolean', nullable: true, default: false })
+  possui_plano_saude: boolean;
+
+  @Column({ type: 'text', nullable: true })
+  plano_saude: string;
+
+  @Column({ type: 'text', nullable: true })
+  numero_sus: string;
+
+  @Column({ type: 'boolean', nullable: true, default: false })
   interesse_cursos: boolean;
 
   @Column({ nullable: true, default: true })
@@ -85,6 +94,10 @@ export class Funcionario {
 
   @Column({ type: 'text', nullable: true, unique: true })
   matricula: string;
+
+  /** UUID do usuário do sistema vinculado a este funcionário (preenchido quando o admin cria o login) */
+  @Column({ type: 'uuid', nullable: true, unique: true, name: 'usuario_id' })
+  usuario_id: string;
 
   @CreateDateColumn()
   created_at: Date;

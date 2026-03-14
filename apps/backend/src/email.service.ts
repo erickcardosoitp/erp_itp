@@ -411,4 +411,249 @@ export class EmailService implements OnModuleInit {
       this.logger.warn(`👁️  Preview: ${nodemailer.getTestMessageUrl(info)}`);
     }
   }
+
+  // ─────────────────────────────────────────────────────────────────────
+  //  FUNCIONÁRIO — Confirmação de recebimento da solicitação
+  // ─────────────────────────────────────────────────────────────────────
+
+  async enviarConfirmacaoCadastroFuncionario(email: string, nome: string, matricula: string): Promise<void> {
+    const primeiroNome = nome.split(' ')[0];
+    const msg = `📧 [CONF-FUNC] ${nome} <${email}> | Matrícula: ${matricula}`;
+    if (!this.transporter) { this.logger.warn(msg); return; }
+
+    const html = `
+<!DOCTYPE html><html lang="pt-br"><head><meta charset="UTF-8"/></head>
+<body style="margin:0;padding:0;background:#f4f6f9;font-family:Arial,sans-serif">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f9;padding:40px 20px">
+<tr><td align="center">
+  <table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,.08)">
+    <tr><td style="background:#1e3a5f;padding:32px 40px;text-align:center">
+      <h1 style="margin:0;color:#fff;font-size:22px;font-weight:700">Instituto Tia Pretinha</h1>
+      <p style="margin:6px 0 0;color:#a8c4e0;font-size:14px">CNPJ nº 11.759.851/0001-39</p>
+    </td></tr>
+    <tr><td style="padding:40px">
+      <p style="margin:0 0 16px;color:#374151;font-size:16px">Olá, <strong>${primeiroNome}</strong>! 👋</p>
+      <p style="margin:0 0 16px;color:#6b7280;font-size:15px;line-height:1.7">
+        Recebemos sua solicitação de cadastro no <strong>Instituto Tia Pretinha</strong>.
+        Nossa equipe irá analisar os dados e, em breve, você receberá um e-mail com suas
+        informações de acesso ao sistema.
+      </p>
+      <table width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0">
+        <tr><td style="background:#f0fdf4;border:2px solid #86efac;border-radius:12px;padding:20px;text-align:center">
+          <p style="margin:0 0 6px;color:#15803d;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px">Protocolo de Solicitação</p>
+          <p style="margin:0;color:#14532d;font-size:24px;font-weight:900;letter-spacing:2px;font-family:monospace">${matricula}</p>
+        </td></tr>
+      </table>
+      <table width="100%" cellpadding="0" cellspacing="0"><tr>
+        <td style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:16px">
+          <p style="margin:0;color:#1e40af;font-size:13px;line-height:1.8">
+            📌 Guarde este protocolo para acompanhar sua solicitação.<br>
+            ⏳ O processo de aprovação pode levar até 3 dias úteis.<br>
+            📧 Dúvidas? Responda a este e-mail.
+          </p>
+        </td>
+      </tr></table>
+    </td></tr>
+    <tr><td style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:20px 40px;text-align:center">
+      <p style="margin:0;color:#9ca3af;font-size:12px">Instituto Tia Pretinha — Este cadastro não garante acesso ao sistema.</p>
+    </td></tr>
+  </table>
+</td></tr></table>
+</body></html>`.trim();
+
+    const info = await this.transporter.sendMail({
+      from: `"Instituto Tia Pretinha" <${this.config.get<string>('SMTP_FROM_ADDRESS') || this.config.get<string>('SMTP_USER')}>`,
+      to: email,
+      subject: `✅ Solicitação de cadastro recebida — ${matricula}`,
+      html,
+    });
+    this.logger.log(`📧 Confirmação de cadastro enviada para ${email}`);
+    if (this.isEthereal) this.logger.warn(`👁️  Preview: ${nodemailer.getTestMessageUrl(info)}`);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  //  FUNCIONÁRIO — Credenciais de acesso ao sistema
+  // ─────────────────────────────────────────────────────────────────────
+
+  async enviarAcessoSistema(email: string, nome: string, matricula: string, senhaInicial: string): Promise<void> {
+    const primeiroNome = nome.split(' ')[0];
+    const appUrl = (this.config.get<string>('APP_URL') || 'https://www.institutotiapretinha.org').replace(/\/$/, '');
+    const msg = `📧 [ACESSO] ${nome} <${email}> | login: ${matricula}`;
+    if (!this.transporter) { this.logger.warn(msg); return; }
+
+    const html = `
+<!DOCTYPE html><html lang="pt-br"><head><meta charset="UTF-8"/></head>
+<body style="margin:0;padding:0;background:#f4f4f8;font-family:Arial,sans-serif">
+<table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 16px">
+<tr><td align="center">
+  <table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.1)">
+    <tr><td style="background:#1e293b;padding:32px;text-align:center">
+      <p style="margin:0;font-size:28px;font-weight:900;color:#fff;letter-spacing:-1px">SISTEMA<span style="color:#a855f7">.ITP</span></p>
+      <p style="margin:6px 0 0;font-size:11px;color:#94a3b8;letter-spacing:3px;text-transform:uppercase">Instituto Tia Pretinha</p>
+    </td></tr>
+    <tr><td style="padding:40px 32px">
+      <p style="font-size:22px;font-weight:800;color:#1e293b;margin:0 0 8px">Olá, ${primeiroNome}! 🎉</p>
+      <p style="color:#64748b;font-size:14px;line-height:1.7;margin:0 0 24px">
+        Sua conta de acesso ao sistema do Instituto foi criada. Use as credenciais abaixo para entrar.
+      </p>
+      <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px">
+        <tr><td style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:24px">
+          <table width="100%"><tr>
+            <td style="padding:8px 0;color:#64748b;font-size:13px">🔑 <strong>Login (matrícula):</strong></td>
+            <td style="padding:8px 0;font-family:monospace;font-weight:700;font-size:15px;color:#1e293b;text-align:right">${matricula}</td>
+          </tr><tr>
+            <td style="padding:8px 0;color:#64748b;font-size:13px">🔒 <strong>Senha inicial:</strong></td>
+            <td style="padding:8px 0;font-family:monospace;font-weight:700;font-size:15px;color:#1e293b;text-align:right">${senhaInicial}</td>
+          </tr><tr>
+            <td style="padding:8px 0;color:#64748b;font-size:13px">📧 <strong>E-mail:</strong></td>
+            <td style="padding:8px 0;font-size:13px;color:#1e293b;text-align:right">${email}</td>
+          </tr></table>
+        </td></tr>
+      </table>
+      <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px">
+        <tr><td style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:16px">
+          <p style="margin:0;color:#c2410c;font-size:13px;line-height:1.8">
+            ⚠️ <strong>No primeiro acesso você será obrigado(a) a trocar a senha.</strong><br>
+            A nova senha deve ter pelo menos <strong>14 caracteres</strong>, incluindo letras maiúsculas,
+            minúsculas, números e um símbolo especial.
+          </p>
+        </td></tr>
+      </table>
+      <div style="text-align:center;margin:24px 0">
+        <a href="${appUrl}/login" style="display:inline-block;background:#7c3aed;color:#fff;font-weight:800;font-size:14px;text-decoration:none;padding:16px 40px;border-radius:50px">
+          Acessar o sistema →
+        </a>
+      </div>
+    </td></tr>
+    <tr><td style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:20px 32px;text-align:center">
+      <p style="margin:0;color:#9ca3af;font-size:12px">Este acesso não transfere permissões de gestão — para dúvidas, contate o administrador.</p>
+    </td></tr>
+  </table>
+</td></tr></table>
+</body></html>`.trim();
+
+    const info = await this.transporter.sendMail({
+      from: `"Instituto Tia Pretinha" <${this.config.get<string>('SMTP_FROM_ADDRESS') || this.config.get<string>('SMTP_USER')}>`,
+      to: email,
+      subject: `🔐 Suas credenciais de acesso — Sistema ITP`,
+      html,
+    });
+    this.logger.log(`📧 E-mail de acesso enviado para ${email} | login: ${matricula}`);
+    if (this.isEthereal) this.logger.warn(`👁️  Preview: ${nodemailer.getTestMessageUrl(info)}`);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  //  SENHA FRACA — Lembrete diário de troca obrigatória
+  // ─────────────────────────────────────────────────────────────────────
+
+  async enviarLembreteSenhaFraca(email: string, nome: string): Promise<void> {
+    const primeiroNome = nome.split(' ')[0];
+    const appUrl = (this.config.get<string>('APP_URL') || 'https://www.institutotiapretinha.org').replace(/\/$/, '');
+    if (!this.transporter) {
+      this.logger.warn(`📧 [SENHA-FRACA] ${nome} <${email}>`);
+      return;
+    }
+
+    const html = `
+<!DOCTYPE html><html lang="pt-br"><head><meta charset="UTF-8"/></head>
+<body style="margin:0;padding:0;background:#fff7ed;font-family:Arial,sans-serif">
+<table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 16px">
+<tr><td align="center">
+  <table width="560" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.1)">
+    <tr><td style="background:#c2410c;padding:28px 32px;text-align:center">
+      <p style="margin:0;font-size:20px;font-weight:900;color:#fff">⚠️ Ação obrigatória — Troca de senha</p>
+      <p style="margin:6px 0 0;color:#fed7aa;font-size:12px">Instituto Tia Pretinha</p>
+    </td></tr>
+    <tr><td style="padding:32px">
+      <p style="font-size:20px;font-weight:700;color:#1e293b;margin:0 0 12px">Olá, ${primeiroNome}!</p>
+      <p style="color:#64748b;font-size:14px;line-height:1.7;margin:0 0 20px">
+        Seu acesso ao Sistema ITP está <strong style="color:#dc2626">bloqueado</strong> porque sua senha
+        não atende aos requisitos mínimos de segurança.
+      </p>
+      <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px">
+        <tr><td style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:16px">
+          <p style="margin:0 0 8px;color:#991b1b;font-size:13px;font-weight:700">A nova senha deve ter:</p>
+          <ul style="margin:0;padding:0 0 0 16px;color:#dc2626;font-size:13px;line-height:2">
+            <li>Mínimo de <strong>14 caracteres</strong></li>
+            <li>Pelo menos 1 <strong>letra maiúscula</strong> (A-Z)</li>
+            <li>Pelo menos 1 <strong>letra minúscula</strong> (a-z)</li>
+            <li>Pelo menos 1 <strong>número</strong> (0-9)</li>
+            <li>Pelo menos 1 <strong>símbolo especial</strong> (!@#$%...)</li>
+          </ul>
+        </td></tr>
+      </table>
+      <div style="text-align:center;margin:24px 0">
+        <a href="${appUrl}/trocar-senha" style="display:inline-block;background:#dc2626;color:#fff;font-weight:800;font-size:14px;text-decoration:none;padding:14px 36px;border-radius:50px">
+          Trocar senha agora →
+        </a>
+      </div>
+      <p style="color:#94a3b8;font-size:12px;text-align:center;margin:0">Você continuará recebendo este aviso diariamente até trocar a senha.</p>
+    </td></tr>
+  </table>
+</td></tr></table>
+</body></html>`.trim();
+
+    const info = await this.transporter.sendMail({
+      from: `"Instituto Tia Pretinha" <${this.config.get<string>('SMTP_FROM_ADDRESS') || this.config.get<string>('SMTP_USER')}>`,
+      to: email,
+      subject: `🚨 Sua senha está bloqueada — troque agora`,
+      html,
+    });
+    this.logger.log(`📧 Lembrete de senha fraca enviado para ${email}`);
+    if (this.isEthereal) this.logger.warn(`👁️  Preview: ${nodemailer.getTestMessageUrl(info)}`);
+  }
+
+  /**
+   * Notificação por e-mail enviada individualmente para membros de grupos
+   * (ex.: nova solicitação de funcionário → ADMIN, PRT, VP).
+   */
+  async enviarNotificacaoGrupo(
+    email: string,
+    nome: string,
+    titulo: string,
+    mensagem: string,
+  ): Promise<void> {
+    const primeiroNome = nome.split(' ')[0];
+    const appUrl = (this.config.get<string>('APP_URL') || 'https://www.institutotiapretinha.org').replace(/\/$/, '');
+
+    if (!this.transporter) {
+      this.logger.warn(`📧 [NOTIF-GRUPO] ${titulo} → ${nome} <${email}>`);
+      return;
+    }
+
+    const html = `
+<!DOCTYPE html><html lang="pt-br"><head><meta charset="UTF-8"/></head>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:Arial,sans-serif">
+<table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 16px">
+<tr><td align="center">
+  <table width="560" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.1)">
+    <tr><td style="background:#1e3a5f;padding:28px 32px;text-align:center">
+      <p style="margin:0;font-size:20px;font-weight:900;color:#fff">🔔 Nova notificação — ITP</p>
+      <p style="margin:6px 0 0;color:#93c5fd;font-size:12px">Instituto Tia Pretinha</p>
+    </td></tr>
+    <tr><td style="padding:32px">
+      <p style="font-size:20px;font-weight:700;color:#1e293b;margin:0 0 12px">Olá, ${primeiroNome}!</p>
+      <p style="color:#334155;font-size:15px;font-weight:600;margin:0 0 8px">${titulo}</p>
+      <p style="color:#64748b;font-size:14px;line-height:1.7;margin:0 0 24px">${mensagem}</p>
+      <div style="text-align:center;margin:0 0 24px">
+        <a href="${appUrl}/funcionarios" style="display:inline-block;background:#1e3a5f;color:#fff;font-weight:700;font-size:14px;text-decoration:none;padding:14px 36px;border-radius:50px">
+          Ver no painel →
+        </a>
+      </div>
+      <p style="color:#94a3b8;font-size:12px;text-align:center;margin:0">Esta notificação foi enviada porque você pertence a um grupo com permissão para gerenciar este tipo de operação.</p>
+    </td></tr>
+  </table>
+</td></tr></table>
+</body></html>`.trim();
+
+    const info = await this.transporter.sendMail({
+      from: `"Instituto Tia Pretinha" <${this.config.get<string>('SMTP_FROM_ADDRESS') || this.config.get<string>('SMTP_USER')}>`,
+      to: email,
+      subject: titulo,
+      html,
+    });
+    this.logger.log(`📧 Notificação de grupo enviada para ${email} (${titulo})`);
+    if (this.isEthereal) this.logger.warn(`👁️  Preview: ${nodemailer.getTestMessageUrl(info)}`);
+  }
 }
+

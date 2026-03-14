@@ -27,5 +27,11 @@
       "src": "/(.*)",
       "dest": "/api/server.js"
     }
+  ],
+  "crons": [
+    {
+      "path": "/api/auth/cron/verificar-senhas",
+      "schedule": "0 8 * * *"
+    }
   ]
 }

@@ -16,7 +16,8 @@ export default function ClientShell({ children }: { children: React.ReactNode })
     || pathname?.startsWith('/lgpd')
     || pathname?.startsWith('/estoque/coletor')
     || pathname?.startsWith('/esqueci-senha')
-    || pathname?.startsWith('/reset-senha');
+    || pathname?.startsWith('/reset-senha')
+    || pathname?.startsWith('/trocar-senha');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [mounted, setMounted] = useState(false);
 
@@ -49,7 +50,19 @@ export default function ClientShell({ children }: { children: React.ReactNode })
           <div className="flex-1">{children}</div>
         </main>
 
-        <Toaster richColors position="top-right" expand visibleToasts={5} />
+        <Toaster
+          richColors
+          position="top-right"
+          expand
+          visibleToasts={5}
+          toastOptions={{
+            style: {
+              background: 'hsl(var(--popover, 0 0% 100%))',
+              opacity: 1,
+              boxShadow: '0 8px 32px rgba(0,0,0,0.22)',
+            },
+          }}
+        />
         <PwaInstall />
         <SettingsApplier />
       </ThemeProvider>

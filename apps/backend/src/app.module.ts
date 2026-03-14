@@ -297,6 +297,22 @@ export class AppModule implements OnModuleInit {
         }
         this.logger.log('✅ Matrículas atribuídas aos usuários existentes.');
       }
+
+      // ── Novas colunas (funcionários + usuários) ───────────────────────────
+      await this.dataSource.query(`
+        ALTER TABLE IF EXISTS funcionarios
+          ADD COLUMN IF NOT EXISTS possui_plano_saude BOOLEAN DEFAULT false,
+          ADD COLUMN IF NOT EXISTS plano_saude TEXT,
+          ADD COLUMN IF NOT EXISTS numero_sus TEXT,
+          ADD COLUMN IF NOT EXISTS usuario_id UUID UNIQUE
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE IF EXISTS usuarios
+          ADD COLUMN IF NOT EXISTS funcionario_id UUID UNIQUE,
+          ADD COLUMN IF NOT EXISTS deve_trocar_senha BOOLEAN NOT NULL DEFAULT false
+      `);
+      this.logger.log('✅ Migrations de funcionários/usuários (novas colunas) aplicadas');
+
     } catch (err: any) {
       this.logger.error(`❌ Erro nas migrations automáticas: ${err.message}`);
     }

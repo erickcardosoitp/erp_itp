@@ -1,4 +1,4 @@
-import { Injectable, ConflictException, UnauthorizedException, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, ConflictException, UnauthorizedException, Logger, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Usuario } from '../usuarios/usuario.entity';
@@ -121,9 +121,14 @@ export class AuthService {
 
       this.logger.log(`✅ Login realizado: ${id} [Cargo: ${roleLimpa}]`);
 
+      // Inclui flag de troca obrigatória de senha no payload e na resposta
+      const deveTracar = Boolean((usuario as any).deve_trocar_senha);
+      const payloadComFlag = { ...payload, deve_trocar_senha: deveTracar };
+
       return {
-        access_token: await this.jwtService.signAsync(payload),
-        usuario: usuarioSemSenha 
+        access_token: await this.jwtService.signAsync(payloadComFlag),
+        usuario: { ...usuarioSemSenha, deve_trocar_senha: deveTracar },
+        deve_trocar_senha: deveTracar,
       };
     } catch (err: any) {
       this.logger.error(`💥 Erro interno no processo de login: ${err.message}`);
@@ -237,5 +242,152 @@ export class AuthService {
 
     this.logger.log(`✅ Senha redefinida para usuário: ${usuario.email}`);
     return { message: 'Senha redefinida com sucesso! Você já pode fazer login.' };
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  //  Validação de senha forte (14 chars, maiúscula, minúscula, número, símbolo)
+  // ─────────────────────────────────────────────────────────────────────
+
+  private validarSenhaForte(senha: string): void {
+    if (senha.length < 14) {
+      throw new BadRequestException('A senha deve ter pelo menos 14 caracteres.');
+    }
+    if (!/[A-Z]/.test(senha)) {
+      throw new BadRequestException('A senha deve conter pelo menos uma letra maiúscula.');
+    }
+    if (!/[a-z]/.test(senha)) {
+      throw new BadRequestException('A senha deve conter pelo menos uma letra minúscula.');
+    }
+    if (!/[0-9]/.test(senha)) {
+      throw new BadRequestException('A senha deve conter pelo menos um número.');
+    }
+    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>/?]/.test(senha)) {
+      throw new BadRequestException('A senha deve conter pelo menos um símbolo especial (!@#$%...). ');
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  //  Troca obrigatória de senha (requer auth + valida critérios MFA)
+  // ─────────────────────────────────────────────────────────────────────
+
+  async trocarSenha(userId: string, novaSenha: string, senhaAtual?: string): Promise<{ message: string }> {
+    this.validarSenhaForte(novaSenha);
+
+    const usuario = await this.usuarioRepository
+      .createQueryBuilder('u')
+      .addSelect('u.password')
+      .where('u.id = :id', { id: userId })
+      .getOne();
+
+    if (!usuario) throw new NotFoundException('Usuário não encontrado.');
+
+    // Se o usuário forneceu a senha atual, valida-a (exceto quando deve_trocar_senha=true e não tem senha atual)
+    if (senhaAtual && usuario.password) {
+      const ok = await bcrypt.compare(senhaAtual, usuario.password);
+      if (!ok) throw new UnauthorizedException('Senha atual incorreta.');
+    }
+
+    const hashedPassword = await bcrypt.hash(novaSenha, 12);
+    await this.usuarioRepository.update(userId, {
+      password: hashedPassword,
+      deve_trocar_senha: false,
+    });
+
+    this.logger.log(`✅ Senha trocada com sucesso: ${usuario.email}`);
+    return { message: 'Senha atualizada com sucesso!' };
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  //  Criar usuário a partir de um funcionário (chamado pelo admin)
+  // ─────────────────────────────────────────────────────────────────────
+
+  async criarUsuarioParaFuncionario(dto: {
+    funcionario_id: string;
+    role?: string;
+    grupo_id?: string;
+  }): Promise<{ usuario: Partial<Usuario>; senha_inicial: string }> {
+    // Busca funcionário via query direta (sem injetar FuncionariosService para evitar dependência circular)
+    const rows: any[] = await this.usuarioRepository.manager.query(
+      `SELECT * FROM funcionarios WHERE id = $1`,
+      [dto.funcionario_id],
+    );
+    const func = rows[0];
+    if (!func) throw new NotFoundException('Funcionário não encontrado.');
+    if (func.usuario_id) throw new ConflictException('Este funcionário já possui um usuário de sistema.');
+    if (!func.email) throw new BadRequestException('O funcionário não possui e-mail cadastrado para criar o acesso.');
+
+    const emailExiste = await this.usuarioRepository.findOneBy({ email: func.email.toLowerCase() });
+    if (emailExiste) throw new ConflictException(`O e-mail ${func.email} já está cadastrado no sistema.`);
+
+    // Gera matrícula USR única
+    const now = new Date();
+    const yyyymm = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const total = await this.usuarioRepository.count();
+    const seq = String(total + 1).padStart(3, '0');
+    const matricula = `ITP-USR-${yyyymm}-${seq}`;
+
+    // Senha inicial = YYYYMMDD da data de nascimento ou data atual
+    let senhaInicial = now.toISOString().slice(0, 10).replace(/-/g, '');
+    if (func.data_nascimento) {
+      const d = String(func.data_nascimento).replace(/-/g, '').slice(0, 8);
+      if (d.length === 8) senhaInicial = d;
+    }
+
+    const hashedPassword = await bcrypt.hash(senhaInicial, 12);
+
+    const novoUsuario = this.usuarioRepository.create({
+      nome: func.nome,
+      email: func.email.toLowerCase(),
+      password: hashedPassword,
+      matricula,
+      funcionario_id: func.id,
+      role: dto.role ?? 'assistente',
+      deve_trocar_senha: true,
+    });
+
+    const salvo = await this.usuarioRepository.save(novoUsuario);
+
+    // Vincula usuario_id no funcionário
+    await this.usuarioRepository.manager.query(
+      `UPDATE funcionarios SET usuario_id = $1 WHERE id = $2`,
+      [salvo.id, func.id],
+    );
+
+    this.logger.log(`👤 Usuário criado para funcionário ${func.nome} | Login: ${matricula}`);
+
+    // Envia e-mail com credenciais
+    try {
+      await this.emailService.enviarAcessoSistema(func.email, func.nome, matricula, senhaInicial);
+    } catch (err: any) {
+      this.logger.error(`Erro ao enviar e-mail de acesso: ${err.message}`);
+    }
+
+    const { password, resetToken, resetTokenExpires, ...semSenha } = salvo as any;
+    return { usuario: semSenha, senha_inicial: senhaInicial };
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  //  Cron: envia e-mails de lembrete para usuários com deve_trocar_senha=true
+  // ─────────────────────────────────────────────────────────────────────
+
+  async enviarLembretesSenhaFraca(): Promise<{ total: number }> {
+    const pendentes = await this.usuarioRepository.find({
+      where: { deve_trocar_senha: true },
+      select: ['id', 'nome', 'email'],
+    });
+
+    let enviados = 0;
+    for (const u of pendentes) {
+      if (!u.email) continue;
+      try {
+        await this.emailService.enviarLembreteSenhaFraca(u.email, u.nome);
+        enviados++;
+      } catch (err: any) {
+        this.logger.error(`Erro lembrete senha fraca ${u.email}: ${err.message}`);
+      }
+    }
+
+    this.logger.log(`📧 Lembretes de senha fraca enviados: ${enviados}/${pendentes.length}`);
+    return { total: enviados };
   }
 }

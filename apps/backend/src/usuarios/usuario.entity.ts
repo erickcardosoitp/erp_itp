@@ -34,6 +34,14 @@ export class Usuario {
   @Column({ nullable: true, unique: true })
   matricula: string;
 
+  /** ID do funcionário vinculado a este usuário (quando admin cria login a partir do form) */
+  @Column({ type: 'uuid', nullable: true, unique: true, name: 'funcionario_id' })
+  funcionario_id: string;
+
+  /** Se verdadeiro, o login bloqueia e força troca de senha na próxima autenticação */
+  @Column({ name: 'deve_trocar_senha', default: false })
+  deve_trocar_senha: boolean;
+
   // ✅ Relação ManyToOne com Grupo
   @ManyToOne(() => Grupo, (grupo) => grupo.usuarios, { 
     nullable: true, 

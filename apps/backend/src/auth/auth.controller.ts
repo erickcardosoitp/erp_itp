@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Res, Logger, HttpStatus, HttpCode, UnauthorizedException } from '@nestjs/common';
+import { Controller, Post, Body, Res, Logger, HttpStatus, HttpCode, UnauthorizedException, Patch, Req, Headers, Get } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { Response } from 'express';
 import { Public } from './decorators/public.decorator';
@@ -69,5 +69,41 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   async resetarSenha(@Body() body: { token: string; senha: string }) {
     return this.authService.resetarSenha(body.token, body.senha);
+  }
+
+  /** Trocar senha obrigatória (requer login; valida critérios MFA) */
+  @Patch('trocar-senha')
+  @HttpCode(HttpStatus.OK)
+  async trocarSenha(
+    @Req() req: any,
+    @Body() body: { nova_senha: string; senha_atual?: string },
+  ) {
+    return this.authService.trocarSenha(req.user.userId, body.nova_senha, body.senha_atual);
+  }
+
+  /** Criar usuário de sistema para um funcionário cadastrado via formulário */
+  @Post('criar-usuario-funcionario')
+  @HttpCode(HttpStatus.CREATED)
+  async criarUsuarioFuncionario(@Body() body: { funcionario_id: string; role?: string }) {
+    return this.authService.criarUsuarioParaFuncionario(body);
+  }
+
+  /** 
+   * Endpoint de Cron Job — envia lembretes diários de troca de senha.
+   * Protegido pelo header x-cron-secret (local) ou Authorization Bearer (Vercel Cron).
+   */
+  @Public()
+  @Get('cron/verificar-senhas')
+  @HttpCode(HttpStatus.OK)
+  async cronVerificarSenhas(
+    @Headers('x-cron-secret') cronSecret: string,
+    @Headers('authorization') authHeader: string,
+  ) {
+    const expected = process.env.CRON_SECRET || 'itp-cron-2026';
+    const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : '';
+    if (cronSecret !== expected && bearerToken !== expected) {
+      throw new UnauthorizedException('Cron secret inválido.');
+    }
+    return this.authService.enviarLembretesSenhaFraca();
   }
 }

@@ -68,7 +68,12 @@ function LoginForm() {
         Cookies.set('itp_token', data.access_token, { expires, path: '/' });
       }
 
-      setTimeout(() => { window.location.href = '/dashboard'; }, 100);
+      // Se o usuário precisa trocar a senha, redireciona antes do dashboard
+      if (data.deve_trocar_senha) {
+        setTimeout(() => { window.location.href = '/trocar-senha'; }, 100);
+      } else {
+        setTimeout(() => { window.location.href = '/dashboard'; }, 100);
+      }
 
     } catch (err: any) {
       setError(err.message || 'Erro de conexão com o servidor.');

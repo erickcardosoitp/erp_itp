@@ -52,32 +52,56 @@ export class FuncionariosController {
     if (secret !== WEBHOOK_SECRET) {
       throw new UnauthorizedException('Secret inválido.');
     }
+
+    // Normaliza os nomes dos campos — o GAS pode enviar variantes diferentes
+    const p = payload;
     const dto = {
-      nome:                   payload.nome,
-      cargo:                  payload.cargo,
-      email:                  payload.email,
-      cpf:                    payload.cpf,
-      data_nascimento:        payload.data_nascimento,
-      celular:                payload.celular,
-      sexo:                   payload.sexo,
-      raca_cor:               payload.raca_cor,
-      escolaridade:           payload.escolaridade,
-      cep:                    payload.cep,
-      numero_residencia:      payload.numero_residencia,
-      complemento:            payload.complemento,
-      estado:                 payload.estado,
-      telefone_emergencia_1:  payload.telefone_emergencia_1,
-      telefone_emergencia_2:  payload.telefone_emergencia_2,
-      possui_deficiencia:     payload.possui_deficiencia === true,
-      deficiencia_descricao:  payload.deficiencia_descricao,
-      possui_alergias:        payload.possui_alergias === true,
-      alergias_descricao:     payload.alergias_descricao,
-      usa_medicamentos:       payload.usa_medicamentos === true,
-      medicamentos_descricao: payload.medicamentos_descricao,
-      interesse_cursos:       payload.interesse_cursos === true,
-      ativo:                  true,
+      nome:                   p.nome,
+      cargo:                  p.cargo,
+      email:                  p.email,
+      cpf:                    p.cpf,
+      data_nascimento:        p.data_nascimento,
+      celular:                p.celular,
+      sexo:                   p.sexo,
+      // "raca" (GAS) ou "raca_cor" (legado)
+      raca_cor:               p.raca ?? p.raca_cor,
+      escolaridade:           p.escolaridade,
+      cep:                    p.cep,
+      // "endereco" (GAS) ou "logradouro" (legado)
+      logradouro:             p.endereco ?? p.logradouro,
+      // "numero" (GAS) ou "numero_residencia" (legado)
+      numero_residencia:      p.numero ?? p.numero_residencia,
+      bairro:                 p.bairro,
+      cidade:                 p.cidade,
+      complemento:            p.complemento,
+      estado:                 p.estado,
+      telefone_emergencia_1:  p.telefone_emergencia_1,
+      telefone_emergencia_2:  p.telefone_emergencia_2,
+      // booleans: aceita true/false ou string "sim"
+      possui_deficiencia:    p.possui_deficiencia === true || String(p.possui_deficiencia).toLowerCase() === 'sim',
+      // "descricao_deficiencia" (GAS) ou "deficiencia_descricao" (legado)
+      deficiencia_descricao: p.descricao_deficiencia ?? p.deficiencia_descricao,
+      // "possui_alergia" (GAS singular) ou "possui_alergias" (legado)
+      possui_alergias:       p.possui_alergia === true || p.possui_alergias === true
+                               || String(p.possui_alergia ?? '').toLowerCase() === 'sim'
+                               || String(p.possui_alergias ?? '').toLowerCase() === 'sim',
+      // "descricao_alergia" (GAS) ou "alergias_descricao" (legado)
+      alergias_descricao:    p.descricao_alergia ?? p.alergias_descricao,
+      // "usa_medicamento" (GAS singular) ou "usa_medicamentos" (legado)
+      usa_medicamentos:      p.usa_medicamento === true || p.usa_medicamentos === true
+                               || String(p.usa_medicamento ?? '').toLowerCase() === 'sim'
+                               || String(p.usa_medicamentos ?? '').toLowerCase() === 'sim',
+      // "descricao_medicamento" (GAS) ou "medicamentos_descricao" (legado)
+      medicamentos_descricao: p.descricao_medicamento ?? p.medicamentos_descricao,
+      // Campos de saúde adicionais do GAS
+      possui_plano_saude:    p.possui_plano_saude === true || String(p.possui_plano_saude ?? '').toLowerCase() === 'sim',
+      plano_saude:           p.plano_saude,
+      numero_sus:            p.numero_sus,
+      interesse_cursos:      p.interesse_cursos === true || String(p.interesse_cursos ?? '').toLowerCase() === 'sim',
+      ativo:                 true,
     };
     this.logger.log(`[Webhook Google Forms] Cadastrando funcionário: ${dto.nome}`);
-    return this.svc.criar(dto);
+    return this.svc.criarViaWebhook(dto);
   }
 }
+
