@@ -714,33 +714,70 @@ function LinhaDRE({ descricao, valor, nivel = 1, negrito = false, destaque = fal
   );
 }
 
-interface DreFiltros {
-  receitasDetalhes: boolean;
-  deducoes: boolean;
-  despesasDetalhes: boolean;
-  resultadoFinanceiro: boolean;
-  grafico: boolean;
+interface DreSecao {
+  id: string;
+  label: string;
+  nivel: '1' | '2' | '3';
 }
+
+const SECOES_PADRAO: DreSecao[] = [
+  { id: 'receitas_detalhe', label: 'Detalhes das Receitas', nivel: '2' },
+  { id: 'deducoes',         label: 'Deduções de Receitas',  nivel: '2' },
+  { id: 'despesas_grupos',  label: 'Grupos de Despesas',    nivel: '1' },
+  { id: 'despesas_detalhe', label: 'Detalhes das Despesas', nivel: '3' },
+  { id: 'resultado_fin',    label: 'Resultado Financeiro',  nivel: '2' },
+  { id: 'grafico',          label: 'Gráfico de Evolução',   nivel: '3' },
+];
+
+const COR_NIVEL = {
+  '1': {
+    area:    'bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-800',
+    card:    'bg-blue-100 dark:bg-blue-900/40 border-blue-300 dark:border-blue-700',
+    badge:   'bg-blue-600',
+    titulo:  'text-blue-700 dark:text-blue-300',
+    dragover:'bg-blue-100 dark:bg-blue-900/60 border-blue-500',
+    btn:     'border-blue-400 text-blue-700 dark:text-blue-300',
+  },
+  '2': {
+    area:    'bg-violet-50 dark:bg-violet-950/40 border-violet-200 dark:border-violet-800',
+    card:    'bg-violet-100 dark:bg-violet-900/40 border-violet-300 dark:border-violet-700',
+    badge:   'bg-violet-600',
+    titulo:  'text-violet-700 dark:text-violet-300',
+    dragover:'bg-violet-100 dark:bg-violet-900/60 border-violet-500',
+    btn:     'border-violet-400 text-violet-700 dark:text-violet-300',
+  },
+  '3': {
+    area:    'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800',
+    card:    'bg-rose-100 dark:bg-rose-900/40 border-rose-300 dark:border-rose-700',
+    badge:   'bg-rose-600',
+    titulo:  'text-rose-700 dark:text-rose-300',
+    dragover:'bg-rose-100 dark:bg-rose-900/60 border-rose-500',
+    btn:     'border-rose-400 text-rose-700 dark:text-rose-300',
+  },
+} as const;
 
 function AbaDRE() {
   const anoAtual = new Date().getFullYear();
   const dreRef = React.useRef<HTMLDivElement>(null);
-  const [dre, setDre]       = useState<DreDado | null>(null);
-  const [ano, setAno]       = useState(String(anoAtual));
-  const [mesIni, setMesIni] = useState('1');
-  const [mesFim, setMesFim] = useState('12');
+  const dragId = React.useRef<string | null>(null);
+  const [dre, setDre]               = useState<DreDado | null>(null);
+  const [ano, setAno]               = useState(String(anoAtual));
+  const [mesIni, setMesIni]         = useState('1');
+  const [mesFim, setMesFim]         = useState('12');
   const [carregando, setCarregando] = useState(false);
   const [exportando, setExportando] = useState<'pdf' | 'png' | null>(null);
-  const [filtros, setFiltros] = useState<DreFiltros>({
-    receitasDetalhes: true,
-    deducoes: true,
-    despesasDetalhes: true,
-    resultadoFinanceiro: true,
-    grafico: true,
-  });
+  const [secoes, setSecoes]         = useState<DreSecao[]>(SECOES_PADRAO);
+  const [nivelAtivo, setNivelAtivo] = useState<'1' | '2' | '3'>('2');
+  const [dropAlvo, setDropAlvo]     = useState<'1' | '2' | '3' | null>(null);
 
-  const toggleFiltro = (k: keyof DreFiltros) =>
-    setFiltros(prev => ({ ...prev, [k]: !prev[k] }));
+  /** Retorna true se a seção deve aparecer no nível de exibição ativo */
+  const sv = (id: string) => {
+    const s = secoes.find(s => s.id === id);
+    return s ? Number(s.nivel) <= Number(nivelAtivo) : false;
+  };
+
+  const moverSecao = (id: string, novoNivel: '1' | '2' | '3') =>
+    setSecoes(prev => prev.map(s => s.id === id ? { ...s, nivel: novoNivel } : s));
 
   const carregar = useCallback(async () => {
     setCarregando(true);
@@ -814,17 +851,9 @@ function AbaDRE() {
     } catch {/* silencia */} finally { setExportando(null); }
   };
 
-  const LABELS: { key: keyof DreFiltros; label: string }[] = [
-    { key: 'receitasDetalhes', label: 'Detalhes Receitas' },
-    { key: 'deducoes',         label: 'Deduções' },
-    { key: 'despesasDetalhes', label: 'Detalhes Despesas' },
-    { key: 'resultadoFinanceiro', label: 'Resultado Financeiro' },
-    { key: 'grafico',          label: 'Gráfico Evolução' },
-  ];
-
   return (
     <div className="space-y-6">
-      {/* Filtros */}
+      {/* ── Filtros de período ─────────────────────────────────────────── */}
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 p-4 space-y-3">
         <div className="flex flex-wrap gap-3 items-end">
           <div>
@@ -867,22 +896,61 @@ function AbaDRE() {
             </>
           )}
         </div>
-        {/* Filtros por nível */}
-        {dre && (
-          <div className="flex flex-wrap gap-2 pt-1 border-t border-slate-100 dark:border-slate-800">
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider self-center">Exibir:</span>
-            {LABELS.map(({ key, label }) => (
-              <button key={key} onClick={() => toggleFiltro(key)}
-                className={`px-2.5 py-1 rounded-full text-[10px] font-black border transition-all ${
-                  filtros[key]
-                    ? 'bg-purple-600 text-white border-purple-600'
-                    : 'bg-white dark:bg-slate-800 text-slate-400 border-slate-200 dark:border-slate-700'
+        {/* ── Painel de Níveis com Drag & Drop ─────────────────────────── */}
+        <div className="border-t border-slate-100 dark:border-slate-800 pt-4 space-y-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Exibir até:</span>
+            {(['1','2','3'] as const).map(n => (
+              <button key={n} onClick={() => setNivelAtivo(n)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-black border-2 transition-all ${
+                  nivelAtivo === n
+                    ? `${COR_NIVEL[n].badge} text-white border-transparent shadow`
+                    : `bg-white dark:bg-slate-800 ${COR_NIVEL[n].btn}`
                 }`}>
-                {label}
+                Nível {n}
               </button>
             ))}
+            <span className="text-[10px] text-slate-400 dark:text-slate-600 italic ml-auto hidden sm:inline">
+              ← Arraste os labels para reorganizar os níveis
+            </span>
           </div>
-        )}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {(['1','2','3'] as const).map(n => {
+              const c = COR_NIVEL[n];
+              const secoesDoNivel = secoes.filter(s => s.nivel === n);
+              const isDragOver = dropAlvo === n;
+              return (
+                <div key={n}
+                  className={`rounded-xl border-2 border-dashed p-3 min-h-[110px] transition-all duration-150 ${
+                    isDragOver ? c.dragover : c.area
+                  }`}
+                  onDragOver={e => { e.preventDefault(); setDropAlvo(n); }}
+                  onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropAlvo(null); }}
+                  onDrop={e => { e.preventDefault(); setDropAlvo(null); if (dragId.current) moverSecao(dragId.current, n); }}>
+                  <p className={`text-[10px] font-black uppercase tracking-widest mb-2 flex items-center gap-1.5 ${c.titulo}`}>
+                    Nível {n}
+                    {nivelAtivo === n && <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${c.badge} text-white font-black`}>ativo</span>}
+                  </p>
+                  <div className="flex flex-col gap-1.5">
+                    {secoesDoNivel.map(s => (
+                      <div key={s.id}
+                        draggable
+                        onDragStart={e => { e.dataTransfer.effectAllowed = 'move'; dragId.current = s.id; }}
+                        onDragEnd={() => { dragId.current = null; setDropAlvo(null); }}
+                        className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border ${c.card} cursor-grab active:cursor-grabbing select-none text-[11px] font-bold text-slate-700 dark:text-slate-200 shadow-sm`}>
+                        <span className="text-slate-400 dark:text-slate-500 text-sm leading-none">⠿</span>
+                        {s.label}
+                      </div>
+                    ))}
+                    {secoesDoNivel.length === 0 && (
+                      <p className="text-[10px] text-slate-300 dark:text-slate-600 text-center pt-3">Solte aqui</p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       {dre && (
@@ -904,10 +972,13 @@ function AbaDRE() {
 
           {/* DRE Table */}
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-sm">
-            <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+            <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
               <h3 className="font-black text-sm uppercase tracking-widest text-slate-700 dark:text-slate-200">
                 DRE — {MESES_PT[dre.periodo.mes_ini]}/{dre.periodo.ano} a {MESES_PT[dre.periodo.mes_fim]}/{dre.periodo.ano}
               </h3>
+              <span className={`text-[10px] font-black px-2 py-0.5 rounded-full text-white ${COR_NIVEL[nivelAtivo].badge}`}>
+                Nível {nivelAtivo}
+              </span>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full">
@@ -920,15 +991,15 @@ function AbaDRE() {
                 <tbody>
                   {/* Receitas */}
                   <LinhaDRE descricao="1. RECEITAS OPERACIONAIS" valor={dre.totalReceitasBrutas} nivel={1} negrito />
-                  {filtros.receitasDetalhes && dre.receitasBrutas.map((r,i) => (
+                  {sv('receitas_detalhe') && dre.receitasBrutas.map((r,i) => (
                     <LinhaDRE key={i} descricao={r.conta} valor={r.valor} nivel={2} />
                   ))}
-                  {filtros.receitasDetalhes && (
+                  {sv('receitas_detalhe') && (
                     <LinhaDRE descricao="TOTAL RECEITAS BRUTAS" valor={dre.totalReceitasBrutas} nivel={1} negrito />
                   )}
 
                   {/* Deduções */}
-                  {filtros.deducoes && dre.deducoes.length > 0 && (
+                  {sv('deducoes') && dre.deducoes.length > 0 && (
                     <>
                       <LinhaDRE descricao="(-) DEDUÇÕES DE RECEITAS" valor={0} nivel={1} negrito />
                       {dre.deducoes.map((d,i) => (
@@ -942,10 +1013,10 @@ function AbaDRE() {
 
                   {/* Despesas */}
                   <LinhaDRE descricao="2. DESPESAS" valor={dre.totalDespesas} nivel={1} negrito />
-                  {filtros.despesasDetalhes && dre.gruposDespesas.map((g, gi) => (
+                  {sv('despesas_grupos') && dre.gruposDespesas.map((g, gi) => (
                     <React.Fragment key={gi}>
                       <LinhaDRE descricao={g.grupo} valor={0} nivel={2} negrito />
-                      {g.itens.map((it, ii) => (
+                      {sv('despesas_detalhe') && g.itens.map((it, ii) => (
                         <LinhaDRE key={ii} descricao={it.conta} valor={-it.valor} nivel={3} inverter />
                       ))}
                       <LinhaDRE descricao={`Subtotal ${g.grupo}`} valor={-g.subtotal} nivel={2} negrito inverter />
@@ -956,7 +1027,7 @@ function AbaDRE() {
                   {/* Resultados */}
                   <LinhaDRE descricao="= RESULTADO OPERACIONAL" valor={dre.resultadoOperacional} nivel={1} negrito destaque />
 
-                  {filtros.resultadoFinanceiro && dre.resultadoFinanceiro !== 0 && (
+                  {sv('resultado_fin') && dre.resultadoFinanceiro !== 0 && (
                     <LinhaDRE descricao="± Resultado Financeiro" valor={dre.resultadoFinanceiro} nivel={2} />
                   )}
 
@@ -971,7 +1042,7 @@ function AbaDRE() {
           </div>
 
           {/* Gráfico evolução */}
-          {filtros.grafico && dre.evolucaoMensal.length > 0 && (
+          {sv('grafico') && dre.evolucaoMensal.length > 0 && (
             <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-sm">
               <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800">
                 <h3 className="font-black text-sm uppercase tracking-widest text-slate-700 dark:text-slate-200">Evolução Mensal do Resultado</h3>
