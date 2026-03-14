@@ -509,31 +509,38 @@ export class RelatoriosService {
     const isDeducao  = (r: any) => r.tipo_movimentacao === 'Dedução'  || r.categoria?.toLowerCase().includes('devolução') || r.categoria?.toLowerCase().includes('desconto');
 
     // ── GRUPO: Receitas Operacionais ──────────────────────────────────────
-    const receitasBrutas = rows
-      .filter(r => isReceita(r) && !isDeducao(r))
-      .map(r => ({ conta: r.plano_contas || r.categoria || 'Receitas', valor: this.num(r.total) }));
+    const receitasAcc = Object.create(null) as Record<string, number>;
+    for (const r of rows.filter(r => isReceita(r) && !isDeducao(r))) {
+      const conta = r.plano_contas || r.categoria || 'Receitas';
+      receitasAcc[conta] = (receitasAcc[conta] ?? 0) + this.num(r.total);
+    }
+    const receitasBrutas = Object.entries(receitasAcc).map(([conta, valor]) => ({ conta, valor }));
 
-    const deducoes = rows
-      .filter(r => isDeducao(r))
-      .map(r => ({ conta: r.plano_contas || r.categoria || 'Deduções', valor: this.num(r.total) }));
+    const deducoesAcc = Object.create(null) as Record<string, number>;
+    for (const r of rows.filter(r => isDeducao(r))) {
+      const conta = r.plano_contas || r.categoria || 'Deduções';
+      deducoesAcc[conta] = (deducoesAcc[conta] ?? 0) + this.num(r.total);
+    }
+    const deducoes = Object.entries(deducoesAcc).map(([conta, valor]) => ({ conta, valor }));
 
     const totalReceitasBrutas  = receitasBrutas.reduce((s, i) => s + i.valor, 0);
     const totalDeducoes        = deducoes.reduce((s, i) => s + i.valor, 0);
     const receitaLiquida       = totalReceitasBrutas - totalDeducoes;
 
     // ── GRUPO: Despesas (agrupadas por plano_contas ou categoria) ─────────
-    const despesasMap = Object.create(null) as Record<string, { itens: { conta: string; valor: number }[]; subtotal: number }>;
+    const despesasMap = Object.create(null) as Record<string, { itens: { conta: string; valor: number }[]; itensAcc: Record<string, number>; subtotal: number }>;
 
     for (const r of rows.filter(r => isDespesa(r))) {
       const grupo = String(r.plano_contas ?? 'Outras Despesas');
-      if (!despesasMap[grupo]) despesasMap[grupo] = { itens: [], subtotal: 0 };
-      despesasMap[grupo].itens.push({ conta: r.categoria || grupo, valor: this.num(r.total) });
+      if (!despesasMap[grupo]) despesasMap[grupo] = { itens: [], subtotal: 0, itensAcc: Object.create(null) as Record<string, number> };
+      const itemConta = r.categoria || grupo;
+      despesasMap[grupo].itensAcc[itemConta] = (despesasMap[grupo].itensAcc[itemConta] ?? 0) + this.num(r.total);
       despesasMap[grupo].subtotal += this.num(r.total);
     }
 
     const gruposDespesas = Object.entries(despesasMap).map(([grupo, v]) => ({
       grupo,
-      itens: v.itens,
+      itens: Object.entries(v.itensAcc).map(([conta, valor]) => ({ conta, valor })),
       subtotal: v.subtotal,
     }));
 
