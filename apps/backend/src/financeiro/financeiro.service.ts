@@ -184,10 +184,13 @@ export class FinanceiroService {
         referencia_tipo: 'movimentacao',
       }).catch(() => {});
     } else if (mov.forma_pagamento?.toUpperCase() === 'PIX') {
+      const isEntrada = mov.tipo_movimentacao === 'Receita' || mov.tipo_movimentacao === 'Entrada';
       await this.notificacoes.criar({
-        tipo: 'pix_recebido',
-        titulo: `🟢 PIX recebido: ${valor}`,
-        mensagem: `Um pagamento via PIX de ${valor} foi registrado (${mov.nome}).`,
+        tipo: isEntrada ? 'pix_recebido' : 'pix_enviado',
+        titulo: isEntrada ? `🟢 PIX recebido: ${valor}` : `🔴 PIX enviado: ${valor}`,
+        mensagem: isEntrada
+          ? `Um pagamento via PIX de ${valor} foi recebido (${mov.nome}).`
+          : `Um pagamento via PIX de ${valor} foi enviado (${mov.nome}).`,
         referencia_id: mov.id,
         referencia_tipo: 'movimentacao',
       }).catch(() => {});
