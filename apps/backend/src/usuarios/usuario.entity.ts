@@ -17,7 +17,7 @@ export class Usuario {
   @Column()
   nome: string;
 
-  @Column({ unique: true, nullable: true })
+  @Column({ type: 'varchar', unique: true, nullable: true })
   email: string | null;
 
   @Column({ select: false }) // Proteção contra vazamento de hash
