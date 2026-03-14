@@ -106,7 +106,7 @@ export default function FinanceiroPage() {
       data: m.data?.slice(0, 10), nome: m.nome, competencia: m.competencia,
       tipo_movimentacao: m.tipo_movimentacao, descricao: m.descricao,
       plano_contas: m.plano_contas, categoria: m.categoria, status: m.status,
-      valor: m.valor, tipo_pessoa: m.tipo_pessoa,
+      valor: m.valor != null ? String(m.valor) : '', tipo_pessoa: m.tipo_pessoa,
       forma_pagamento: m.forma_pagamento, recorrencia: m.recorrencia,
     });
     setModal({ aberto: true, editando: m });
@@ -116,7 +116,7 @@ export default function FinanceiroPage() {
   const handleSalvar = async (e: React.FormEvent) => {
     e.preventDefault(); setSalvando(true); setErro('');
     try {
-      const payload = { ...form, valor: form.valor ? Number(form.valor) : undefined };
+      const payload = { ...form, valor: form.valor !== '' && form.valor != null ? parseFloat(String(form.valor).replace(',', '.')) : undefined };
       if (modal.editando) await api.patch(`/financeiro/movimentacoes/${modal.editando.id}`, payload);
       else await api.post('/financeiro/movimentacoes', payload);
       fecharModal(); loadMovimentacoes();
@@ -330,7 +330,7 @@ export default function FinanceiroPage() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <FInput label="Competência" value={form.competencia ?? ''} onChange={v => setForm(p => ({ ...p, competencia: v }))} placeholder="Ex: Jun/2025" />
-                    <FInput label="Valor *" type="number" step="0.01" value={String(form.valor ?? '')} onChange={v => setForm(p => ({ ...p, valor: v ? Number(v) : undefined }))} placeholder="0.00" required />
+                    <FInput label="Valor *" type="number" step="0.01" value={form.valor ?? ''} onChange={v => setForm(p => ({ ...p, valor: v }))} placeholder="0.00" required />
                   </div>
 
                   <FInput label="Descrição" value={form.descricao ?? ''} onChange={v => setForm(p => ({ ...p, descricao: v }))} />
