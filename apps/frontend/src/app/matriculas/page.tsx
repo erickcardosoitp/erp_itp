@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 // ✅ IMPORTANTE: Instância configurada com porta 3001 e Credentials
 import api from '@/services/api'; 
 // xlsx carregado dinamicamente apenas ao exportar (evita ~1 MB no bundle inicial)
@@ -37,6 +37,7 @@ export default function GestaoMatriculas() {
   const [sortAsc, setSortAsc] = useState(true);
 
   const handleSort = (key: SortKey) => {
+    setPagina(1);
     if (sortKey === key) setSortAsc(prev => !prev);
     else { setSortKey(key); setSortAsc(true); }
   };
@@ -51,6 +52,18 @@ export default function GestaoMatriculas() {
   const [filtroAlergia, setFiltroAlergia] = useState('');
   const [showMoreKPIs, setShowMoreKPIs] = useState(false);
 
+  // Paginação e dados do servidor
+  const LIMITE = 50;
+  const [pagina, setPagina] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [totalPaginas, setTotalPaginas] = useState(1);
+  const [statsServidor, setStatsServidor] = useState<Record<string, number>>({});
+  const [localidades, setLocalidades] = useState<{ cidades: string[]; bairrosPorCidade: Record<string, string[]> }>({
+    cidades: [], bairrosPorCidade: {},
+  });
+  // Incrementar este contador força re-fetch manual (botão refresh, pós-matrícula)
+  const [refreshTick, setRefreshTick] = useState(0);
+
   // Modal de Matricular Candidato
   const [cursosDisponiveis, setCursosDisponiveis] = useState<string[]>([]);
   const [modalMatricular, setModalMatricular] = useState<{ aberto: boolean; candidato: any | null }>({ aberto: false, candidato: null });
@@ -58,97 +71,76 @@ export default function GestaoMatriculas() {
   const [matriculando, setMatriculando] = useState(false);
   const [matriculaResultado, setMatriculaResultado] = useState<{ numero: string; nome: string } | null>(null);
 
-  // ✅ Busca sincronizada com o Backend ITP (Porta 3001)
-  const fetchMatriculas = async () => {
-    setLoading(true);
-    try {
-      const response = await api.get('/matriculas');
-      const dados = Array.isArray(response.data) ? response.data : [];
-      setMatriculas(dados);
-    } catch (error: any) {
-      console.error("❌ Erro na requisição de matrículas:", error.response?.status || error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Dispara re-fetch manual (botão refresh, pós-matrícula)
+  const fetchMatriculas = useCallback(() => setRefreshTick(t => t + 1), []);
 
+  // Dados de suporte: cursos e localidades (executado apenas no mount)
   useEffect(() => {
-    fetchMatriculas();
     api.get('/matriculas/cursos-disponiveis')
-      .then(r => { const d = r.data; setCursosDisponiveis(Array.isArray(d) ? d : []); })
+      .then(r => setCursosDisponiveis(Array.isArray(r.data) ? r.data : []))
+      .catch(() => {});
+    api.get('/matriculas/localidades')
+      .then(r => { if (r.data) setLocalidades(r.data); })
       .catch(() => {});
   }, []);
 
-  // FILTRO SÍNCRONO: Bairros dependem da Cidade selecionada
-  const bairrosDisponiveis = useMemo(() => {
-    const listaBase = filtroCidade 
-      ? matriculas.filter(m => (m.cidade || m.Cidade) === filtroCidade) 
-      : matriculas;
-    return [...new Set(listaBase.map(m => m.bairro || m.Bairro))].filter(Boolean).sort() as string[];
-  }, [filtroCidade, matriculas]);
-
-  // KPIs dinâmicos com useMemo
-  const stats = useMemo(() => ({
-    total: matriculas.length,
-    pendentes: matriculas.filter(m => m.status_matricula === 'Pendente').length,
-    aguardandoLgpd: matriculas.filter(m => m.status_matricula === 'Aguardando Assinatura LGPD').length,
-    emValidacao: matriculas.filter(m => m.status_matricula === 'Em Validação').length,
-    aguardandoDocs: matriculas.filter(m => m.status_matricula === 'Aguardando Documentos').length,
-    documentosEnviados: matriculas.filter(m => m.status_matricula === 'Documentos Enviados').length,
-    matriculados: matriculas.filter(m => m.status_matricula === 'Matriculado').length,
-    incompletos: matriculas.filter(m => m.status_matricula === 'Incompleto').length,
-    desistentes: matriculas.filter(m => m.status_matricula === 'Desistente').length,
-    cancelados: matriculas.filter(m => m.status_matricula === 'Cancelado').length,
-  }), [matriculas]);
-
-  // Lógica de Filtro Case-Insensitive
-  const dadosFiltrados = useMemo(() => {
-    const filtered = matriculas.filter(m => {
-      const valNome = (m.nome_completo || '').toLowerCase();
-      const valCpf  = (m.cpf || '').replace(/\D/g, '');
-      const valCidade = (m.cidade || m.Cidade || '');
-      const valBairro = (m.bairro || m.Bairro || '');
-      const valStatus = m.status_matricula || '';
-      const valSexo = (m.sexo || '').toLowerCase();
-      const temAlergia = m.possui_alergias ? 'sim' : 'não';
-      return (
-        valNome.includes(filtroNome.toLowerCase()) &&
-        (filtroCpf === '' || valCpf.includes(filtroCpf.replace(/\D/g, ''))) &&
-        (filtroCidade === '' || valCidade === filtroCidade) &&
-        (filtroBairro === '' || valBairro === filtroBairro) &&
-        (filtroStatus === '' || valStatus === filtroStatus) &&
-        (filtroSexo === '' || valSexo === filtroSexo.toLowerCase()) &&
-        (filtroAlergia === '' || temAlergia === filtroAlergia)
-      );
-    });
-
-    const statusOrder: Record<string, number> = {
-      'Pendente': 1, 'Aguardando Assinatura LGPD': 2,
-      'Em Validação': 3, 'Aguardando Documentos': 4,
-      'Documentos Enviados': 5, 'Matriculado': 6,
-      'Incompleto': 7, 'Desistente': 8, 'Cancelado': 9,
+  // Fetch paginado + filtrado — re-executa quando pagina, filtros, ordenação ou refreshTick mudam
+  useEffect(() => {
+    let cancelled = false;
+    const doFetch = async () => {
+      setLoading(true);
+      try {
+        const params = new URLSearchParams({ pagina: String(pagina), limite: String(LIMITE) });
+        if (filtroNome)    params.set('nome',        filtroNome);
+        if (filtroCpf)     params.set('cpf',         filtroCpf);
+        if (filtroStatus)  params.set('status',      filtroStatus);
+        if (filtroCidade)  params.set('cidade',      filtroCidade);
+        if (filtroBairro)  params.set('bairro',      filtroBairro);
+        if (filtroSexo)    params.set('sexo',        filtroSexo);
+        if (filtroAlergia) params.set('tem_alergia', filtroAlergia);
+        params.set('orderBy',  sortKey);
+        params.set('orderDir', sortAsc ? 'ASC' : 'DESC');
+        const response = await api.get(`/matriculas?${params.toString()}`);
+        if (!cancelled) {
+          const data = response.data;
+          setMatriculas(Array.isArray(data.items) ? data.items : []);
+          setTotal(data.total || 0);
+          setTotalPaginas(data.totalPaginas || 1);
+          setStatsServidor(data.stats || {});
+        }
+      } catch (error: any) {
+        if (!cancelled) console.error('❌ Erro na requisição de matrículas:', error.response?.status || error.message);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     };
+    doFetch();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pagina, filtroNome, filtroCpf, filtroStatus, filtroCidade, filtroBairro, filtroSexo, filtroAlergia, sortKey, sortAsc, refreshTick]);
 
-    return [...filtered].sort((a: any, b: any) => {
-      let va: any, vb: any;
-      if (sortKey === 'data_inscricao') {
-        va = new Date(a.createdAt || a.created_at || 0).getTime();
-        vb = new Date(b.createdAt || b.created_at || 0).getTime();
-        return sortAsc ? va - vb : vb - va;
-      }
-      if (sortKey === 'status_matricula') {
-        va = statusOrder[a.status_matricula] ?? 99;
-        vb = statusOrder[b.status_matricula] ?? 99;
-        return sortAsc ? va - vb : vb - va;
-      }
-      va = ((sortKey === 'cidade' ? (a.cidade || a.Cidade) : a[sortKey]) || '').toLowerCase();
-      vb = ((sortKey === 'cidade' ? (b.cidade || b.Cidade) : b[sortKey]) || '').toLowerCase();
-      return sortAsc ? va.localeCompare(vb, 'pt-BR') : vb.localeCompare(va, 'pt-BR');
-    });
-  }, [matriculas, filtroNome, filtroCpf, filtroCidade, filtroBairro, filtroStatus, filtroSexo, filtroAlergia, sortKey, sortAsc]);
+  // Bairros disponíveis para a cidade selecionada (dados do servidor)
+  const bairrosDisponiveis = useMemo(
+    () => filtroCidade ? (localidades.bairrosPorCidade[filtroCidade] || []) : [],
+    [filtroCidade, localidades],
+  );
+
+  // KPIs baseados nos contadores aggregados do servidor (sem filtro — retrato geral)
+  const stats = useMemo(() => ({
+    total: Object.values(statsServidor).reduce((a, b) => a + b, 0),
+    pendentes:          statsServidor['Pendente'] || 0,
+    aguardandoLgpd:     statsServidor['Aguardando Assinatura LGPD'] || 0,
+    emValidacao:        statsServidor['Em Validação'] || 0,
+    aguardandoDocs:     statsServidor['Aguardando Documentos'] || 0,
+    documentosEnviados: statsServidor['Documentos Enviados'] || 0,
+    matriculados:       statsServidor['Matriculado'] || 0,
+    incompletos:        statsServidor['Incompleto'] || 0,
+    desistentes:        statsServidor['Desistente'] || 0,
+    cancelados:         statsServidor['Cancelado'] || 0,
+  }), [statsServidor]);
 
   const handleExport = async (formato: 'xlsx' | 'csv' | 'json') => {
-    const dataToExport = dadosFiltrados.map(m => ({
+    const dataToExport = matriculas.map(m => ({
       ID: m.id,
       Nome: m.nome_completo,
       CPF: m.cpf,
@@ -281,13 +273,13 @@ export default function GestaoMatriculas() {
           <div>
             <p className="text-[9px] font-black uppercase tracking-widest text-purple-400 mb-2 pl-1">Pipeline Ativo</p>
             <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
-              <KPICard title="Total" value={stats.total} icon={<Users size={18}/>} color="#2e1065" onClick={() => setFiltroStatus('')} isActive={filtroStatus === ''} />
-              <KPICard title="Pendentes" value={stats.pendentes} icon={<Clock size={18}/>} color="#94a3b8" onClick={() => setFiltroStatus('Pendente')} isActive={filtroStatus === 'Pendente'} />
-              <KPICard title="Ag. LGPD" value={stats.aguardandoLgpd} icon={<ShieldAlert size={18}/>} color="#f97316" onClick={() => setFiltroStatus('Aguardando Assinatura LGPD')} isActive={filtroStatus === 'Aguardando Assinatura LGPD'} />
-              <KPICard title="Em Validação" value={stats.emValidacao} icon={<UserCheck size={18}/>} color="#3b82f6" onClick={() => setFiltroStatus('Em Validação')} isActive={filtroStatus === 'Em Validação'} />
-              <KPICard title="Ag. Documentos" value={stats.aguardandoDocs} icon={<FileText size={18}/>} color="#f59e0b" onClick={() => setFiltroStatus('Aguardando Documentos')} isActive={filtroStatus === 'Aguardando Documentos'} />
-              <KPICard title="Docs Enviados" value={stats.documentosEnviados} icon={<FileCheck2 size={18}/>} color="#0891b2" onClick={() => setFiltroStatus('Documentos Enviados')} isActive={filtroStatus === 'Documentos Enviados'} />
-              <KPICard title="Matriculados" value={stats.matriculados} icon={<CheckCircle2 size={18}/>} color="#16a34a" onClick={() => setFiltroStatus('Matriculado')} isActive={filtroStatus === 'Matriculado'} />
+              <KPICard title="Total" value={stats.total} icon={<Users size={18}/>} color="#2e1065" onClick={() => { setPagina(1); setFiltroStatus(''); }} isActive={filtroStatus === ''} />
+              <KPICard title="Pendentes" value={stats.pendentes} icon={<Clock size={18}/>} color="#94a3b8" onClick={() => { setPagina(1); setFiltroStatus('Pendente'); }} isActive={filtroStatus === 'Pendente'} />
+              <KPICard title="Ag. LGPD" value={stats.aguardandoLgpd} icon={<ShieldAlert size={18}/>} color="#f97316" onClick={() => { setPagina(1); setFiltroStatus('Aguardando Assinatura LGPD'); }} isActive={filtroStatus === 'Aguardando Assinatura LGPD'} />
+              <KPICard title="Em Validação" value={stats.emValidacao} icon={<UserCheck size={18}/>} color="#3b82f6" onClick={() => { setPagina(1); setFiltroStatus('Em Validação'); }} isActive={filtroStatus === 'Em Validação'} />
+              <KPICard title="Ag. Documentos" value={stats.aguardandoDocs} icon={<FileText size={18}/>} color="#f59e0b" onClick={() => { setPagina(1); setFiltroStatus('Aguardando Documentos'); }} isActive={filtroStatus === 'Aguardando Documentos'} />
+              <KPICard title="Docs Enviados" value={stats.documentosEnviados} icon={<FileCheck2 size={18}/>} color="#0891b2" onClick={() => { setPagina(1); setFiltroStatus('Documentos Enviados'); }} isActive={filtroStatus === 'Documentos Enviados'} />
+              <KPICard title="Matriculados" value={stats.matriculados} icon={<CheckCircle2 size={18}/>} color="#16a34a" onClick={() => { setPagina(1); setFiltroStatus('Matriculado'); }} isActive={filtroStatus === 'Matriculado'} />
             </div>
           </div>
 
@@ -306,9 +298,9 @@ export default function GestaoMatriculas() {
 
             {showMoreKPIs && (
               <div className="grid grid-cols-3 gap-3">
-                <KPICard title="Incompletos" value={stats.incompletos} icon={<AlertCircle size={18}/>} color="#dc2626" onClick={() => setFiltroStatus('Incompleto')} isActive={filtroStatus === 'Incompleto'} />
-                <KPICard title="Desistentes" value={stats.desistentes} icon={<UserX size={18}/>} color="#64748b" onClick={() => setFiltroStatus('Desistente')} isActive={filtroStatus === 'Desistente'} />
-                <KPICard title="Cancelados" value={stats.cancelados} icon={<Ban size={18}/>} color="#7f1d1d" onClick={() => setFiltroStatus('Cancelado')} isActive={filtroStatus === 'Cancelado'} />
+              <KPICard title="Incompletos" value={stats.incompletos} icon={<AlertCircle size={18}/>} color="#dc2626" onClick={() => { setPagina(1); setFiltroStatus('Incompleto'); }} isActive={filtroStatus === 'Incompleto'} />
+                <KPICard title="Desistentes" value={stats.desistentes} icon={<UserX size={18}/>} color="#64748b" onClick={() => { setPagina(1); setFiltroStatus('Desistente'); }} isActive={filtroStatus === 'Desistente'} />
+                <KPICard title="Cancelados" value={stats.cancelados} icon={<Ban size={18}/>} color="#7f1d1d" onClick={() => { setPagina(1); setFiltroStatus('Cancelado'); }} isActive={filtroStatus === 'Cancelado'} />
               </div>
             )}
           </div>
@@ -321,33 +313,33 @@ export default function GestaoMatriculas() {
             <FilterGroup label="Nome">
               <div className="relative">
                 <Search className="absolute left-3 top-3 text-gray-400" size={12} />
-                <input type="text" value={filtroNome} placeholder="Nome..." className="w-full pl-8 pr-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-purple-500" onChange={(e) => setFiltroNome(e.target.value)} />
+                <input type="text" value={filtroNome} placeholder="Nome..." className="w-full pl-8 pr-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-purple-500" onChange={(e) => { setPagina(1); setFiltroNome(e.target.value); }} />
               </div>
             </FilterGroup>
 
             <FilterGroup label="CPF">
               <div className="relative">
                 <Search className="absolute left-3 top-3 text-gray-400" size={12} />
-                <input type="text" value={filtroCpf} placeholder="CPF..." className="w-full pl-8 pr-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-purple-500" onChange={(e) => setFiltroCpf(e.target.value)} />
+                <input type="text" value={filtroCpf} placeholder="CPF..." className="w-full pl-8 pr-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-purple-500" onChange={(e) => { setPagina(1); setFiltroCpf(e.target.value); }} />
               </div>
             </FilterGroup>
 
             <FilterGroup label="Cidade">
-              <select value={filtroCidade} className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 text-xs font-bold text-gray-700 uppercase outline-none" onChange={(e) => { setFiltroCidade(e.target.value); setFiltroBairro(''); }}>
+              <select value={filtroCidade} className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 text-xs font-bold text-gray-700 uppercase outline-none" onChange={(e) => { setPagina(1); setFiltroCidade(e.target.value); setFiltroBairro(''); }}>
                 <option value="">Todas</option>
-                {[...new Set(matriculas.map((m: any) => m.cidade || m.Cidade))].filter(Boolean).sort().map((c: any) => <option key={c} value={c}>{c}</option>)}
+                {localidades.cidades.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </FilterGroup>
 
             <FilterGroup label="Bairro" isSincrono={!!filtroCidade}>
-              <select value={filtroBairro} className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 text-xs font-bold text-gray-700 uppercase outline-none" onChange={(e) => setFiltroBairro(e.target.value)}>
+              <select value={filtroBairro} className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 text-xs font-bold text-gray-700 uppercase outline-none" onChange={(e) => { setPagina(1); setFiltroBairro(e.target.value); }}>
                 <option value="">Todos</option>
                 {bairrosDisponiveis.map(b => <option key={b} value={b}>{b}</option>)}
               </select>
             </FilterGroup>
 
             <FilterGroup label="Status">
-              <select value={filtroStatus} className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 text-xs font-bold text-gray-700 uppercase outline-none" onChange={(e) => setFiltroStatus(e.target.value)}>
+              <select value={filtroStatus} className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 text-xs font-bold text-gray-700 uppercase outline-none" onChange={(e) => { setPagina(1); setFiltroStatus(e.target.value); }}>
                 <option value="">Todos Status</option>
                 <option value="Pendente">Pendente</option>
                 <option value="Aguardando Assinatura LGPD">Ag. LGPD</option>
@@ -362,7 +354,7 @@ export default function GestaoMatriculas() {
             </FilterGroup>
 
             <FilterGroup label="Sexo">
-              <select value={filtroSexo} className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 text-xs font-bold text-gray-700 uppercase outline-none" onChange={(e) => setFiltroSexo(e.target.value)}>
+              <select value={filtroSexo} className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 text-xs font-bold text-gray-700 uppercase outline-none" onChange={(e) => { setPagina(1); setFiltroSexo(e.target.value); }}>
                 <option value="">Todos</option>
                 <option value="Masculino">Masculino</option>
                 <option value="Feminino">Feminino</option>
@@ -371,7 +363,7 @@ export default function GestaoMatriculas() {
             </FilterGroup>
 
             <FilterGroup label="Alergia">
-              <select value={filtroAlergia} className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 text-xs font-bold text-gray-700 uppercase outline-none" onChange={(e) => setFiltroAlergia(e.target.value)}>
+              <select value={filtroAlergia} className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 text-xs font-bold text-gray-700 uppercase outline-none" onChange={(e) => { setPagina(1); setFiltroAlergia(e.target.value); }}>
                 <option value="">Todos</option>
                 <option value="sim">Possui</option>
                 <option value="não">Não possui</option>
@@ -379,7 +371,7 @@ export default function GestaoMatriculas() {
             </FilterGroup>
           </div>
           <div className="flex justify-end mt-3">
-            <button onClick={() => { setFiltroNome(''); setFiltroCpf(''); setFiltroCidade(''); setFiltroBairro(''); setFiltroStatus(''); setFiltroSexo(''); setFiltroAlergia(''); }}
+            <button onClick={() => { setPagina(1); setFiltroNome(''); setFiltroCpf(''); setFiltroCidade(''); setFiltroBairro(''); setFiltroStatus(''); setFiltroSexo(''); setFiltroAlergia(''); }}
               className="flex items-center gap-2 text-red-400 hover:text-red-600 font-black text-[10px] uppercase transition-colors">
               <FilterX size={12} /> Limpar Filtros
             </button>
@@ -409,8 +401,8 @@ export default function GestaoMatriculas() {
               <tbody className="divide-y divide-gray-50">
                 {loading ? (
                    <tr><td colSpan={5} className="py-10 text-center text-gray-400 font-black uppercase text-xs animate-pulse italic">Sincronizando com Servidor ITP...</td></tr>
-                ) : dadosFiltrados.length > 0 ? (
-                  dadosFiltrados.map((m, idx) => {
+                ) : matriculas.length > 0 ? (
+                  matriculas.map((m, idx) => {
                     const statusStyle = getStatusStyle(m.status_matricula);
                     return (
                       <tr key={m.id || idx} className="hover:bg-purple-50/30 transition-all group">
@@ -465,6 +457,48 @@ export default function GestaoMatriculas() {
             </table>
           </div>
         </div>
+
+        {/* ── Paginação ───────────────────────────────────────────────────── */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 px-1">
+          <p className="text-xs text-gray-500 font-bold">
+            {total} registro{total !== 1 ? 's' : ''}
+            {(filtroNome || filtroCpf || filtroStatus || filtroCidade || filtroBairro || filtroSexo || filtroAlergia)
+              ? ' (filtrado)' : ''}
+            {totalPaginas > 1 && (
+              <span className="ml-2 text-gray-400">
+                — página {pagina} de {totalPaginas} &middot; {LIMITE}/pág.
+              </span>
+            )}
+          </p>
+          {totalPaginas > 1 && (
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setPagina(1)}
+                disabled={pagina <= 1 || loading}
+                className="px-2.5 py-1.5 rounded-lg bg-white border border-gray-200 text-gray-600 font-black text-xs disabled:opacity-40 disabled:cursor-not-allowed hover:border-purple-400 hover:text-purple-700 transition-colors shadow-sm"
+              >«</button>
+              <button
+                onClick={() => setPagina(p => Math.max(1, p - 1))}
+                disabled={pagina <= 1 || loading}
+                className="px-3 py-1.5 rounded-lg bg-white border border-gray-200 text-gray-600 font-bold text-xs disabled:opacity-40 disabled:cursor-not-allowed hover:border-purple-400 hover:text-purple-700 transition-colors shadow-sm"
+              >‹ Anterior</button>
+              <span className="px-3 py-1.5 rounded-lg bg-purple-600 text-white font-black text-xs shadow-sm">
+                {pagina} / {totalPaginas}
+              </span>
+              <button
+                onClick={() => setPagina(p => Math.min(totalPaginas, p + 1))}
+                disabled={pagina >= totalPaginas || loading}
+                className="px-3 py-1.5 rounded-lg bg-white border border-gray-200 text-gray-600 font-bold text-xs disabled:opacity-40 disabled:cursor-not-allowed hover:border-purple-400 hover:text-purple-700 transition-colors shadow-sm"
+              >Próxima ›</button>
+              <button
+                onClick={() => setPagina(totalPaginas)}
+                disabled={pagina >= totalPaginas || loading}
+                className="px-2.5 py-1.5 rounded-lg bg-white border border-gray-200 text-gray-600 font-black text-xs disabled:opacity-40 disabled:cursor-not-allowed hover:border-purple-400 hover:text-purple-700 transition-colors shadow-sm"
+              >»</button>
+            </div>
+          )}
+        </div>
+
       </div>
       {isModalOpen && candidatoSelecionado && (
         <DossieCandidato

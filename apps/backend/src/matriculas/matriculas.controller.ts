@@ -24,12 +24,38 @@ export class MatriculasController {
 
   /**
    * CONSULTA: Nível mínimo CZNH (1). 
-   * Como o ADMIN é nível 10, o RolesGuard permitirá o acesso automaticamente (10 >= 1).
+   * Suporta paginação (?pagina=1&limite=50) e filtros como query params.
    */
   @Get()
-  @Roles(Role.CZNH) 
-  async listarInscricoes() {
-    return await this.matriculasService.listarTodas();
+  @Roles(Role.CZNH)
+  async listarInscricoes(
+    @Query('pagina') pagina?: string,
+    @Query('limite') limite?: string,
+    @Query('nome') nome?: string,
+    @Query('cpf') cpf?: string,
+    @Query('status') status?: string,
+    @Query('cidade') cidade?: string,
+    @Query('bairro') bairro?: string,
+    @Query('sexo') sexo?: string,
+    @Query('tem_alergia') temAlergia?: string,
+    @Query('orderBy') orderBy?: string,
+    @Query('orderDir') orderDir?: string,
+  ) {
+    const p = Math.max(1, parseInt(pagina ?? '1', 10) || 1);
+    const l = Math.min(200, Math.max(1, parseInt(limite ?? '50', 10) || 50));
+    const dir: 'ASC' | 'DESC' = orderDir?.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+    return await this.matriculasService.listarTodas(p, l, {
+      nome, cpf, status, cidade, bairro, sexo, tem_alergia: temAlergia, orderBy, orderDir: dir,
+    });
+  }
+
+  /**
+   * Retorna cidades e bairros distintos para popular dropdowns do frontend.
+   */
+  @Get('localidades')
+  @Roles(Role.CZNH)
+  async localidades() {
+    return await this.matriculasService.listarLocalidades();
   }
 
   /**

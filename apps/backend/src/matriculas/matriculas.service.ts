@@ -74,18 +74,136 @@ export class MatriculasService {
   }
 
   /**
-   * Lista todas as inscrições com carregamento otimizado da relação aluno.
+   * Lista inscrições de forma paginada com suporte a filtros e ordenação.
    */
-  async listarTodas(): Promise<Inscricao[]> {
+  async listarTodas(
+    pagina = 1,
+    limite = 50,
+    filtros?: {
+      nome?: string;
+      cpf?: string;
+      status?: string;
+      cidade?: string;
+      bairro?: string;
+      sexo?: string;
+      tem_alergia?: string;
+      orderBy?: string;
+      orderDir?: 'ASC' | 'DESC';
+    },
+  ): Promise<{
+    items: Inscricao[];
+    total: number;
+    pagina: number;
+    limite: number;
+    totalPaginas: number;
+    stats: Record<string, number>;
+  }> {
     try {
-      return await this.inscricaoRepository.find({
-        relations: { aluno: true },
-        order: { createdAt: 'DESC' },
-      });
+      const qb = this.inscricaoRepository
+        .createQueryBuilder('i')
+        .leftJoinAndSelect('i.aluno', 'aluno');
+
+      if (filtros?.nome?.trim()) {
+        qb.andWhere('LOWER(i.nome_completo) LIKE :nome', {
+          nome: `%${filtros.nome.trim().toLowerCase()}%`,
+        });
+      }
+      if (filtros?.cpf?.trim()) {
+        const cpfLimpo = filtros.cpf.replace(/\D/g, '');
+        if (cpfLimpo) {
+          qb.andWhere("REGEXP_REPLACE(i.cpf, '[^0-9]', '', 'g') LIKE :cpf", {
+            cpf: `%${cpfLimpo}%`,
+          });
+        }
+      }
+      if (filtros?.status?.trim()) {
+        qb.andWhere('i.status_matricula = :status', { status: filtros.status.trim() });
+      }
+      if (filtros?.cidade?.trim()) {
+        qb.andWhere('i.cidade = :cidade', { cidade: filtros.cidade.trim() });
+      }
+      if (filtros?.bairro?.trim()) {
+        qb.andWhere('i.bairro = :bairro', { bairro: filtros.bairro.trim() });
+      }
+      if (filtros?.sexo?.trim()) {
+        qb.andWhere('LOWER(i.sexo) = :sexo', { sexo: filtros.sexo.trim().toLowerCase() });
+      }
+      if (filtros?.tem_alergia === 'sim') {
+        qb.andWhere(
+          "(i.possui_alergias = 'true' OR i.possui_alergias = '1' OR i.possui_alergias = 'Sim')",
+        );
+      } else if (filtros?.tem_alergia === 'não') {
+        qb.andWhere(
+          "(i.possui_alergias IS NULL OR i.possui_alergias = 'false' OR i.possui_alergias = '0' OR i.possui_alergias = 'Não' OR i.possui_alergias = '')",
+        );
+      }
+
+      const ALLOWED_ORDER: Record<string, string> = {
+        nome_completo: 'i.nome_completo',
+        cidade: 'i.cidade',
+        data_inscricao: 'i.createdAt',
+        status_matricula: 'i.status_matricula',
+      };
+      const orderCol = ALLOWED_ORDER[filtros?.orderBy ?? ''] ?? 'i.createdAt';
+      const orderDir = filtros?.orderDir ?? 'DESC';
+      qb.orderBy(orderCol, orderDir);
+
+      const [items, total] = await qb
+        .skip((pagina - 1) * limite)
+        .take(limite)
+        .getManyAndCount();
+
+      // KPI counts — sempre sem filtro para refletir o painel geral
+      const statsRaw = await this.inscricaoRepository
+        .createQueryBuilder('i')
+        .select('i.status_matricula', 'status')
+        .addSelect('COUNT(*)', 'count')
+        .groupBy('i.status_matricula')
+        .getRawMany<{ status: string; count: string }>();
+
+      const stats: Record<string, number> = {};
+      statsRaw.forEach(r => { stats[r.status] = parseInt(r.count, 10); });
+
+      return {
+        items,
+        total,
+        pagina,
+        limite,
+        totalPaginas: Math.ceil(total / limite) || 1,
+        stats,
+      };
     } catch (error: any) {
       this.logger.error(`❌ Erro ao listar matrículas: ${error.message}`, error.stack);
       throw new InternalServerErrorException('Falha ao carregar matrículas. Tente novamente em instantes.');
     }
+  }
+
+  /**
+   * Retorna cidades e bairros distintos para popular filtros no frontend.
+   */
+  async listarLocalidades(): Promise<{ cidades: string[]; bairrosPorCidade: Record<string, string[]> }> {
+    const rows = await this.inscricaoRepository
+      .createQueryBuilder('i')
+      .select('i.cidade', 'cidade')
+      .addSelect('i.bairro', 'bairro')
+      .distinct(true)
+      .where("i.cidade IS NOT NULL AND i.cidade != ''")
+      .orderBy('cidade', 'ASC')
+      .addOrderBy('bairro', 'ASC')
+      .getRawMany<{ cidade: string; bairro: string | null }>();
+
+    const cidadesSet = new Set<string>();
+    const bairrosPorCidade: Record<string, string[]> = {};
+    for (const r of rows) {
+      if (r.cidade) {
+        cidadesSet.add(r.cidade);
+        if (r.bairro) {
+          if (!bairrosPorCidade[r.cidade]) bairrosPorCidade[r.cidade] = [];
+          bairrosPorCidade[r.cidade].push(r.bairro);
+        }
+      }
+    }
+    return { cidades: [...cidadesSet], bairrosPorCidade };
   }
 
   /**
