@@ -120,10 +120,10 @@ export class MatriculasService {
         qb.andWhere('i.status_matricula = :status', { status: filtros.status.trim() });
       }
       if (filtros?.cidade?.trim()) {
-        qb.andWhere('i.cidade = :cidade', { cidade: filtros.cidade.trim() });
+        qb.andWhere('TRIM(i.cidade) = :cidade', { cidade: filtros.cidade.trim() });
       }
       if (filtros?.bairro?.trim()) {
-        qb.andWhere('i.bairro = :bairro', { bairro: filtros.bairro.trim() });
+        qb.andWhere('TRIM(i.bairro) = :bairro', { bairro: filtros.bairro.trim() });
       }
       if (filtros?.sexo?.trim()) {
         qb.andWhere('LOWER(i.sexo) = :sexo', { sexo: filtros.sexo.trim().toLowerCase() });
@@ -184,22 +184,24 @@ export class MatriculasService {
   async listarLocalidades(): Promise<{ cidades: string[]; bairrosPorCidade: Record<string, string[]> }> {
     const rows = await this.inscricaoRepository
       .createQueryBuilder('i')
-      .select('i.cidade', 'cidade')
-      .addSelect('i.bairro', 'bairro')
+      .select('TRIM(i.cidade)', 'cidade')
+      .addSelect('TRIM(i.bairro)', 'bairro')
       .distinct(true)
-      .where("i.cidade IS NOT NULL AND i.cidade != ''")
-      .orderBy('cidade', 'ASC')
-      .addOrderBy('bairro', 'ASC')
+      .where("TRIM(i.cidade) IS NOT NULL AND TRIM(i.cidade) != ''")
+      .orderBy('TRIM(i.cidade)', 'ASC')
+      .addOrderBy('TRIM(i.bairro)', 'ASC')
       .getRawMany<{ cidade: string; bairro: string | null }>();
 
     const cidadesSet = new Set<string>();
     const bairrosPorCidade: Record<string, string[]> = {};
     for (const r of rows) {
-      if (r.cidade) {
-        cidadesSet.add(r.cidade);
-        if (r.bairro) {
-          if (!bairrosPorCidade[r.cidade]) bairrosPorCidade[r.cidade] = [];
-          bairrosPorCidade[r.cidade].push(r.bairro);
+      const cidade = r.cidade?.trim();
+      const bairro = r.bairro?.trim();
+      if (cidade) {
+        cidadesSet.add(cidade);
+        if (bairro) {
+          if (!bairrosPorCidade[cidade]) bairrosPorCidade[cidade] = [];
+          if (!bairrosPorCidade[cidade].includes(bairro)) bairrosPorCidade[cidade].push(bairro);
         }
       }
     }
