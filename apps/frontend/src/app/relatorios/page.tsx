@@ -8,7 +8,7 @@ import {
 import {
   BarChart2, Download, TrendingUp, Users, BookOpen,
   Package, Heart, DollarSign, Globe, Filter, RefreshCw,
-  Leaf, HandHeart,
+  Leaf, HandHeart, Eye, EyeOff,
 } from 'lucide-react';
 import api from '@/services/api';
 
@@ -718,6 +718,7 @@ interface DreSecao {
   id: string;
   label: string;
   nivel: '1' | '2' | '3';
+  oculto?: boolean;
 }
 
 const SECOES_PADRAO: DreSecao[] = [
@@ -758,8 +759,9 @@ const COR_NIVEL = {
 
 function AbaDRE() {
   const anoAtual = new Date().getFullYear();
-  const dreRef = React.useRef<HTMLDivElement>(null);
-  const dragId = React.useRef<string | null>(null);
+  const dreRef        = React.useRef<HTMLDivElement>(null);
+  const dragId        = React.useRef<string | null>(null);
+  const dropCardId    = React.useRef<string | null>(null);
   const [dre, setDre]               = useState<DreDado | null>(null);
   const [ano, setAno]               = useState(String(anoAtual));
   const [mesIni, setMesIni]         = useState('1');
@@ -770,14 +772,32 @@ function AbaDRE() {
   const [nivelAtivo, setNivelAtivo] = useState<'1' | '2' | '3'>('2');
   const [dropAlvo, setDropAlvo]     = useState<'1' | '2' | '3' | null>(null);
 
-  /** Retorna true se a seção deve aparecer no nível de exibição ativo */
+  /** Retorna true se a seção deve aparecer no nível de exibição ativo e não está oculta */
   const sv = (id: string) => {
     const s = secoes.find(s => s.id === id);
-    return s ? Number(s.nivel) <= Number(nivelAtivo) : false;
+    return s ? !s.oculto && Number(s.nivel) <= Number(nivelAtivo) : false;
   };
 
-  const moverSecao = (id: string, novoNivel: '1' | '2' | '3') =>
-    setSecoes(prev => prev.map(s => s.id === id ? { ...s, nivel: novoNivel } : s));
+  const toggleOculto = (id: string) =>
+    setSecoes(prev => prev.map(s => s.id === id ? { ...s, oculto: !s.oculto } : s));
+
+  /** Move / reordena: se targetId definido, insere antes; senão, appenda ao final do nível */
+  const reordenarOuMover = (draggedId: string, targetId: string | null, targetNivel: '1' | '2' | '3') => {
+    setSecoes(prev => {
+      const arr = [...prev];
+      const di = arr.findIndex(s => s.id === draggedId);
+      if (di === -1) return prev;
+      const dragged = { ...arr[di], nivel: targetNivel };
+      arr.splice(di, 1);
+      if (targetId) {
+        const ti = arr.findIndex(s => s.id === targetId);
+        arr.splice(ti >= 0 ? ti : arr.length, 0, dragged);
+      } else {
+        arr.push(dragged);
+      }
+      return arr;
+    });
+  };
 
   const carregar = useCallback(async () => {
     setCarregando(true);
@@ -926,7 +946,11 @@ function AbaDRE() {
                   }`}
                   onDragOver={e => { e.preventDefault(); setDropAlvo(n); }}
                   onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropAlvo(null); }}
-                  onDrop={e => { e.preventDefault(); setDropAlvo(null); if (dragId.current) moverSecao(dragId.current, n); }}>
+                  onDrop={e => {
+                    e.preventDefault(); setDropAlvo(null);
+                    if (dragId.current) reordenarOuMover(dragId.current, dropCardId.current, n);
+                    dropCardId.current = null;
+                  }}>
                   <p className={`text-[10px] font-black uppercase tracking-widest mb-2 flex items-center gap-1.5 ${c.titulo}`}>
                     Nível {n}
                     {nivelAtivo === n && <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${c.badge} text-white font-black`}>ativo</span>}
@@ -936,10 +960,28 @@ function AbaDRE() {
                       <div key={s.id}
                         draggable
                         onDragStart={e => { e.dataTransfer.effectAllowed = 'move'; dragId.current = s.id; }}
-                        onDragEnd={() => { dragId.current = null; setDropAlvo(null); }}
-                        className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border ${c.card} cursor-grab active:cursor-grabbing select-none text-[11px] font-bold text-slate-700 dark:text-slate-200 shadow-sm`}>
-                        <span className="text-slate-400 dark:text-slate-500 text-sm leading-none">⠿</span>
-                        {s.label}
+                        onDragEnd={() => { dragId.current = null; dropCardId.current = null; setDropAlvo(null); }}
+                        onDragOver={e => { e.preventDefault(); e.stopPropagation(); dropCardId.current = s.id; }}
+                        onDrop={e => {
+                          e.preventDefault(); e.stopPropagation();
+                          setDropAlvo(null);
+                          if (dragId.current && dragId.current !== s.id)
+                            reordenarOuMover(dragId.current, s.id, n);
+                        }}
+                        className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border ${
+                          s.oculto
+                            ? 'opacity-40 ' + c.card
+                            : c.card
+                        } cursor-grab active:cursor-grabbing select-none text-[11px] font-bold text-slate-700 dark:text-slate-200 shadow-sm`}>
+                        <span className="text-slate-400 dark:text-slate-500 text-sm leading-none flex-shrink-0">⠿</span>
+                        <span className="flex-1 truncate">{s.label}</span>
+                        <button
+                          type="button"
+                          onClick={e => { e.stopPropagation(); toggleOculto(s.id); }}
+                          title={s.oculto ? 'Mostrar no DRE' : 'Ocultar no DRE'}
+                          className="flex-shrink-0 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors">
+                          {s.oculto ? <EyeOff size={12} /> : <Eye size={12} />}
+                        </button>
                       </div>
                     ))}
                     {secoesDoNivel.length === 0 && (
