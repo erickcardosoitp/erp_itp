@@ -85,9 +85,9 @@ export default function NotificationBell() {
               toast(n.titulo, {
                 description: n.mensagem,
                 icon: React.createElement(cfg.icon, { size: 16, className: cfg.color }),
-                duration: 6000,
+                duration: 10_000,
                 action: link ? {
-                  label: 'Ver',
+                  label: 'Ver agora →',
                   onClick: () => router.push(link),
                 } : undefined,
               });
@@ -117,10 +117,10 @@ export default function NotificationBell() {
     }
   }, []);
 
-  // Polling a cada 30s para atualizar badge
+  // Polling a cada 10s para atualizar badge
   useEffect(() => {
     carregarContagem();
-    const timer = setInterval(carregarContagem, 30_000);
+    const timer = setInterval(carregarContagem, 10_000);
     return () => clearInterval(timer);
   }, [carregarContagem]);
 

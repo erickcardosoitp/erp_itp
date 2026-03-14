@@ -49,7 +49,7 @@ export default function ClientShell({ children }: { children: React.ReactNode })
           <div className="flex-1">{children}</div>
         </main>
 
-        <Toaster richColors />
+        <Toaster richColors position="top-right" expand visibleToasts={5} />
         <PwaInstall />
         <SettingsApplier />
       </ThemeProvider>
