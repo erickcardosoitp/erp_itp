@@ -126,7 +126,7 @@ export class RelatoriosService {
 
   /** Top doadores e evolução de doações */
   async relatorioDoacoes(data_ini: string, data_fim: string) {
-    const [resumo, mensal]: [any[], any[]] = await Promise.all([
+    const [resumo, mensal, contadoresDoadores]: [any[], any[], any[]] = await Promise.all([
       this.db.query(`
         SELECT
           nome,
@@ -149,12 +149,11 @@ export class RelatoriosService {
         GROUP BY mes
         ORDER BY mes
       `, [data_ini, data_fim]),
-    ]);
-
-    const [contadoresDoadores]: [any[]] = await Promise.all([
       this.db.query(`
-        SELECT COUNT(*) AS total_doadores FROM doadores WHERE ativo = true
-      `),
+        SELECT COUNT(DISTINCT nome) AS total_doadores
+        FROM movimentacoes_financeiras
+        WHERE categoria = 'Doação' AND data BETWEEN $1 AND $2
+      `, [data_ini, data_fim]),
     ]);
 
     return {
