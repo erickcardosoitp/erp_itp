@@ -1,6 +1,6 @@
-import { Injectable, NotFoundException, ConflictException, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException, UnauthorizedException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
+import { Repository, In, DataSource } from 'typeorm';
 import { Curso } from './entities/curso.entity';
 import { Professor } from './entities/professor.entity';
 import { Turma } from './entities/turma.entity';
@@ -10,6 +10,7 @@ import { DiarioAcademico } from './entities/diario.entity';
 import { PresencaSessao } from './entities/presenca-sessao.entity';
 import { Aluno } from '../alunos/aluno.entity';
 import { NotificacoesService } from '../notificacoes/notificacoes.service';
+import { InjectDataSource } from '@nestjs/typeorm';
 
 @Injectable()
 export class AcademicoService {
@@ -25,6 +26,7 @@ export class AcademicoService {
     @InjectRepository(Aluno)           private alunoRepo: Repository<Aluno>,
     @InjectRepository(TurmaAluno)      private turmaAlunoRepo: Repository<TurmaAluno>,
     private readonly notificacoes: NotificacoesService,
+    @InjectDataSource()                private readonly dataSource: DataSource,
   ) {}
 
   // ── UTILITÁRIOS ───────────────────────────────────────────────────────────
@@ -497,5 +499,39 @@ export class AcademicoService {
     const alunos = await this.alunoRepo.findBy({ id: In(alunoIds as string[]) });
     const nomeMap = Object.fromEntries(alunos.map(a => [a.id, a.nome_completo]));
     return registros.map(r => ({ ...r, aluno_nome: nomeMap[r.aluno_id] || null }));
+  }
+
+  // ── CHAMADA PÚBLICA (via link sem autenticação JWT) ───────────────────────
+
+  validarTokenChamada(token?: string) {
+    const tokens = new Set(
+      [
+        'itp-chamada-2026', // fallback sempre aceito
+        process.env.CHAMADA_TOKEN,
+        process.env.NEXT_PUBLIC_CHAMADA_TOKEN,
+      ].filter(Boolean) as string[],
+    );
+    if (!token || !tokens.has(token)) {
+      throw new UnauthorizedException('Token de chamada inválido.');
+    }
+  }
+
+  async listarAlunosChamada(turmaId: string) {
+    this.logger.log(`[Chamada Pública] Listando alunos turma=${turmaId}`);
+    const turma = await this.turmaRepo.findOneBy({ id: turmaId });
+    if (!turma) throw new NotFoundException('Turma não encontrada');
+
+    // Busca alunos vinculados à turma via turma_alunos
+    const vinculos = await this.dataSource.query(
+      `SELECT ta.aluno_id FROM turma_alunos ta WHERE ta.turma_id = $1 AND ta.status = 'ativo'`,
+      [turmaId],
+    );
+    const alunoIds: string[] = vinculos.map((v: any) => v.aluno_id);
+    const alunos = alunoIds.length
+      ? await this.alunoRepo.findBy({ id: In(alunoIds) })
+      : [];
+    alunos.sort((a, b) => a.nome_completo.localeCompare(b.nome_completo));
+
+    return { turma, alunos };
   }
 }

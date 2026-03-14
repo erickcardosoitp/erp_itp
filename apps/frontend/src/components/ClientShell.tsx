@@ -16,6 +16,7 @@ export default function ClientShell({ children }: { children: React.ReactNode })
   const isPublicPage = pathname === '/login'
     || pathname?.startsWith('/lgpd')
     || pathname?.startsWith('/estoque/coletor')
+    || pathname?.startsWith('/academico/chamada')
     || pathname?.startsWith('/esqueci-senha')
     || pathname?.startsWith('/reset-senha')
     || pathname?.startsWith('/trocar-senha');
@@ -53,7 +54,7 @@ export default function ClientShell({ children }: { children: React.ReactNode })
         <main
           className={`flex-1 flex flex-col transition-all duration-300 w-full ${
             !isPublicPage
-              ? `lg:${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`
+              ? isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'
               : ''
           }`}
         >

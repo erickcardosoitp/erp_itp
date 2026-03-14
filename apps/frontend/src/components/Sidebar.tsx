@@ -92,17 +92,10 @@ export default function Sidebar({ isCollapsed, setIsCollapsed, mobileOpen, setMo
   };
 
   return (
-    <aside 
+    <aside
       className={`fixed left-0 top-0 h-screen text-white flex flex-col shadow-2xl transition-all duration-300 z-50
-        ${
-          /* desktop: recolhida ou expandida */
-          `lg:${isCollapsed ? 'w-20' : 'w-64'}`
-        }
-        /* mobile: drawer slide-in */
-        w-72
-        ${
-          mobileOpen ? 'translate-x-0' : '-translate-x-full'
-        } lg:translate-x-0
+        w-72 ${isCollapsed ? 'lg:w-20' : 'lg:w-64'}
+        ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0
       `}
       style={{ backgroundColor: '#1a0b2e' }}
     >

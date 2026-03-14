@@ -13,6 +13,35 @@ export class AcademicoController {
   private readonly logger = new Logger(AcademicoController.name);
   constructor(private readonly svc: AcademicoService) {}
 
+  // ── CHAMADA PÚBLICA (via link, sem autenticação JWT) ─────────────────────
+
+  @Public()
+  @Get('chamada/alunos')
+  async getAlunosChamada(
+    @Query('token') token: string,
+    @Query('turma_id') turmaId: string,
+  ) {
+    this.svc.validarTokenChamada(token);
+    return this.svc.listarAlunosChamada(turmaId);
+  }
+
+  @Public()
+  @Post('chamada')
+  async salvarChamada(@Body() dto: any) {
+    this.svc.validarTokenChamada(dto.token);
+    return this.svc.criarSessaoComPresenca(
+      {
+        turma_id:          dto.turma_id,
+        data:              dto.data,
+        tema_aula:         dto.tema_aula,
+        conteudo_abordado: dto.conteudo_abordado,
+        registros:         dto.registros,
+      },
+      undefined,
+      dto.professor_nome || 'Chamada via link',
+    );
+  }
+
   // ── CURSOS ────────────────────────────────────────────────────────────────
   @Get('cursos')
   getCursos() { return this.svc.listarCursos(); }

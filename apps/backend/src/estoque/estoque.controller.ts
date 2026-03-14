@@ -121,12 +121,16 @@ export class EstoqueController {
   }
 
   private validarTokenColetor(token?: string) {
-    // Aceita COLETOR_TOKEN ou NEXT_PUBLIC_COLETOR_TOKEN; fallback para valor padrão
-    const esperado =
-      process.env.COLETOR_TOKEN ||
-      process.env.NEXT_PUBLIC_COLETOR_TOKEN ||
-      'itp-coletor-2026';
-    if (!token || token !== esperado) {
+    // Aceita o token do env var E o token padrão para evitar falha quando
+    // COLETOR_TOKEN está definido com valor diferente em algum ambiente
+    const tokens = new Set(
+      [
+        'itp-coletor-2026', // sempre aceito como fallback
+        process.env.COLETOR_TOKEN,
+        process.env.NEXT_PUBLIC_COLETOR_TOKEN,
+      ].filter(Boolean) as string[],
+    );
+    if (!token || !tokens.has(token)) {
       throw new UnauthorizedException('Token de coletor inválido.');
     }
   }

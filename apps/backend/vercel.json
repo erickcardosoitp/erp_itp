@@ -2,6 +2,12 @@
   "version": 2,
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
+  "env": {
+    "COLETOR_TOKEN": "itp-coletor-2026",
+    "NEXT_PUBLIC_COLETOR_TOKEN": "itp-coletor-2026",
+    "CHAMADA_TOKEN": "itp-chamada-2026",
+    "NEXT_PUBLIC_CHAMADA_TOKEN": "itp-chamada-2026"
+  },
   "functions": {
     "api/server.js": {
       "memory": 1024,

@@ -48,6 +48,7 @@ export function middleware(request: NextRequest) {
 
   // ── Rotas sempre públicas ─────────────────────────────────────────────────
   if (pathname.startsWith('/estoque/coletor')) return NextResponse.next();
+  if (pathname.startsWith('/academico/chamada')) return NextResponse.next();
   if (pathname.startsWith('/esqueci-senha'))   return NextResponse.next();
   if (pathname.startsWith('/reset-senha'))     return NextResponse.next();
   if (pathname.startsWith('/lgpd'))            return NextResponse.next();

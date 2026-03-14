@@ -5,7 +5,7 @@ import {
   GraduationCap, Users, BookOpen, LayoutGrid, History,
   Plus, Trash2, Search, X, ClipboardList,
   Edit3, Coffee, UserPlus, RefreshCw, ClipboardCheck, CheckSquare, Square,
-  ChevronDown, ChevronUp, FileText, Eye,
+  ChevronDown, ChevronUp, FileText, Eye, Smartphone, Copy, Check,
 } from 'lucide-react';
 import api from '@/services/api';
 import { useAuth } from '@/context/auth-context';
@@ -934,6 +934,7 @@ function PresencaTab({ turmas, podeEditar }: { turmas: Turma[]; podeEditar: bool
   const [carregandoAlunos, setCarregandoAlunos] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [erroModal, setErroModal] = useState<string | null>(null);
+  const [linkCopiado, setLinkCopiado] = useState(false);
 
   const carregarHistorico = useCallback(async () => {
     setCarregandoHist(true);
@@ -983,6 +984,17 @@ function PresencaTab({ turmas, podeEditar }: { turmas: Turma[]; podeEditar: bool
       setEtapa(2);
     } catch { setErroModal('Erro ao carregar alunos da turma.'); }
     setCarregandoAlunos(false);
+  };
+
+  const gerarLinkChamada = () => {
+    if (!formSessao.turma_id)        { setErroModal('Selecione uma turma.');     return; }
+    if (!formSessao.data)            { setErroModal('Informe a data da aula.'); return; }
+    if (!formSessao.tema_aula.trim()) { setErroModal('Informe o tema da aula.'); return; }
+    const chamadaToken = process.env.NEXT_PUBLIC_CHAMADA_TOKEN || 'itp-chamada-2026';
+    const url = `${window.location.origin}/academico/chamada?token=${chamadaToken}&turma_id=${formSessao.turma_id}&data=${formSessao.data}&tema_aula=${encodeURIComponent(formSessao.tema_aula)}&conteudo_abordado=${encodeURIComponent(formSessao.conteudo_abordado)}`;
+    navigator.clipboard.writeText(url).catch(() => window.open(url, '_blank'));
+    setLinkCopiado(true);
+    setTimeout(() => setLinkCopiado(false), 3000);
   };
 
   const salvarLista = async () => {
@@ -1190,10 +1202,22 @@ function PresencaTab({ turmas, podeEditar }: { turmas: Turma[]; podeEditar: bool
                       rows={4}
                       className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 resize-none" />
                   </div>
-                  <button onClick={avancarParaChamada} disabled={carregandoAlunos}
-                    className="w-full bg-purple-600 text-white py-2.5 rounded-xl font-black text-xs uppercase hover:bg-purple-700 disabled:opacity-50">
-                    {carregandoAlunos ? 'Carregando alunos...' : 'Iniciar Chamada →'}
-                  </button>
+                  <div className="flex flex-col gap-2">
+                    <button onClick={avancarParaChamada} disabled={carregandoAlunos}
+                      className="w-full bg-purple-600 text-white py-2.5 rounded-xl font-black text-xs uppercase hover:bg-purple-700 disabled:opacity-50">
+                      {carregandoAlunos ? 'Carregando alunos...' : 'Iniciar Chamada →'}
+                    </button>
+                    <button onClick={gerarLinkChamada}
+                      className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl font-black text-xs uppercase border transition-all ${
+                        linkCopiado
+                          ? 'bg-green-50 border-green-300 text-green-700'
+                          : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-purple-50 hover:border-purple-300 hover:text-purple-600'
+                      }`}>
+                      {linkCopiado
+                        ? <><Check size={13}/> Link copiado!</>
+                        : <><Smartphone size={13}/> <Copy size={11}/> Abrir Chamada no Celular</>}
+                    </button>
+                  </div>
                 </div>
               )}
 
