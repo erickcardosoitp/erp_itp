@@ -28,6 +28,11 @@ interface Movimentacao {
 
 interface LookupItem { id: string; nome: string; ativo?: boolean; }
 
+// Form usa valor como string para permitir digitação com decimais
+interface FormMovimentacao extends Omit<Partial<Movimentacao>, 'valor'> {
+  valor?: string;
+}
+
 // ─── Helpers de formatação ────────────────────────────────────────────────────
 
 function moeda(v?: number | string) {
@@ -50,7 +55,7 @@ export default function FinanceiroPage() {
   const [erro, setErro] = useState('');
   const [busca, setBusca] = useState('');
   const [modal, setModal] = useState<{ aberto: boolean; editando: Movimentacao | null }>({ aberto: false, editando: null });
-  const [form, setForm] = useState<Partial<Movimentacao>>({ status: 'Pendente' });
+  const [form, setForm] = useState<FormMovimentacao>({ status: 'Pendente' });
   const [salvando, setSalvando] = useState(false);
 
   // Lookups
