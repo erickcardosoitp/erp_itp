@@ -13,7 +13,7 @@ export class FuncionariosService {
   constructor(
     @InjectRepository(Funcionario) private funcionarioRepo: Repository<Funcionario>,
     @InjectRepository(Usuario) private usuarioRepo: Repository<Usuario>,
-    private readonly emailService: EmailService,
+    public readonly emailService: EmailService,
     private readonly notificacoesService: NotificacoesService,
   ) {}
 
@@ -34,6 +34,13 @@ export class FuncionariosService {
     const funcionario = this.funcionarioRepo.create({ ...dto, matricula });
     const salvo = await this.funcionarioRepo.save(funcionario);
     this.logger.log(`Funcionário criado: ${salvo.id} - ${salvo.nome} | Matrícula: ${matricula}`);
+
+    if (salvo.email) {
+      this.emailService
+        .enviarConfirmacaoCadastroFuncionario(salvo.email, salvo.nome, salvo.matricula)
+        .catch(err => this.logger.error(`Erro e-mail confirmação funcionário: ${err.message}`));
+    }
+
     return salvo;
   }
 
