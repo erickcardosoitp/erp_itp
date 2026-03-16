@@ -10,7 +10,7 @@ export class TurmaAluno {
   turma_id: string | null;
 
   /** null quando tipo_vinculo = 'candidato' */
-  @Column({ name: 'aluno_id', nullable: true })
+ @Column({ name: 'aluno_id', type: 'varchar', nullable: true })
   aluno_id: string | null;
 
   /** ID da Inscricao quando tipo_vinculo = 'candidato' */
