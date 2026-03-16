@@ -9,7 +9,7 @@
     "NEXT_PUBLIC_CHAMADA_TOKEN": "itp-chamada-2026"
   },
   "functions": {
-    "api/server.js": {
+    "api/main.js": {
       "memory": 1024,
       "maxDuration": 30,
       "includeFiles": "dist/**"
@@ -31,7 +31,7 @@
     },
     {
       "src": "/(.*)",
-      "dest": "/api/server.js"
+      "dest": "/api/main.js"
     }
   ],
   "crons": [
