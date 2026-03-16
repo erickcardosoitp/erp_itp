@@ -31,17 +31,23 @@ export class FuncionariosService {
     const seq = String(total + 1).padStart(3, '0');
     const matricula = `ITP-FUNC-${yyyymm}-${seq}`;
 
-    const funcionario = this.funcionarioRepo.create({ ...dto, matricula });
-    const salvo = await this.funcionarioRepo.save(funcionario);
-    this.logger.log(`Funcionário criado: ${salvo.id} - ${salvo.nome} | Matrícula: ${matricula}`);
+    try {
+      const funcionario = this.funcionarioRepo.create({ ...dto, matricula });
+      const salvo = await this.funcionarioRepo.save(funcionario);
+      this.logger.log(`Funcionário criado: ${salvo.id} - ${salvo.nome} | Matrícula: ${matricula}`);
 
-    if (salvo.email) {
-      this.emailService
-        .enviarConfirmacaoCadastroFuncionario(salvo.email, salvo.nome, salvo.matricula)
-        .catch(err => this.logger.error(`Erro e-mail confirmação funcionário: ${err.message}`));
+      if (salvo.email) {
+        this.emailService
+          .enviarConfirmacaoCadastroFuncionario(salvo.email, salvo.nome, salvo.matricula)
+          .catch(err => this.logger.error(`Erro e-mail confirmação funcionário: ${err.message}`));
+      }
+
+      return salvo;
+    } catch (err: any) {
+      this.logger.error(`Erro ao salvar funcionário: ${err.message}`, err.stack);
+      throw new BadRequestException('Erro ao salvar funcionário: ' + err.message);
     }
-
-    return salvo;
+    
   }
 
   /**
