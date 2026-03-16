@@ -5,28 +5,22 @@ export class TurmaAluno {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  /** null = backlog (sem turma definida) */
-  @Column({ name: 'turma_id', type: 'uuid', nullable: true })
+  @Column({ name: 'turma_id', type: 'varchar', nullable: true })
   turma_id: string | null;
 
-  /** null quando tipo_vinculo = 'candidato' */
- @Column({ name: 'aluno_id', type: 'varchar', nullable: true })
+  @Column({ name: 'aluno_id', type: 'varchar', nullable: true })
   aluno_id: string | null;
 
-  /** ID da Inscricao quando tipo_vinculo = 'candidato' */
   @Column({ name: 'inscricao_id', type: 'int', nullable: true })
   inscricao_id: number | null;
 
-  /** Nome do candidato (cache para exibição rápida) */
-  @Column({ name: 'nome_candidato', nullable: true })
+  @Column({ name: 'nome_candidato', type: 'varchar', nullable: true })
   nome_candidato: string | null;
 
-  /** 'aluno' | 'candidato' */
-  @Column({ name: 'tipo_vinculo', default: 'aluno' })
+  @Column({ name: 'tipo_vinculo', type: 'varchar', default: 'aluno' })
   tipo_vinculo: string;
 
-  /** 'backlog' | 'ativo' */
-  @Column({ default: 'backlog' })
+  @Column({ type: 'varchar', default: 'backlog' })
   status: string;
 
   @CreateDateColumn({ name: 'created_at' })
