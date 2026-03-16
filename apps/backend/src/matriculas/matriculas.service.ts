@@ -24,6 +24,16 @@ function safePublicPath(urlArquivo: string): string {
   return full;
 }
 
+/** Remove arquivo temporário (criado pelo multer) garantindo que o caminho fique dentro do dir de uploads. */
+function safeDeleteTempFile(filePath: string): void {
+  const uploadsBase = resolve(join(process.cwd(), 'public', 'uploads'));
+  const resolved = resolve(filePath);
+  if (!resolved.startsWith(uploadsBase + require('path').sep) && resolved !== uploadsBase) {
+    throw new Error('Tentativa de exclusão fora do diretório de uploads.');
+  }
+  if (existsSync(resolved)) unlinkSync(resolved);
+}
+
 /** Tipos obrigatórios que devem estar presentes para considerar o envio completo. */
 const TIPOS_OBRIGATORIOS = [
   TipoDocumento.FOTO_ALUNO,
@@ -721,8 +731,8 @@ export class MatriculasService {
 
     // Valida mimetype
     if (!MIMETYPES_ACEITOS.includes(file.mimetype)) {
-      // Remove arquivo já gravado pelo multer
-      if (existsSync(file.path)) unlinkSync(file.path);
+      // Remove arquivo já gravado pelo multer (valida path contra traversal)
+      safeDeleteTempFile(file.path);
       throw new BadRequestException(
         `Tipo de arquivo não permitido. Use JPEG, PNG, WebP ou PDF.`,
       );
@@ -730,7 +740,7 @@ export class MatriculasService {
 
     // Valida tamanho
     if (file.size > TAMANHO_MAX_BYTES) {
-      if (existsSync(file.path)) unlinkSync(file.path);
+      safeDeleteTempFile(file.path);
       throw new BadRequestException('Arquivo excede o limite de 8 MB.');
     }
 
@@ -752,7 +762,7 @@ export class MatriculasService {
         where: { inscricao_id: inscricao.id, tipo: TipoDocumento.EXTRA },
       });
       if (qtdExtra >= 5) {
-        if (existsSync(file.path)) unlinkSync(file.path);
+        safeDeleteTempFile(file.path);
         throw new BadRequestException('Limite de 5 documentos extras atingido.');
       }
     }

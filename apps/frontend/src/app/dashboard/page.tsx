@@ -30,19 +30,22 @@ export default function DashboardEstrategico() {
   const [alunos,       setAlunos]       = useState<any[]>([]);
   const [cursos,       setCursos]       = useState<any[]>([]);
   const [movimentacoes, setMovimentacoes] = useState<any[]>([]);
+  const [alertasCandidatos, setAlertasCandidatos] = useState<any[]>([]);
   const [carregando,   setCarregando]   = useState(false);
 
   const carregar = useCallback(async () => {
     setCarregando(true);
     try {
-      const [ra, rc, rm] = await Promise.allSettled([
+      const [ra, rc, rm, rca] = await Promise.allSettled([
         api.get('/academico/alunos'),
         api.get('/academico/cursos'),
         api.get('/financeiro/movimentacoes'),
+        api.get('/academico/presenca/alertas-candidatos'),
       ]);
       if (ra.status === 'fulfilled') setAlunos(ra.value.data ?? []);
       if (rc.status === 'fulfilled') setCursos(rc.value.data ?? []);
       if (rm.status === 'fulfilled') setMovimentacoes(rm.value.data ?? []);
+      if (rca.status === 'fulfilled') setAlertasCandidatos(rca.value.data ?? []);
     } catch { /* silencioso */ }
     setCarregando(false);
   }, []);
@@ -312,7 +315,15 @@ export default function DashboardEstrategico() {
                   msg={a.detalhes_cuidado || `Requer atenção especial: ${a.cuidado_especial}.`}
                 />
               ))}
-              {alunosInativos === 0 && alunos.filter(a => a.cuidado_especial && a.cuidado_especial !== 'Não').length === 0 && (
+              {alertasCandidatos.slice(0, 3).map((a: any) => (
+                <AlertItem 
+                  key={a.inscricao_id}
+                  name={a.pessoa_nome || `Candidato #${a.inscricao_id}`}
+                  bairro="Candidato"
+                  msg={`Presente em "${a.tema_aula || 'aula'}" em ${a.data ? new Date(a.data + 'T12:00:00').toLocaleDateString('pt-BR') : '–'}. ${a.turma_nome ? 'Turma: ' + a.turma_nome : ''}`}
+                />
+              ))}
+              {alunosInativos === 0 && alunos.filter(a => a.cuidado_especial && a.cuidado_especial !== 'Não').length === 0 && alertasCandidatos.length === 0 && (
                 <div className="bg-white/5 border border-white/10 p-4 rounded-3xl text-center">
                   <p className="text-sm text-slate-300 font-bold">Nenhum alerta no momento.</p>
                   <p className="text-[11px] text-slate-400 mt-1">Todos os alunos estão ativos.</p>

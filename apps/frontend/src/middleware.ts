@@ -58,7 +58,7 @@ export function middleware(request: NextRequest) {
   const privateRoutes = [
     '/dashboard', '/matriculas', '/academico', '/financeiro',
     '/cadastro',  '/config',     '/doacoes',   '/estoque', '/relatorios',
-    '/notificacoes',
+    '/notificacoes', '/chamada',
   ];
   const isPrivateRoute = privateRoutes.some(r => pathname.startsWith(r));
 

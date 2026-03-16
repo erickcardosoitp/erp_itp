@@ -26,6 +26,9 @@ export class PresencaSessao {
   @Column({ name: 'hora_fim', type: 'time', nullable: true })
   hora_fim: string;
 
+  @Column({ name: 'ip_address', nullable: true })
+  ip_address: string;
+
   @Column({ name: 'usuario_id', nullable: true })
   usuario_id: string;
 

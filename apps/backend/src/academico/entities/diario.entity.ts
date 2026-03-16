@@ -33,6 +33,14 @@ export class DiarioAcademico {
   @Column({ name: 'sessao_id', nullable: true })
   sessao_id: string;
 
+  /** ID da Inscricao (candidato sem matrícula) */
+  @Column({ name: 'inscricao_id', type: 'int', nullable: true })
+  inscricao_id: number | null;
+
+  /** Nome em cache quando inscricao_id está preenchido */
+  @Column({ name: 'pessoa_nome', nullable: true })
+  pessoa_nome: string | null;
+
   @CreateDateColumn({ name: 'created_at' })
   created_at: Date;
 }

@@ -72,7 +72,12 @@ function LoginForm() {
       if (data.deve_trocar_senha) {
         setTimeout(() => { window.location.href = '/trocar-senha'; }, 100);
       } else {
-        setTimeout(() => { window.location.href = '/dashboard'; }, 100);
+        const params = new URLSearchParams(window.location.search);
+        const callbackUrl = params.get('callbackUrl');
+        const dest = (callbackUrl && callbackUrl.startsWith('/') && !callbackUrl.startsWith('/login'))
+          ? callbackUrl
+          : '/dashboard';
+        setTimeout(() => { window.location.href = dest; }, 100);
       }
 
     } catch (err: any) {

@@ -197,8 +197,18 @@ export class AcademicoController {
 
   @Post('presenca/sessoes')
   criarSessao(@Body() dto: any, @Req() req: any) {
-    return this.svc.criarSessaoComPresenca(dto, req.user?.userId, req.user?.email);
+    const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip || req.connection?.remoteAddress;
+    return this.svc.criarSessaoComPresenca(dto, req.user?.userId, req.user?.email, ip);
   }
+
+  @Patch('presenca/sessoes/:id')
+  editarSessao(@Param('id') id: string, @Body() dto: any) { return this.svc.editarSessao(id, dto); }
+
+  @Delete('presenca/sessoes/:id')
+  estornarSessao(@Param('id') id: string) { return this.svc.estornarSessao(id); }
+
+  @Get('presenca/alertas-candidatos')
+  alertasCandidatos() { return this.svc.listarAlertasCandidatos(); }
 
   @Get('presenca/sessoes/:id/registros')
   getRegistrosSessao(@Param('id') id: string) { return this.svc.listarRegistrosSessao(id); }

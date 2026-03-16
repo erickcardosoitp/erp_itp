@@ -718,11 +718,15 @@ export class RelatoriosService {
       GROUP BY projeto, categoria ORDER BY projeto, total DESC
     `, [data_ini, data_fim]);
 
-    const map: Record<string, { projeto: string; total: number; categorias: {categoria:string;total:number;qtd:number}[] }> = {};
+    // Object.create(null) evita Prototype Pollution (CWE-1321) — nenhuma chave herdada do Object.prototype
+    const map: Record<string, { projeto: string; total: number; categorias: {categoria:string;total:number;qtd:number}[] }> = Object.create(null);
     for (const r of rows) {
-      if (!map[r.projeto]) map[r.projeto] = { projeto: r.projeto, total: 0, categorias: [] };
-      map[r.projeto].total += this.num(r.total);
-      map[r.projeto].categorias.push({ categoria: r.categoria, total: this.num(r.total), qtd: this.num(r.qtd) });
+      const chave = String(r.projeto ?? 'Sem projeto');
+      if (!Object.prototype.hasOwnProperty.call(map, chave)) {
+        map[chave] = { projeto: chave, total: 0, categorias: [] };
+      }
+      map[chave].total += this.num(r.total);
+      map[chave].categorias.push({ categoria: r.categoria, total: this.num(r.total), qtd: this.num(r.qtd) });
     }
     const total_geral = Object.values(map).reduce((s, p) => s + p.total, 0);
     return {

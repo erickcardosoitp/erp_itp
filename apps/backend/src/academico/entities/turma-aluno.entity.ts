@@ -9,8 +9,21 @@ export class TurmaAluno {
   @Column({ name: 'turma_id', type: 'uuid', nullable: true })
   turma_id: string | null;
 
-  @Column({ name: 'aluno_id' })
-  aluno_id: string;
+  /** null quando tipo_vinculo = 'candidato' */
+  @Column({ name: 'aluno_id', nullable: true })
+  aluno_id: string | null;
+
+  /** ID da Inscricao quando tipo_vinculo = 'candidato' */
+  @Column({ name: 'inscricao_id', type: 'int', nullable: true })
+  inscricao_id: number | null;
+
+  /** Nome do candidato (cache para exibição rápida) */
+  @Column({ name: 'nome_candidato', nullable: true })
+  nome_candidato: string | null;
+
+  /** 'aluno' | 'candidato' */
+  @Column({ name: 'tipo_vinculo', default: 'aluno' })
+  tipo_vinculo: string;
 
   /** 'backlog' | 'ativo' */
   @Column({ default: 'backlog' })

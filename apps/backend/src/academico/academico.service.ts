@@ -443,10 +443,11 @@ export class AcademicoService {
       hora_fim?: string;
       tema_aula?: string;
       conteudo_abordado?: string;
-      registros: { aluno_id: string; presente: boolean }[];
+      registros: { aluno_id?: string; inscricao_id?: number; pessoa_nome?: string; presente: boolean }[];
     },
     usuarioId?: string,
     usuarioNome?: string,
+    ipAddress?: string,
   ) {
     this.logger.log(`Criando sessão de presença turma=${dto.turma_id} data=${dto.data}`);
     if (!dto.turma_id)           throw new BadRequestException('turma_id é obrigatório');
@@ -471,13 +472,16 @@ export class AcademicoService {
       usuario_nome:      usuarioNome,
       total_presentes:   totalPresentes,
       total_ausentes:    totalAusentes,
+      ip_address:        ipAddress,
     }));
     this.logger.log(`Sessão criada id=${sessao.id}`);
 
     const entries = dto.registros.map(r =>
       this.diarioRepo.create({
         tipo:         'Presença',
-        aluno_id:     r.aluno_id,
+        aluno_id:     r.aluno_id   || undefined,
+        inscricao_id: r.inscricao_id || undefined,
+        pessoa_nome:  r.pessoa_nome  || undefined,
         turma_id:     dto.turma_id,
         data:         dto.data,
         descricao:    r.presente ? 'Presente' : 'Falta',
@@ -492,6 +496,35 @@ export class AcademicoService {
     return { sessao, registrados: entries.length };
   }
 
+  async editarSessao(id: string, dto: { tema_aula?: string; hora_inicio?: string; hora_fim?: string; conteudo_abordado?: string }) {
+    const sessao = await this.sessaoRepo.findOneBy({ id });
+    if (!sessao) throw new NotFoundException('Sessão não encontrada');
+    Object.assign(sessao, dto);
+    return this.sessaoRepo.save(sessao);
+  }
+
+  async estornarSessao(id: string) {
+    const sessao = await this.sessaoRepo.findOneBy({ id });
+    if (!sessao) throw new NotFoundException('Sessão não encontrada');
+    await this.diarioRepo.delete({ sessao_id: id });
+    await this.sessaoRepo.delete(id);
+    return { ok: true, id };
+  }
+
+  async listarAlertasCandidatos() {
+    const registros = await this.dataSource.query(`
+      SELECT d.inscricao_id, COALESCE(d.pessoa_nome, i.nome_completo, 'Candidato') AS candidato_nome,
+             d.data, ps.turma_nome, ps.id AS sessao_id
+      FROM diario_academico d
+      JOIN presenca_sessoes ps ON ps.id = d.sessao_id
+      LEFT JOIN inscricoes i   ON i.id   = d.inscricao_id
+      WHERE d.tipo = 'Presença' AND d.inscricao_id IS NOT NULL AND d.descricao = 'Presente'
+      ORDER BY d.data DESC
+      LIMIT 30
+    `);
+    return registros;
+  }
+
   async listarRegistrosSessao(sessaoId: string) {
     this.logger.log(`Listando registros da sessão id=${sessaoId}`);
     const registros = await this.diarioRepo.find({
@@ -499,10 +532,13 @@ export class AcademicoService {
       order: { aluno_id: 'ASC' },
     });
     const alunoIds = [...new Set(registros.map(r => r.aluno_id).filter(Boolean))];
-    if (!alunoIds.length) return registros;
-    const alunos = await this.alunoRepo.findBy({ id: In(alunoIds as string[]) });
+    const alunos = alunoIds.length ? await this.alunoRepo.findBy({ id: In(alunoIds as string[]) }) : [];
     const nomeMap = Object.fromEntries(alunos.map(a => [a.id, a.nome_completo]));
-    return registros.map(r => ({ ...r, aluno_nome: nomeMap[r.aluno_id] || null }));
+    return registros.map(r => ({
+      ...r,
+      aluno_nome: r.aluno_id ? (nomeMap[r.aluno_id] || null) : (r.pessoa_nome || null),
+      is_candidato: !r.aluno_id && !!r.inscricao_id,
+    }));
   }
 
   // ── CHAMADA PÚBLICA (via link sem autenticação JWT) ───────────────────────
@@ -521,21 +557,35 @@ export class AcademicoService {
   }
 
   async listarAlunosChamada(turmaId: string) {
-    this.logger.log(`[Chamada Pública] Listando alunos turma=${turmaId}`);
+    this.logger.log(`[Chamada] Listando alunos turma=${turmaId}`);
     const turma = await this.turmaRepo.findOneBy({ id: turmaId });
     if (!turma) throw new NotFoundException('Turma não encontrada');
 
-    // Busca alunos vinculados à turma via turma_alunos
     const vinculos = await this.dataSource.query(
-      `SELECT ta.aluno_id FROM turma_alunos ta WHERE ta.turma_id = $1 AND ta.status = 'ativo'`,
+      `SELECT ta.aluno_id, ta.inscricao_id, ta.nome_candidato, COALESCE(ta.tipo_vinculo, 'aluno') AS tipo_vinculo
+       FROM turma_alunos ta WHERE ta.turma_id = $1 AND ta.status = 'ativo'`,
       [turmaId],
     );
-    const alunoIds: string[] = vinculos.map((v: any) => v.aluno_id);
-    const alunos = alunoIds.length
-      ? await this.alunoRepo.findBy({ id: In(alunoIds) })
-      : [];
-    alunos.sort((a, b) => a.nome_completo.localeCompare(b.nome_completo));
 
-    return { turma, alunos };
+    const alunoIds = vinculos.filter((v: any) => v.aluno_id).map((v: any) => v.aluno_id);
+    const alunos = alunoIds.length ? await this.alunoRepo.findBy({ id: In(alunoIds) }) : [];
+    const alunoMap = Object.fromEntries(alunos.map(a => [a.id, a]));
+
+    const lista = vinculos.map((v: any) => {
+      if (v.tipo_vinculo === 'candidato' || (!v.aluno_id && v.inscricao_id)) {
+        return {
+          id: `candidato-${v.inscricao_id}`,
+          inscricao_id: v.inscricao_id,
+          nome_completo: v.nome_candidato || 'Candidato',
+          numero_matricula: null,
+          is_candidato: true,
+        };
+      }
+      const a = alunoMap[v.aluno_id];
+      return a ? { id: a.id, inscricao_id: null, nome_completo: a.nome_completo, numero_matricula: a.numero_matricula, is_candidato: false } : null;
+    }).filter(Boolean);
+
+    lista.sort((a: any, b: any) => a.nome_completo.localeCompare(b.nome_completo));
+    return { turma, alunos: lista };
   }
 }

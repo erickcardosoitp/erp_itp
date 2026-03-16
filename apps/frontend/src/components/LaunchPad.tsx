@@ -78,7 +78,7 @@ export default function LaunchPad() {
 
   // ── URL para QR code ──
   const loginUrl = typeof window !== 'undefined'
-    ? `${window.location.origin}/login`
+    ? `${window.location.origin}/chamada`
     : '';
 
   // Fechar ao clicar fora

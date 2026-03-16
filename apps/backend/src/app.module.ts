@@ -113,7 +113,8 @@ import { RelatoriosModule } from './relatorios/relatorios.module';
     MateriasController, 
     AuthController, 
     MatriculasController,
-    UsuariosController 
+    UsuariosController,
+    require('./funcionarios/funcionarios.controller').FuncionariosController
   ],
   providers: [
     AppService, 

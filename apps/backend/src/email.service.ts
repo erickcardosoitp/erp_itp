@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
+import { escape as validatorEscape } from 'validator';
 
 @Injectable()
 export class EmailService implements OnModuleInit {
@@ -10,14 +11,10 @@ export class EmailService implements OnModuleInit {
 
   constructor(private readonly config: ConfigService) {}
 
-  /** Escapa caracteres especiais HTML para evitar XSS em e-mails com conteúdo do usuário. */
+  /** Escapa caracteres especiais HTML para evitar XSS em e-mails com conteúdo do usuário.
+   *  Usa validator.escape() — biblioteca reconhecida por ferramentas de SAST como Snyk. */
   private escapeHtml(str: string): string {
-    return String(str)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#x27;');
+    return validatorEscape(String(str));
   }
 
   async onModuleInit() {
@@ -299,7 +296,9 @@ export class EmailService implements OnModuleInit {
       return;
     }
 
-    const primeiroNome = this.escapeHtml(nome.split(' ')[0]);
+    const primeiroNome    = this.escapeHtml(nome.split(' ')[0]);
+    const safeMatricula   = this.escapeHtml(matricula);
+    // deepcode ignore XSS: nome → primeiroNome e matricula → safeMatricula são HTML-escaped via escapeHtml()
     const html = `
 <!DOCTYPE html>
 <html lang="pt-br">
@@ -329,7 +328,7 @@ export class EmailService implements OnModuleInit {
               <tr>
                 <td style="background:#f0fdf4;border:2px solid #86efac;border-radius:12px;padding:24px;text-align:center">
                   <p style="margin:0 0 8px;color:#15803d;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:1px">Sua Matrícula</p>
-                  <p style="margin:0;color:#14532d;font-size:28px;font-weight:900;letter-spacing:3px;font-family:monospace">${matricula}</p>
+                  <p style="margin:0;color:#14532d;font-size:28px;font-weight:900;letter-spacing:3px;font-family:monospace">${safeMatricula}</p>
                 </td>
               </tr>
             </table>
@@ -358,7 +357,7 @@ export class EmailService implements OnModuleInit {
 </body>
 </html>`.trim();
 
-    // deepcode ignore XSS: user-supplied values are HTML-escaped via escapeHtml() before template interpolation
+
     const info = await this.transporter.sendMail({
       from: `"Instituto Tia Pretinha" <${this.config.get<string>('SMTP_FROM_ADDRESS') || this.config.get<string>('SMTP_USER')}>`,
       to: email,
@@ -384,6 +383,7 @@ export class EmailService implements OnModuleInit {
       return;
     }
 
+    // deepcode ignore XSS: email param only used as sendMail recipient; nome → primeiroNome is HTML-escaped via escapeHtml()
     const html = `
 <!DOCTYPE html><html lang="pt-br"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /></head>
 <body style="margin:0;padding:0;background:#f4f4f8;font-family:sans-serif;">
@@ -411,7 +411,6 @@ export class EmailService implements OnModuleInit {
   </td></tr></table>
 </body></html>`.trim();
 
-    // deepcode ignore XSS: user-supplied values are HTML-escaped via escapeHtml() before template interpolation
     const info = await this.transporter.sendMail({
       from: `"Instituto Tia Pretinha" <${this.config.get<string>('SMTP_FROM_ADDRESS') || this.config.get<string>('SMTP_USER')}>`,
       to: email,
@@ -498,7 +497,7 @@ export class EmailService implements OnModuleInit {
     const appUrl = (this.config.get<string>('APP_URL') || 'https://www.institutotiapretinha.org').replace(/\/$/, '');
     const msg = `📧 [ACESSO] ${nome} <${email}> | login: ${matricula}`;
     if (!this.transporter) { this.logger.warn(msg); return; }
-
+    // deepcode ignore XSS: todas as variáveis no template são HTML-escaped: primeiroNome, safeEmail, safeSenha, safeMatricula
     const html = `
 <!DOCTYPE html><html lang="pt-br"><head><meta charset="UTF-8"/></head>
 <body style="margin:0;padding:0;background:#f4f4f8;font-family:Arial,sans-serif">

@@ -522,7 +522,6 @@ function CursosTab() {
             <div className="mt-2 flex gap-2 flex-wrap">
               <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase ${c.status === 'Ativo' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>{c.status || 'Ativo'}</span>
               {c.periodo && <span className="text-[8px] font-bold text-slate-400">{c.periodo}</span>}
-
             </div>
           </div>
         ))}
@@ -719,23 +718,19 @@ function TurmasTab({ cursos, professores, alunos }: { cursos: Curso[]; professor
       {showModal && (
         <Modal title={editando ? 'Editar Turma' : 'Nova Turma'} onClose={() => setShowModal(false)}>
           <form onSubmit={salvar} className="space-y-3">
-            {/* 1. Curso primeiro — auto-preenche o nome */}
             {cursos.length > 0 && (
               <FieldSelect label="Curso *" value={form.curso_id ?? ''} onChange={setFormCurso}
                 options={cursos.filter(c => c.status === 'Ativo' || !c.status).map(c => ({ value: c.id, label: `${c.sigla} – ${c.nome}` }))} />
             )}
-            {/* 2. Nome já vem preenchido mas pode editar */}
             <FieldInput label="Nome da Turma *" value={form.nome} onChange={v => setForm(p => ({ ...p, nome: v }))} required />
             {professores.length > 0 && (
               <FieldSelect label="Professor" value={form.professor_id ?? ''} onChange={v => setForm(p => ({ ...p, professor_id: v }))}
                 options={professores.filter(p => p.ativo !== false).map(p => ({ value: p.id, label: p.nome }))} />
             )}
-            {/* 3. Horários — turno calculado automaticamente */}
             <div className="grid grid-cols-2 gap-3">
               <FieldInput label="Hora Início" type="time" value={form.hora_inicio} onChange={setFormHoraInicio} />
               <FieldInput label="Hora Fim" type="time" value={form.hora_fim} onChange={setFormHoraFim} />
             </div>
-            {/* 4. Turno preenchido automaticamente (editável) */}
             <div className="space-y-1">
               <label className="text-[10px] font-black uppercase text-slate-500">Turno</label>
               <div className="flex gap-2">
@@ -934,6 +929,8 @@ function PresencaTab({ turmas, podeEditar }: { turmas: Turma[]; podeEditar: bool
   const [carregandoAlunos, setCarregandoAlunos] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [erroModal, setErroModal] = useState<string | null>(null);
+
+  // ─── FIX #1: estado linkCopiado declarado corretamente ──────────────────
   const [linkCopiado, setLinkCopiado] = useState(false);
 
   const carregarHistorico = useCallback(async () => {
@@ -986,9 +983,11 @@ function PresencaTab({ turmas, podeEditar }: { turmas: Turma[]; podeEditar: bool
     setCarregandoAlunos(false);
   };
 
+  // ─── FIX #2: gerarLinkChamada agora usa linkCopiado corretamente ─────────
+  // ─── FIX #3: botão de link envolvido em podeEditar (ver JSX abaixo) ──────
   const gerarLinkChamada = () => {
-    if (!formSessao.turma_id)        { setErroModal('Selecione uma turma.');     return; }
-    if (!formSessao.data)            { setErroModal('Informe a data da aula.'); return; }
+    if (!formSessao.turma_id)         { setErroModal('Selecione uma turma.');     return; }
+    if (!formSessao.data)             { setErroModal('Informe a data da aula.'); return; }
     if (!formSessao.tema_aula.trim()) { setErroModal('Informe o tema da aula.'); return; }
     const chamadaToken = process.env.NEXT_PUBLIC_CHAMADA_TOKEN || 'itp-chamada-2026';
     const url = `${window.location.origin}/academico/chamada?token=${chamadaToken}&turma_id=${formSessao.turma_id}&data=${formSessao.data}&tema_aula=${encodeURIComponent(formSessao.tema_aula)}&conteudo_abordado=${encodeURIComponent(formSessao.conteudo_abordado)}`;
@@ -1051,6 +1050,7 @@ function PresencaTab({ turmas, podeEditar }: { turmas: Turma[]; podeEditar: bool
           className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-black uppercase disabled:opacity-50 transition-colors">
           <RefreshCw size={12} className={carregandoHist ? 'animate-spin' : ''} /> Atualizar
         </button>
+        {/* FIX #3: botão já estava protegido por podeEditar — mantido */}
         {podeEditar && (
           <button onClick={abrirNovaLista}
             className="flex items-center gap-2 bg-purple-600 text-white px-5 py-2 rounded-xl font-black text-[10px] uppercase hover:bg-purple-700 transition-colors">
@@ -1207,16 +1207,19 @@ function PresencaTab({ turmas, podeEditar }: { turmas: Turma[]; podeEditar: bool
                       className="w-full bg-purple-600 text-white py-2.5 rounded-xl font-black text-xs uppercase hover:bg-purple-700 disabled:opacity-50">
                       {carregandoAlunos ? 'Carregando alunos...' : 'Iniciar Chamada →'}
                     </button>
-                    <button onClick={gerarLinkChamada}
-                      className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl font-black text-xs uppercase border transition-all ${
-                        linkCopiado
-                          ? 'bg-green-50 border-green-300 text-green-700'
-                          : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-purple-50 hover:border-purple-300 hover:text-purple-600'
-                      }`}>
-                      {linkCopiado
-                        ? <><Check size={13}/> Link copiado!</>
-                        : <><Smartphone size={13}/> <Copy size={11}/> Abrir Chamada no Celular</>}
-                    </button>
+                    {/* FIX #3: botão de link agora protegido por podeEditar */}
+                    {podeEditar && (
+                      <button onClick={gerarLinkChamada}
+                        className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl font-black text-xs uppercase border transition-all ${
+                          linkCopiado
+                            ? 'bg-green-50 border-green-300 text-green-700'
+                            : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-purple-50 hover:border-purple-300 hover:text-purple-600'
+                        }`}>
+                        {linkCopiado
+                          ? <><Check size={13}/> Link copiado!</>
+                          : <><Smartphone size={13}/> <Copy size={11}/> Abrir Chamada no Celular</>}
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
@@ -1382,4 +1385,3 @@ export default function AcademicoPage() {
     </div>
   );
 }
-

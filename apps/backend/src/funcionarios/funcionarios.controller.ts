@@ -103,5 +103,24 @@ export class FuncionariosController {
     this.logger.log(`[Webhook Google Forms] Cadastrando funcionário: ${dto.nome}`);
     return this.svc.criarViaWebhook(dto);
   }
+
+  /**
+   * Endpoint temporário para testar envio de e-mail de confirmação de cadastro de funcionário.
+   * POST /funcionarios/test-email
+   */
+  @Post('test-email')
+  @Public()
+  async testEmail() {
+    const email = 'goncalvecardoso@gmail.com';
+    const nome = 'Teste Cardoso';
+    const matricula = 'ITP-FUNC-202603-999';
+    try {
+      await this.svc.emailService.enviarConfirmacaoCadastroFuncionario(email, nome, matricula);
+      return { ok: true, email, nome, matricula };
+    } catch (e) {
+      this.logger.error('Erro ao enviar e-mail de teste', (e as any)?.stack);
+      return { ok: false, error: (e as any)?.message };
+    }
+  }
 }
 

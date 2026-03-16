@@ -65,3 +65,5 @@ itp_frontend/out/
 # Produção
 build/
 itp_frontend/build/
+.vercel
+.env*.local
