@@ -12,6 +12,7 @@
     "baseUrl": "./",
     "incremental": true,
     "strictPropertyInitialization": false,
+    "downlevelIteration": true,
     "paths": {
       "@/*": ["src/*"]
     }
