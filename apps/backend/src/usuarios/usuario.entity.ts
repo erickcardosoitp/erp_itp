@@ -14,24 +14,24 @@ export class Usuario {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column()
+  @Column({ type: 'varchar' })
   nome: string;
 
   @Column({ type: 'varchar', unique: true, nullable: true })
   email: string | null;
 
-  @Column({ select: false }) // Proteção contra vazamento de hash
+  @Column({ type: 'varchar', select: false }) // Proteção contra vazamento de hash
   password: string;
 
   @Column({ type: 'varchar', default: 'assistente' }) 
   role: string;
 
   // ✅ Coluna física foto_url no Neon
-  @Column({ name: 'foto_url', nullable: true })
+  @Column({ name: 'foto_url', type: 'varchar', nullable: true })
   fotoUrl: string;
 
   // Matrícula do funcionário vinculado — usada também como identificador de login
-  @Column({ nullable: true, unique: true })
+  @Column({ type: 'varchar', nullable: true, unique: true })
   matricula: string;
 
   /** ID do funcionário vinculado a este usuário (quando admin cria login a partir do form) */
@@ -39,7 +39,7 @@ export class Usuario {
   funcionario_id: string;
 
   /** Se verdadeiro, o login bloqueia e força troca de senha na próxima autenticação */
-  @Column({ name: 'deve_trocar_senha', default: false })
+  @Column({ name: 'deve_trocar_senha', type: 'boolean', default: false })
   deve_trocar_senha: boolean;
 
   // ✅ Relação ManyToOne com Grupo

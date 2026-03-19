@@ -5,16 +5,16 @@ export class PresencaSessao {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'turma_id' })
+  @Column({ name: 'turma_id', type: 'uuid' })
   turma_id: string;
 
-  @Column({ name: 'turma_nome', nullable: true })
+  @Column({ name: 'turma_nome', type: 'varchar', nullable: true })
   turma_nome: string;
 
   @Column({ type: 'date' })
   data: string;
 
-  @Column({ name: 'tema_aula', nullable: true })
+  @Column({ name: 'tema_aula', type: 'varchar', nullable: true })
   tema_aula: string;
 
   @Column({ name: 'conteudo_abordado', type: 'text', nullable: true })
@@ -26,13 +26,13 @@ export class PresencaSessao {
   @Column({ name: 'hora_fim', type: 'time', nullable: true })
   hora_fim: string;
 
-  @Column({ name: 'ip_address', nullable: true })
+  @Column({ name: 'ip_address', type: 'varchar', nullable: true })
   ip_address: string;
 
-  @Column({ name: 'usuario_id', nullable: true })
+  @Column({ name: 'usuario_id', type: 'uuid', nullable: true })
   usuario_id: string;
 
-  @Column({ name: 'usuario_nome', nullable: true })
+  @Column({ name: 'usuario_nome', type: 'varchar', nullable: true })
   usuario_nome: string;
 
   @Column({ name: 'total_presentes', type: 'int', default: 0 })

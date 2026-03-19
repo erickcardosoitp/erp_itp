@@ -89,7 +89,7 @@ export class Funcionario {
   @Column({ type: 'boolean', nullable: true, default: false })
   interesse_cursos: boolean;
 
-  @Column({ nullable: true, default: true })
+  @Column({ type: 'boolean', nullable: true, default: true })
   ativo: boolean;
 
   @Column({ type: 'text', nullable: true, unique: true })

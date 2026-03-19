@@ -26,79 +26,79 @@ export class Inscricao {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ name: 'nome_completo' }) 
+  @Column({ name: 'nome_completo', type: 'varchar' }) 
   nome_completo: string;
 
-  @Column()
+  @Column({ type: 'varchar' })
   cpf: string;
 
-  @Column() 
+  @Column({ type: 'varchar' }) 
   email: string;
 
-  @Column() 
+  @Column({ type: 'varchar' }) 
   celular: string;
 
-  @Column({ name: 'data_nascimento', nullable: true }) 
+  @Column({ name: 'data_nascimento', type: 'date', nullable: true }) 
   data_nascimento: string;
 
   @Column({ name: 'idade', nullable: true, type: 'int' }) 
   idade: number; 
 
-  @Column({ name: 'sexo', nullable: true }) 
+  @Column({ name: 'sexo', type: 'varchar', nullable: true }) 
   sexo: string;
 
-  @Column({ name: 'escolaridade', nullable: true }) 
+  @Column({ name: 'escolaridade', type: 'varchar', nullable: true }) 
   escolaridade: string;
 
-  @Column({ name: 'turno_escolar', nullable: true }) 
+  @Column({ name: 'turno_escolar', type: 'varchar', nullable: true }) 
   turno_escolar: string;
 
-  @Column({ name: 'logradouro', nullable: true }) 
+  @Column({ name: 'logradouro', type: 'varchar', nullable: true }) 
   logradouro: string;
 
-  @Column({ name: 'numero', nullable: true }) 
+  @Column({ name: 'numero', type: 'varchar', nullable: true }) 
   numero: string;
 
-  @Column({ name: 'complemento', nullable: true }) 
+  @Column({ name: 'complemento', type: 'varchar', nullable: true }) 
   complemento: string;
 
-  @Column({ name: 'cidade', nullable: true }) 
+  @Column({ name: 'cidade', type: 'varchar', nullable: true }) 
   cidade: string;
 
-  @Column({ name: 'bairro', nullable: true }) 
+  @Column({ name: 'bairro', type: 'varchar', nullable: true }) 
   bairro: string;
 
-  @Column({ name: 'estado_uf', nullable: true }) 
+  @Column({ name: 'estado_uf', type: 'varchar', nullable: true }) 
   estado_uf: string;
 
-  @Column({ name: 'cep', nullable: true }) 
+  @Column({ name: 'cep', type: 'varchar', nullable: true }) 
   cep: string;
 
   @Column({ name: 'maior_18_anos', type: 'boolean', nullable: true }) 
   maior_18_anos: boolean;
 
-  @Column({ name: 'nome_responsavel', nullable: true }) 
+  @Column({ name: 'nome_responsavel', type: 'varchar', nullable: true }) 
   nome_responsavel: string;
 
-  @Column({ name: 'grau_parentesco', nullable: true }) 
+  @Column({ name: 'grau_parentesco', type: 'varchar', nullable: true }) 
   grau_parentesco: string;
 
-  @Column({ name: 'cpf_responsavel', nullable: true }) 
+  @Column({ name: 'cpf_responsavel', type: 'varchar', nullable: true }) 
   cpf_responsavel: string;
 
-  @Column({ name: 'telefone_alternativo', nullable: true }) 
+  @Column({ name: 'telefone_alternativo', type: 'varchar', nullable: true }) 
   telefone_alternativo: string;
 
-  @Column({ name: 'possui_alergias', nullable: true }) 
+  @Column({ name: 'possui_alergias', type: 'varchar', nullable: true }) 
   possui_alergias: string;
 
-  @Column({ name: 'cuidado_especial', nullable: true }) 
+  @Column({ name: 'cuidado_especial', type: 'varchar', nullable: true }) 
   cuidado_especial: string;
 
   @Column({ name: 'detalhes_cuidado', type: 'text', nullable: true }) 
   detalhes_cuidado: string;
 
-  @Column({ name: 'uso_medicamento', nullable: true }) 
+  @Column({ name: 'uso_medicamento', type: 'varchar', nullable: true }) 
   uso_medicamento: string;
 
   @Column({ name: 'cursos_desejados', type: 'text', nullable: true }) 
@@ -107,7 +107,7 @@ export class Inscricao {
   @Column({ name: 'autoriza_imagem', type: 'boolean', default: false }) 
   autoriza_imagem: boolean;
 
-  @Column({ name: 'nome_assinatura_imagem', nullable: true }) 
+  @Column({ name: 'nome_assinatura_imagem', type: 'varchar', nullable: true }) 
   nome_assinatura_imagem: string;
 
   @Column({ name: 'lgpd_aceito', type: 'boolean', default: false }) 
@@ -128,10 +128,10 @@ export class Inscricao {
   @Column({ name: 'motivo_status', type: 'text', nullable: true })
   motivo_status: string;
 
-  @Column({ name: 'url_documentos_zip', nullable: true }) 
+  @Column({ name: 'url_documentos_zip', type: 'varchar', nullable: true }) 
   url_documentos_zip: string;
 
-  @Column({ name: 'url_termo_lgpd', nullable: true }) 
+  @Column({ name: 'url_termo_lgpd', type: 'varchar', nullable: true }) 
   url_termo_lgpd: string;
 
   @Column({ name: 'lgpd_token', type: 'varchar', nullable: true })

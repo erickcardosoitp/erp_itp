@@ -15,24 +15,24 @@ export class GradeHoraria {
   @Column({ name: 'horario_fim', type: 'time' })
   horario_fim: string;
 
-  @Column({ name: 'materia_id', nullable: true })
+  @Column({ name: 'materia_id', type: 'uuid', nullable: true })
   materia_id: string;
 
-  @Column({ name: 'nome_curso', nullable: true })
+  @Column({ name: 'nome_curso', type: 'varchar', nullable: true })
   nome_curso: string;
 
-  @Column({ name: 'professor_id', nullable: true })
+  @Column({ name: 'professor_id', type: 'uuid', nullable: true })
   professor_id: string;
 
-  @Column({ name: 'nome_professor', nullable: true })
+  @Column({ name: 'nome_professor', type: 'varchar', nullable: true })
   nome_professor: string;
 
-  @Column({ name: 'turma_id', nullable: true })
+  @Column({ name: 'turma_id', type: 'uuid', nullable: true })
   turma_id: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   sala: string;
 
-  @Column({ default: '#7c3aed' })
+  @Column({ type: 'varchar', default: '#7c3aed' })
   cor: string;
 }

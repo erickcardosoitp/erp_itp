@@ -8,37 +8,37 @@ export class MovimentacaoFinanceira {
   @Column({ type: 'date', default: () => 'CURRENT_DATE' })
   data: string;
 
-  @Column()
+  @Column({ type: 'varchar' })
   nome: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   competencia: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   tipo_movimentacao: string;
 
   @Column({ nullable: true, type: 'text' })
   descricao: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   plano_contas: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   categoria: string;
 
-  @Column({ default: 'Pendente' })
+  @Column({ type: 'varchar', default: 'Pendente' })
   status: string;
 
   @Column({ type: 'numeric', precision: 15, scale: 2, default: 0 })
   valor: number;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   tipo_pessoa: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   forma_pagamento: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   recorrencia: string;
 
   @CreateDateColumn()

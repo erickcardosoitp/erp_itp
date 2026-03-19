@@ -5,10 +5,10 @@ export class Insumo {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column()
+  @Column({ type: 'varchar' })
   nome: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   categoria: string;
 
   @Column({ nullable: true, type: 'text' })
@@ -17,13 +17,13 @@ export class Insumo {
   @Column({ type: 'numeric', default: 0 })
   quantidade: number;
 
-  @Column({ default: 'un' })
+  @Column({ type: 'varchar', default: 'un' })
   unidade: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   fornecedor: string;
 
-  @Column({ default: 'ok' })
+  @Column({ type: 'varchar', default: 'ok' })
   status: string;
 
   @CreateDateColumn()

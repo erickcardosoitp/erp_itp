@@ -22,10 +22,10 @@ export class InscricaoAnotacao {
   @Column({ name: 'usuario_id', type: 'varchar', nullable: true })
   usuario_id: string | null;
 
-  @Column({ name: 'usuario_nome', nullable: true })
+  @Column({ name: 'usuario_nome', type: 'varchar', nullable: true })
   usuario_nome: string;
 
-  @Column({ name: 'usuario_foto', nullable: true })
+  @Column({ name: 'usuario_foto', type: 'varchar', nullable: true })
   usuario_foto: string;
 
   @CreateDateColumn({ name: 'created_at' })

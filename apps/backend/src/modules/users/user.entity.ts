@@ -5,16 +5,16 @@ export class User {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ unique: true })
+  @Column({ type: 'varchar', unique: true })
   username: string; // erick_cardoso
 
-  @Column({ unique: true })
+  @Column({ type: 'varchar', unique: true })
   email: string; // goncalvecardoso@gmail.com
 
-  @Column({ default: 'ADMIN' })
+  @Column({ type: 'varchar', default: 'ADMIN' })
   role: string;
 
-  @Column({ default: true })
+  @Column({ type: 'boolean', default: true })
   isActive: boolean;
 
   @CreateDateColumn()

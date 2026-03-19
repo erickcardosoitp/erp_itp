@@ -23,7 +23,7 @@ export class Produto {
   @Column({ name: 'codigo_interno', type: 'text', nullable: true, unique: true })
   codigo_interno: string | null;
 
-  @Column({ default: true })
+  @Column({ type: 'boolean', default: true })
   ativo: boolean;
 
   @CreateDateColumn()

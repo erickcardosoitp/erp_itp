@@ -6,31 +6,31 @@ export class Curso {
   id: string;
 
   /** Código único gerado automaticamente: CRS-YYYYMMX */
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   codigo: string;
 
-  @Column()
+  @Column({ type: 'varchar' })
   nome: string;
 
-  @Column({ unique: true })
+  @Column({ type: 'varchar', unique: true })
   sigla: string;
 
   @Column({ type: 'text', nullable: true })
   descricao: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   conceito: string;
 
-  @Column({ default: '2026.1' })
+  @Column({ type: 'varchar', default: '2026.1' })
   periodo: string;
 
-  @Column({ name: 'professor_id', nullable: true })
+  @Column({ name: 'professor_id', type: 'uuid', nullable: true })
   professor_id: string;
 
-  @Column({ default: 'Ativo' })
+  @Column({ type: 'varchar', default: 'Ativo' })
   status: string;
 
-  @Column({ default: 'Média' })
+  @Column({ type: 'varchar', default: 'Média' })
   prioridade: string;
 
   @Column({ type: 'decimal', precision: 5, scale: 2, default: 0 })

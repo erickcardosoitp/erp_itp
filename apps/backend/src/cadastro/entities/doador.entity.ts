@@ -5,28 +5,28 @@ export class Doador {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column()
+  @Column({ type: 'varchar' })
   nome: string;
 
-  @Column({ default: 'PF' })
+  @Column({ type: 'varchar', default: 'PF' })
   tipo: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   cpf_cnpj: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   email: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   telefone: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   cidade: string;
 
   @Column({ nullable: true, type: 'text' })
   observacoes: string;
 
-  @Column({ default: true })
+  @Column({ type: 'boolean', default: true })
   ativo: boolean;
 
   /** Código interno gerado automaticamente: ITP-DOAD-YYYYMM-NNN */

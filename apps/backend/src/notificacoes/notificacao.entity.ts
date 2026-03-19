@@ -19,7 +19,7 @@ export class Notificacao {
   @Column({ type: 'text' })
   mensagem: string;
 
-  @Column({ default: false })
+  @Column({ type: 'boolean', default: false })
   lida: boolean;
 
   /** ID da entidade relacionada (produto, aluno, etc.) */

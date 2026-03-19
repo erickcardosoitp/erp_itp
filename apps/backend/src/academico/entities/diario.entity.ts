@@ -6,31 +6,31 @@ export class DiarioAcademico {
   id: string;
 
   /** 'Avaliação' | 'Presença' | 'Incidente' | 'Observação' | 'Comunicado' */
-  @Column()
+  @Column({ type: 'varchar' })
   tipo: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   titulo: string;
 
   @Column({ type: 'text', nullable: true })
   descricao: string;
 
-  @Column({ name: 'aluno_id', nullable: true })
+  @Column({ name: 'aluno_id', type: 'uuid', nullable: true })
   aluno_id: string;
 
-  @Column({ name: 'turma_id', nullable: true })
+  @Column({ name: 'turma_id', type: 'uuid', nullable: true })
   turma_id: string;
 
   @Column({ type: 'date', default: () => 'CURRENT_DATE' })
   data: string;
 
-  @Column({ name: 'usuario_id', nullable: true })
+  @Column({ name: 'usuario_id', type: 'uuid', nullable: true })
   usuario_id: string;
 
-  @Column({ name: 'usuario_nome', nullable: true })
+  @Column({ name: 'usuario_nome', type: 'varchar', nullable: true })
   usuario_nome: string;
 
-  @Column({ name: 'sessao_id', nullable: true })
+  @Column({ name: 'sessao_id', type: 'uuid', nullable: true })
   sessao_id: string;
 
   /** ID da Inscricao (candidato sem matrícula) */
@@ -38,7 +38,7 @@ export class DiarioAcademico {
   inscricao_id: number | null;
 
   /** Nome em cache quando inscricao_id está preenchido */
-  @Column({ name: 'pessoa_nome', nullable: true })
+  @Column({ name: 'pessoa_nome', type: 'varchar', nullable: true })
   pessoa_nome: string | null;
 
   @CreateDateColumn({ name: 'created_at' })

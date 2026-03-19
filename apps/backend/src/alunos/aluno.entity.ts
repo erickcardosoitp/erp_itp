@@ -11,87 +11,87 @@ export class Aluno {
   id: string;
 
   /** ITP-YYYY-MMDDX  ex: ITP-2026-03081 */
-  @Column({ unique: true })
+  @Column({ type: 'varchar', unique: true })
   @Index()
   numero_matricula: string;
 
   // ── Identificação ────────────────────────────────────────────────
-  @Column()
+  @Column({ type: 'varchar' })
   nome_completo: string;
 
-  @Column({ unique: true, nullable: true })
+  @Column({ type: 'varchar', unique: true, nullable: true })
   cpf: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   email: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   celular: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'date', nullable: true })
   data_nascimento: string;
 
   @Column({ nullable: true, type: 'int' })
   idade: number;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   sexo: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   escolaridade: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   turno_escolar: string;
 
   // ── Endereço ─────────────────────────────────────────────────────
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   logradouro: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   numero: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   complemento: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   cidade: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   bairro: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   estado_uf: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   cep: string;
 
   // ── Responsável ──────────────────────────────────────────────────
   @Column({ type: 'boolean', nullable: true })
   maior_18_anos: boolean;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   nome_responsavel: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   grau_parentesco: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   cpf_responsavel: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   telefone_alternativo: string;
 
   // ── Saúde ────────────────────────────────────────────────────────
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   possui_alergias: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   cuidado_especial: string;
 
   @Column({ type: 'text', nullable: true })
   detalhes_cuidado: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   uso_medicamento: string;
 
   // ── Cursos ───────────────────────────────────────────────────────
@@ -107,7 +107,7 @@ export class Aluno {
   autoriza_imagem: boolean;
 
   // ── Status ───────────────────────────────────────────────────────
-  @Column({ default: true })
+  @Column({ type: 'boolean', default: true })
   ativo: boolean;
 
   @Column({ type: 'timestamp', nullable: true })

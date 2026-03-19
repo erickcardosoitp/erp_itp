@@ -19,15 +19,15 @@ export class InscricaoMovimentacao {
   @Column({ name: 'usuario_id', type: 'varchar', nullable: true })
   usuario_id: string | null;
 
-  @Column({ name: 'usuario_nome', nullable: true })
+  @Column({ name: 'usuario_nome', type: 'varchar', nullable: true })
   usuario_nome: string;
 
   // 'Edição', 'Status', 'Exclusão', etc.
-  @Column({ name: 'tipo' })
+  @Column({ name: 'tipo', type: 'varchar' })
   tipo: string;
 
   // Ex: 'status_matricula', 'nome_completo', etc.
-  @Column({ name: 'categoria', nullable: true })
+  @Column({ name: 'categoria', type: 'varchar', nullable: true })
   categoria: string;
 
   @Column({ name: 'valor_antes', type: 'text', nullable: true })

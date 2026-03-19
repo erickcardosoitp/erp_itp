@@ -5,13 +5,13 @@ export class TipoPessoa {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ unique: true })
+  @Column({ type: 'varchar', unique: true })
   nome: string;
 
   @Column({ nullable: true, type: 'text' })
   descricao: string;
 
-  @Column({ default: true })
+  @Column({ type: 'boolean', default: true })
   ativo: boolean;
 
   @CreateDateColumn()

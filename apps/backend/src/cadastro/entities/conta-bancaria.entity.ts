@@ -5,25 +5,25 @@ export class ContaBancaria {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column()
+  @Column({ type: 'varchar' })
   banco: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   agencia: string;
 
-  @Column()
+  @Column({ type: 'varchar' })
   conta: string;
 
-  @Column({ default: 'Corrente' })
+  @Column({ type: 'varchar', default: 'Corrente' })
   tipo: string;
 
-  @Column()
+  @Column({ type: 'varchar' })
   titular: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   pix: string;
 
-  @Column({ default: true })
+  @Column({ type: 'boolean', default: true })
   ativo: boolean;
 
   /** Código interno gerado automaticamente: ITP-BNCO-YYYYMM-NNN */

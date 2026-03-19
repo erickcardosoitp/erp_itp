@@ -12,25 +12,25 @@ export class Materia {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column()
+  @Column({ type: 'varchar' })
   nome: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   conceito: string;
 
-  @Column({ unique: true })
+  @Column({ type: 'varchar', unique: true })
   sigla: string;
 
   @Column({ type: 'enum', enum: Prioridade, default: Prioridade.MEDIA })
   prioridade: Prioridade;
 
-  @Column()
-  periodo: string; // Ex: '2026.1'
+  @Column({ type: 'varchar' }) // Ex: '2026.1'
+  periodo: string;
 
-  @Column({ name: 'professor_id', nullable: true })
+  @Column({ name: 'professor_id', type: 'uuid', nullable: true })
   professor: string;
 
-  @Column({ default: 'Pendente' })
+  @Column({ type: 'varchar', default: 'Pendente' })
   status: string; // Pendente, Em Curso, Concluída
 
   @Column({ type: 'decimal', precision: 5, scale: 2, default: 0 })
