@@ -81,4 +81,4 @@ export default async function handler(req: any, res: any) {
 // Executa o servidor em qualquer ambiente exceto Vercel (Railway, Render, local, etc.)
 if (!process.env.VERCEL) {
   bootstrapLocal();
-}
+}// Cache buster: 03/18/2026 23:26:57
