@@ -20,5 +20,6 @@ import { NotificacoesModule } from '../notificacoes/notificacoes.module';
   ],
   controllers: [AcademicoController],
   providers: [AcademicoService],
+  exports: [AcademicoService],
 })
 export class AcademicoModule {}

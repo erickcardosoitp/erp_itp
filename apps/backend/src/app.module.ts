@@ -25,6 +25,8 @@ import { InscricaoMovimentacao } from './matriculas/inscricao-movimentacao.entit
 import { Grupo } from './grupos/grupo.entity';
 import { DocumentoInscricao } from './matriculas/documento-inscricao.entity';
 import { TurmaAluno } from './academico/entities/turma-aluno.entity';
+import { Curso } from './academico/entities/curso.entity';
+import { Turma } from './academico/entities/turma.entity';
 
 // Services / Controllers
 import { MateriasService } from './materias/materias.service';
@@ -95,7 +97,7 @@ import { RelatoriosModule } from './relatorios/relatorios.module';
     }),
 
     // 4. Repositórios
-    TypeOrmModule.forFeature([Materia, Usuario, Aluno, Inscricao, InscricaoAnotacao, InscricaoMovimentacao, Grupo, DocumentoInscricao, TurmaAluno]),
+    TypeOrmModule.forFeature([Materia, Usuario, Aluno, Inscricao, InscricaoAnotacao, InscricaoMovimentacao, Grupo, DocumentoInscricao, TurmaAluno, Curso, Turma]),
     
     // 5. Módulos Encapsulados (Não adicione os services deles em providers!)
     GruposModule, 

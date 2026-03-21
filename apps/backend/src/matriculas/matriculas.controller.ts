@@ -58,14 +58,6 @@ export class MatriculasController {
     return await this.matriculasService.listarLocalidades();
   }
 
-  /**
-   * Retorna lista de cursos únicos extraídos de cursos_desejados das inscrições.
-   */
-  @Get('cursos-disponiveis')
-  @Roles(Role.CZNH)
-  async cursosDisponiveis() {
-    return await this.matriculasService.listarCursosDisponiveis();
-  }
 
   /**
    * Retorna cursos ATIVOS do módulo acadêmico com suas turmas ativas.
