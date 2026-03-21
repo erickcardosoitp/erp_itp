@@ -30,9 +30,8 @@ import { Turma } from './academico/entities/turma.entity';
 
 // Services / Controllers
 import { MateriasService } from './materias/materias.service';
-import { MatriculasService } from './matriculas/matriculas.service';
 import { MateriasController } from './materias/materias.controller';
-import { MatriculasController } from './matriculas/matriculas.controller';
+import { MatriculasModule } from './matriculas/matriculas.module';
 import { UsuariosController } from './usuarios/usuarios.controller'; 
 import { EmailService } from './email.service';
 
@@ -97,7 +96,7 @@ import { RelatoriosModule } from './relatorios/relatorios.module';
     }),
 
     // 4. Repositórios
-    TypeOrmModule.forFeature([Materia, Usuario, Aluno, Inscricao, InscricaoAnotacao, InscricaoMovimentacao, Grupo, DocumentoInscricao, TurmaAluno, Curso, Turma]),
+    TypeOrmModule.forFeature([Materia, Usuario, Aluno, Grupo, DocumentoInscricao]),
     
     // 5. Módulos Encapsulados (Não adicione os services deles em providers!)
     GruposModule, 
@@ -109,12 +108,12 @@ import { RelatoriosModule } from './relatorios/relatorios.module';
     EstoqueModule,
     NotificacoesModule,
     RelatoriosModule,
+    MatriculasModule,
   ],
   controllers: [
     AppController, 
     MateriasController, 
     AuthController, 
-    MatriculasController,
     UsuariosController,
     require('./funcionarios/funcionarios.controller').FuncionariosController
   ],
@@ -122,7 +121,6 @@ import { RelatoriosModule } from './relatorios/relatorios.module';
     AppService, 
     MateriasService, 
     AuthService, 
-    MatriculasService,
     EmailService,
     // O UsersService NÃO deve estar aqui, pois já está dentro do UsersModule
     JwtStrategy,
