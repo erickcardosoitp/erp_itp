@@ -107,7 +107,10 @@ export default function LaunchPad() {
       try {
         const r = await api.get('/academico/turmas');
         setTurmas(r.data.filter((t: any) => t.ativo !== false));
-      } catch { /* silencioso */ }
+      } catch (error) {
+        console.error("Erro ao carregar turmas:", error);
+        setErroModal('Erro ao carregar turmas. Tente novamente.');
+      }
       setCarregandoTurmas(false);
     }
   };
@@ -264,6 +267,10 @@ export default function LaunchPad() {
                 )}
                 {podeEstoque && (
                   <a
+                    // ATENÇÃO: NEXT_PUBLIC_COLETOR_TOKEN está exposto no frontend.
+                    // Se as operações que este token permite são sensíveis (ex: registrar baixa de produtos no estoque),
+                    // a lógica de uso do token (e o próprio token) deveria ser movida para o backend.
+                    // O frontend faria uma chamada autenticada ao backend, e o backend usaria o COLETOR_TOKEN de forma segura.
                     href={`/estoque/coletor?token=${process.env.NEXT_PUBLIC_COLETOR_TOKEN || 'itp-coletor-2026'}`}
                     target="_blank"
                     rel="noopener noreferrer"

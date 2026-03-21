@@ -80,28 +80,6 @@ export class MatriculasService {
   ) {}
 
   /**
-   * Retorna a lista canônica de cursos oferecidos pelo instituto.
-   */
-  async listarCursosDisponiveis(): Promise<string[]> {
-    return [
-      'Ballet Clássico',
-      'Beleza e Massagem',
-      'Capoeira',
-      'Dança do Ventre',
-      'Danças Contemporâneas',
-      'Futebol',
-      'Inglês',
-      'Informática',
-      'Jazz',
-      'Jiu-Jitsu',
-      'Música',
-      'Pré-Vestibular',
-      'Reforço Escolar',
-      'Vôlei',
-    ];
-  }
-
-  /**
    * Retorna cursos ativos do acadêmico com suas turmas ativas.
    * Usado para popular formulário de matrícula direta.
    */
@@ -608,24 +586,12 @@ export class MatriculasService {
         throw new BadRequestException('Candidato já possui matrícula ativa.');
       }
 
+      const hoje = new Date();
       const cursosFinal = cursosSelecionados?.length
         ? cursosSelecionados.join(', ')
         : inscricao.cursos_desejados ?? '';
 
-      // Gera número ITP-YYYY-MMDDX
-      const hoje = new Date();
-      const anoStr  = String(hoje.getFullYear());
-      const mesStr  = String(hoje.getMonth() + 1).padStart(2, '0');
-      const diaStr  = String(hoje.getDate()).padStart(2, '0');
-      // Conta alunos criados hoje para calcular X
-      const inicioHoje = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate(), 0, 0, 0);
-      const fimHoje    = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate(), 23, 59, 59);
-      const contaHoje  = await queryRunner.manager
-        .createQueryBuilder(Aluno, 'a')
-        .where('a.createdAt BETWEEN :ini AND :fim', { ini: inicioHoje, fim: fimHoje })
-        .getCount();
-      const seq = String(contaHoje + 1);
-      const numeroMatricula = `ITP-${anoStr}-${mesStr}${diaStr}${seq}`;
+      const numeroMatricula = await this.generateMatriculaNumber(queryRunner.manager);
 
       const novoAluno = queryRunner.manager.create(Aluno, {
         numero_matricula:    numeroMatricula,
@@ -705,6 +671,7 @@ export class MatriculasService {
     await queryRunner.startTransaction();
 
     try {
+      const hoje = new Date();
       // Validação de campos obrigatórios
       if (!dados.nome_completo?.trim()) throw new BadRequestException('Nome completo é obrigatório.');
       if (!dados.cpf?.trim()) throw new BadRequestException('CPF é obrigatório.');
@@ -728,19 +695,7 @@ export class MatriculasService {
         }
       }
 
-      // Gera número ITP-YYYY-MMDDX
-      const hoje = new Date();
-      const anoStr  = String(hoje.getFullYear());
-      const mesStr  = String(hoje.getMonth() + 1).padStart(2, '0');
-      const diaStr  = String(hoje.getDate()).padStart(2, '0');
-      const inicioHoje = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate(), 0, 0, 0);
-      const fimHoje    = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate(), 23, 59, 59);
-      const contaHoje  = await queryRunner.manager
-        .createQueryBuilder(Aluno, 'a')
-        .where('a.createdAt BETWEEN :ini AND :fim', { ini: inicioHoje, fim: fimHoje })
-        .getCount();
-      const seq = String(contaHoje + 1);
-      const numeroMatricula = `ITP-${anoStr}-${mesStr}${diaStr}${seq}`;
+      const numeroMatricula = await this.generateMatriculaNumber(queryRunner.manager);
 
       const novoAluno = queryRunner.manager.create(Aluno, {
         numero_matricula: numeroMatricula,
@@ -836,6 +791,23 @@ export class MatriculasService {
     }
   }
 
+  /**
+   * Helper para gerar o número de matrícula ITP-YYYY-MMDDX.
+   */
+  private async generateMatriculaNumber(manager: any): Promise<string> {
+    const hoje = new Date();
+    const anoStr = String(hoje.getFullYear());
+    const mesStr = String(hoje.getMonth() + 1).padStart(2, '0');
+    const diaStr = String(hoje.getDate()).padStart(2, '0');
+    const inicioHoje = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate(), 0, 0, 0);
+    const fimHoje = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate(), 23, 59, 59);
+    const contaHoje = await manager
+      .createQueryBuilder(Aluno, 'a')
+      .where('a.createdAt BETWEEN :ini AND :fim', { ini: inicioHoje, fim: fimHoje })
+      .getCount();
+    const seq = String(contaHoje + 1);
+    return `ITP-${anoStr}-${mesStr}${diaStr}${seq}`;
+  }
   // ── Documentos ───────────────────────────────────────────────────────────────
 
   /**
