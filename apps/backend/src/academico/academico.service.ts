@@ -60,6 +60,14 @@ export class AcademicoService {
     return this.cursoRepo.find({ order: { nome: 'ASC' } });
   }
 
+  listarCursosAtivos() {
+    this.logger.log('Listando cursos ativos');
+    return this.cursoRepo.find({ 
+      where: { status: 'Ativo' },
+      order: { nome: 'ASC' } 
+    });
+  }
+
   async criarCurso(dto: Partial<Curso>) {
     this.logger.log(`Criando curso: ${dto.nome} | sigla: ${dto.sigla}`);
     if (!dto.nome || !dto.sigla) throw new BadRequestException('Nome e sigla são obrigatórios');

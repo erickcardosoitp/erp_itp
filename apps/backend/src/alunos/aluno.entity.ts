@@ -73,6 +73,9 @@ export class Aluno {
   nome_responsavel: string;
 
   @Column({ type: 'varchar', nullable: true })
+  email_responsavel: string;
+
+  @Column({ type: 'varchar', nullable: true })
   grau_parentesco: string;
 
   @Column({ type: 'varchar', nullable: true })

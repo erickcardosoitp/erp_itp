@@ -80,6 +80,9 @@ export class Inscricao {
   @Column({ name: 'nome_responsavel', type: 'varchar', nullable: true }) 
   nome_responsavel: string;
 
+  @Column({ name: 'email_responsavel', type: 'varchar', nullable: true }) 
+  email_responsavel: string;
+
   @Column({ name: 'grau_parentesco', type: 'varchar', nullable: true }) 
   grau_parentesco: string;
 

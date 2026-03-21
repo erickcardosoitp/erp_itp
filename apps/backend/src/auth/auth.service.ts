@@ -149,6 +149,7 @@ export class AuthService {
     const usuario = await this.usuarioRepository.findOne({
       where: { id: userId },
       relations: ['grupo'],
+      select: ['id', 'nome', 'email', 'fotoUrl', 'matricula', 'role', 'deve_trocar_senha', 'createdAt', 'updatedAt', 'grupo'],
     });
 
     if (!usuario) {

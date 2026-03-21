@@ -160,6 +160,121 @@ export class EmailService implements OnModuleInit {
     }
   }
 
+  /**
+   * Envia termo LGPD ao responsável (quando aluno é menor de 18 anos)
+   */
+  async enviarTermoLGPDResponsavel(emailResponsavel: string, nomeResponsavel: string, nomeAluno: string, token: string): Promise<void> {
+    const appUrl = (this.config.get<string>('APP_URL') || 'http://localhost:3000').replace(/\/$/, '');
+    const link = `${appUrl}/lgpd/${token}`;
+
+    if (!this.transporter) {
+      this.logger.warn(`📧 [SEM-SMTP] Termo LGPD para responsável ${nomeResponsavel} <${emailResponsavel}>`);
+      this.logger.warn(`🔗 Link de assinatura: ${link}`);
+      return;
+    }
+
+    const primeiroNomeResp = this.escapeHtml(nomeResponsavel.split(' ')[0]);
+    const nomeAlunoEsc = this.escapeHtml(nomeAluno);
+    const html = `
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Termo LGPD – Instituto Tia Pretinha</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f6f9;font-family:Arial,sans-serif">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f9;padding:40px 20px">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,0.08)">
+        
+        <!-- Header -->
+        <tr>
+          <td style="background:#1e3a5f;padding:32px 40px;text-align:center">
+            <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:700">Instituto Tia Pretinha</h1>
+            <p style="margin:6px 0 0;color:#a8c4e0;font-size:14px">CNPJ nº 11.759.851/0001-39</p>
+          </td>
+        </tr>
+
+        <!-- Body -->
+        <tr>
+          <td style="padding:40px">
+            <p style="margin:0 0 16px;color:#374151;font-size:16px">Olá, <strong>${primeiroNomeResp}</strong>!</p>
+            <p style="margin:0 0 24px;color:#6b7280;font-size:15px;line-height:1.6">
+              O candidato(a) <strong>${nomeAlunoEsc}</strong>, seu(sua) filho(a), iniciou o processo de inscrição no Instituto Tia Pretinha.
+              <br><br>
+              Para avançar na matrícula, precisamos que você, como responsável legal, 
+              leia e assine eletronicamente o <strong>Termo de Autorização de Uso de Imagem, Voz e 
+              Tratamento de Dados Pessoais (LGPD)</strong>.
+            </p>
+
+            <!-- CTA Button -->
+            <table cellpadding="0" cellspacing="0" style="margin:0 auto 32px">
+              <tr>
+                <td style="background:#1e3a5f;border-radius:8px;padding:16px 36px;text-align:center">
+                  <a href="${link}" style="color:#ffffff;font-size:16px;font-weight:600;text-decoration:none;display:block">
+                    Assinar Termo LGPD
+                  </a>
+                </td>
+              </tr>
+            </table>
+
+            <p style="margin:0 0 8px;color:#6b7280;font-size:13px;text-align:center">
+              Ou copie e cole o link abaixo no seu navegador:
+            </p>
+            <p style="margin:0 0 32px;font-size:12px;word-break:break-all;text-align:center;color:#9ca3af">
+              ${link}
+            </p>
+
+            <!-- Info box -->
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="background:#fef9e7;border:1px solid #f59e0b;border-radius:8px;padding:16px">
+                  <p style="margin:0;color:#92400e;font-size:13px;line-height:1.6">
+                    ⏰ <strong>Este link é válido por 72 horas</strong> a partir do envio desta mensagem.<br>
+                    Se o prazo expirar, solicite um novo link à equipe do Instituto.
+                  </p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- Footer -->
+        <tr>
+          <td style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:24px 40px;text-align:center">
+            <p style="margin:0;color:#9ca3af;font-size:12px;line-height:1.6">
+              Este e-mail foi enviado automaticamente pelo sistema do Instituto Tia Pretinha.<br>
+              Se o candidato não se inscreveu, desconsidere esta mensagem.
+            </p>
+          </td>
+        </tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>
+    `.trim();
+
+    const info = await this.transporter.sendMail({
+      from: `"Instituto Tia Pretinha" <${this.config.get<string>('SMTP_FROM_ADDRESS') || this.config.get<string>('SMTP_USER')}>`  ,
+      to: emailResponsavel,
+      subject: '📋 Assinatura de Termo LGPD (Responsável) – Instituto Tia Pretinha',
+      html,
+    });
+
+    this.logger.log(`📧 E-mail LGPD enviado para responsável ${emailResponsavel} (aluno: ${nomeAlunoEsc})`);
+
+    if (this.isEthereal) {
+      const previewUrl = nodemailer.getTestMessageUrl(info);
+      this.logger.warn('─────────────────────────────────────────────────────');
+      this.logger.warn(`👁️  VISUALIZAR E-MAIL (Ethereal): ${previewUrl}`);
+      this.logger.warn(`🔗  Link de assinatura: ${link}`);
+      this.logger.warn('─────────────────────────────────────────────────────');
+    }
+  }
+
   async enviarLinkDocumentos(email: string, nome: string, token: string): Promise<void> {
     const appUrl = (this.config.get<string>('APP_URL') || 'http://localhost:3000').replace(/\/$/, '');
     const link = `${appUrl}/documentos/${token}`;

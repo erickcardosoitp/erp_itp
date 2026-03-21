@@ -50,11 +50,22 @@ function dataParaISO_(value) {
  */
 function campo_(r, chaves) {
   if (!Array.isArray(chaves)) chaves = [chaves];
+  if (!r || typeof r !== 'object') return null;
+  
+  // Tentativa exata primeiro
   for (var i = 0; i < chaves.length; i++) {
     var raw = r[chaves[i]];
     if (raw && raw[0]) return str_(raw[0]);
   }
-  var normalize = function(s) { return s.toLowerCase().replace(/[:\s]+$/, '').trim(); };
+  
+  // Fallback normalizado: lowercase, remove pontuação, replace spaces → underscore
+  var normalize = function(s) { 
+    return s.toLowerCase()
+      .replace(/[:\s]+$/g, '')  // remove : e espaços FINAIS
+      .replace(/\s+/g, '_')     // espaços → underscore
+      .trim(); 
+  };
+  
   var nks = chaves.map(normalize);
   for (var key in r) {
     var nk = normalize(key);
@@ -65,6 +76,7 @@ function campo_(r, chaves) {
       }
     }
   }
+  
   return null;
 }
 

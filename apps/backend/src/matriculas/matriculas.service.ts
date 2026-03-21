@@ -12,6 +12,9 @@ import { Aluno } from '../alunos/aluno.entity';
 import { Usuario } from '../usuarios/usuario.entity';
 import { EmailService } from '../email.service';
 import { TurmaAluno } from '../academico/entities/turma-aluno.entity';
+import { Curso } from '../academico/entities/curso.entity';
+import { Turma } from '../academico/entities/turma.entity';
+import { AcademicoService } from '../academico/academico.service';
 import { NotificacoesService } from '../notificacoes/notificacoes.service';
 
 /** Valida que o caminho de arquivo do banco não escapa do diretório público (path traversal). */
@@ -64,10 +67,15 @@ export class MatriculasService {
     private readonly documentoRepository: Repository<DocumentoInscricao>,
     @InjectRepository(Usuario)
     private readonly usuarioRepository: Repository<Usuario>,
+    @InjectRepository(Curso)
+    private readonly cursoRepository: Repository<Curso>,
+    @InjectRepository(Turma)
+    private readonly turmaRepository: Repository<Turma>,
     private readonly dataSource: DataSource,
     private readonly emailService: EmailService,
     @InjectRepository(TurmaAluno)
     private readonly turmaAlunoRepository: Repository<TurmaAluno>,
+    private readonly academicoService: AcademicoService,
     private readonly notificacoes: NotificacoesService,
   ) {}
 
@@ -91,6 +99,37 @@ export class MatriculasService {
       'Reforço Escolar',
       'Vôlei',
     ];
+  }
+
+  /**
+   * Retorna cursos ativos do acadêmico com suas turmas ativas.
+   * Usado para popular formulário de matrícula direta.
+   */
+  async obterCursosAtivosComTurmas(): Promise<Array<{ 
+    id: string; 
+    nome: string; 
+    sigla: string; 
+    turmas: Array<{ id: string; nome: string; codigo: string }> 
+  }>> {
+    const cursos = await this.cursoRepository.find({
+      where: { status: 'Ativo' },
+      order: { nome: 'ASC' }
+    });
+
+    const resultado = [];
+    for (const curso of cursos) {
+      const turmas = await this.turmaRepository.find({
+        where: { curso_id: curso.id, ativo: true },
+        order: { nome: 'ASC' }
+      });
+      resultado.push({
+        id: curso.id,
+        nome: curso.nome,
+        sigla: curso.sigla,
+        turmas: turmas.map(t => ({ id: t.id, nome: t.nome, codigo: t.codigo }))
+      });
+    }
+    return resultado;
   }
 
   /**
@@ -250,7 +289,20 @@ export class MatriculasService {
     this.emailService.enviarTermoLGPD(inscricao.email, inscricao.nome_completo, token)
       .catch(err => this.logger.error(`❌ Falha ao enviar e-mail LGPD: ${err.message}`));
 
-    this.logger.log(`📧 Termo LGPD disparado para: ${inscricao.nome_completo} <${inscricao.email}>`);
+    // Se menor de 18 anos E tem responsável, envia também ao responsável
+    if (!inscricao.maior_18_anos && inscricao.nome_responsavel && inscricao.email_responsavel) {
+      this.emailService.enviarTermoLGPDResponsavel(
+        inscricao.email_responsavel,
+        inscricao.nome_responsavel,
+        inscricao.nome_completo,
+        token
+      ).catch(err => this.logger.error(`❌ Falha ao enviar e-mail LGPD ao responsável: ${err.message}`));
+
+      this.logger.log(`📧 Termo LGPD disparado para: ${inscricao.nome_completo} <${inscricao.email}> e responsável ${inscricao.nome_responsavel} <${inscricao.email_responsavel}>`);
+    } else {
+      this.logger.log(`📧 Termo LGPD disparado para: ${inscricao.nome_completo} <${inscricao.email}>`);
+    }
+
     return salva;
   }
 
@@ -595,6 +647,7 @@ export class MatriculasService {
         cep:                 inscricao.cep,
         maior_18_anos:       inscricao.maior_18_anos,
         nome_responsavel:    inscricao.nome_responsavel,
+        email_responsavel:   inscricao.email_responsavel,
         grau_parentesco:     inscricao.grau_parentesco,
         cpf_responsavel:     inscricao.cpf_responsavel,
         telefone_alternativo:inscricao.telefone_alternativo,
@@ -636,6 +689,148 @@ export class MatriculasService {
       await queryRunner.rollbackTransaction();
       this.logger.error(`💥 Falha na transação de matrícula: ${err.message}`);
       throw new BadRequestException(err.message || 'Erro interno ao processar matrícula.');
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  /**
+   * Cria um aluno DIRETAMENTE, sem passar por todo o workflow de inscrição.
+   * Útil quando a matrícula é feita presencialmente ou em caso de exceção.
+   * Campos obrigatórios: nome_completo, cpf, email, celular, cursos_matriculados
+   */
+  async criarAlunoDireto(dados: Partial<any>): Promise<any> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // Validação de campos obrigatórios
+      if (!dados.nome_completo?.trim()) throw new BadRequestException('Nome completo é obrigatório.');
+      if (!dados.cpf?.trim()) throw new BadRequestException('CPF é obrigatório.');
+      if (!dados.email?.trim()) throw new BadRequestException('Email é obrigatório.');
+      if (!dados.celular?.trim()) throw new BadRequestException('Celular é obrigatório.');
+      
+      // Verifica se já existe aluno com esse CPF
+      const existente = await queryRunner.manager.findOne(Aluno, { where: { cpf: dados.cpf } });
+      if (existente) throw new BadRequestException(`CPF ${dados.cpf} já possui matrícula ativa.`);
+
+      // Processa cursos: busca os cursos selecionados se fornecidos
+      let descricaoCursos = 'A Definir';
+      const cursoIds = dados.curso_ids || [];
+      
+      if (cursoIds.length > 0) {
+        const cursosSelecionados = await queryRunner.manager.find(Curso, {
+          where: { id: In(cursoIds) }
+        });
+        if (cursosSelecionados.length > 0) {
+          descricaoCursos = cursosSelecionados.map(c => c.nome).join(', ');
+        }
+      }
+
+      // Gera número ITP-YYYY-MMDDX
+      const hoje = new Date();
+      const anoStr  = String(hoje.getFullYear());
+      const mesStr  = String(hoje.getMonth() + 1).padStart(2, '0');
+      const diaStr  = String(hoje.getDate()).padStart(2, '0');
+      const inicioHoje = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate(), 0, 0, 0);
+      const fimHoje    = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate(), 23, 59, 59);
+      const contaHoje  = await queryRunner.manager
+        .createQueryBuilder(Aluno, 'a')
+        .where('a.createdAt BETWEEN :ini AND :fim', { ini: inicioHoje, fim: fimHoje })
+        .getCount();
+      const seq = String(contaHoje + 1);
+      const numeroMatricula = `ITP-${anoStr}-${mesStr}${diaStr}${seq}`;
+
+      const novoAluno = queryRunner.manager.create(Aluno, {
+        numero_matricula: numeroMatricula,
+        nome_completo: dados.nome_completo,
+        cpf: dados.cpf,
+        email: dados.email,
+        celular: dados.celular,
+        data_nascimento: dados.data_nascimento || null,
+        idade: dados.idade || null,
+        sexo: dados.sexo || null,
+        escolaridade: dados.escolaridade || null,
+        turno_escolar: dados.turno_escolar || null,
+        logradouro: dados.logradouro || null,
+        numero: dados.numero || null,
+        complemento: dados.complemento || null,
+        cidade: dados.cidade || 'Rio de Janeiro',
+        bairro: dados.bairro || null,
+        estado_uf: dados.estado_uf || 'RJ',
+        cep: dados.cep || null,
+        maior_18_anos: dados.maior_18_anos !== undefined ? dados.maior_18_anos : true,
+        nome_responsavel: dados.nome_responsavel || null,
+        email_responsavel: dados.email_responsavel || null,
+        grau_parentesco: dados.grau_parentesco || null,
+        cpf_responsavel: dados.cpf_responsavel || null,
+        telefone_alternativo: dados.telefone_alternativo || null,
+        possui_alergias: dados.possui_alergias || null,
+        cuidado_especial: dados.cuidado_especial || null,
+        detalhes_cuidado: dados.detalhes_cuidado || null,
+        uso_medicamento: dados.uso_medicamento || null,
+        cursos_matriculados: descricaoCursos,
+        lgpd_aceito: dados.lgpd_aceito || false,
+        autoriza_imagem: dados.autoriza_imagem || false,
+        ativo: true,
+        data_matricula: hoje,
+      });
+
+      const alunoSalvo = await queryRunner.manager.save(novoAluno);
+
+      // Cria registros TurmaAluno para cada curso selecionado
+      if (cursoIds.length > 0) {
+        for (const cursoId of cursoIds) {
+          // Busca a turma ativa do curso (assume que cada curso tem uma turma ativa)
+          const turma = await queryRunner.manager.findOne(Turma, {
+            where: { curso_id: cursoId, ativo: true }
+          });
+          
+          if (turma) {
+            // Cria registro de TurmaAluno já como 'ativo' (não backlog)
+            await queryRunner.manager.save(
+              queryRunner.manager.create(TurmaAluno, {
+                aluno_id: alunoSalvo.id,
+                turma_id: turma.id,
+                status: 'ativo'
+              })
+            );
+            this.logger.log(`✅ Aluno ${alunoSalvo.numero_matricula} adicionado à turma ${turma.id} (${turma.nome})`);
+          } else {
+            // Se não houver turma ativa, adiciona ao backlog
+            await queryRunner.manager.save(
+              queryRunner.manager.create(TurmaAluno, {
+                aluno_id: alunoSalvo.id,
+                status: 'backlog'
+              })
+            );
+            this.logger.warn(`⚠️ Aluno ${alunoSalvo.numero_matricula} adicionado ao backlog (nenhuma turma ativa para o curso)`);
+          }
+        }
+      } else {
+        // Se nenhum curso foi selecionado, adiciona ao backlog
+        try {
+          await queryRunner.manager.save(
+            queryRunner.manager.create(TurmaAluno, { aluno_id: alunoSalvo.id, status: 'backlog' })
+          );
+        } catch (_) { /* ignora se já existir */ }
+      }
+
+      await queryRunner.commitTransaction();
+      this.logger.log(`🎉 Aluno criado diretamente: ${alunoSalvo.numero_matricula} – ${alunoSalvo.nome_completo} | Cursos: ${descricaoCursos}`);
+      await this.notificacoes.criar({
+        tipo: 'nova_matricula',
+        titulo: `Nova matrícula (Direct): ${alunoSalvo.nome_completo}`,
+        mensagem: `O aluno "${alunoSalvo.nome_completo}" foi matriculado diretamente com o nº ${alunoSalvo.numero_matricula} nos cursos: ${descricaoCursos}.`,
+        referencia_id: String(alunoSalvo.id),
+        referencia_tipo: 'aluno',
+      }).catch(() => {});
+      return alunoSalvo;
+    } catch (err: any) {
+      await queryRunner.rollbackTransaction();
+      this.logger.error(`💥 Falha ao criar aluno direto: ${err.message}`);
+      throw new BadRequestException(err.message || 'Erro interno ao criar aluno.');
     } finally {
       await queryRunner.release();
     }

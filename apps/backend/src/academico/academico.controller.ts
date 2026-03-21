@@ -46,6 +46,10 @@ export class AcademicoController {
   @Get('cursos')
   getCursos() { return this.svc.listarCursos(); }
 
+  @Public()
+  @Get('cursos/ativos')
+  getCursosAtivos() { return this.svc.listarCursosAtivos(); }
+
   @Post('cursos')
   async criarCurso(@Body() dto: any) {
     try { return await this.svc.criarCurso(dto); }

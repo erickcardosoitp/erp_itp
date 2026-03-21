@@ -495,8 +495,22 @@ export default function DossieCandidato({ aluno, onClose, onSuccess }: DossiePro
                     <div className="w-8 h-8 rounded-xl bg-purple-100 flex items-center justify-center overflow-hidden shrink-0">
                       {anot.usuario_foto
                         ? <img
-                            src={anot.usuario_foto.startsWith('http') ? anot.usuario_foto : `${API_ORIGIN}${anot.usuario_foto}`}
-                            className="w-full h-full object-cover" alt="" />
+                            src={(() => {
+                              // Validar foto contra XSS
+                              const foto = anot.usuario_foto;
+                              const isExternalUrl = foto?.startsWith('http://') || foto?.startsWith('https://');
+                              const isInternalUrl = foto?.startsWith('/uploads/');
+                              const isInternalWithOrigin = foto?.startsWith(API_ORIGIN);
+                              
+                              if (isExternalUrl || isInternalUrl || isInternalWithOrigin) {
+                                return foto;
+                              }
+                              if (foto && !foto.startsWith('http')) {
+                                return `${API_ORIGIN}${foto}`;
+                              }
+                              return '';
+                            })()}
+                            className="w-full h-full object-cover" alt="Foto do usuário" />
                         : <User size={14} className="text-purple-400" />}
                     </div>
                     <div>

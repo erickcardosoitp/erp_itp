@@ -68,6 +68,17 @@ export class MatriculasController {
   }
 
   /**
+   * Retorna cursos ATIVOS do módulo acadêmico com suas turmas ativas.
+   * Endpoint público para popular formulário de matrícula direta.
+   * Substituir listarCursosDisponiveis por dados reais do acadêmico.
+   */
+  @Get('cursos-ativos-academico')
+  @Public()
+  async cursosAtivosAcademico() {
+    return await this.matriculasService.obterCursosAtivosComTurmas();
+  }
+
+  /**
    * INCLUSÃO: Restrita a Diretores (8) para cima.
    * ADMIN (10) e VP (9) passam automaticamente pela lógica de hierarquia.
    */
@@ -75,6 +86,18 @@ export class MatriculasController {
   @Public()
   async receberInscricao(@Body() dados: any) {
     return await this.matriculasService.receberInscricao(dados);
+  }
+
+  /**
+   * CRIAÇÃO DIRETA DE ALUNO: Bypass do workflow de inscrição.
+   * Útil para matrícula presencial ou casos de exceção.
+   * Exige nível DRT (8).
+   * Campos obrigatórios: nome_completo, cpf, email, celular, cursos_matriculados
+   */
+  @Post('aluno-direto')
+  @Roles(Role.DRT)
+  async criarAlunoDireto(@Body() dados: any) {
+    return await this.matriculasService.criarAlunoDireto(dados);
   }
 
   /**

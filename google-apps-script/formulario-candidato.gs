@@ -58,25 +58,39 @@ function dataISO_(val) {
  */
 function campo_(r, chaves) {
   if (!Array.isArray(chaves)) chaves = [chaves];
-  // Tentativa exata primeiro (incluindo array do namedValues)
+  if (!r || typeof r !== 'object') return null;
+  
+  // Tentativa exata primeiro
   for (var i = 0; i < chaves.length; i++) {
     var raw = r[chaves[i]];
     var v = str_(raw ? raw[0] : null);
     if (v) return v;
   }
-  // Fallback case-insensitive + sem pontuação final
-  var normalize = function(s) { return s.toLowerCase().replace(/[:\s]+$/, '').trim(); };
+  
+  // Fallback normalizado: lowercase, remove pontuação, replace spaces → underscore
+  var normalize = function(s) { 
+    return s.toLowerCase()
+      .replace(/[:\s]+$/g, '')  // remove : e espaços FINAIS
+      .replace(/\s+/g, '_')     // espaços → underscore
+      .trim(); 
+  };
+  
   var normalizedKeys = chaves.map(normalize);
+  var availableKeys = Object.keys(r).map(normalize);
+  
   for (var key in r) {
     var nk = normalize(key);
     for (var j = 0; j < normalizedKeys.length; j++) {
       if (nk === normalizedKeys[j]) {
         var raw2 = r[key];
         var v2 = str_(raw2 ? raw2[0] : null);
-        if (v2) return v2;
+        if (v2) {
+          return v2;
+        }
       }
     }
   }
+  
   return null;
 }
 
@@ -238,26 +252,37 @@ function notificarEquipe_(dados, sucesso, detalhe) {
  * Caso 3 - Trigger da planilha sem namedValues → reconstrói via e.values + e.range.
  */
 function reconstruirNamedValues_(e) {
+  Logger.log('🔍 DEBUG: Tipo de evento recebido:', typeof e);
+  Logger.log('🔍 DEBUG: Propriedades do evento:', Object.keys(e || {}));
+  
   // Caso 1: planilha com namedValues pronto
-  if (e && e.namedValues) return e.namedValues;
+  if (e && e.namedValues) {
+    Logger.log('✅ Caso 1: namedValues direto da planilha');
+    return e.namedValues;
+  }
 
   var r = {};
 
   // Caso 2: trigger do Forms — e.response é um FormResponse object
   if (e && e.response && typeof e.response.getItemResponses === 'function') {
+    Logger.log('✅ Caso 2: FormResponse detectado');
     var itemResponses = e.response.getItemResponses();
+    Logger.log('📋 Total de itens: ' + itemResponses.length);
+    
     for (var i = 0; i < itemResponses.length; i++) {
       var item   = itemResponses[i];
       var titulo = item.getItem().getTitle();
       var resp   = item.getResponse();
       // Caixas de seleção multipla retornam array → join
       r[titulo]  = [Array.isArray(resp) ? resp.join(', ') : (resp || '')];
+      Logger.log('  📝 ' + titulo + ' = ' + r[titulo][0]);
     }
     return r;
   }
 
   // Caso 3: trigger da planilha sem namedValues (e.values + e.range)
   if (e && e.values && e.range) {
+    Logger.log('✅ Caso 3: Planilha com values + range');
     var sheet   = e.range.getSheet();
     var headers = sheet.getRange(1, 1, 1, e.values.length).getValues()[0];
     for (var j = 0; j < headers.length; j++) {
@@ -265,6 +290,12 @@ function reconstruirNamedValues_(e) {
     }
     return r;
   }
+
+  Logger.log('❌ NENHUM CASO CORRESPONDEU!');
+  Logger.log('   e.namedValues:', e ? e.namedValues : 'N/A');
+  Logger.log('   e.response:', e ? (typeof e.response) : 'N/A');
+  Logger.log('   e.values:', e ? (e.values ? 'existe' : 'undefined') : 'N/A');
+  Logger.log('   e.range:', e ? (e.range ? 'existe' : 'undefined') : 'N/A');
 
   return r;
 }
@@ -283,34 +314,35 @@ function aoEnviarFormulario(e) {
 
   // ── Leitura dos campos do formulário ──────────────────────────────
   var dados = {
-    nome_completo:        campo_(r, ['Nome completo', 'Nome Completo', 'Nome completo:'])   || '',
-    email:                campo_(r, ['Endereço de e-mail', 'E-mail', 'Email'])              || '',
-    cpf:                  digits_(campo_(r, ['CPF', 'CPF:']))                               || '',
-    celular:              digits_(campo_(r, ['Celular', 'Celular:']))                       || '',
-    data_nascimento:      dataISO_(campo_(r, ['Data de Nascimento', 'Data de nascimento'])),
-    idade:                (function() { var v = campo_(r, ['Idade', 'Idade:']); return v ? parseInt(v.replace(/\D/g, '')) || null : null; })(),
-    sexo:                 campo_(r, ['Sexo', 'Sexo:']),
-    escolaridade:         campo_(r, ['Escolaridade', 'Escolaridade:']),
-    turno_escolar:        campo_(r, ['Turno escolar', 'Turno escolar:']),
-    maior_18_anos:        bool_(campo_(r, ['Maior de 18 anos', 'Maior de 18 anos:'])),
-    logradouro:           campo_(r, ['Logradouro', 'Logradouro:']),
-    numero:               campo_(r, ['Número', 'Número:', 'Numero']),
-    complemento:          campo_(r, ['Complemento', 'Complemento:']),
-    bairro:               campo_(r, ['Bairro', 'Bairro:']),
-    cidade:               campo_(r, ['Cidade', 'Cidade:'])           || 'Rio de Janeiro',
-    estado_uf:            campo_(r, ['Estado (UF)', 'Estado (UF):', 'Estado', 'Estado:']) || 'RJ',
-    cep:                  digits_(campo_(r, ['CEP', 'CEP:'])),
-    nome_responsavel:     campo_(r, ['Nome Completo do Responsável', 'Nome do Responsável', 'Nome completo do responsável']),
-    grau_parentesco:      campo_(r, ['Grau de parentesco do responsável', 'Grau de parentesco']),
-    cpf_responsavel:      digits_(campo_(r, ['CPF do Responsável', 'CPF do responsável'])),
-    telefone_alternativo: digits_(campo_(r, ['Telefone alternativo', 'Telefone alternativo:'])),
-    possui_alergias:      campo_(r, ['Possui alergias', 'Possui alergias:']),
-    cuidado_especial:     campo_(r, ['Necessita de cuidado especial', 'Necessita de cuidado especial:']),
-    detalhes_cuidado:     campo_(r, ['Detalhes do cuidado', 'Detalhes do cuidado:']),
-    uso_medicamento:      campo_(r, ['Faz uso de medicamento', 'Faz uso de medicamento:']),
-    cursos_desejados:     campo_(r, ['Cursos desejados', 'Cursos desejados:']),
-    lgpd_aceito:          bool_(campo_(r, ['LGPD Aceito', 'LGPD Aceito:'])),
-    autoriza_imagem:      bool_(campo_(r, ['Autoriza uso de imagem', 'Autoriza uso de imagem:'])),
+    nome_completo:        campo_(r, ['nome_completo', 'Nome completo', 'Nome Completo', 'Nome completo:'])   || '',
+    email:                campo_(r, ['email', 'Endereço de e-mail', 'E-mail', 'Email'])              || '',
+    cpf:                  digits_(campo_(r, ['cpf', 'CPF', 'CPF:']))                               || '',
+    celular:              digits_(campo_(r, ['celular', 'Celular', 'Celular:']))                       || '',
+    data_nascimento:      dataISO_(campo_(r, ['data_nascimento', 'Data de Nascimento', 'Data de nascimento'])),
+    idade:                (function() { var v = campo_(r, ['idade', 'Idade', 'Idade:']); return v ? parseInt(v.replace(/\D/g, '')) || null : null; })(),
+    sexo:                 campo_(r, ['sexo', 'Sexo', 'Sexo:']),
+    escolaridade:         campo_(r, ['escolaridade', 'Escolaridade', 'Escolaridade:']),
+    turno_escolar:        campo_(r, ['turno_escolar', 'Turno escolar', 'Turno escolar:']),
+    maior_18_anos:        bool_(campo_(r, ['maior_18_anos', 'Maior de 18 anos', 'Maior de 18 anos:'])),
+    logradouro:           campo_(r, ['logradouro', 'Logradouro', 'Logradouro:']),
+    numero:               campo_(r, ['numero', 'Número', 'Número:', 'Numero']),
+    complemento:          campo_(r, ['complemento', 'Complemento', 'Complemento:']),
+    bairro:               campo_(r, ['bairro', 'Bairro', 'Bairro:']),
+    cidade:               campo_(r, ['cidade', 'Cidade', 'Cidade:'])           || 'Rio de Janeiro',
+    estado_uf:            campo_(r, ['estado_uf', 'Estado (UF)', 'Estado (UF):', 'Estado', 'Estado:']) || 'RJ',
+    cep:                  digits_(campo_(r, ['cep', 'CEP', 'CEP:'])),
+    nome_responsavel:     campo_(r, ['nome_responsavel', 'Nome Completo do Responsável', 'Nome do Responsável', 'Nome completo do responsável']),
+    email_responsavel:    campo_(r, ['email_responsavel', 'Email do Responsável', 'Email responsável', 'E-mail do Responsável', 'E-mail responsável']),
+    grau_parentesco:      campo_(r, ['grau_parentesco', 'Grau de parentesco do responsável', 'Grau de parentesco']),
+    cpf_responsavel:      digits_(campo_(r, ['cpf_responsavel', 'CPF do Responsável', 'CPF do responsável'])),
+    telefone_alternativo: digits_(campo_(r, ['telefone_alternativo', 'Telefone alternativo', 'Telefone alternativo:'])),
+    possui_alergias:      campo_(r, ['possui_alergias', 'Possui alergias', 'Possui alergias:']),
+    cuidado_especial:     campo_(r, ['cuidado_especial', 'Necessita de cuidado especial', 'Necessita de cuidado especial:']),
+    detalhes_cuidado:     campo_(r, ['detalhes_cuidado', 'Detalhes do cuidado', 'Detalhes do cuidado:']),
+    uso_medicamento:      campo_(r, ['uso_medicamento', 'Faz uso de medicamento', 'Faz uso de medicamento:']),
+    cursos_desejados:     campo_(r, ['cursos_desejados', 'Cursos desejados', 'Cursos desejados:']),
+    lgpd_aceito:          bool_(campo_(r, ['lgpd_aceito', 'LGPD Aceito', 'LGPD Aceito:'])),
+    autoriza_imagem:      bool_(campo_(r, ['autoriza_imagem', 'Autoriza uso de imagem', 'Autoriza uso de imagem:'])),
   };
 
   Logger.log('👤 Candidato: ' + dados.nome_completo + ' | CPF: ' + dados.cpf);
@@ -342,6 +374,7 @@ function aoEnviarFormulario(e) {
       estado_uf:            dados.estado_uf,
       cep:                  dados.cep,
       nome_responsavel:     dados.nome_responsavel,
+      email_responsavel:    dados.email_responsavel,
       grau_parentesco:      dados.grau_parentesco,
       cpf_responsavel:      dados.cpf_responsavel,
       telefone_alternativo: dados.telefone_alternativo,
