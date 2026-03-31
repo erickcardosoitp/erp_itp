@@ -25,13 +25,13 @@ export class EstoqueController {
   }
 
   @Post('produtos')
-  @Roles(Role.ADMIN, Role.VP, Role.DRT, Role.DRT_ADJ)
+  @Roles(Role.ADMIN, Role.VP, Role.DRT, Role.DRT_ADJ, Role.ASSIST, Role.MNT, Role.PROF)
   criar(@Body() body: any) {
     return this.svc.criarProduto(body);
   }
 
   @Patch('produtos/:id')
-  @Roles(Role.ADMIN, Role.VP, Role.DRT, Role.DRT_ADJ)
+  @Roles(Role.ADMIN, Role.VP, Role.DRT, Role.DRT_ADJ, Role.ASSIST, Role.MNT, Role.PROF)
   atualizar(@Param('id') id: string, @Body() body: any) {
     return this.svc.atualizarProduto(id, body);
   }
@@ -103,13 +103,13 @@ export class EstoqueController {
   }
 
   @Post('categorias')
-  @Roles(Role.ADMIN, Role.VP, Role.DRT, Role.DRT_ADJ)
+  @Roles(Role.ADMIN, Role.VP, Role.DRT, Role.DRT_ADJ, Role.ASSIST, Role.MNT, Role.PROF)
   criarCategoria(@Body() body: { nome: string; codigo?: string }) {
     return this.svc.criarCategoria(body.nome, body.codigo);
   }
 
   @Patch('categorias/:id')
-  @Roles(Role.ADMIN, Role.VP, Role.DRT, Role.DRT_ADJ)
+  @Roles(Role.ADMIN, Role.VP, Role.DRT, Role.DRT_ADJ, Role.ASSIST, Role.MNT, Role.PROF)
   atualizarCategoria(@Param('id') id: string, @Body() body: { nome: string; codigo?: string }) {
     return this.svc.atualizarCategoria(id, body.nome, body.codigo);
   }

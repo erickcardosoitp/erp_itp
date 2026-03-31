@@ -320,6 +320,17 @@ export class AppModule implements OnModuleInit {
       await this.dataSource.query(`ALTER TABLE IF EXISTS usuarios ALTER COLUMN email DROP NOT NULL`);
       this.logger.log('✅ Migrations de funcionários/usuários (novas colunas) aplicadas');
 
+      // ── email_responsavel em inscricoes e alunos ───────────────────────────
+      await this.dataSource.query(`
+        ALTER TABLE IF EXISTS inscricoes
+          ADD COLUMN IF NOT EXISTS email_responsavel VARCHAR
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE IF EXISTS alunos
+          ADD COLUMN IF NOT EXISTS email_responsavel VARCHAR
+      `);
+      this.logger.log('✅ Colunas email_responsavel aplicadas (IF NOT EXISTS)');
+
     } catch (err: any) {
       this.logger.error(`❌ Erro nas migrations automáticas: ${err.message}`);
     }
