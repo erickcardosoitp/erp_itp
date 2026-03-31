@@ -110,6 +110,15 @@ export class MatriculasService {
     return resultado;
   }
 
+  async listarNomesCursosAtivos(): Promise<string[]> {
+    const cursos = await this.cursoRepository.find({
+      select: ['nome'],
+      where: { status: 'Ativo' },
+      order: { nome: 'ASC' },
+    });
+    return cursos.map(c => c.nome);
+  }
+
   /**
    * Lista inscrições de forma paginada com suporte a filtros e ordenação.
    */

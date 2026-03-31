@@ -10,6 +10,8 @@ export interface CriarNotificacaoDto {
   referencia_id?: string;
   referencia_tipo?: string;
   usuario_id?: string;
+  /** Nível mínimo de role para ver esta notificação. NULL = sem restrição. */
+  cargo_minimo?: number | null;
 }
 
 @Injectable()
@@ -22,21 +24,32 @@ export class NotificacoesService {
 
   // ── CRUD ──────────────────────────────────────────────────────────────────
 
-  async listar(params: { pagina?: number; limite?: number; apenasNaoLidas?: boolean } = {}) {
-    const { pagina = 1, limite = 50, apenasNaoLidas = false } = params;
+  async listar(params: { pagina?: number; limite?: number; apenasNaoLidas?: boolean; nivelRole?: number } = {}) {
+    const { pagina = 1, limite = 50, apenasNaoLidas = false, nivelRole } = params;
     const skip = (pagina - 1) * limite;
-    const where = apenasNaoLidas ? { lida: false as const } : {};
-    const [items, total] = await this.repo.findAndCount({
-      where,
-      order: { criado_em: 'DESC' },
-      take: limite,
-      skip,
-    });
+
+    const qb = this.repo.createQueryBuilder('n')
+      .orderBy('n.criado_em', 'DESC')
+      .take(limite)
+      .skip(skip);
+
+    if (apenasNaoLidas) qb.andWhere('n.lida = false');
+
+    // Filtra por cargo_minimo: mostra se NULL (global) ou se cargo_minimo <= nivelRole do usuário
+    if (nivelRole !== undefined) {
+      qb.andWhere('(n.cargo_minimo IS NULL OR n.cargo_minimo <= :nivel)', { nivel: nivelRole });
+    }
+
+    const [items, total] = await qb.getManyAndCount();
     return { items, total, pagina, limite };
   }
 
-  async contarNaoLidas(): Promise<number> {
-    return this.repo.count({ where: { lida: false } });
+  async contarNaoLidas(nivelRole?: number): Promise<number> {
+    const qb = this.repo.createQueryBuilder('n').where('n.lida = false');
+    if (nivelRole !== undefined) {
+      qb.andWhere('(n.cargo_minimo IS NULL OR n.cargo_minimo <= :nivel)', { nivel: nivelRole });
+    }
+    return qb.getCount();
   }
 
   async marcarLida(id: string) {
@@ -72,6 +85,7 @@ export class NotificacoesService {
         referencia_id: dto.referencia_id ?? null,
         referencia_tipo: dto.referencia_tipo ?? null,
         usuario_id: dto.usuario_id ?? null,
+        cargo_minimo: dto.cargo_minimo ?? null,
         lida: false,
       });
       const salvo = await this.repo.save(n);
@@ -103,6 +117,7 @@ export class NotificacoesService {
           mensagem: `O produto "${p.nome}" está com estoque crítico (${p.quantidade_atual} ${p.quantidade_atual === 1 ? 'unidade' : 'unidades'} — mínimo: ${p.estoque_minimo}).`,
           referencia_id: p.id,
           referencia_tipo: 'produto',
+          cargo_minimo: 2, // assistente (ASSIST) e acima
         });
       }
     }

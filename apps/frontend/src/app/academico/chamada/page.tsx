@@ -1,9 +1,9 @@
 'use client';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  CheckSquare, Square, RefreshCw, CheckCircle2,
+  CheckSquare, Square, CheckCircle2,
   WifiOff, Loader2, Users, BookOpen, X,
-  ClipboardCheck,
+  ClipboardCheck, Printer, CalendarDays,
 } from 'lucide-react';
 
 const API_BASE =
@@ -190,6 +190,17 @@ export default function ChamadaPage() {
           </div>
           <div className="space-y-2">
             <div>
+              <label className="text-[9px] font-black uppercase text-purple-400 mb-1 flex items-center gap-1">
+                <CalendarDays size={10} /> Data da Aula
+              </label>
+              <input
+                type="date"
+                value={data}
+                onChange={e => setData(e.target.value)}
+                className="w-full bg-purple-950/60 border border-purple-700/50 text-white rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-purple-500"
+              />
+            </div>
+            <div>
               <label className="text-[9px] font-black uppercase text-purple-400 mb-1 block">Professor(a)</label>
               <input
                 value={professorNome}
@@ -235,6 +246,22 @@ export default function ChamadaPage() {
             <Square size={13} /> Todos Ausentes
           </button>
         </div>
+
+        {/* ── Barra de presença ── */}
+        {alunos.length > 0 && (
+          <div className="bg-purple-900/20 border border-purple-800/40 rounded-2xl p-3">
+            <div className="flex justify-between text-[10px] font-black mb-1.5">
+              <span className="text-green-400">{presentes} presentes ({Math.round((presentes / alunos.length) * 100)}%)</span>
+              <span className="text-red-400">{ausentes} faltas</span>
+            </div>
+            <div className="w-full bg-purple-900/60 rounded-full h-2">
+              <div
+                className="h-2 rounded-full bg-green-500 transition-all"
+                style={{ width: `${Math.round((presentes / alunos.length) * 100)}%` }}
+              />
+            </div>
+          </div>
+        )}
 
         {/* ── Lista de alunos ── */}
         <div className="space-y-1">
@@ -297,17 +324,20 @@ export default function ChamadaPage() {
         )}
       </div>
 
-      {/* ── Bottom Bar – Salvar ── */}
+      {/* ── Bottom Bar – Salvar + Imprimir ── */}
       <div className="fixed bottom-0 left-0 right-0 bg-[#1a0b2e]/95 backdrop-blur border-t border-purple-900/50 p-4">
-        <div className="max-w-lg mx-auto space-y-2">
-          <div className="flex justify-between text-xs font-bold text-purple-300 px-1">
-            <span className="text-green-400">{presentes} presentes</span>
-            <span className="text-red-400">{ausentes} ausentes</span>
-          </div>
+        <div className="max-w-lg mx-auto flex gap-2">
+          <button
+            onClick={() => window.print()}
+            title="Imprimir lista"
+            className="px-4 py-4 rounded-2xl bg-purple-900/60 border border-purple-700/50 text-purple-300 hover:bg-purple-800/60 transition-colors shrink-0"
+          >
+            <Printer size={18} />
+          </button>
           <button
             onClick={salvarChamada}
             disabled={salvando || alunos.length === 0}
-            className="w-full flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-black text-sm uppercase tracking-widest py-4 rounded-2xl transition-all shadow-lg shadow-purple-900/50"
+            className="flex-1 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-black text-sm uppercase tracking-widest py-4 rounded-2xl transition-all shadow-lg shadow-purple-900/50"
           >
             {salvando ? (
               <><Loader2 size={18} className="animate-spin" /> Salvando...</>

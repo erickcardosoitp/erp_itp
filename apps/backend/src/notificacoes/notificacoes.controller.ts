@@ -1,7 +1,7 @@
-import { Controller, Get, Patch, Delete, Param, Query } from '@nestjs/common';
+import { Controller, Get, Patch, Delete, Param, Query, Req } from '@nestjs/common';
 import { NotificacoesService } from './notificacoes.service';
 import { Roles } from '../auth/decorators/roles.decorator';
-import { Role } from '../auth/constants/roles.enum';
+import { Role, RoleLevel } from '../auth/constants/roles.enum';
 
 @Controller('notificacoes')
 export class NotificacoesController {
@@ -12,17 +12,21 @@ export class NotificacoesController {
     @Query('pagina') pagina?: string,
     @Query('limite') limite?: string,
     @Query('nao_lidas') naoLidas?: string,
+    @Req() req?: any,
   ) {
+    const nivelRole = RoleLevel[req?.user?.role ?? ''] ?? 0;
     return this.svc.listar({
       pagina: pagina ? Number(pagina) : 1,
       limite: limite ? Number(limite) : 50,
       apenasNaoLidas: naoLidas === 'true',
+      nivelRole,
     });
   }
 
   @Get('count')
-  contarNaoLidas() {
-    return this.svc.contarNaoLidas().then(total => ({ total }));
+  contarNaoLidas(@Req() req?: any) {
+    const nivelRole = RoleLevel[req?.user?.role ?? ''] ?? 0;
+    return this.svc.contarNaoLidas(nivelRole).then(total => ({ total }));
   }
 
   @Patch(':id/lida')

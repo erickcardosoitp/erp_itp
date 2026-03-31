@@ -69,15 +69,10 @@ export class MatriculasController {
     return await this.matriculasService.obterCursosAtivosComTurmas();
   }
 
-  /**
-   * Retorna apenas os nomes dos cursos ativos como string[].
-   * Usado pelos componentes do frontend (DossieCandidato, página de matrículas).
-   */
   @Get('cursos-disponiveis')
   @Public()
   async cursosDisponiveis() {
-    const cursos = await this.matriculasService.obterCursosAtivosComTurmas();
-    return cursos.map(c => c.nome);
+    return await this.matriculasService.listarNomesCursosAtivos();
   }
 
   /**

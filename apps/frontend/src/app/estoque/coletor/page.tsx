@@ -1,6 +1,6 @@
 'use client';
-import React, { useState, useEffect, useCallback } from 'react';
-import { PackageMinus, RefreshCw, CheckCircle2, AlertTriangle, X, WifiOff, Loader2 } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { PackageMinus, RefreshCw, CheckCircle2, AlertTriangle, X, WifiOff, Loader2, Search } from 'lucide-react';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://api.itp.institutotiapretinha.org/api';
 
@@ -30,6 +30,7 @@ export default function ColetorPage() {
   const [sucesso, setSucesso] = useState<{ nome: string; qtd: string; un: string } | null>(null);
   const [erro, setErro] = useState('');
   const [operador, setOperador] = useState('');
+  const [busca, setBusca] = useState('');
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -88,6 +89,23 @@ export default function ColetorPage() {
     setRegistrando(false);
   };
 
+  const produtosFiltrados = useMemo(() => {
+    if (!busca.trim()) return produtos;
+    const q = busca.toLowerCase();
+    return produtos.filter(p => p.nome.toLowerCase().includes(q) || p.categoria.toLowerCase().includes(q));
+  }, [produtos, busca]);
+
+  function nivelEstoque(p: Produto): { pct: number; cor: string } {
+    const min = Number(p.estoque_minimo);
+    const atual = Number(p.quantidade_atual);
+    if (min <= 0) return { pct: 100, cor: 'bg-green-500' };
+    const pct = Math.min(100, Math.round((atual / (min * 2)) * 100));
+    if (atual <= 0) return { pct: 0, cor: 'bg-red-600' };
+    if (atual <= min) return { pct, cor: 'bg-red-500' };
+    if (atual <= min * 1.5) return { pct, cor: 'bg-amber-400' };
+    return { pct, cor: 'bg-green-500' };
+  }
+
   // ── ESTADO: Token inválido ────────────────────────────────────────────────
   if (tokenInvalido || (!loading && !token)) {
     return (
@@ -126,12 +144,18 @@ export default function ColetorPage() {
         </div>
       </div>
 
-      {/* OPERADOR */}
-      <div className="px-4 py-3 bg-slate-800/50 border-b border-slate-700/50">
+      {/* OPERADOR + BUSCA */}
+      <div className="px-4 py-3 bg-slate-800/50 border-b border-slate-700/50 space-y-2">
         <div className="flex items-center gap-3 max-w-sm mx-auto">
           <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap">Operador</label>
           <input value={operador} onChange={e => salvarOperador(e.target.value)} placeholder="Seu nome..."
             className="flex-1 bg-slate-700 border border-slate-600 text-white rounded-xl px-3 py-1.5 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-green-500" />
+        </div>
+        <div className="flex items-center gap-2 max-w-sm mx-auto bg-slate-700 border border-slate-600 rounded-xl px-3 py-1.5">
+          <Search size={14} className="text-slate-400 shrink-0" />
+          <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar produto..."
+            className="flex-1 bg-transparent text-white text-sm font-bold focus:outline-none placeholder:text-slate-500" />
+          {busca && <button onClick={() => setBusca('')} className="text-slate-400 hover:text-white"><X size={12} /></button>}
         </div>
       </div>
 
@@ -143,6 +167,9 @@ export default function ColetorPage() {
             {produtos.filter(emAlerta).length} produto{produtos.filter(emAlerta).length > 1 ? 's' : ''} abaixo do estoque mínimo!
           </p>
         </div>
+      )}
+      {busca && produtosFiltrados.length === 0 && (
+        <p className="text-center text-slate-500 text-sm font-bold py-8">Nenhum produto encontrado para "{busca}".</p>
       )}
 
       {/* SUCESSO FLASH */}
@@ -159,28 +186,35 @@ export default function ColetorPage() {
 
       {/* LISTA DE PRODUTOS */}
       <div className="p-4 space-y-2 max-w-lg mx-auto">
-        {/* Grupo por categoria */}
-        {[...new Set(produtos.map(p => p.categoria))].sort().map(cat => (
-          <div key={cat} className="space-y-2">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 pt-2 px-1">{cat}</p>
-            {produtos.filter(p => p.categoria === cat).map(p => {
+        {[...new Set(produtosFiltrados.map(p => p.categoria))].sort().map(cat => (
+          <div key={cat} className="space-y-1.5">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 pt-3 pb-1 px-1 border-b border-slate-700/50">
+              {cat} <span className="text-slate-600 normal-case font-bold">({produtosFiltrados.filter(p => p.categoria === cat).length})</span>
+            </p>
+            {produtosFiltrados.filter(p => p.categoria === cat).map(p => {
               const alerta = emAlerta(p);
+              const { pct, cor } = nivelEstoque(p);
               return (
                 <button key={p.id} onClick={() => abrirBaixa(p)}
-                  className={`w-full flex items-center justify-between p-4 rounded-2xl border transition-all active:scale-[0.98] text-left ${alerta ? 'bg-red-900/30 border-red-700/50 hover:bg-red-900/50' : 'bg-slate-800 border-slate-700 hover:bg-slate-700'}`}>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
+                  className={`w-full p-4 rounded-2xl border transition-all active:scale-[0.98] text-left ${alerta ? 'bg-red-900/30 border-red-700/50 hover:bg-red-900/50' : 'bg-slate-800 border-slate-700 hover:bg-slate-700'}`}>
+                  <div className="flex items-center justify-between gap-3 mb-2">
+                    <div className="flex items-center gap-2 min-w-0">
                       {alerta && <AlertTriangle size={13} className="text-red-400 flex-shrink-0" />}
                       <p className="font-black text-base text-white truncate">{p.nome}</p>
                     </div>
-                    {alerta && (
-                      <p className="text-[10px] text-red-400 font-bold mt-0.5">⚠ Abaixo do mínimo ({fmt(p.estoque_minimo)} {p.unidade_medida})</p>
-                    )}
+                    <div className="flex-shrink-0 text-right">
+                      <p className={`font-mono font-black text-xl ${alerta ? 'text-red-400' : 'text-green-400'}`}>{fmt(p.quantidade_atual)}</p>
+                      <p className="text-[10px] text-slate-500 font-mono">{p.unidade_medida}</p>
+                    </div>
                   </div>
-                  <div className="flex-shrink-0 text-right ml-3">
-                    <p className={`font-mono font-black text-xl ${alerta ? 'text-red-400' : 'text-green-400'}`}>{fmt(p.quantidade_atual)}</p>
-                    <p className="text-[10px] text-slate-500 font-mono">{p.unidade_medida}</p>
-                  </div>
+                  {Number(p.estoque_minimo) > 0 && (
+                    <div>
+                      <div className="w-full bg-slate-700 rounded-full h-1.5">
+                        <div className={`h-1.5 rounded-full transition-all ${cor}`} style={{ width: `${pct}%` }} />
+                      </div>
+                      <p className="text-[9px] text-slate-500 font-mono mt-0.5">mín: {fmt(p.estoque_minimo)} {p.unidade_medida}</p>
+                    </div>
+                  )}
                 </button>
               );
             })}

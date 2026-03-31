@@ -10,7 +10,6 @@ import { Usuario } from '../usuarios/usuario.entity';
 import { Curso } from '../academico/entities/curso.entity';
 import { Turma } from '../academico/entities/turma.entity';
 import { TurmaAluno } from '../academico/entities/turma-aluno.entity';
-import { EmailService } from '../email.service';
 import { AcademicoModule } from '../academico/academico.module';
 import { NotificacoesModule } from '../notificacoes/notificacoes.module';
 
@@ -30,7 +29,7 @@ import { NotificacoesModule } from '../notificacoes/notificacoes.module';
     NotificacoesModule,
   ],
   controllers: [MatriculasController],
-  providers: [MatriculasService, EmailService],
+  providers: [MatriculasService],
   exports: [MatriculasService],
 })
 export class MatriculasModule {}

@@ -34,6 +34,10 @@ export class Notificacao {
   @Column({ name: 'usuario_id', type: 'text', nullable: true })
   usuario_id: string | null;
 
+  /** Nível mínimo de role para ver esta notificação (0=todos, 8=drt+). NULL = sem restrição. */
+  @Column({ name: 'cargo_minimo', type: 'int', nullable: true })
+  cargo_minimo: number | null;
+
   @CreateDateColumn({ name: 'criado_em' })
   criado_em: Date;
 }

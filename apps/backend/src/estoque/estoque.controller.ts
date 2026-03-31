@@ -6,7 +6,7 @@ import {
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
-import { Role } from '../auth/constants/roles.enum';
+import { Role, ESTOQUE_READ_ROLES, ESTOQUE_WRITE_ROLES, ESTOQUE_BAIXA_ROLES, ESTOQUE_ENTRADA_ROLES } from '../auth/constants/roles.enum';
 import { Public } from '../auth/decorators/public.decorator';
 import { EstoqueService } from './estoque.service';
 
@@ -19,19 +19,19 @@ export class EstoqueController {
   // ── Produtos ──────────────────────────────────────────────────────────────
 
   @Get('produtos')
-  @Roles(Role.ADMIN, Role.VP, Role.DRT, Role.DRT_ADJ, Role.ASSIST, Role.CZNH, Role.MNT, Role.PROF)
+  @Roles(...ESTOQUE_READ_ROLES)
   listar() {
     return this.svc.listarTodos();
   }
 
   @Post('produtos')
-  @Roles(Role.ADMIN, Role.VP, Role.DRT, Role.DRT_ADJ, Role.ASSIST, Role.MNT, Role.PROF)
+  @Roles(...ESTOQUE_WRITE_ROLES)
   criar(@Body() body: any) {
     return this.svc.criarProduto(body);
   }
 
   @Patch('produtos/:id')
-  @Roles(Role.ADMIN, Role.VP, Role.DRT, Role.DRT_ADJ, Role.ASSIST, Role.MNT, Role.PROF)
+  @Roles(...ESTOQUE_WRITE_ROLES)
   atualizar(@Param('id') id: string, @Body() body: any) {
     return this.svc.atualizarProduto(id, body);
   }
@@ -43,7 +43,7 @@ export class EstoqueController {
   }
 
   @Get('alertas')
-  @Roles(Role.ADMIN, Role.VP, Role.DRT, Role.DRT_ADJ, Role.ASSIST, Role.CZNH)
+  @Roles(...ESTOQUE_BAIXA_ROLES)
   alertas() {
     return this.svc.listarAlertas();
   }
@@ -51,21 +51,21 @@ export class EstoqueController {
   // ── Movimentos autenticados ───────────────────────────────────────────────
 
   @Post('produtos/:id/entrada')
-  @Roles(Role.ADMIN, Role.VP, Role.DRT, Role.DRT_ADJ, Role.ASSIST)
+  @Roles(...ESTOQUE_ENTRADA_ROLES)
   entrada(@Param('id') id: string, @Body() body: any, @Req() req: any) {
     const nome = req.user?.nome || req.user?.email || 'Sistema';
     return this.svc.registrarEntrada(id, Number(body.quantidade), body.observacao, nome);
   }
 
   @Post('produtos/:id/baixa')
-  @Roles(Role.ADMIN, Role.VP, Role.DRT, Role.DRT_ADJ, Role.ASSIST, Role.CZNH)
+  @Roles(...ESTOQUE_BAIXA_ROLES)
   baixa(@Param('id') id: string, @Body() body: any, @Req() req: any) {
     const nome = req.user?.nome || req.user?.email || 'Sistema';
     return this.svc.registrarBaixa(id, Number(body.quantidade), body.observacao, nome);
   }
 
   @Get('movimentos')
-  @Roles(Role.ADMIN, Role.VP, Role.DRT, Role.DRT_ADJ, Role.ASSIST)
+  @Roles(...ESTOQUE_ENTRADA_ROLES)
   movimentos(
     @Query('produto_id') produtoId?: string,
     @Query('limit') limit?: string,
@@ -97,19 +97,19 @@ export class EstoqueController {
   // ── Categorias ────────────────────────────────────────────────────────────
 
   @Get('categorias')
-  @Roles(Role.ADMIN, Role.VP, Role.DRT, Role.DRT_ADJ, Role.ASSIST, Role.CZNH, Role.MNT, Role.PROF)
+  @Roles(...ESTOQUE_READ_ROLES)
   listarCategorias() {
     return this.svc.listarCategorias();
   }
 
   @Post('categorias')
-  @Roles(Role.ADMIN, Role.VP, Role.DRT, Role.DRT_ADJ, Role.ASSIST, Role.MNT, Role.PROF)
+  @Roles(...ESTOQUE_WRITE_ROLES)
   criarCategoria(@Body() body: { nome: string; codigo?: string }) {
     return this.svc.criarCategoria(body.nome, body.codigo);
   }
 
   @Patch('categorias/:id')
-  @Roles(Role.ADMIN, Role.VP, Role.DRT, Role.DRT_ADJ, Role.ASSIST, Role.MNT, Role.PROF)
+  @Roles(...ESTOQUE_WRITE_ROLES)
   atualizarCategoria(@Param('id') id: string, @Body() body: { nome: string; codigo?: string }) {
     return this.svc.atualizarCategoria(id, body.nome, body.codigo);
   }

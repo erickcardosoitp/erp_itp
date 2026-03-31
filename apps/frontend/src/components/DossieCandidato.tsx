@@ -4,7 +4,7 @@ import {
   X, User, Camera, Edit3, CheckCircle, Save,
   MessageSquare, AlertTriangle, Send, Loader2,
   History, Paperclip, ShieldCheck, ChevronRight, Phone,
-  Download, ExternalLink
+  Download, ExternalLink, Trash2, FileWarning,
 } from 'lucide-react';
 
 const API_ORIGIN = (process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:3001/api')
@@ -101,6 +101,8 @@ export default function DossieCandidato({ aluno, onClose, onSuccess }: DossiePro
   const [lgpdLoading, setLgpdLoading] = useState(false);
   const [docLoading, setDocLoading] = useState(false);
   const [uploadedDocs, setUploadedDocs] = useState<DocEnviado[]>([]);
+  const [obrigatoriosPendentes, setObrigatoriosPendentes] = useState<string[]>([]);
+  const [docsCompleto, setDocsCompleto] = useState(false);
   const [loadingDocs, setLoadingDocs] = useState(false);
   const [matriculaNumero, setMatriculaNumero] = useState<string | null>(null);
 
@@ -111,8 +113,12 @@ export default function DossieCandidato({ aluno, onClose, onSuccess }: DossiePro
     if (abaAtiva !== 'documentos' || !formData.doc_token) return;
     setLoadingDocs(true);
     api.get(`/matriculas/documentos/status/${formData.doc_token}`)
-      .then(res => setUploadedDocs(res.data?.documentos ?? []))
-      .catch(() => setUploadedDocs([]))
+      .then(res => {
+        setUploadedDocs(res.data?.documentos ?? []);
+        setObrigatoriosPendentes(res.data?.obrigatorios_pendentes ?? []);
+        setDocsCompleto(res.data?.completo ?? false);
+      })
+      .catch(() => { setUploadedDocs([]); setObrigatoriosPendentes([]); setDocsCompleto(false); })
       .finally(() => setLoadingDocs(false));
   }, [abaAtiva, formData.doc_token]);
 
@@ -442,17 +448,19 @@ export default function DossieCandidato({ aluno, onClose, onSuccess }: DossiePro
                 </div>
               </div>
 
-              {/* ── Responsável ── (apenas para menores) */}
-              {(!(formData.idade > 18) && !formData.maior_18_anos) && (
+              {/* ── Responsável ── (apenas para menores ou quando maior_18_anos não foi confirmado) */}
+              {!(formData.idade > 18) && (
               <div className="bg-gray-50 p-6 rounded-[24px] space-y-4">
                 <SectionTitle>Responsável</SectionTitle>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="col-span-2">
                     <EditField label="Maior de 18 Anos" field="maior_18_anos" value={formData.maior_18_anos} isEditing={isEditing} type="checkbox" onChange={handleFieldChange} />
                   </div>
-                  <EditField label="Nome do Responsável" field="nome_responsavel" value={formData.nome_responsavel} isEditing={isEditing} onChange={handleFieldChange} />
-                  <EditField label="Grau de Parentesco" field="grau_parentesco" value={formData.grau_parentesco} isEditing={isEditing} onChange={handleFieldChange} />
-                  <EditField label="CPF do Responsável" field="cpf_responsavel" value={formData.cpf_responsavel} isEditing={isEditing} onChange={handleFieldChange} />
+                  {!formData.maior_18_anos && (<>
+                    <EditField label="Nome do Responsável" field="nome_responsavel" value={formData.nome_responsavel} isEditing={isEditing} onChange={handleFieldChange} />
+                    <EditField label="Grau de Parentesco" field="grau_parentesco" value={formData.grau_parentesco} isEditing={isEditing} onChange={handleFieldChange} />
+                    <EditField label="CPF do Responsável" field="cpf_responsavel" value={formData.cpf_responsavel} isEditing={isEditing} onChange={handleFieldChange} />
+                  </>)}
                 </div>
               </div>
               )}
@@ -584,7 +592,6 @@ export default function DossieCandidato({ aluno, onClose, onSuccess }: DossiePro
           {/* ABA DOCUMENTOS */}
           {!loading && abaAtiva === 'documentos' && (
             <div className="space-y-3">
-              {/* Se não há token, ancora na mensagem legada */}
               {!formData.doc_token ? (
                 <>
                   <p className="text-[10px] font-black text-gray-400 uppercase mb-4">
@@ -602,63 +609,121 @@ export default function DossieCandidato({ aluno, onClose, onSuccess }: DossiePro
                 <div className="flex justify-center py-10">
                   <Loader2 className="animate-spin text-purple-400" size={24} />
                 </div>
-              ) : uploadedDocs.length === 0 ? (
-                <p className="text-center text-[11px] text-gray-400 font-bold uppercase py-8">
-                  Nenhum documento enviado ainda.
-                </p>
               ) : (
                 <>
-                  <p className="text-[10px] font-black text-gray-400 uppercase mb-4">
-                    {uploadedDocs.length} documento(s) enviado(s) pelo responsável
-                  </p>
-                  {uploadedDocs.map(doc => {
-                    const nomeLabel = (() => {
-                      const labelMap: Record<string, string> = {
-                        foto_aluno: 'Foto do Aluno',
-                        identidade: 'Identidade',
-                        comprovante_residencia: 'Comprovante de Residência',
-                        certidao_nascimento: 'Certidão de Nascimento',
-                        identidade_responsavel: 'Identidade do Responsável',
-                        declaracao_escolaridade: 'Declaração de Escolaridade',
-                        extra: doc.nome_extra ?? 'Documento Adicional',
-                      };
-                      return labelMap[doc.tipo] ?? doc.tipo;
-                    })();
-                    const fileUrl = doc.url_arquivo.startsWith('http')
-                      ? doc.url_arquivo
-                      : `${API_ORIGIN}${doc.url_arquivo}`;
-                    const bytes = doc.tamanho_bytes ?? 0;
-                    const sizeLabel = bytes > 1_048_576
-                      ? `${(bytes / 1_048_576).toFixed(1)} MB`
-                      : bytes > 1024
-                      ? `${(bytes / 1024).toFixed(0)} KB`
-                      : `${bytes} B`;
+                  {/* Barra de progresso */}
+                  {(() => {
+                    const total = 5; // TIPOS_OBRIGATORIOS.length no backend
+                    const enviados = total - obrigatoriosPendentes.length;
+                    const pct = Math.round((enviados / total) * 100);
                     return (
-                      <div key={doc.id} className="flex items-center justify-between gap-3 p-4 bg-gray-50 hover:bg-purple-50/40 rounded-2xl border border-gray-100 hover:border-purple-200 transition-all group">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <span className="text-purple-400 group-hover:text-purple-600 shrink-0">
-                            {doc.tipo === 'foto_aluno' ? (
-                              <Camera size={14} />
-                            ) : (
-                              <Paperclip size={14} />
-                            )}
+                      <div className={`p-4 rounded-2xl border ${docsCompleto ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'} mb-1`}>
+                        <div className="flex justify-between items-center mb-2">
+                          <p className="text-[10px] font-black uppercase text-gray-700">
+                            Obrigatórios: {enviados}/{total}
+                          </p>
+                          <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${docsCompleto ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                            {docsCompleto ? '✔ COMPLETO' : '⏳ PENDENTE'}
                           </span>
-                          <div className="min-w-0">
-                            <p className="text-[10px] font-black uppercase text-gray-700 group-hover:text-purple-700 truncate">{nomeLabel}</p>
-                            <p className="text-[9px] text-gray-400">{fmtDate(doc.createdAt)} · {sizeLabel}</p>
-                          </div>
                         </div>
-                        <a
-                          href={safeUrl(fileUrl)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-1 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-[9px] font-black uppercase text-gray-600 hover:bg-purple-600 hover:text-white hover:border-purple-600 transition-all shrink-0"
-                        >
-                          <ExternalLink size={10} /> Abrir
-                        </a>
+                        <div className="w-full bg-gray-200 rounded-full h-1.5">
+                          <div
+                            className={`h-1.5 rounded-full transition-all ${docsCompleto ? 'bg-green-500' : 'bg-amber-400'}`}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
                       </div>
                     );
-                  })}
+                  })()}
+
+                  {/* Documentos pendentes */}
+                  {obrigatoriosPendentes.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-[9px] font-black uppercase text-red-400 mb-1">Pendentes</p>
+                      {obrigatoriosPendentes.map(tipo => {
+                        const labelMap: Record<string, string> = {
+                          foto_aluno: 'Foto do Aluno',
+                          identidade: 'Identidade',
+                          comprovante_residencia: 'Comprovante de Residência',
+                          certidao_nascimento: 'Certidão de Nascimento',
+                          identidade_responsavel: 'Identidade do Responsável',
+                        };
+                        return (
+                          <div key={tipo} className="flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-100 rounded-xl">
+                            <FileWarning size={12} className="text-red-400 shrink-0" />
+                            <p className="text-[10px] font-bold text-red-600">{labelMap[tipo] ?? tipo}</p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Documentos enviados */}
+                  {uploadedDocs.length === 0 ? (
+                    <p className="text-center text-[11px] text-gray-400 font-bold uppercase py-4">
+                      Nenhum documento enviado ainda.
+                    </p>
+                  ) : (
+                    <div className="space-y-1">
+                      <p className="text-[9px] font-black uppercase text-gray-400 mb-1">Enviados ({uploadedDocs.length})</p>
+                      {uploadedDocs.map(doc => {
+                        const labelMap: Record<string, string> = {
+                          foto_aluno: 'Foto do Aluno',
+                          identidade: 'Identidade',
+                          comprovante_residencia: 'Comprovante de Residência',
+                          certidao_nascimento: 'Certidão de Nascimento',
+                          identidade_responsavel: 'Identidade do Responsável',
+                          declaracao_escolaridade: 'Declaração de Escolaridade',
+                          extra: doc.nome_extra ?? 'Documento Adicional',
+                        };
+                        const nomeLabel = labelMap[doc.tipo] ?? doc.tipo;
+                        const fileUrl = doc.url_arquivo.startsWith('http')
+                          ? doc.url_arquivo
+                          : `${API_ORIGIN}${doc.url_arquivo}`;
+                        const bytes = doc.tamanho_bytes ?? 0;
+                        const sizeLabel = bytes > 1_048_576
+                          ? `${(bytes / 1_048_576).toFixed(1)} MB`
+                          : bytes > 1024
+                          ? `${(bytes / 1024).toFixed(0)} KB`
+                          : `${bytes} B`;
+                        return (
+                          <div key={doc.id} className="flex items-center justify-between gap-3 p-3 bg-gray-50 hover:bg-purple-50/40 rounded-2xl border border-gray-100 hover:border-purple-200 transition-all group">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <span className="text-purple-400 group-hover:text-purple-600 shrink-0">
+                                {doc.tipo === 'foto_aluno' ? <Camera size={14} /> : <Paperclip size={14} />}
+                              </span>
+                              <div className="min-w-0">
+                                <p className="text-[10px] font-black uppercase text-gray-700 group-hover:text-purple-700 truncate">{nomeLabel}</p>
+                                <p className="text-[9px] text-gray-400">{fmtDate(doc.createdAt)} · {sizeLabel}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <a
+                                href={safeUrl(fileUrl)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-1 px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-[9px] font-black uppercase text-gray-600 hover:bg-purple-600 hover:text-white hover:border-purple-600 transition-all"
+                              >
+                                <ExternalLink size={10} /> Abrir
+                              </a>
+                              <button
+                                onClick={async () => {
+                                  if (!confirm(`Remover "${nomeLabel}"?`)) return;
+                                  try {
+                                    await api.delete(`/matriculas/documentos/${doc.id}`);
+                                    setUploadedDocs(prev => prev.filter(d => d.id !== doc.id));
+                                  } catch { alert('Erro ao remover documento.'); }
+                                }}
+                                className="flex items-center gap-1 px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-[9px] font-black uppercase text-red-400 hover:bg-red-500 hover:text-white hover:border-red-500 transition-all"
+                              >
+                                <Trash2 size={10} />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </>
               )}
             </div>

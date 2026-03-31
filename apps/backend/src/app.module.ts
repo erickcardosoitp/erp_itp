@@ -33,7 +33,7 @@ import { MateriasService } from './materias/materias.service';
 import { MateriasController } from './materias/materias.controller';
 import { MatriculasModule } from './matriculas/matriculas.module';
 import { UsuariosController } from './usuarios/usuarios.controller'; 
-import { EmailService } from './email.service';
+import { EmailModule } from './email.module';
 
 // Modules
 import { GruposModule } from './grupos/grupos.module';
@@ -109,6 +109,7 @@ import { RelatoriosModule } from './relatorios/relatorios.module';
     NotificacoesModule,
     RelatoriosModule,
     MatriculasModule,
+    EmailModule,
   ],
   controllers: [
     AppController, 
@@ -118,10 +119,9 @@ import { RelatoriosModule } from './relatorios/relatorios.module';
     require('./funcionarios/funcionarios.controller').FuncionariosController
   ],
   providers: [
-    AppService, 
-    MateriasService, 
-    AuthService, 
-    EmailService,
+    AppService,
+    MateriasService,
+    AuthService,
     // O UsersService NÃO deve estar aqui, pois já está dentro do UsersModule
     JwtStrategy,
     { provide: APP_GUARD, useClass: JwtAuthGuard },
@@ -275,6 +275,10 @@ export class AppModule implements OnModuleInit {
           usuario_id TEXT,
           criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
         )
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE IF EXISTS notificacoes
+          ADD COLUMN IF NOT EXISTS cargo_minimo INT
       `);
       this.logger.log('✅ Tabela notificacoes criada/verificada');
 
