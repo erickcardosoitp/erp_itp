@@ -169,7 +169,7 @@ export default function ColetorPage() {
         </div>
       )}
       {busca && produtosFiltrados.length === 0 && (
-        <p className="text-center text-slate-500 text-sm font-bold py-8">Nenhum produto encontrado para "{busca}".</p>
+        <p className="text-center text-slate-500 text-sm font-bold py-8">Nenhum produto encontrado para &ldquo;{busca}&rdquo;.</p>
       )}
 
       {/* SUCESSO FLASH */}
