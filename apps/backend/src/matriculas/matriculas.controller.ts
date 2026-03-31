@@ -62,12 +62,22 @@ export class MatriculasController {
   /**
    * Retorna cursos ATIVOS do módulo acadêmico com suas turmas ativas.
    * Endpoint público para popular formulário de matrícula direta.
-   * Substituir listarCursosDisponiveis por dados reais do acadêmico.
    */
   @Get('cursos-ativos-academico')
   @Public()
   async cursosAtivosAcademico() {
     return await this.matriculasService.obterCursosAtivosComTurmas();
+  }
+
+  /**
+   * Retorna apenas os nomes dos cursos ativos como string[].
+   * Usado pelos componentes do frontend (DossieCandidato, página de matrículas).
+   */
+  @Get('cursos-disponiveis')
+  @Public()
+  async cursosDisponiveis() {
+    const cursos = await this.matriculasService.obterCursosAtivosComTurmas();
+    return cursos.map(c => c.nome);
   }
 
   /**
