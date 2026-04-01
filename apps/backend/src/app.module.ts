@@ -335,6 +335,15 @@ export class AppModule implements OnModuleInit {
       `);
       this.logger.log('✅ Colunas email_responsavel aplicadas (IF NOT EXISTS)');
 
+      // ── Colunas faltantes em turma_alunos (schema drift) ─────────────────
+      await this.dataSource.query(`
+        ALTER TABLE IF EXISTS turma_alunos
+          ADD COLUMN IF NOT EXISTS inscricao_id INT,
+          ADD COLUMN IF NOT EXISTS nome_candidato VARCHAR,
+          ADD COLUMN IF NOT EXISTS tipo_vinculo VARCHAR NOT NULL DEFAULT 'aluno'
+      `);
+      this.logger.log('✅ Colunas turma_alunos (inscricao_id, nome_candidato, tipo_vinculo) aplicadas (IF NOT EXISTS)');
+
     } catch (err: any) {
       this.logger.error(`❌ Erro nas migrations automáticas: ${err.message}`);
     }
