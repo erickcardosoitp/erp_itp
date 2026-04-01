@@ -34,9 +34,24 @@ function decodeJwtPayload(token: string): Record<string, any> | null {
   }
 }
 
+/**
+ * Verifica se o token JWT é estruturalmente válido e não está expirado.
+ * Não verifica assinatura — isso é responsabilidade do backend.
+ */
+function isTokenValid(token: string): boolean {
+  try {
+    const payload = decodeJwtPayload(token);
+    if (!payload) return false;
+    if (payload.exp && Math.floor(Date.now() / 1000) > payload.exp) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function middleware(request: NextRequest) {
   const token = request.cookies.get('itp_token')?.value;
-  const hasValidToken = !!token;
+  const hasValidToken = !!token && isTokenValid(token);
   const { pathname } = request.nextUrl;
 
   // ── Redirecionamento da Raiz ──────────────────────────────────────────────

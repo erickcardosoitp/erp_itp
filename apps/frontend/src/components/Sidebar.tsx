@@ -4,6 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
+import Cookies from 'js-cookie';
 import { 
   LayoutDashboard, UserPlus, ClipboardList, 
   LogOut, Settings, PanelLeftClose, PanelLeftOpen,
@@ -32,7 +33,7 @@ const PATH_TO_MODULE: Record<string, string> = {
 export default function Sidebar({ isCollapsed, setIsCollapsed, mobileOpen, setMobileOpen }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const [isLoggingOut, setIsLoggingOut] = React.useState(false);
 
   // Menu atualizado com a taxonomia do ITP ERP
@@ -48,11 +49,13 @@ export default function Sidebar({ isCollapsed, setIsCollapsed, mobileOpen, setMo
   ];
 
   // Filtra módulos com base nas permissões do grupo
-  const isAdmin = user?.role?.toLowerCase() === 'admin';
+  // admin e prt têm acesso total (espelha o middleware)
+  const isFullAccess = ['admin', 'prt'].includes(user?.role?.toLowerCase() ?? '');
   const modulosVisiveis = user?.grupo?.grupo_permissoes?.modulos_visiveis;
 
   const filteredMenu = primaryMenu.filter(item => {
-    if (isAdmin) return true; // Admin vê tudo
+    if (loading) return true;       // Mantém itens visíveis durante o carregamento inicial
+    if (isFullAccess) return true;  // Admin/prt veem tudo
     if (!user?.grupo) return false; // Sem grupo = acesso restrito
     if (!modulosVisiveis) return false; // Grupo sem config = sem acesso
     const key = PATH_TO_MODULE[item.path];
@@ -66,28 +69,21 @@ export default function Sidebar({ isCollapsed, setIsCollapsed, mobileOpen, setMo
    */
   const handleLogout = async () => {
     if (!confirm('Deseja realmente sair do sistema?')) return;
-    
+
     setIsLoggingOut(true);
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001/api'; // Já usa a variável de ambiente
-      
-      const response = await fetch(`${apiUrl}/auth/logout`, {
+      const apiUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001/api';
+      await fetch(`${apiUrl}/auth/logout`, {
         method: 'POST',
-        credentials: 'include', // Necessário para enviar e limpar o cookie
+        credentials: 'include',
       });
-
-      if (response.ok) {
-        // Força reload para limpar estados da aplicação e redirecionar via Middleware
-        window.location.href = '/login';
-      } else {
-        throw new Error('Falha no logout');
-      }
     } catch (error) {
       console.error('Erro ao deslogar:', error);
-      // Fallback: redireciona mesmo se a API falhar
-      router.push('/login');
     } finally {
+      // Sempre limpa o cookie client-side e redireciona, independente da resposta da API
+      Cookies.remove('itp_token', { path: '/' });
       setIsLoggingOut(false);
+      window.location.href = '/login';
     }
   };
 
