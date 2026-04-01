@@ -1207,7 +1207,7 @@ function TurmasTab({ cursos, professores, alunos }: { cursos: Curso[]; professor
         <Modal title={`Atribuir Professor — ${turmaAtribuir.nome}`} onClose={() => setShowAtribuirProf(false)}>
           <div className="space-y-4">
             {usuariosProfessores.length === 0 && professores.length === 0 ? (
-              <p className="text-sm text-slate-400 text-center py-4">Nenhum professor encontrado.<br/>Cadastre usuários no grupo "Professor".</p>
+              <p className="text-sm text-slate-400 text-center py-4">Nenhum professor encontrado.<br/>Cadastre usuários no grupo &quot;Professor&quot;.</p>
             ) : (
               <>
                 {usuariosProfessores.length > 0 && (
