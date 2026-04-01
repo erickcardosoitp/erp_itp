@@ -553,6 +553,18 @@ export class AcademicoService {
     return { ok: true, id };
   }
 
+  /** Retorna usuários do sistema cujo grupo contenha "professor" (case-insensitive). */
+  async listarUsuariosProfessores() {
+    const rows = await this.dataSource.query(`
+      SELECT u.id, u.nome, u.email, u.role, g.nome as grupo_nome
+      FROM usuarios u
+      LEFT JOIN grupos g ON u.grupo_id = g.id
+      WHERE LOWER(g.nome) LIKE '%professor%'
+      ORDER BY u.nome ASC
+    `);
+    return rows;
+  }
+
   async listarAlertasCandidatos() {
     const registros = await this.dataSource.query(`
       SELECT d.inscricao_id, COALESCE(d.pessoa_nome, i.nome_completo, 'Candidato') AS candidato_nome,

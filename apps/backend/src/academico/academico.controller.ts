@@ -228,6 +228,9 @@ export class AcademicoController {
   @Get('presenca/alertas-candidatos')
   alertasCandidatos() { return this.svc.listarAlertasCandidatos(); }
 
+  @Get('usuarios-professores')
+  listarUsuariosProfessores() { return this.svc.listarUsuariosProfessores(); }
+
   @Get('presenca/sessoes/:id/registros')
   getRegistrosSessao(@Param('id') id: string) { return this.svc.listarRegistrosSessao(id); }
 

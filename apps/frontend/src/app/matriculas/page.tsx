@@ -71,6 +71,19 @@ export default function GestaoMatriculas() {
   const [matriculando, setMatriculando] = useState(false);
   const [matriculaResultado, setMatriculaResultado] = useState<{ numero: string; nome: string } | null>(null);
 
+  // Modal de Cadastro Direto (bypass do workflow)
+  const [showCadastroDireto, setShowCadastroDireto] = useState(false);
+  const [cursosAcademico, setCursosAcademico] = useState<Array<{ id: string; nome: string; sigla: string }>>([]);
+  const [formDireto, setFormDireto] = useState<Record<string, any>>({
+    nome_completo: '', cpf: '', email: '', celular: '',
+    data_nascimento: '', sexo: '', escolaridade: '', turno_escolar: '',
+    cidade: '', bairro: '', nome_responsavel: '', lgpd_aceito: false,
+    curso_ids: [] as string[],
+  });
+  const [salvandoDireto, setSalvandoDireto] = useState(false);
+  const [erroDireto, setErroDireto] = useState<string | null>(null);
+  const [resultadoDireto, setResultadoDireto] = useState<{ numero_matricula: string; nome_completo: string } | null>(null);
+
   // Dispara re-fetch manual (botão refresh, pós-matrícula)
   const fetchMatriculas = useCallback(() => setRefreshTick(t => t + 1), []);
 
@@ -82,7 +95,81 @@ export default function GestaoMatriculas() {
     api.get('/matriculas/localidades')
       .then(r => { if (r.data) setLocalidades(r.data); })
       .catch(() => {});
+    api.get('/matriculas/cursos-ativos-academico')
+      .then(r => setCursosAcademico(Array.isArray(r.data) ? r.data : []))
+      .catch(() => {});
   }, []);
+
+  const calcularIdadeDireto = (dataNasc: string): number => {
+    if (!dataNasc) return 99;
+    const d = new Date(dataNasc + 'T12:00:00');
+    if (isNaN(d.getTime())) return 99;
+    const hoje = new Date();
+    let idade = hoje.getFullYear() - d.getFullYear();
+    const m = hoje.getMonth() - d.getMonth();
+    if (m < 0 || (m === 0 && hoje.getDate() < d.getDate())) idade--;
+    return idade;
+  };
+  const menorDeIdadeDireto = formDireto.data_nascimento ? calcularIdadeDireto(formDireto.data_nascimento) < 18 : false;
+
+  const toggleCursoDireto = (id: string) => {
+    setFormDireto(prev => ({
+      ...prev,
+      curso_ids: prev.curso_ids.includes(id)
+        ? prev.curso_ids.filter((c: string) => c !== id)
+        : [...prev.curso_ids, id],
+    }));
+  };
+
+  const abrirCadastroDireto = () => {
+    setFormDireto({
+      nome_completo: '', cpf: '', email: '', celular: '',
+      data_nascimento: '', sexo: '', escolaridade: '', turno_escolar: '',
+      cidade: '', bairro: '', nome_responsavel: '', lgpd_aceito: false,
+      curso_ids: [],
+    });
+    setErroDireto(null);
+    setResultadoDireto(null);
+    setShowCadastroDireto(true);
+  };
+
+  const salvarCadastroDireto = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formDireto.nome_completo.trim()) { setErroDireto('Nome completo é obrigatório.'); return; }
+    if (!formDireto.cpf.trim()) { setErroDireto('CPF é obrigatório.'); return; }
+    if (!formDireto.email.trim()) { setErroDireto('E-mail é obrigatório.'); return; }
+    if (!formDireto.celular.trim()) { setErroDireto('Celular é obrigatório.'); return; }
+    setSalvandoDireto(true);
+    setErroDireto(null);
+    try {
+      const payload: Record<string, any> = {
+        nome_completo:   formDireto.nome_completo.trim(),
+        cpf:             formDireto.cpf.trim(),
+        email:           formDireto.email.trim(),
+        celular:         formDireto.celular.trim(),
+        data_nascimento: formDireto.data_nascimento || undefined,
+        sexo:            formDireto.sexo || undefined,
+        escolaridade:    formDireto.escolaridade || undefined,
+        turno_escolar:   formDireto.turno_escolar || undefined,
+        cidade:          formDireto.cidade.trim() || undefined,
+        bairro:          formDireto.bairro.trim() || undefined,
+        lgpd_aceito:     formDireto.lgpd_aceito,
+        curso_ids:       formDireto.curso_ids,
+      };
+      if (menorDeIdadeDireto && formDireto.nome_responsavel.trim()) {
+        payload.nome_responsavel = formDireto.nome_responsavel.trim();
+        payload.maior_18_anos = false;
+      }
+      const r = await api.post('/matriculas/aluno-direto', payload);
+      setResultadoDireto(r.data);
+      fetchMatriculas();
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || err?.message || 'Erro ao cadastrar.';
+      setErroDireto(Array.isArray(msg) ? msg.join(', ') : msg);
+    } finally {
+      setSalvandoDireto(false);
+    }
+  };
 
   // Fetch paginado + filtrado — re-executa quando pagina, filtros, ordenação ou refreshTick mudam
   useEffect(() => {
@@ -136,7 +223,7 @@ export default function GestaoMatriculas() {
     matriculados:       statsServidor['Matriculado'] || 0,
     incompletos:        statsServidor['Incompleto'] || 0,
     desistentes:        statsServidor['Desistente'] || 0,
-    cancelados:         statsServidor['Cancelado'] || 0,
+    cancelados:         statsServidor['Cancelada'] || 0,
   }), [statsServidor]);
 
   const handleExport = async (formato: 'xlsx' | 'csv' | 'json') => {
@@ -170,7 +257,7 @@ export default function GestaoMatriculas() {
   // Paleta de cores fundamentada em UX de workflow:
   // Cinza = neutro/aguardando | Laranja = ação do candidato | Azul = processamento interno
   // Verde = sucesso | Vermelho = problema | Cinza-escuro = saída passiva
-  const podeMatricular = (status: string) => !['Matriculado', 'Desistente', 'Cancelado'].includes(status);
+  const podeMatricular = (status: string) => !['Matriculado', 'Desistente', 'Cancelada'].includes(status);
 
   const abrirModalMatricular = (m: any) => {
     const raw = m.cursos_desejados ?? '';
@@ -219,7 +306,7 @@ export default function GestaoMatriculas() {
       case 'Matriculado':                  return { bg: '#16a34a', text: '#fff' };  // green-600 — concluído
       case 'Incompleto':                   return { bg: '#dc2626', text: '#fff' };  // red-600   — bloqueado
       case 'Desistente':                   return { bg: '#64748b', text: '#fff' };  // slate-500 — saída voluntária
-      case 'Cancelado':                    return { bg: '#7f1d1d', text: '#fff' };  // red-950   — cancelado
+      case 'Cancelada':                    return { bg: '#7f1d1d', text: '#fff' };  // red-950   — cancelado
       default:                             return { bg: '#e2e8f0', text: '#475569' };
     }
   };
@@ -245,6 +332,13 @@ export default function GestaoMatriculas() {
               className="p-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 text-slate-500 hover:text-purple-600 hover:border-purple-400 transition-all disabled:opacity-60"
             >
               <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
+            </button>
+            <button
+              onClick={abrirCadastroDireto}
+              className="flex items-center gap-2 px-5 py-3 rounded-xl font-black text-xs uppercase tracking-widest text-white shadow-lg bg-green-600 hover:bg-green-700 transition-all"
+              title="Cadastrar aluno diretamente, sem o workflow de inscrição"
+            >
+              <GraduationCap size={15} /> Cadastrar Diretamente
             </button>
             <div className="relative">
               <button 
@@ -300,7 +394,7 @@ export default function GestaoMatriculas() {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <KPICard title="Incompletos" value={stats.incompletos} icon={<AlertCircle size={18}/>} color="#dc2626" onClick={() => { setPagina(1); setFiltroStatus('Incompleto'); }} isActive={filtroStatus === 'Incompleto'} />
                 <KPICard title="Desistentes" value={stats.desistentes} icon={<UserX size={18}/>} color="#64748b" onClick={() => { setPagina(1); setFiltroStatus('Desistente'); }} isActive={filtroStatus === 'Desistente'} />
-                <KPICard title="Cancelados" value={stats.cancelados} icon={<Ban size={18}/>} color="#7f1d1d" onClick={() => { setPagina(1); setFiltroStatus('Cancelado'); }} isActive={filtroStatus === 'Cancelado'} />
+                <KPICard title="Cancelados" value={stats.cancelados} icon={<Ban size={18}/>} color="#7f1d1d" onClick={() => { setPagina(1); setFiltroStatus('Cancelada'); }} isActive={filtroStatus === 'Cancelada'} />
               </div>
             )}
           </div>
@@ -349,7 +443,7 @@ export default function GestaoMatriculas() {
                 <option value="Matriculado">Matriculado</option>
                 <option value="Incompleto">Incompleto</option>
                 <option value="Desistente">Desistente</option>
-                <option value="Cancelado">Cancelado</option>
+                <option value="Cancelada">Cancelada</option>
               </select>
             </FilterGroup>
 
@@ -499,6 +593,197 @@ export default function GestaoMatriculas() {
           onClose={() => setIsModalOpen(false)}
           onSuccess={fetchMatriculas}
         />
+      )}
+
+      {/* ── Modal: Cadastro Direto ───────────────────────────────────── */}
+      {showCadastroDireto && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden max-h-[90vh] flex flex-col">
+            <div className="bg-green-600 px-6 py-4 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="bg-white/20 p-2 rounded-xl"><GraduationCap size={20} className="text-white" /></div>
+                <div>
+                  <p className="text-[9px] font-black uppercase tracking-widest text-green-100">Matrícula Direta</p>
+                  <p className="text-sm font-black text-white">Cadastrar Aluno sem Workflow</p>
+                </div>
+              </div>
+              <button onClick={() => setShowCadastroDireto(false)} className="text-white/70 hover:text-white"><X size={18} /></button>
+            </div>
+
+            <div className="overflow-y-auto flex-1 px-6 py-5">
+              {resultadoDireto ? (
+                <div className="text-center py-8 space-y-4">
+                  <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
+                    <CheckCircle2 size={32} className="text-green-600" />
+                  </div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-green-600">Aluno Cadastrado!</p>
+                  <p className="font-bold text-slate-800 dark:text-white">{resultadoDireto.nome_completo}</p>
+                  <p className="text-[10px] text-slate-500">Número de Matrícula</p>
+                  <p className="font-mono text-2xl font-black text-green-700 tracking-wider">{resultadoDireto.numero_matricula}</p>
+                  <div className="flex gap-3 justify-center mt-4">
+                    <button onClick={() => { setResultadoDireto(null); setFormDireto({ nome_completo: '', cpf: '', email: '', celular: '', data_nascimento: '', sexo: '', escolaridade: '', turno_escolar: '', cidade: '', bairro: '', nome_responsavel: '', lgpd_aceito: false, curso_ids: [] }); setErroDireto(null); }}
+                      className="px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl font-black text-xs uppercase">
+                      + Cadastrar Outro
+                    </button>
+                    <button onClick={() => setShowCadastroDireto(false)}
+                      className="px-5 py-2.5 border border-slate-200 text-slate-600 rounded-xl font-black text-xs uppercase hover:bg-slate-50">
+                      Fechar
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <form onSubmit={salvarCadastroDireto} className="space-y-5">
+                  {/* Identificação */}
+                  <fieldset className="space-y-3">
+                    <legend className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2">Identificação *</legend>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="sm:col-span-2">
+                        <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Nome Completo *</label>
+                        <input required value={formDireto.nome_completo} onChange={e => setFormDireto(p => ({ ...p, nome_completo: e.target.value }))}
+                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">CPF *</label>
+                        <input required value={formDireto.cpf} onChange={e => setFormDireto(p => ({ ...p, cpf: e.target.value }))}
+                          placeholder="000.000.000-00"
+                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Data de Nascimento</label>
+                        <input type="date" value={formDireto.data_nascimento} onChange={e => setFormDireto(p => ({ ...p, data_nascimento: e.target.value }))}
+                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Sexo</label>
+                        <select value={formDireto.sexo} onChange={e => setFormDireto(p => ({ ...p, sexo: e.target.value }))}
+                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400 bg-white">
+                          <option value="">Selecione...</option>
+                          <option value="Masculino">Masculino</option>
+                          <option value="Feminino">Feminino</option>
+                          <option value="Outro">Outro</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Escolaridade</label>
+                        <select value={formDireto.escolaridade} onChange={e => setFormDireto(p => ({ ...p, escolaridade: e.target.value }))}
+                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400 bg-white">
+                          <option value="">Selecione...</option>
+                          <option>Fundamental Incompleto</option>
+                          <option>Fundamental Completo</option>
+                          <option>Médio Incompleto</option>
+                          <option>Médio Completo</option>
+                          <option>Superior Incompleto</option>
+                          <option>Superior Completo</option>
+                        </select>
+                      </div>
+                    </div>
+                    {menorDeIdadeDireto && (
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-orange-500 block mb-1">Nome do Responsável (menor de idade)</label>
+                        <input value={formDireto.nome_responsavel} onChange={e => setFormDireto(p => ({ ...p, nome_responsavel: e.target.value }))}
+                          className="w-full border border-orange-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                      </div>
+                    )}
+                  </fieldset>
+
+                  {/* Contato */}
+                  <fieldset className="space-y-3">
+                    <legend className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2">Contato *</legend>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">E-mail *</label>
+                        <input required type="email" value={formDireto.email} onChange={e => setFormDireto(p => ({ ...p, email: e.target.value }))}
+                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Celular *</label>
+                        <input required value={formDireto.celular} onChange={e => setFormDireto(p => ({ ...p, celular: e.target.value }))}
+                          placeholder="(21) 99999-9999"
+                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400" />
+                      </div>
+                    </div>
+                  </fieldset>
+
+                  {/* Localização */}
+                  <fieldset className="space-y-3">
+                    <legend className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2">Localização</legend>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Cidade</label>
+                        <input value={formDireto.cidade} onChange={e => setFormDireto(p => ({ ...p, cidade: e.target.value }))}
+                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Bairro</label>
+                        <input value={formDireto.bairro} onChange={e => setFormDireto(p => ({ ...p, bairro: e.target.value }))}
+                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Turno Escolar</label>
+                        <select value={formDireto.turno_escolar} onChange={e => setFormDireto(p => ({ ...p, turno_escolar: e.target.value }))}
+                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400 bg-white">
+                          <option value="">Selecione...</option>
+                          <option>Manhã</option><option>Tarde</option><option>Noite</option><option>Integral</option>
+                        </select>
+                      </div>
+                    </div>
+                  </fieldset>
+
+                  {/* Cursos */}
+                  {cursosAcademico.length > 0 && (
+                    <fieldset>
+                      <legend className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-3">
+                        Cursos a Matricular
+                        <span className="ml-2 font-normal normal-case text-slate-400">({formDireto.curso_ids.length} selecionado{formDireto.curso_ids.length !== 1 ? 's' : ''})</span>
+                      </legend>
+                      <div className="grid grid-cols-2 gap-2">
+                        {cursosAcademico.map((c: any) => {
+                          const ativo = formDireto.curso_ids.includes(c.id);
+                          return (
+                            <button key={c.id} type="button" onClick={() => toggleCursoDireto(c.id)}
+                              className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-left text-[11px] font-bold transition-all ${
+                                ativo ? 'bg-green-600 border-green-600 text-white' : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-green-400'
+                              }`}>
+                              <span className={`w-4 h-4 rounded flex-shrink-0 flex items-center justify-center border ${ativo ? 'bg-white border-white' : 'border-slate-300'}`}>
+                                {ativo && <span className="text-green-600 text-[10px] font-black">✓</span>}
+                              </span>
+                              <span className="truncate">{c.sigla} – {c.nome}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </fieldset>
+                  )}
+
+                  {/* LGPD */}
+                  <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl p-3">
+                    <input type="checkbox" id="lgpd_direto" checked={formDireto.lgpd_aceito}
+                      onChange={e => setFormDireto(p => ({ ...p, lgpd_aceito: e.target.checked }))}
+                      className="mt-0.5 rounded" />
+                    <label htmlFor="lgpd_direto" className="text-[11px] font-bold text-amber-700 cursor-pointer">
+                      Confirmo que o aluno autorizou o uso de seus dados conforme a LGPD (Lei 13.709/2018)
+                    </label>
+                  </div>
+
+                  {erroDireto && (
+                    <div className="bg-red-50 border border-red-200 text-red-700 text-[11px] font-bold rounded-xl px-4 py-3">⚠ {erroDireto}</div>
+                  )}
+
+                  <div className="flex gap-3 pt-2">
+                    <button type="button" onClick={() => setShowCadastroDireto(false)}
+                      className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-black text-xs uppercase hover:bg-slate-50">
+                      Cancelar
+                    </button>
+                    <button type="submit" disabled={salvandoDireto}
+                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white font-black text-xs uppercase">
+                      {salvandoDireto ? <><RefreshCw size={13} className="animate-spin" /> Cadastrando...</> : <><GraduationCap size={13} /> Cadastrar Aluno</>}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ── Modal: Efetivar Matrícula ─────────────────────────────────── */}

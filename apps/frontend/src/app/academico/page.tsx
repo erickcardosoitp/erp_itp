@@ -316,7 +316,10 @@ function AlunosTab({ cursos, turmas }: { cursos: Curso[]; turmas: Turma[] }) {
   const [filtroCursoNome, setFiltroCursoNome] = useState('');
   const [filtroTurmaId, setFiltroTurmaId] = useState('');
   const [fichaAluno, setFichaAluno] = useState<any>(null);
+  const [fichaAba, setFichaAba] = useState<'dados' | 'presenca'>('dados');
   const [dossieCandidato, setDossieCandidato] = useState<any>(null);
+  const [fichaErro, setFichaErro] = useState<string | null>(null);
+  const [fichaLoading, setFichaLoading] = useState(false);
 
   // ── Cadastro Rápido ───────────────────────────────────────────────────────
   const [showCadastroRapido, setShowCadastroRapido] = useState(false);
@@ -349,19 +352,18 @@ function AlunosTab({ cursos, turmas }: { cursos: Curso[]; turmas: Turma[] }) {
   useEffect(() => { load(); }, [load]);
 
   const verFicha = async (id: string) => {
+    setFichaErro(null);
+    setFichaLoading(true);
     try {
       const r = await api.get(`/academico/alunos/${id}/ficha`);
-      const data = r.data;
-      if (data.inscricao_id) {
-        // Aluno veio do workflow de matrícula — busca inscricao e abre DossieCandidato
-        try {
-          const ri = await api.get(`/matriculas/inscricao/${data.inscricao_id}`);
-          setDossieCandidato(ri.data);
-          return;
-        } catch { /* fallback para ficha simples */ }
-      }
-      setFichaAluno(data);
-    } catch {}
+      setFichaAba('dados');
+      setFichaAluno(r.data);
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || err?.message || 'Erro ao carregar ficha do aluno.';
+      setFichaErro(Array.isArray(msg) ? msg.join(', ') : msg);
+    } finally {
+      setFichaLoading(false);
+    }
   };
 
   const abrirCadastroRapido = () => {
@@ -463,9 +465,9 @@ function AlunosTab({ cursos, turmas }: { cursos: Curso[]; turmas: Turma[] }) {
                     <td className="px-4 py-3 text-slate-500">{a.turno_escolar || '–'}</td>
                     <td className="px-4 py-3 text-slate-500">{fmtDate(a.data_matricula)}</td>
                     <td className="px-4 py-3 text-center">
-                      <button onClick={() => verFicha(a.id)}
-                        className="bg-purple-100 text-purple-700 px-3 py-1 rounded-lg text-[9px] font-black uppercase hover:bg-purple-200 transition-colors">
-                        Ver
+                      <button onClick={() => verFicha(a.id)} disabled={fichaLoading}
+                        className="bg-purple-100 text-purple-700 px-3 py-1 rounded-lg text-[9px] font-black uppercase hover:bg-purple-200 transition-colors disabled:opacity-50">
+                        {fichaLoading ? '...' : 'Ver'}
                       </button>
                     </td>
                   </tr>
@@ -475,6 +477,14 @@ function AlunosTab({ cursos, turmas }: { cursos: Curso[]; turmas: Turma[] }) {
           </div>
         )}
       </div>
+
+      {/* Erro ao carregar ficha */}
+      {fichaErro && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[400] bg-red-600 text-white px-6 py-3 rounded-2xl shadow-2xl text-sm font-bold flex items-center gap-3">
+          ⚠ {fichaErro}
+          <button onClick={() => setFichaErro(null)} className="ml-2 underline text-white/80 text-xs">Fechar</button>
+        </div>
+      )}
 
       {dossieCandidato && (
         <DossieCandidato
@@ -526,140 +536,212 @@ function AlunosTab({ cursos, turmas }: { cursos: Curso[]; turmas: Turma[] }) {
       )}
 
       {fichaAluno && (
-        <Modal title={`Ficha: ${fichaAluno.aluno?.nome_completo}`} onClose={() => setFichaAluno(null)}>
-          <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
-            {/* Matrícula + Turma */}
-            <div className="flex gap-2">
-              <div className="flex-1 bg-purple-50 border border-purple-100 rounded-xl p-3 text-center">
-                <span className="text-[8px] font-black uppercase text-purple-400 block">Matrícula</span>
-                <span className="font-black text-purple-700 text-sm">{fichaAluno.aluno?.numero_matricula || '–'}</span>
-              </div>
-              {fichaAluno.turmaInfo && (
-                <div className="flex-1 bg-indigo-50 border border-indigo-100 rounded-xl p-3 text-center">
-                  <span className="text-[8px] font-black uppercase text-indigo-400 block">Turma</span>
-                  <span className="font-black text-indigo-700 text-sm">{fichaAluno.turmaInfo.nome}</span>
+        <div className="fixed inset-0 z-[300] bg-purple-950/60 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="w-full max-w-2xl bg-white rounded-[32px] shadow-2xl flex flex-col overflow-hidden max-h-[92vh]">
+            {/* Header */}
+            <div className="p-5 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center text-purple-600 font-black text-lg">
+                  {(fichaAluno.aluno?.nome_completo || '?')[0].toUpperCase()}
                 </div>
-              )}
-              <div className="flex-1 bg-green-50 border border-green-100 rounded-xl p-3 text-center">
-                <span className="text-[8px] font-black uppercase text-green-400 block">Status</span>
-                <span className="font-black text-green-700 text-sm">{fichaAluno.aluno?.ativo ? 'Ativo' : 'Inativo'}</span>
+                <div>
+                  <h2 className="font-black text-slate-800 text-base uppercase tracking-tight">{fichaAluno.aluno?.nome_completo}</h2>
+                  <div className="flex gap-2 mt-0.5 flex-wrap">
+                    <span className="font-mono text-[10px] font-black text-purple-700 bg-purple-50 px-2 py-0.5 rounded">{fichaAluno.aluno?.numero_matricula || '–'}</span>
+                    {fichaAluno.turmaInfo && <span className="text-[10px] font-black text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded">{fichaAluno.turmaInfo.nome}</span>}
+                    <span className={`text-[10px] font-black px-2 py-0.5 rounded ${fichaAluno.aluno?.ativo ? 'bg-green-50 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
+                      {fichaAluno.aluno?.ativo ? 'Ativo' : 'Inativo'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {fichaAluno.inscricao_id && (
+                  <button
+                    onClick={() => {
+                      api.get(`/matriculas/inscricao/${fichaAluno.inscricao_id}`)
+                        .then(r => { setFichaAluno(null); setDossieCandidato(r.data); })
+                        .catch(() => alert('Não foi possível carregar o dossier do candidato.'));
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-[9px] font-black uppercase transition-colors"
+                    title="Abrir Dossier Completo (LGPD, documentos, movimentações)"
+                  >
+                    <FileText size={11}/> Dossier Completo
+                  </button>
+                )}
+                <button onClick={() => setFichaAluno(null)} className="p-1.5 hover:bg-slate-100 rounded-xl text-slate-400"><X size={16}/></button>
               </div>
             </div>
 
-            {/* Dados Pessoais */}
-            <section>
-              <h4 className="text-[9px] font-black uppercase text-purple-600 mb-2 tracking-widest">Dados Pessoais</h4>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                {([
-                  ['CPF', fichaAluno.aluno?.cpf],
-                  ['Celular', fichaAluno.aluno?.celular],
-                  ['E-mail', fichaAluno.aluno?.email],
-                  ['Nascimento', fmtDate(fichaAluno.aluno?.data_nascimento)],
-                  ['Sexo', fichaAluno.aluno?.sexo],
-                  ['Escolaridade', fichaAluno.aluno?.escolaridade],
-                  ['Turno', fichaAluno.aluno?.turno_escolar],
-                  ['Cursos', fichaAluno.aluno?.cursos_matriculados],
-                ] as [string, string][]).map(([k, v]) => (
-                  <div key={k} className="bg-slate-50 rounded-xl p-2">
-                    <span className="text-[8px] font-black uppercase text-slate-400 block">{k}</span>
-                    <span className="font-bold text-slate-700 truncate block">{v || '–'}</span>
-                  </div>
-                ))}
-              </div>
-            </section>
+            {/* Tabs */}
+            <div className="flex border-b border-slate-100 bg-white shrink-0 px-4">
+              {(['dados', 'presenca'] as const).map(aba => (
+                <button key={aba} onClick={() => setFichaAba(aba)}
+                  className={`px-4 py-2.5 text-[10px] font-black uppercase tracking-widest border-b-2 transition-colors ${
+                    fichaAba === aba ? 'border-purple-600 text-purple-700' : 'border-transparent text-slate-400 hover:text-slate-700'
+                  }`}>
+                  {aba === 'dados' ? 'Cadastro' : `Presença (${fichaAluno.totalPresencas ?? 0}P / ${fichaAluno.totalFaltas ?? 0}F)`}
+                </button>
+              ))}
+            </div>
 
-            {/* Endereço */}
-            <section>
-              <h4 className="text-[9px] font-black uppercase text-purple-600 mb-2 tracking-widest">Endereço</h4>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                {([
-                  ['Cidade', fichaAluno.aluno?.cidade],
-                  ['Bairro', fichaAluno.aluno?.bairro],
-                  ['Logradouro', fichaAluno.aluno?.logradouro],
-                  ['CEP', fichaAluno.aluno?.cep],
-                ] as [string, string][]).map(([k, v]) => (
-                  <div key={k} className="bg-slate-50 rounded-xl p-2">
-                    <span className="text-[8px] font-black uppercase text-slate-400 block">{k}</span>
-                    <span className="font-bold text-slate-700 truncate block">{v || '–'}</span>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            {/* Responsável (se menor) */}
-            {fichaAluno.aluno?.nome_responsavel && (
-              <section>
-                <h4 className="text-[9px] font-black uppercase text-purple-600 mb-2 tracking-widest">Responsável</h4>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  {([
-                    ['Nome', fichaAluno.aluno?.nome_responsavel],
-                    ['Parentesco', fichaAluno.aluno?.grau_parentesco],
-                    ['Email Resp.', fichaAluno.aluno?.email_responsavel],
-                    ['CPF Resp.', fichaAluno.aluno?.cpf_responsavel],
-                  ] as [string, string][]).map(([k, v]) => (
-                    <div key={k} className="bg-slate-50 rounded-xl p-2">
-                      <span className="text-[8px] font-black uppercase text-slate-400 block">{k}</span>
-                      <span className="font-bold text-slate-700 truncate block">{v || '–'}</span>
+            {/* Content */}
+            <div className="overflow-y-auto flex-1 p-5 space-y-4">
+              {fichaAba === 'dados' && (
+                <>
+                  {/* Dados Pessoais */}
+                  <section>
+                    <h4 className="text-[9px] font-black uppercase text-purple-600 mb-2 tracking-widest">Dados Pessoais</h4>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      {([
+                        ['CPF', fichaAluno.aluno?.cpf],
+                        ['Celular', fichaAluno.aluno?.celular],
+                        ['E-mail', fichaAluno.aluno?.email],
+                        ['Nascimento', fmtDate(fichaAluno.aluno?.data_nascimento)],
+                        ['Sexo', fichaAluno.aluno?.sexo],
+                        ['Escolaridade', fichaAluno.aluno?.escolaridade],
+                        ['Turno', fichaAluno.aluno?.turno_escolar],
+                        ['Cursos Matriculados', fichaAluno.aluno?.cursos_matriculados],
+                        ['LGPD Aceito', fichaAluno.aluno?.lgpd_aceito ? 'Sim' : 'Não'],
+                      ] as [string, string][]).map(([k, v]) => (
+                        <div key={k} className="bg-slate-50 rounded-xl p-2">
+                          <span className="text-[8px] font-black uppercase text-slate-400 block">{k}</span>
+                          <span className="font-bold text-slate-700 truncate block">{v || '–'}</span>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              </section>
-            )}
+                  </section>
 
-            {/* Saúde */}
-            {(fichaAluno.aluno?.possui_alergias || fichaAluno.aluno?.cuidado_especial || fichaAluno.aluno?.uso_medicamento) && (
-              <section>
-                <h4 className="text-[9px] font-black uppercase text-amber-600 mb-2 tracking-widest">Saúde</h4>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  {([
-                    ['Alergias', fichaAluno.aluno?.possui_alergias],
-                    ['Cuidado Especial', fichaAluno.aluno?.cuidado_especial],
-                    ['Medicamentos', fichaAluno.aluno?.uso_medicamento],
-                  ] as [string, string][]).map(([k, v]) => v ? (
-                    <div key={k} className="bg-amber-50 rounded-xl p-2">
-                      <span className="text-[8px] font-black uppercase text-amber-500 block">{k}</span>
-                      <span className="font-bold text-amber-700 truncate block">{v}</span>
+                  {/* Endereço */}
+                  <section>
+                    <h4 className="text-[9px] font-black uppercase text-purple-600 mb-2 tracking-widest">Endereço</h4>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      {([
+                        ['Cidade', fichaAluno.aluno?.cidade],
+                        ['Bairro', fichaAluno.aluno?.bairro],
+                        ['Logradouro', fichaAluno.aluno?.logradouro],
+                        ['CEP', fichaAluno.aluno?.cep],
+                      ] as [string, string][]).map(([k, v]) => (
+                        <div key={k} className="bg-slate-50 rounded-xl p-2">
+                          <span className="text-[8px] font-black uppercase text-slate-400 block">{k}</span>
+                          <span className="font-bold text-slate-700 truncate block">{v || '–'}</span>
+                        </div>
+                      ))}
                     </div>
-                  ) : null)}
-                </div>
-              </section>
-            )}
+                  </section>
 
-            {/* Presença */}
-            <section>
-              <h4 className="text-[9px] font-black uppercase text-purple-600 mb-2 tracking-widest">Presença</h4>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="bg-green-50 border border-green-100 rounded-xl p-3 text-center">
-                  <span className="text-[8px] font-black uppercase text-green-500 block">Presenças</span>
-                  <span className="font-black text-green-700 text-lg">{fichaAluno.totalPresencas ?? 0}</span>
-                </div>
-                <div className="bg-red-50 border border-red-100 rounded-xl p-3 text-center">
-                  <span className="text-[8px] font-black uppercase text-red-500 block">Faltas</span>
-                  <span className="font-black text-red-700 text-lg">{fichaAluno.totalFaltas ?? 0}</span>
-                </div>
-              </div>
-            </section>
-
-            {/* Histórico Diário */}
-            {fichaAluno.historico?.length > 0 && (
-              <section>
-                <h4 className="text-[9px] font-black uppercase text-purple-600 mb-2 tracking-widest">Histórico Diário</h4>
-                <div className="space-y-1.5">
-                  {fichaAluno.historico.map((h: DiarioEntry) => (
-                    <div key={h.id} className="flex gap-2 bg-slate-50 rounded-xl p-2">
-                      <span className="px-1.5 py-0.5 rounded text-[8px] font-black bg-purple-100 text-purple-700 uppercase self-start whitespace-nowrap">{h.tipo}</span>
-                      <div>
-                        {h.titulo && <div className="text-xs font-bold text-slate-700">{h.titulo}</div>}
-                        {h.descricao && <div className="text-[10px] text-slate-500">{h.descricao}</div>}
-                        <div className="text-[9px] text-slate-400 mt-0.5">{fmtDate(h.data)} · {h.usuario_nome}</div>
+                  {/* Responsável */}
+                  {fichaAluno.aluno?.nome_responsavel && (
+                    <section>
+                      <h4 className="text-[9px] font-black uppercase text-purple-600 mb-2 tracking-widest">Responsável</h4>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        {([
+                          ['Nome', fichaAluno.aluno?.nome_responsavel],
+                          ['Parentesco', fichaAluno.aluno?.grau_parentesco],
+                          ['E-mail', fichaAluno.aluno?.email_responsavel],
+                          ['CPF', fichaAluno.aluno?.cpf_responsavel],
+                        ] as [string, string][]).map(([k, v]) => (
+                          <div key={k} className="bg-slate-50 rounded-xl p-2">
+                            <span className="text-[8px] font-black uppercase text-slate-400 block">{k}</span>
+                            <span className="font-bold text-slate-700 truncate block">{v || '–'}</span>
+                          </div>
+                        ))}
                       </div>
+                    </section>
+                  )}
+
+                  {/* Saúde */}
+                  {(fichaAluno.aluno?.possui_alergias || fichaAluno.aluno?.cuidado_especial || fichaAluno.aluno?.uso_medicamento) && (
+                    <section>
+                      <h4 className="text-[9px] font-black uppercase text-amber-600 mb-2 tracking-widest">Saúde / Cuidados</h4>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        {([
+                          ['Alergias', fichaAluno.aluno?.possui_alergias],
+                          ['Cuidado Especial', fichaAluno.aluno?.cuidado_especial],
+                          ['Medicamentos', fichaAluno.aluno?.uso_medicamento],
+                          ['Detalhes', fichaAluno.aluno?.detalhes_cuidado],
+                        ] as [string, string][]).map(([k, v]) => v ? (
+                          <div key={k} className="bg-amber-50 rounded-xl p-2 col-span-1">
+                            <span className="text-[8px] font-black uppercase text-amber-500 block">{k}</span>
+                            <span className="font-bold text-amber-700 block text-xs leading-tight">{v}</span>
+                          </div>
+                        ) : null)}
+                      </div>
+                    </section>
+                  )}
+                </>
+              )}
+
+              {fichaAba === 'presenca' && (
+                <>
+                  {/* KPIs */}
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="bg-green-50 border border-green-100 rounded-xl p-3 text-center">
+                      <span className="text-[8px] font-black uppercase text-green-500 block">Presenças</span>
+                      <span className="font-black text-green-700 text-2xl">{fichaAluno.totalPresencas ?? 0}</span>
                     </div>
-                  ))}
-                </div>
-              </section>
-            )}
+                    <div className="bg-red-50 border border-red-100 rounded-xl p-3 text-center">
+                      <span className="text-[8px] font-black uppercase text-red-500 block">Faltas</span>
+                      <span className="font-black text-red-700 text-2xl">{fichaAluno.totalFaltas ?? 0}</span>
+                    </div>
+                    <div className="bg-purple-50 border border-purple-100 rounded-xl p-3 text-center">
+                      <span className="text-[8px] font-black uppercase text-purple-500 block">% Freq.</span>
+                      <span className="font-black text-purple-700 text-2xl">
+                        {fichaAluno.totalPresencas + fichaAluno.totalFaltas > 0
+                          ? Math.round((fichaAluno.totalPresencas / (fichaAluno.totalPresencas + fichaAluno.totalFaltas)) * 100)
+                          : 0}%
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Histórico de presença detalhado */}
+                  {fichaAluno.frequencia?.length > 0 ? (
+                    <section>
+                      <h4 className="text-[9px] font-black uppercase text-purple-600 mb-2 tracking-widest">Registro por Aula</h4>
+                      <div className="space-y-1.5 max-h-[340px] overflow-y-auto pr-1">
+                        {fichaAluno.frequencia.map((f: any) => (
+                          <div key={f.id} className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold ${
+                            f.descricao === 'Presente' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'
+                          }`}>
+                            <div className={`w-2 h-2 rounded-full shrink-0 ${f.descricao === 'Presente' ? 'bg-green-500' : 'bg-red-400'}`} />
+                            <span className="flex-1 truncate">{fmtDate(f.data)}</span>
+                            <span className="shrink-0 text-[9px] uppercase font-black">{f.descricao}</span>
+                            {f.turma_id && turmas.find(t => t.id === f.turma_id) && (
+                              <span className="shrink-0 text-[8px] font-bold text-slate-400">
+                                {turmas.find(t => t.id === f.turma_id)?.nome}
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  ) : (
+                    <div className="py-10 text-center text-sm text-slate-400">Nenhum registro de presença encontrado.</div>
+                  )}
+
+                  {/* Histórico Diário (outros tipos) */}
+                  {fichaAluno.historico?.filter((h: any) => h.tipo !== 'Presença').length > 0 && (
+                    <section>
+                      <h4 className="text-[9px] font-black uppercase text-purple-600 mb-2 tracking-widest">Outros Registros no Diário</h4>
+                      <div className="space-y-1.5">
+                        {fichaAluno.historico.filter((h: any) => h.tipo !== 'Presença').map((h: DiarioEntry) => (
+                          <div key={h.id} className="flex gap-2 bg-slate-50 rounded-xl p-2">
+                            <span className="px-1.5 py-0.5 rounded text-[8px] font-black bg-purple-100 text-purple-700 uppercase self-start whitespace-nowrap">{h.tipo}</span>
+                            <div>
+                              {h.titulo && <div className="text-xs font-bold text-slate-700">{h.titulo}</div>}
+                              {h.descricao && <div className="text-[10px] text-slate-500">{h.descricao}</div>}
+                              <div className="text-[9px] text-slate-400 mt-0.5">{fmtDate(h.data)} · {h.usuario_nome}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  )}
+                </>
+              )}
+            </div>
           </div>
-        </Modal>
+        </div>
       )}
     </div>
   );
@@ -768,6 +850,8 @@ function calcularTurno(horaInicio: string): string {
   return 'Noite';
 }
 
+interface UsuarioProf { id: string; nome: string; email?: string; grupo_nome?: string; }
+
 function TurmasTab({ cursos, professores, alunos }: { cursos: Curso[]; professores: Professor[]; alunos: Aluno[] }) {
   const [turmas, setTurmas] = useState<Turma[]>([]);
   const [showModal, setShowModal] = useState(false);
@@ -783,8 +867,30 @@ function TurmasTab({ cursos, professores, alunos }: { cursos: Curso[]; professor
   const [incluirSucesso, setIncluirSucesso] = useState<string | null>(null);
   const [buscarAluno, setBuscarAluno] = useState('');
 
+  // ── Usuários com grupo Professor ─────────────────────────────────────────────
+  const [usuariosProfessores, setUsuariosProfessores] = useState<UsuarioProf[]>([]);
+  // ── Atribuir professor a turma (inline) ──────────────────────────────────────
+  const [showAtribuirProf, setShowAtribuirProf] = useState(false);
+  const [turmaAtribuir, setTurmaAtribuir] = useState<Turma | null>(null);
+  const [profSelecionadoId, setProfSelecionadoId] = useState('');
+  const [atribuindoProf, setAtribuindoProf] = useState(false);
+  const [erroAtribuir, setErroAtribuir] = useState<string | null>(null);
+  // ── Histórico de presença por turma ──────────────────────────────────────────
+  const [showHistPresenca, setShowHistPresenca] = useState(false);
+  const [turmaPresenca, setTurmaPresenca] = useState<Turma | null>(null);
+  const [sessoesPresenca, setSessoesPresenca] = useState<PresencaSessao[]>([]);
+  const [loadingPresenca, setLoadingPresenca] = useState(false);
+  const [sessaoExpandidaT, setSessaoExpandidaT] = useState<string | null>(null);
+  const [detalhesSessaoT, setDetalhesSessaoT] = useState<Record<string, any[]>>({});
+
   const load = useCallback(async () => {
     try { const r = await api.get('/academico/turmas'); setTurmas(r.data); } catch {}
+  }, []);
+
+  useEffect(() => {
+    api.get('/academico/usuarios-professores')
+      .then(r => setUsuariosProfessores(Array.isArray(r.data) ? r.data : []))
+      .catch(() => {});
   }, []);
   useEffect(() => { load(); }, [load]);
 
@@ -873,7 +979,65 @@ function TurmasTab({ cursos, professores, alunos }: { cursos: Curso[]; professor
 
   const nomeAluno = (id: string) => alunos.find(a => a.id === id)?.nome_completo || id;
   const nomeCurso = (id?: string) => cursos.find(c => c.id === id)?.nome || '–';
-  const nomeProf  = (id?: string) => professores.find(p => p.id === id)?.nome || '–';
+  const nomeProf  = (id?: string) => {
+    if (!id) return '–';
+    return professores.find(p => p.id === id)?.nome
+      || usuariosProfessores.find(u => u.id === id)?.nome
+      || '–';
+  };
+
+  const abrirAtribuirProf = (t: Turma) => {
+    setTurmaAtribuir(t);
+    setProfSelecionadoId(t.professor_id || '');
+    setErroAtribuir(null);
+    setShowAtribuirProf(true);
+  };
+
+  const confirmarAtribuirProf = async () => {
+    if (!turmaAtribuir) return;
+    setAtribuindoProf(true); setErroAtribuir(null);
+    try {
+      await api.patch(`/academico/turmas/${turmaAtribuir.id}`, { professor_id: profSelecionadoId || null });
+      setShowAtribuirProf(false);
+      await load();
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || err?.message || 'Erro ao atribuir professor.';
+      setErroAtribuir(Array.isArray(msg) ? msg.join(', ') : msg);
+    } finally {
+      setAtribuindoProf(false);
+    }
+  };
+
+  const abrirHistPresenca = async (t: Turma) => {
+    setTurmaPresenca(t);
+    setSessoesPresenca([]);
+    setSessaoExpandidaT(null);
+    setDetalhesSessaoT({});
+    setLoadingPresenca(true);
+    setShowHistPresenca(true);
+    try {
+      const r = await api.get('/academico/presenca/sessoes', { params: { turma_id: t.id } });
+      setSessoesPresenca(r.data);
+    } catch { setSessoesPresenca([]); }
+    setLoadingPresenca(false);
+  };
+
+  const toggleDetalhesT = async (sessaoId: string) => {
+    if (sessaoExpandidaT === sessaoId) { setSessaoExpandidaT(null); return; }
+    setSessaoExpandidaT(sessaoId);
+    if (!detalhesSessaoT[sessaoId]) {
+      try {
+        const r = await api.get(`/academico/presenca/sessoes/${sessaoId}/registros`);
+        setDetalhesSessaoT(p => ({ ...p, [sessaoId]: r.data }));
+      } catch { setDetalhesSessaoT(p => ({ ...p, [sessaoId]: [] })); }
+    }
+  };
+
+  const fmtDataT = (v: string) => {
+    if (!v) return '–';
+    const [y, m, d] = v.split('-');
+    return `${d}/${m}/${y}`;
+  };
 
   return (
     <div className="space-y-4">
@@ -922,9 +1086,13 @@ function TurmasTab({ cursos, professores, alunos }: { cursos: Curso[]; professor
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex justify-center gap-1">
-                      <button onClick={() => abrir(t)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><Edit3 size={12}/></button>
-                      <button onClick={() => deletar(t.id)} className="p-1.5 rounded-lg hover:bg-red-50 text-red-400"><Trash2 size={12}/></button>
+                    <div className="flex justify-center gap-1 flex-wrap">
+                      <button onClick={() => abrirHistPresenca(t)} title="Histórico de Presença"
+                        className="p-1.5 rounded-lg hover:bg-purple-50 text-purple-400" ><ClipboardCheck size={12}/></button>
+                      <button onClick={() => abrirAtribuirProf(t)} title="Atribuir Professor"
+                        className="p-1.5 rounded-lg hover:bg-indigo-50 text-indigo-400"><UserPlus size={12}/></button>
+                      <button onClick={() => abrir(t)} title="Editar" className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><Edit3 size={12}/></button>
+                      <button onClick={() => deletar(t.id)} title="Excluir" className="p-1.5 rounded-lg hover:bg-red-50 text-red-400"><Trash2 size={12}/></button>
                     </div>
                   </td>
                 </tr>
@@ -1032,6 +1200,120 @@ function TurmasTab({ cursos, professores, alunos }: { cursos: Curso[]; professor
             )}
           </div>
         </Modal>
+      )}
+
+      {/* ── Modal: Atribuir Professor (usuários grupo Professor) ──────────── */}
+      {showAtribuirProf && turmaAtribuir && (
+        <Modal title={`Atribuir Professor — ${turmaAtribuir.nome}`} onClose={() => setShowAtribuirProf(false)}>
+          <div className="space-y-4">
+            {usuariosProfessores.length === 0 && professores.length === 0 ? (
+              <p className="text-sm text-slate-400 text-center py-4">Nenhum professor encontrado.<br/>Cadastre usuários no grupo "Professor".</p>
+            ) : (
+              <>
+                {usuariosProfessores.length > 0 && (
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black uppercase text-slate-500">Professores (Sistema)</label>
+                    <select value={profSelecionadoId} onChange={e => setProfSelecionadoId(e.target.value)}
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white">
+                      <option value="">— Nenhum —</option>
+                      {usuariosProfessores.map(u => (
+                        <option key={u.id} value={u.id}>{u.nome}{u.email ? ` (${u.email})` : ''}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                {professores.length > 0 && (
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black uppercase text-slate-500">Professores (Cadastro Acadêmico)</label>
+                    <select value={profSelecionadoId} onChange={e => setProfSelecionadoId(e.target.value)}
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white">
+                      <option value="">— Nenhum —</option>
+                      {professores.filter(p => p.ativo !== false).map(p => (
+                        <option key={p.id} value={p.id}>{p.nome}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                {erroAtribuir && (
+                  <div className="bg-red-50 border border-red-200 text-red-700 text-[11px] font-bold rounded-xl px-4 py-2.5">⚠ {erroAtribuir}</div>
+                )}
+                <button onClick={confirmarAtribuirProf} disabled={atribuindoProf}
+                  className="w-full bg-indigo-600 text-white py-2.5 rounded-xl font-black text-xs uppercase disabled:opacity-50 hover:bg-indigo-700">
+                  {atribuindoProf ? 'Salvando...' : 'Confirmar Atribuição'}
+                </button>
+              </>
+            )}
+          </div>
+        </Modal>
+      )}
+
+      {/* ── Modal: Histórico de Presença da Turma ────────────────────────── */}
+      {showHistPresenca && turmaPresenca && (
+        <div className="fixed inset-0 z-[300] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden max-h-[90vh] flex flex-col">
+            <div className="flex justify-between items-center p-5 border-b shrink-0">
+              <div>
+                <h3 className="font-black text-sm uppercase tracking-tight text-slate-800">Presença — {turmaPresenca.nome}</h3>
+                <p className="text-[9px] font-black text-slate-400 uppercase mt-0.5">{sessoesPresenca.length} aula{sessoesPresenca.length !== 1 ? 's' : ''} registrada{sessoesPresenca.length !== 1 ? 's' : ''}</p>
+              </div>
+              <button onClick={() => setShowHistPresenca(false)} className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-400"><X size={16}/></button>
+            </div>
+            <div className="overflow-y-auto flex-1">
+              {loadingPresenca ? (
+                <div className="py-12 text-center text-sm text-slate-400">Carregando...</div>
+              ) : sessoesPresenca.length === 0 ? (
+                <div className="py-16 text-center">
+                  <ClipboardCheck size={36} className="mx-auto mb-3 text-slate-200" />
+                  <p className="text-sm text-slate-400">Nenhuma aula registrada para esta turma.</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-50">
+                  {sessoesPresenca.map(s => (
+                    <div key={s.id}>
+                      <div className="flex flex-wrap items-center gap-3 px-5 py-3 hover:bg-purple-50/20">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs font-black text-slate-800">{fmtDataT(s.data)}</span>
+                          </div>
+                          {s.tema_aula && <p className="text-[11px] font-bold text-slate-600 mt-0.5">{s.tema_aula}</p>}
+                          {s.usuario_nome && <p className="text-[9px] text-slate-400 mt-0.5">Por: {s.usuario_nome}</p>}
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="bg-green-100 text-green-700 text-[9px] font-black px-2 py-0.5 rounded-full">{s.total_presentes} pres.</span>
+                          <span className="bg-red-100 text-red-600 text-[9px] font-black px-2 py-0.5 rounded-full">{s.total_ausentes} aus.</span>
+                          <button onClick={() => toggleDetalhesT(s.id)}
+                            className="flex items-center gap-1 text-[9px] font-black uppercase text-slate-500 hover:text-purple-600 border border-slate-200 px-2.5 py-1 rounded-lg">
+                            <Eye size={10}/> {sessaoExpandidaT === s.id ? 'Fechar' : 'Ver'}
+                            {sessaoExpandidaT === s.id ? <ChevronUp size={10}/> : <ChevronDown size={10}/>}
+                          </button>
+                        </div>
+                      </div>
+                      {sessaoExpandidaT === s.id && (
+                        <div className="bg-slate-50/60 border-t border-slate-100 px-6 py-3">
+                          {!detalhesSessaoT[s.id] ? (
+                            <p className="text-xs text-slate-400">Carregando...</p>
+                          ) : detalhesSessaoT[s.id].length === 0 ? (
+                            <p className="text-xs text-slate-400">Sem registros.</p>
+                          ) : (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                              {detalhesSessaoT[s.id].map((r: any) => (
+                                <div key={r.id} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold ${r.descricao === 'Presente' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
+                                  <div className={`w-2 h-2 rounded-full shrink-0 ${r.descricao === 'Presente' ? 'bg-green-500' : 'bg-red-400'}`} />
+                                  <span className="truncate">{r.aluno_nome || r.aluno_id}</span>
+                                  <span className="shrink-0 text-[9px] uppercase">{r.descricao}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

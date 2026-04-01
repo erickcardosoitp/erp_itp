@@ -284,7 +284,7 @@ export default function DossieCandidato({ aluno, onClose, onSuccess }: DossiePro
     'Matriculado':                'bg-green-100 text-green-700',
     'Incompleto':                 'bg-red-100 text-red-700',
     'Desistente':                 'bg-slate-100 text-slate-600',
-    'Cancelado':                  'bg-red-950 text-red-200',
+    'Cancelada':                  'bg-red-950 text-red-200',
   };
 
   const tipoMovColor: Record<string, string> = {

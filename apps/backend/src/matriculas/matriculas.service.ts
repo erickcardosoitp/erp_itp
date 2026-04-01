@@ -618,9 +618,16 @@ export class MatriculasService {
 
       const alunoSalvo = await queryRunner.manager.save(novoAluno);
 
+      // Vincula o aluno à inscrição (nos dois sentidos da relação)
       inscricao.status_matricula = StatusMatricula.MATRICULADO;
       inscricao.aluno = alunoSalvo;
       await queryRunner.manager.save(Inscricao, inscricao);
+
+      // Define inscricao_id no aluno para que fichaAluno possa encontrar o dossier
+      await queryRunner.manager.query(
+        `UPDATE alunos SET inscricao_id = $1 WHERE id = $2`,
+        [inscricao.id, alunoSalvo.id],
+      );
 
       // Adiciona aluno ao backlog de turmas
       try {
