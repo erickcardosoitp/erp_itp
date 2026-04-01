@@ -323,7 +323,7 @@ function aoEnviarFormulario(e) {
     sexo:                 campo_(r, ['sexo', 'Sexo', 'Sexo:']),
     escolaridade:         campo_(r, ['escolaridade', 'Escolaridade', 'Escolaridade:']),
     turno_escolar:        campo_(r, ['turno_escolar', 'Turno escolar', 'Turno escolar:']),
-    maior_18_anos:        bool_(campo_(r, ['maior_18_anos', 'Maior de 18 anos', 'Maior de 18 anos:'])),
+    maior_18_anos:        bool_(campo_(r, ['maior_18_anos', 'Maior de 18 anos', 'Maior de 18 anos:', 'Maior de 18 anos?', 'Uma perguntinha... O aluno(a) é maior de 18 anos?'])),
     logradouro:           campo_(r, ['logradouro', 'Logradouro', 'Logradouro:']),
     numero:               campo_(r, ['numero', 'Número', 'Número:', 'Numero']),
     complemento:          campo_(r, ['complemento', 'Complemento', 'Complemento:']),
@@ -333,22 +333,23 @@ function aoEnviarFormulario(e) {
     cep:                  digits_(campo_(r, ['cep', 'CEP', 'CEP:'])),
     nome_responsavel:     campo_(r, ['nome_responsavel', 'Nome Completo do Responsável', 'Nome do Responsável', 'Nome completo do responsável']),
     email_responsavel:    campo_(r, ['email_responsavel', 'Email do Responsável', 'Email responsável', 'E-mail do Responsável', 'E-mail responsável']),
-    grau_parentesco:      campo_(r, ['grau_parentesco', 'Grau de parentesco do responsável', 'Grau de parentesco']),
+    grau_parentesco:      campo_(r, ['grau_parentesco', 'Grau de Parentesco', 'Grau de parentesco do responsável', 'Grau de parentesco']),
     cpf_responsavel:      digits_(campo_(r, ['cpf_responsavel', 'CPF do Responsável', 'CPF do responsável'])),
     telefone_alternativo: digits_(campo_(r, ['telefone_alternativo', 'Telefone alternativo', 'Telefone alternativo:'])),
-    possui_alergias:      campo_(r, ['possui_alergias', 'Possui alergias', 'Possui alergias:']),
-    cuidado_especial:     campo_(r, ['cuidado_especial', 'Necessita de cuidado especial', 'Necessita de cuidado especial:']),
-    detalhes_cuidado:     campo_(r, ['detalhes_cuidado', 'Detalhes do cuidado', 'Detalhes do cuidado:']),
-    uso_medicamento:      campo_(r, ['uso_medicamento', 'Faz uso de medicamento', 'Faz uso de medicamento:']),
-    cursos_desejados:     campo_(r, ['cursos_desejados', 'Cursos desejados', 'Cursos desejados:']),
+    possui_alergias:      campo_(r, ['possui_alergias', 'Possui alergias', 'Possui alergias:', 'Possui alergias?']),
+    cuidado_especial:     campo_(r, ['cuidado_especial', 'Possui algum tipo de cuidado especial?', 'Necessita de cuidado especial', 'Necessita de cuidado especial:']),
+    detalhes_cuidado:     campo_(r, ['detalhes_cuidado', 'Caso a resposta anterior tenha sido sim, quais?', 'Detalhes do cuidado', 'Detalhes do cuidado:']),
+    uso_medicamento:      campo_(r, ['uso_medicamento', 'Faz uso de algum tipo de medicamento?', 'Faz uso de medicamento', 'Faz uso de medicamento:']),
+    cursos_desejados:     campo_(r, ['cursos_desejados', 'Projetos', 'Projetos:', 'Cursos desejados', 'Cursos desejados:']),
     lgpd_aceito:          bool_(campo_(r, ['lgpd_aceito', 'LGPD Aceito', 'LGPD Aceito:'])),
-    autoriza_imagem:      bool_(campo_(r, ['autoriza_imagem', 'Autoriza uso de imagem', 'Autoriza uso de imagem:'])),
+    autoriza_imagem:      bool_(campo_(r, ['autoriza_imagem', 'Autorizo o Instituto Tia Pretinha a utilizar fotos e vídeos da criança/adolescente acima para fins institucionais, divulgação de projetos e redes sociais, sem qualquer ônus para a instituição.', 'Autoriza uso de imagem', 'Autoriza uso de imagem:'])),
   };
 
   Logger.log('👤 Candidato: ' + dados.nome_completo + ' | CPF: ' + dados.cpf);
 
-  // ── Salva na planilha (independente do banco) ─────────────────────
-  salvarNaPlanilha_(dados);
+  // Nota: não chamamos salvarNaPlanilha_() porque o Google Forms já salva
+  // automaticamente todas as respostas na planilha vinculada com todos os campos.
+  // Chamar salvarNaPlanilha_() criava linhas duplicadas e incompletas.
 
   // ── POST para o backend ITP ───────────────────────────────────────
   var sucesso = false;
@@ -421,6 +422,7 @@ function aoEnviarFormulario(e) {
 // ─────────────────────────────────────────────────────────────────────
 
 function testeManual() {
+  // Usa os títulos reais do Google Forms do ITP
   var fakeEvent = {
     namedValues: {
       'Endereço de e-mail':                    ['candidato@teste.com'],
@@ -431,9 +433,9 @@ function testeManual() {
       'Idade:':                                ['20'],
       'Sexo:':                                 ['Masculino'],
       'Escolaridade:':                         ['Ensino Médio Completo'],
-      'Turno escolar:':                        ['Manhã'],
-      'Maior de 18 anos:':                     ['Sim'],
-      'Logradouro:':                           ['Rua das Flores'],
+      'Turno Escolar:':                        ['Manhã'],
+      'Uma perguntinha... O aluno(a) é maior de 18 anos?': ['Sim'],
+      'Logradouro':                            ['Rua das Flores'],
       'Número:':                               ['42'],
       'Complemento:':                          [''],
       'Bairro:':                               ['Centro'],
@@ -441,16 +443,15 @@ function testeManual() {
       'Estado (UF):':                          ['RJ'],
       'CEP:':                                  ['20040-020'],
       'Nome Completo do Responsável:':         [''],
-      'Grau de parentesco do responsável:':    [''],
+      'Grau de Parentesco:':                   [''],
       'CPF do Responsável:':                   [''],
       'Telefone alternativo:':                 [''],
-      'Possui alergias:':                      ['Não'],
-      'Necessita de cuidado especial:':        ['Não'],
-      'Detalhes do cuidado:':                  [''],
-      'Faz uso de medicamento:':               ['Não'],
-      'Cursos desejados:':                     ['Informática Básica'],
-      'LGPD Aceito:':                          ['Sim'],
-      'Autoriza uso de imagem:':               ['Sim'],
+      'Possui alergias?':                      ['Não'],
+      'Possui algum tipo de cuidado especial?':['Não'],
+      'Caso a resposta anterior tenha sido sim, quais?': [''],
+      'Faz uso de algum tipo de medicamento?': ['Não'],
+      'Projetos:':                             ['Informática, Futebol'],
+      'Autorizo o Instituto Tia Pretinha a utilizar fotos e vídeos da criança/adolescente acima para fins institucionais, divulgação de projetos e redes sociais, sem qualquer ônus para a instituição.': ['Sim'],
     },
   };
   aoEnviarFormulario(fakeEvent);
