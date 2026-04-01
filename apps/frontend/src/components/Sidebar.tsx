@@ -55,12 +55,12 @@ export default function Sidebar({ isCollapsed, setIsCollapsed, mobileOpen, setMo
 
   const filteredMenu = primaryMenu.filter(item => {
     if (loading) return true;       // Mantém itens visíveis durante o carregamento inicial
+    if (!user) return false;        // Não autenticado
     if (isFullAccess) return true;  // Admin/prt veem tudo
-    if (!user?.grupo) return false; // Sem grupo = acesso restrito
-    if (!modulosVisiveis) return false; // Grupo sem config = sem acesso
+    if (!modulosVisiveis) return true; // Grupo sem config = mostra tudo (backend guarda)
     const key = PATH_TO_MODULE[item.path];
-    if (!key) return false;
-    return modulosVisiveis[key] === true; // Apenas módulos explicitamente permitidos
+    if (!key) return true;
+    return modulosVisiveis[key] !== false; // Esconde só módulos explicitamente desabilitados
   });
 
   /**

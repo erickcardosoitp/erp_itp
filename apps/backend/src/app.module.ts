@@ -344,6 +344,14 @@ export class AppModule implements OnModuleInit {
       `);
       this.logger.log('✅ Colunas turma_alunos (inscricao_id, nome_candidato, tipo_vinculo) aplicadas (IF NOT EXISTS)');
 
+      // ── Colunas faltantes em diario_academico (schema drift) ──────────────
+      await this.dataSource.query(`
+        ALTER TABLE IF EXISTS diario_academico
+          ADD COLUMN IF NOT EXISTS inscricao_id INT,
+          ADD COLUMN IF NOT EXISTS pessoa_nome TEXT
+      `);
+      this.logger.log('✅ Colunas diario_academico (inscricao_id, pessoa_nome) aplicadas (IF NOT EXISTS)');
+
     } catch (err: any) {
       this.logger.error(`❌ Erro nas migrations automáticas: ${err.message}`);
     }
