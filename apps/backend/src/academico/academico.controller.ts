@@ -48,7 +48,12 @@ export class AcademicoController {
   async criarAlunoRapidoChamada(@Body() dto: any) {
     this.svc.validarTokenChamada(dto.token);
     const { token: _token, ...alunoData } = dto;
-    return this.svc.criarAluno(alunoData);
+    try {
+      return await this.svc.criarAluno(alunoData);
+    } catch (e) {
+      this.logger.error('[chamada/aluno-rapido] Erro ao criar aluno:', (e as any)?.message, (e as any)?.stack);
+      throw e;
+    }
   }
 
   // ── CURSOS ────────────────────────────────────────────────────────────────

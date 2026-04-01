@@ -247,6 +247,12 @@ export class AcademicoService {
     const aluno = await this.alunoRepo.findOneBy({ id });
     if (!aluno) throw new NotFoundException('Aluno não encontrado');
 
+    // Busca inscricao_id via SQL direto (JoinColumn não é coluna decorada)
+    const [row] = await this.dataSource.query(
+      `SELECT inscricao_id FROM alunos WHERE id = $1`, [id],
+    );
+    const inscricao_id: number | null = row?.inscricao_id ?? null;
+
     const [frequencia, historico, turmaAluno] = await Promise.all([
       this.diarioRepo.find({ where: { aluno_id: id, tipo: 'Presença' }, order: { data: 'DESC' } }),
       this.diarioRepo.find({ where: { aluno_id: id }, order: { created_at: 'DESC' } }),
@@ -261,8 +267,8 @@ export class AcademicoService {
     const totalPresencas = frequencia.filter(f => f.descricao?.toLowerCase().includes('presente')).length;
     const totalFaltas    = frequencia.filter(f => f.descricao?.toLowerCase().includes('falta') || !f.descricao?.toLowerCase().includes('presente')).length;
 
-    this.logger.log(`Ficha do aluno ${aluno.nome_completo}: ${historico.length} registros no diário`);
-    return { aluno, frequencia, historico, turmaInfo, totalPresencas, totalFaltas };
+    this.logger.log(`Ficha do aluno ${aluno.nome_completo}: ${historico.length} registros no diário, inscricao_id=${inscricao_id}`);
+    return { aluno, inscricao_id, frequencia, historico, turmaInfo, totalPresencas, totalFaltas };
   }
 
   async criarAluno(dto: Partial<Aluno>) {
@@ -271,29 +277,56 @@ export class AcademicoService {
     const anoStr = String(hoje.getFullYear());
     const mesStr = String(hoje.getMonth() + 1).padStart(2, '0');
     const diaStr = String(hoje.getDate()).padStart(2, '0');
-    const inicioHoje = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate(), 0, 0, 0);
-    const fimHoje = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate(), 23, 59, 59);
-    const contaHoje = await this.alunoRepo
-      .createQueryBuilder('a')
-      .where('a.data_matricula BETWEEN :ini AND :fim', { ini: inicioHoje, fim: fimHoje })
-      .getCount();
+
+    // Gera número de matrícula seqüencial do dia usando SQL direto (mais robusto no serverless)
+    const [{ count: contaHojeStr }] = await this.dataSource.query(
+      `SELECT COUNT(*) as count FROM alunos WHERE data_matricula::date = CURRENT_DATE`,
+    );
+    const contaHoje = parseInt(contaHojeStr, 10) || 0;
     const numero_matricula = `ITP-${anoStr}-${mesStr}${diaStr}${contaHoje + 1}`;
-    const cpfLimpo = dto.cpf ? dto.cpf.replace(/\D/g, '') : undefined;
+
+    const cpfLimpo = dto.cpf ? dto.cpf.replace(/\D/g, '') : null;
     if (cpfLimpo) {
       const duplicado = await this.alunoRepo.findOneBy({ cpf: cpfLimpo });
       if (duplicado) throw new ConflictException(`CPF já cadastrado para o aluno: ${duplicado.nome_completo}`);
     }
-    const aluno = this.alunoRepo.create({
-      ...dto,
-      cpf: cpfLimpo,
-      numero_matricula,
-      ativo: true,
-      data_matricula: hoje,
-    });
-    const salvo = await this.alunoRepo.save(aluno);
-    // Adiciona ao backlog automaticamente
-    await this.turmaAlunoRepo.save(this.turmaAlunoRepo.create({ aluno_id: salvo.id, status: 'backlog' }));
+
+    // Insere apenas os campos escalares — sem spread de relações do TypeORM
+    const [result] = await this.dataSource.query(
+      `INSERT INTO alunos
+        (numero_matricula, nome_completo, cpf, email, celular, data_nascimento,
+         sexo, turno_escolar, cidade, bairro, nome_responsavel,
+         maior_18_anos, ativo, data_matricula, lgpd_aceito, autoriza_imagem,
+         cursos_matriculados, "createdAt", "updatedAt")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,true,NOW(),false,false,$13,NOW(),NOW())
+       RETURNING *`,
+      [
+        numero_matricula,
+        dto.nome_completo,
+        cpfLimpo || null,
+        dto.email || null,
+        dto.celular || null,
+        dto.data_nascimento || null,
+        dto.sexo || null,
+        dto.turno_escolar || null,
+        dto.cidade || null,
+        dto.bairro || null,
+        dto.nome_responsavel || null,
+        dto.maior_18_anos !== undefined ? dto.maior_18_anos : null,
+        dto.cursos_matriculados || null,
+      ],
+    );
+
+    const salvo = result;
     this.logger.log(`Aluno criado diretamente: ${salvo.numero_matricula} – ${salvo.nome_completo}`);
+
+    // Adiciona ao backlog automaticamente
+    await this.dataSource.query(
+      `INSERT INTO turma_alunos (id, aluno_id, status, tipo_vinculo, created_at)
+       VALUES (gen_random_uuid(), $1, 'backlog', 'aluno', NOW())`,
+      [salvo.id],
+    ).catch((e: any) => this.logger.warn('Falha ao adicionar backlog: ' + e?.message));
+
     await this.notificacoes.criar({
       tipo: 'novo_aluno',
       titulo: `Novo aluno cadastrado: ${salvo.nome_completo}`,
@@ -301,6 +334,7 @@ export class AcademicoService {
       referencia_id: salvo.id,
       referencia_tipo: 'aluno',
     }).catch(() => {});
+
     return salvo;
   }
 
