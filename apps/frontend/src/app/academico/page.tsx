@@ -297,6 +297,17 @@ function GradeTab({ podeEditar, turmas }: { podeEditar: boolean; turmas: Turma[]
 
 // ─── Tab: Alunos ──────────────────────────────────────────────────────────────
 
+function calcularIdade(dataNasc: string): number {
+  if (!dataNasc) return 99;
+  const d = new Date(dataNasc.includes('T') ? dataNasc : dataNasc + 'T12:00:00');
+  if (isNaN(d.getTime())) return 99;
+  const hoje = new Date();
+  let idade = hoje.getFullYear() - d.getFullYear();
+  const m = hoje.getMonth() - d.getMonth();
+  if (m < 0 || (m === 0 && hoje.getDate() < d.getDate())) idade--;
+  return idade;
+}
+
 function AlunosTab({ cursos, turmas }: { cursos: Curso[]; turmas: Turma[] }) {
   const [alunos, setAlunos] = useState<Aluno[]>([]);
   const [loading, setLoading] = useState(true);
@@ -304,6 +315,15 @@ function AlunosTab({ cursos, turmas }: { cursos: Curso[]; turmas: Turma[] }) {
   const [filtroCursoNome, setFiltroCursoNome] = useState('');
   const [filtroTurmaId, setFiltroTurmaId] = useState('');
   const [fichaAluno, setFichaAluno] = useState<any>(null);
+
+  // ── Cadastro Rápido ───────────────────────────────────────────────────────
+  const [showCadastroRapido, setShowCadastroRapido] = useState(false);
+  const [formRapido, setFormRapido] = useState<{ nome_completo: string; data_nascimento: string; cpf: string; celular: string; nome_responsavel: string }>({ nome_completo: '', data_nascimento: '', cpf: '', celular: '', nome_responsavel: '' });
+  const [salvandoRapido, setSalvandoRapido] = useState(false);
+  const [erroRapido, setErroRapido] = useState<string | null>(null);
+  const [sucessoRapido, setSucessoRapido] = useState<string | null>(null);
+
+  const menorDeIdade = formRapido.data_nascimento ? calcularIdade(formRapido.data_nascimento) < 18 : false;
 
   const turmasDoCurso = turmas.filter(t => {
     if (!filtroCursoNome) return false;
@@ -328,6 +348,34 @@ function AlunosTab({ cursos, turmas }: { cursos: Curso[]; turmas: Turma[] }) {
 
   const verFicha = async (id: string) => {
     try { const r = await api.get(`/academico/alunos/${id}/ficha`); setFichaAluno(r.data); } catch {}
+  };
+
+  const abrirCadastroRapido = () => {
+    setFormRapido({ nome_completo: '', data_nascimento: '', cpf: '', celular: '', nome_responsavel: '' });
+    setErroRapido(null); setSucessoRapido(null);
+    setShowCadastroRapido(true);
+  };
+
+  const salvarCadastroRapido = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formRapido.nome_completo.trim()) { setErroRapido('Nome é obrigatório.'); return; }
+    setSalvandoRapido(true); setErroRapido(null); setSucessoRapido(null);
+    try {
+      const r = await api.post('/academico/alunos', {
+        nome_completo:    formRapido.nome_completo.trim(),
+        data_nascimento:  formRapido.data_nascimento || undefined,
+        cpf:              formRapido.cpf.trim() || undefined,
+        celular:          formRapido.celular.trim() || undefined,
+        nome_responsavel: menorDeIdade ? formRapido.nome_responsavel.trim() || undefined : undefined,
+      });
+      setSucessoRapido(`Aluno "${r.data?.nome_completo || formRapido.nome_completo}" cadastrado! Matrícula: ${r.data?.numero_matricula || '–'}`);
+      await load();
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || err?.message || 'Erro ao cadastrar.';
+      setErroRapido(Array.isArray(msg) ? msg.join(', ') : msg);
+    } finally {
+      setSalvandoRapido(false);
+    }
   };
 
   return (
@@ -362,6 +410,10 @@ function AlunosTab({ cursos, turmas }: { cursos: Curso[]; turmas: Turma[] }) {
         <button onClick={() => { setFiltroNome(''); setFiltroCursoNome(''); setFiltroTurmaId(''); }}
           className="text-[10px] font-black uppercase text-red-400 hover:text-red-600 flex items-center gap-1">
           <X size={11}/> Limpar
+        </button>
+        <button onClick={abrirCadastroRapido}
+          className="flex items-center gap-1.5 bg-green-600 text-white px-4 py-2 rounded-xl font-black text-[10px] uppercase hover:bg-green-700 ml-auto">
+          <UserPlus size={12}/> Cadastro Rápido
         </button>
       </div>
 
@@ -409,6 +461,47 @@ function AlunosTab({ cursos, turmas }: { cursos: Curso[]; turmas: Turma[] }) {
           </div>
         )}
       </div>
+
+      {showCadastroRapido && (
+        <Modal title="Cadastro Rápido de Aluno" onClose={() => setShowCadastroRapido(false)}>
+          <form onSubmit={salvarCadastroRapido} className="space-y-3">
+            <FieldInput label="Nome Completo *" value={formRapido.nome_completo} onChange={v => setFormRapido(p => ({ ...p, nome_completo: v }))} required />
+            <FieldInput label="Data de Nascimento" type="date" value={formRapido.data_nascimento} onChange={v => setFormRapido(p => ({ ...p, data_nascimento: v }))} />
+            {menorDeIdade && (
+              <FieldInput label="Nome do Responsável" value={formRapido.nome_responsavel} onChange={v => setFormRapido(p => ({ ...p, nome_responsavel: v }))} />
+            )}
+            <div className="grid grid-cols-2 gap-3">
+              <FieldInput label="CPF" value={formRapido.cpf} onChange={v => setFormRapido(p => ({ ...p, cpf: v }))} />
+              <FieldInput label="Telefone" value={formRapido.celular} onChange={v => setFormRapido(p => ({ ...p, celular: v }))} />
+            </div>
+            {erroRapido && (
+              <div className="bg-red-50 border border-red-200 text-red-700 text-[11px] font-bold rounded-xl px-4 py-2.5">⚠ {erroRapido}</div>
+            )}
+            {sucessoRapido && (
+              <div className="bg-green-50 border border-green-200 text-green-700 text-[11px] font-bold rounded-xl px-4 py-2.5">✓ {sucessoRapido}</div>
+            )}
+            <div className="flex gap-2">
+              {!sucessoRapido ? (
+                <button type="submit" disabled={salvandoRapido}
+                  className="flex-1 bg-green-600 text-white py-2.5 rounded-xl font-black text-xs uppercase disabled:opacity-50 hover:bg-green-700">
+                  {salvandoRapido ? 'Cadastrando...' : 'Cadastrar'}
+                </button>
+              ) : (
+                <button type="button" onClick={() => { setShowCadastroRapido(false); }}
+                  className="flex-1 bg-purple-600 text-white py-2.5 rounded-xl font-black text-xs uppercase hover:bg-purple-700">
+                  Fechar
+                </button>
+              )}
+              {sucessoRapido && (
+                <button type="button" onClick={() => { setFormRapido({ nome_completo: '', data_nascimento: '', cpf: '', celular: '', nome_responsavel: '' }); setErroRapido(null); setSucessoRapido(null); }}
+                  className="flex-1 bg-green-600 text-white py-2.5 rounded-xl font-black text-xs uppercase hover:bg-green-700">
+                  + Outro
+                </button>
+              )}
+            </div>
+          </form>
+        </Modal>
+      )}
 
       {fichaAluno && (
         <Modal title={`Ficha: ${fichaAluno.aluno?.nome_completo}`} onClose={() => setFichaAluno(null)}>
@@ -568,11 +661,13 @@ function TurmasTab({ cursos, professores, alunos }: { cursos: Curso[]; professor
   const [form, setForm] = useState<Partial<Turma>>({ ano: '2026' });
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
-  const [showBacklog, setShowBacklog] = useState(false);
-  const [backlog, setBacklog] = useState<TurmaAlunoRecord[]>([]);
-  const [backlogAlunoId, setBacklogAlunoId] = useState('');
-  const [backlogTurmaId, setBacklogTurmaId] = useState('');
-  const [backlogLoading, setBacklogLoading] = useState(false);
+  const [showIncluir, setShowIncluir] = useState(false);
+  const [incluirAlunoId, setIncluirAlunoId] = useState('');
+  const [incluirTurmaId, setIncluirTurmaId] = useState('');
+  const [incluirSalvando, setIncluirSalvando] = useState(false);
+  const [incluirErro, setIncluirErro] = useState<string | null>(null);
+  const [incluirSucesso, setIncluirSucesso] = useState<string | null>(null);
+  const [buscarAluno, setBuscarAluno] = useState('');
 
   const load = useCallback(async () => {
     try { const r = await api.get('/academico/turmas'); setTurmas(r.data); } catch {}
@@ -637,19 +732,29 @@ function TurmasTab({ cursos, professores, alunos }: { cursos: Curso[]; professor
     }
   };
 
-  const abrirBacklog = async () => {
-    setBacklogAlunoId(''); setBacklogTurmaId('');
-    setShowBacklog(true); setBacklogLoading(true);
-    try { const r = await api.get('/academico/turma-alunos/backlog'); setBacklog(r.data); } catch {}
-    setBacklogLoading(false);
+  const abrirIncluir = () => {
+    setIncluirAlunoId(''); setIncluirTurmaId('');
+    setIncluirErro(null); setIncluirSucesso(null);
+    setBuscarAluno('');
+    setShowIncluir(true);
   };
 
   const confirmarInclusao = async () => {
-    if (!backlogAlunoId || !backlogTurmaId) return;
+    if (!incluirAlunoId || !incluirTurmaId) return;
+    setIncluirSalvando(true); setIncluirErro(null); setIncluirSucesso(null);
     try {
-      await api.post('/academico/turma-alunos/incluir', { aluno_id: backlogAlunoId, turma_id: backlogTurmaId });
-      setShowBacklog(false); setBacklog([]);
-    } catch {}
+      await api.post('/academico/turma-alunos/incluir', { aluno_id: incluirAlunoId, turma_id: incluirTurmaId });
+      const nomeA = alunos.find(a => a.id === incluirAlunoId)?.nome_completo || 'Aluno';
+      const nomeT = turmas.find(t => t.id === incluirTurmaId)?.nome || 'Turma';
+      setIncluirSucesso(`${nomeA} adicionado(a) à turma ${nomeT} com sucesso!`);
+      setIncluirAlunoId(''); setIncluirTurmaId('');
+      await load();
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || err?.message || 'Erro ao incluir aluno na turma.';
+      setIncluirErro(Array.isArray(msg) ? msg.join(', ') : msg);
+    } finally {
+      setIncluirSalvando(false);
+    }
   };
 
   const nomeAluno = (id: string) => alunos.find(a => a.id === id)?.nome_completo || id;
@@ -661,7 +766,7 @@ function TurmasTab({ cursos, professores, alunos }: { cursos: Curso[]; professor
       <div className="flex flex-wrap justify-between items-center gap-2">
         <h2 className="text-lg font-black uppercase tracking-tight text-slate-800">Turmas</h2>
         <div className="flex gap-2">
-          <button onClick={abrirBacklog} className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2.5 rounded-xl font-black text-[10px] uppercase hover:bg-indigo-700">
+          <button onClick={abrirIncluir} className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2.5 rounded-xl font-black text-[10px] uppercase hover:bg-indigo-700">
             <UserPlus size={14}/> Incluir Aluno em Turma
           </button>
           <button onClick={() => abrir()} className="flex items-center gap-2 bg-purple-600 text-white px-5 py-2.5 rounded-xl font-black text-[10px] uppercase hover:bg-purple-700">
@@ -758,28 +863,39 @@ function TurmasTab({ cursos, professores, alunos }: { cursos: Curso[]; professor
         </Modal>
       )}
 
-      {showBacklog && (
-        <Modal title="Incluir Aluno em Turma" onClose={() => setShowBacklog(false)}>
+      {showIncluir && (
+        <Modal title="Incluir Aluno em Turma" onClose={() => setShowIncluir(false)}>
           <div className="space-y-4">
-            {backlogLoading ? (
-              <p className="text-sm text-slate-400 text-center py-6">Carregando backlog...</p>
-            ) : backlog.length === 0 ? (
-              <p className="text-sm text-slate-400 text-center py-6">Nenhum aluno no backlog.</p>
+            {alunos.length === 0 ? (
+              <p className="text-sm text-slate-400 text-center py-6">Nenhum aluno cadastrado.</p>
             ) : (
               <>
                 <div className="space-y-1">
-                  <label className="text-[10px] font-black uppercase text-slate-500">Aluno (backlog)</label>
-                  <select value={backlogAlunoId} onChange={e => setBacklogAlunoId(e.target.value)}
+                  <label className="text-[10px] font-black uppercase text-slate-500">Buscar aluno</label>
+                  <input
+                    value={buscarAluno}
+                    onChange={e => setBuscarAluno(e.target.value)}
+                    placeholder="Digite o nome..."
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase text-slate-500">Aluno</label>
+                  <select value={incluirAlunoId} onChange={e => setIncluirAlunoId(e.target.value)}
                     className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white">
                     <option value="">Selecione o aluno...</option>
-                    {backlog.map(b => (
-                      <option key={b.id} value={b.aluno_id}>{nomeAluno(b.aluno_id)}</option>
-                    ))}
+                    {alunos
+                      .filter(a => !buscarAluno || a.nome_completo.toLowerCase().includes(buscarAluno.toLowerCase()))
+                      .map(a => (
+                        <option key={a.id} value={a.id}>
+                          {a.nome_completo}{a.numero_matricula ? ` (${a.numero_matricula})` : ''}
+                        </option>
+                      ))}
                   </select>
                 </div>
                 <div className="space-y-1">
                   <label className="text-[10px] font-black uppercase text-slate-500">Turma de destino</label>
-                  <select value={backlogTurmaId} onChange={e => setBacklogTurmaId(e.target.value)}
+                  <select value={incluirTurmaId} onChange={e => setIncluirTurmaId(e.target.value)}
                     className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white">
                     <option value="">Selecione a turma...</option>
                     {turmas.filter(t => t.ativo !== false).map(t => (
@@ -787,10 +903,16 @@ function TurmasTab({ cursos, professores, alunos }: { cursos: Curso[]; professor
                     ))}
                   </select>
                 </div>
-                <button disabled={!backlogAlunoId || !backlogTurmaId}
+                {incluirErro && (
+                  <div className="bg-red-50 border border-red-200 text-red-700 text-[11px] font-bold rounded-xl px-4 py-2.5">⚠ {incluirErro}</div>
+                )}
+                {incluirSucesso && (
+                  <div className="bg-green-50 border border-green-200 text-green-700 text-[11px] font-bold rounded-xl px-4 py-2.5">✓ {incluirSucesso}</div>
+                )}
+                <button disabled={!incluirAlunoId || !incluirTurmaId || incluirSalvando}
                   onClick={confirmarInclusao}
                   className="w-full bg-indigo-600 text-white py-2.5 rounded-xl font-black text-xs uppercase disabled:opacity-40 hover:bg-indigo-700">
-                  Confirmar
+                  {incluirSalvando ? 'Salvando...' : 'Confirmar'}
                 </button>
               </>
             )}

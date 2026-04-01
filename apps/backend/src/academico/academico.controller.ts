@@ -42,6 +42,15 @@ export class AcademicoController {
     );
   }
 
+  /** Cadastro rápido de aluno via link de chamada (sem autenticação JWT). */
+  @Public()
+  @Post('chamada/aluno-rapido')
+  async criarAlunoRapidoChamada(@Body() dto: any) {
+    this.svc.validarTokenChamada(dto.token);
+    const { token: _token, ...alunoData } = dto;
+    return this.svc.criarAluno(alunoData);
+  }
+
   // ── CURSOS ────────────────────────────────────────────────────────────────
   @Get('cursos')
   getCursos() { return this.svc.listarCursos(); }

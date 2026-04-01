@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   CheckSquare, Square, CheckCircle2,
   WifiOff, Loader2, Users, BookOpen, X,
-  ClipboardCheck, Printer, CalendarDays,
+  ClipboardCheck, Printer, CalendarDays, UserPlus,
 } from 'lucide-react';
 
 const API_BASE =
@@ -32,6 +32,13 @@ export default function ChamadaPage() {
   const [salvando, setSalvando]         = useState(false);
   const [salvo, setSalvo]               = useState(false);
   const [erro, setErro]                 = useState('');
+
+  // ── Cadastro Rápido ───────────────────────────────────────────────────────
+  const [showCadRapido, setShowCadRapido] = useState(false);
+  const [cadForm, setCadForm] = useState({ nome_completo: '', data_nascimento: '', cpf: '', celular: '', nome_responsavel: '' });
+  const [cadSalvando, setCadSalvando] = useState(false);
+  const [cadErro, setCadErro] = useState('');
+  const [cadSucesso, setCadSucesso] = useState('');
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -74,6 +81,49 @@ export default function ChamadaPage() {
   const salvarProfessor = (nome: string) => {
     setProfessorNome(nome);
     if (typeof window !== 'undefined') localStorage.setItem('chamada_professor', nome);
+  };
+
+  const calcIdade = (d: string) => {
+    if (!d) return 99;
+    const nasc = new Date(d + 'T12:00:00');
+    if (isNaN(nasc.getTime())) return 99;
+    const hoje = new Date();
+    let idade = hoje.getFullYear() - nasc.getFullYear();
+    const m = hoje.getMonth() - nasc.getMonth();
+    if (m < 0 || (m === 0 && hoje.getDate() < nasc.getDate())) idade--;
+    return idade;
+  };
+
+  const salvarCadRapido = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!cadForm.nome_completo.trim()) { setCadErro('Nome é obrigatório.'); return; }
+    setCadSalvando(true); setCadErro(''); setCadSucesso('');
+    try {
+      const menor = calcIdade(cadForm.data_nascimento) < 18;
+      const res = await fetch(`${API_BASE}/academico/chamada/aluno-rapido`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token,
+          nome_completo:    cadForm.nome_completo.trim(),
+          data_nascimento:  cadForm.data_nascimento || undefined,
+          cpf:              cadForm.cpf.trim() || undefined,
+          celular:          cadForm.celular.trim() || undefined,
+          nome_responsavel: menor ? cadForm.nome_responsavel.trim() || undefined : undefined,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message || 'Erro ao cadastrar.');
+      // Adiciona o novo aluno à lista da chamada com presença marcada
+      const novoAluno: Aluno = { id: json.id, nome_completo: json.nome_completo, numero_matricula: json.numero_matricula };
+      setAlunos(prev => [...prev, novoAluno]);
+      setPresenca(prev => ({ ...prev, [json.id]: true }));
+      setCadSucesso(`Aluno "${json.nome_completo}" cadastrado! Matrícula: ${json.numero_matricula || '–'}`);
+    } catch (err: any) {
+      setCadErro(err.message || 'Erro ao cadastrar aluno.');
+    } finally {
+      setCadSalvando(false);
+    }
   };
 
   const toggle = (id: string) => setPresenca(p => ({ ...p, [id]: !p[id] }));
@@ -277,6 +327,13 @@ export default function ChamadaPage() {
             </div>
           )}
 
+          <button
+            onClick={() => { setCadForm({ nome_completo: '', data_nascimento: '', cpf: '', celular: '', nome_responsavel: '' }); setCadErro(''); setCadSucesso(''); setShowCadRapido(true); }}
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-dashed border-purple-500/50 text-purple-400 text-[10px] font-black uppercase hover:bg-purple-900/30 transition-colors mt-1"
+          >
+            <UserPlus size={13}/> Cadastrar Aluno Rápido
+          </button>
+
           {alunos.map((a, i) => {
             const presente = presenca[a.id] ?? true;
             return (
@@ -323,6 +380,70 @@ export default function ChamadaPage() {
           </div>
         )}
       </div>
+
+      {/* ── Modal Cadastro Rápido ── */}
+      {showCadRapido && (
+        <div className="fixed inset-0 z-[300] bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
+          <div className="bg-[#1e0f38] border border-purple-700/50 rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden">
+            <div className="flex justify-between items-center px-5 py-4 border-b border-purple-800/50">
+              <h3 className="font-black text-sm uppercase tracking-tight text-purple-300">Cadastro Rápido</h3>
+              <button onClick={() => setShowCadRapido(false)} className="p-1.5 rounded-xl hover:bg-purple-900/50 text-purple-500"><X size={16}/></button>
+            </div>
+            <form onSubmit={salvarCadRapido} className="p-5 space-y-3">
+              <div>
+                <label className="text-[9px] font-black uppercase text-purple-400 mb-1 block">Nome Completo *</label>
+                <input value={cadForm.nome_completo} onChange={e => setCadForm(p => ({ ...p, nome_completo: e.target.value }))} required
+                  className="w-full bg-purple-950/60 border border-purple-700/50 text-white rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-purple-500 placeholder-purple-700" placeholder="Nome do aluno..." />
+              </div>
+              <div>
+                <label className="text-[9px] font-black uppercase text-purple-400 mb-1 block">Data de Nascimento</label>
+                <input type="date" value={cadForm.data_nascimento} onChange={e => setCadForm(p => ({ ...p, data_nascimento: e.target.value }))}
+                  className="w-full bg-purple-950/60 border border-purple-700/50 text-white rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-purple-500" />
+              </div>
+              {cadForm.data_nascimento && calcIdade(cadForm.data_nascimento) < 18 && (
+                <div>
+                  <label className="text-[9px] font-black uppercase text-purple-400 mb-1 block">Nome do Responsável</label>
+                  <input value={cadForm.nome_responsavel} onChange={e => setCadForm(p => ({ ...p, nome_responsavel: e.target.value }))}
+                    className="w-full bg-purple-950/60 border border-purple-700/50 text-white rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-purple-500 placeholder-purple-700" placeholder="Nome do responsável..." />
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[9px] font-black uppercase text-purple-400 mb-1 block">CPF</label>
+                  <input value={cadForm.cpf} onChange={e => setCadForm(p => ({ ...p, cpf: e.target.value }))}
+                    className="w-full bg-purple-950/60 border border-purple-700/50 text-white rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-purple-500 placeholder-purple-700" placeholder="000.000.000-00" />
+                </div>
+                <div>
+                  <label className="text-[9px] font-black uppercase text-purple-400 mb-1 block">Telefone</label>
+                  <input value={cadForm.celular} onChange={e => setCadForm(p => ({ ...p, celular: e.target.value }))}
+                    className="w-full bg-purple-950/60 border border-purple-700/50 text-white rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-purple-500 placeholder-purple-700" placeholder="(00) 00000-0000" />
+                </div>
+              </div>
+              {cadErro && <p className="text-red-400 text-xs font-bold bg-red-900/30 border border-red-700/40 rounded-xl px-3 py-2">⚠ {cadErro}</p>}
+              {cadSucesso && <p className="text-green-400 text-xs font-bold bg-green-900/30 border border-green-700/40 rounded-xl px-3 py-2">✓ {cadSucesso}</p>}
+              <div className="flex gap-2 pt-1">
+                {!cadSucesso ? (
+                  <button type="submit" disabled={cadSalvando}
+                    className="flex-1 bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white font-black text-xs uppercase py-3 rounded-xl transition-all">
+                    {cadSalvando ? 'Cadastrando...' : 'Cadastrar'}
+                  </button>
+                ) : (
+                  <>
+                    <button type="button" onClick={() => setShowCadRapido(false)}
+                      className="flex-1 bg-purple-700 hover:bg-purple-600 text-white font-black text-xs uppercase py-3 rounded-xl">
+                      Fechar
+                    </button>
+                    <button type="button" onClick={() => { setCadForm({ nome_completo: '', data_nascimento: '', cpf: '', celular: '', nome_responsavel: '' }); setCadErro(''); setCadSucesso(''); }}
+                      className="flex-1 bg-green-600 hover:bg-green-500 text-white font-black text-xs uppercase py-3 rounded-xl">
+                      + Outro
+                    </button>
+                  </>
+                )}
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* ── Bottom Bar – Salvar + Imprimir ── */}
       <div className="fixed bottom-0 left-0 right-0 bg-[#1a0b2e]/95 backdrop-blur border-t border-purple-900/50 p-4">
