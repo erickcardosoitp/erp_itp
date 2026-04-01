@@ -10,7 +10,7 @@
  * Propriedades do script (Projeto → Configurações → Propriedades do script):
  *   WEBHOOK_SECRET = itp-forms-2026
  *   EMAIL_SUPORTE  = goncalvecardoso@gmail.com
- *   EMAIL_RH       = rh@institutotiapretinha.org  (opcional - equipe de RH/gestão)
+ *   EMAIL_RH       = erickcardoso@institutotiapretinha.org  (opcional - equipe de RH/gestão)
  *
  * A URL da API já está fixa no script abaixo.
  */
