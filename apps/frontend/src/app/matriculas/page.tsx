@@ -74,13 +74,25 @@ export default function GestaoMatriculas() {
   // Modal de Cadastro Direto (bypass do workflow)
   const [showCadastroDireto, setShowCadastroDireto] = useState(false);
   const [cursosAcademico, setCursosAcademico] = useState<Array<{ id: string; nome: string; sigla: string }>>([]);
-  const [formDireto, setFormDireto] = useState<Record<string, any>>({
+  const FORM_DIRETO_VAZIO: Record<string, any> = {
     nome_completo: '', cpf: '', email: '', celular: '',
     data_nascimento: '', sexo: '', escolaridade: '', turno_escolar: '',
-    cidade: '', bairro: '', nome_responsavel: '', lgpd_aceito: false,
+    // Endereço
+    cep: '', logradouro: '', numero: '', complemento: '',
+    bairro: '', cidade: '', estado_uf: '',
+    // Responsável
+    nome_responsavel: '', email_responsavel: '', grau_parentesco: '',
+    cpf_responsavel: '', telefone_alternativo: '',
+    // Saúde
+    possui_alergias: 'Não', cuidado_especial: 'Não', detalhes_cuidado: '', uso_medicamento: 'Não',
+    // Termos
+    lgpd_aceito: false, autoriza_imagem: false,
+    // Cursos
     curso_ids: [] as string[],
-  });
+  };
+  const [formDireto, setFormDireto] = useState<Record<string, any>>({ ...FORM_DIRETO_VAZIO });
   const [salvandoDireto, setSalvandoDireto] = useState(false);
+  const [buscandoCep, setBuscandoCep] = useState(false);
   const [erroDireto, setErroDireto] = useState<string | null>(null);
   const [resultadoDireto, setResultadoDireto] = useState<{ numero_matricula: string; nome_completo: string } | null>(null);
 
@@ -122,15 +134,30 @@ export default function GestaoMatriculas() {
   };
 
   const abrirCadastroDireto = () => {
-    setFormDireto({
-      nome_completo: '', cpf: '', email: '', celular: '',
-      data_nascimento: '', sexo: '', escolaridade: '', turno_escolar: '',
-      cidade: '', bairro: '', nome_responsavel: '', lgpd_aceito: false,
-      curso_ids: [],
-    });
+    setFormDireto({ ...FORM_DIRETO_VAZIO, curso_ids: [] });
     setErroDireto(null);
     setResultadoDireto(null);
     setShowCadastroDireto(true);
+  };
+
+  const buscarCep = async (cep: string) => {
+    const cepLimpo = cep.replace(/\D/g, '');
+    if (cepLimpo.length !== 8) return;
+    setBuscandoCep(true);
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${cepLimpo}/json/`);
+      const data = await res.json();
+      if (!data.erro) {
+        setFormDireto(p => ({
+          ...p,
+          logradouro: data.logradouro || p.logradouro,
+          bairro:     data.bairro     || p.bairro,
+          cidade:     data.localidade || p.cidade,
+          estado_uf:  data.uf         || p.estado_uf,
+        }));
+      }
+    } catch { /* silencia erros de rede */ }
+    finally { setBuscandoCep(false); }
   };
 
   const salvarCadastroDireto = async (e: React.FormEvent) => {
@@ -142,24 +169,37 @@ export default function GestaoMatriculas() {
     setSalvandoDireto(true);
     setErroDireto(null);
     try {
+      const t = (v: string) => v?.trim() || undefined;
       const payload: Record<string, any> = {
-        nome_completo:   formDireto.nome_completo.trim(),
-        cpf:             formDireto.cpf.trim(),
-        email:           formDireto.email.trim(),
-        celular:         formDireto.celular.trim(),
-        data_nascimento: formDireto.data_nascimento || undefined,
-        sexo:            formDireto.sexo || undefined,
-        escolaridade:    formDireto.escolaridade || undefined,
-        turno_escolar:   formDireto.turno_escolar || undefined,
-        cidade:          formDireto.cidade.trim() || undefined,
-        bairro:          formDireto.bairro.trim() || undefined,
-        lgpd_aceito:     formDireto.lgpd_aceito,
-        curso_ids:       formDireto.curso_ids,
+        nome_completo:        t(formDireto.nome_completo),
+        cpf:                  t(formDireto.cpf),
+        email:                t(formDireto.email),
+        celular:              t(formDireto.celular),
+        data_nascimento:      formDireto.data_nascimento || undefined,
+        sexo:                 formDireto.sexo || undefined,
+        escolaridade:         formDireto.escolaridade || undefined,
+        turno_escolar:        formDireto.turno_escolar || undefined,
+        cep:                  t(formDireto.cep),
+        logradouro:           t(formDireto.logradouro),
+        numero:               t(formDireto.numero),
+        complemento:          t(formDireto.complemento),
+        bairro:               t(formDireto.bairro),
+        cidade:               t(formDireto.cidade),
+        estado_uf:            t(formDireto.estado_uf),
+        maior_18_anos:        !menorDeIdadeDireto,
+        nome_responsavel:     menorDeIdadeDireto ? t(formDireto.nome_responsavel) : undefined,
+        email_responsavel:    menorDeIdadeDireto ? t(formDireto.email_responsavel) : undefined,
+        grau_parentesco:      menorDeIdadeDireto ? t(formDireto.grau_parentesco) : undefined,
+        cpf_responsavel:      menorDeIdadeDireto ? t(formDireto.cpf_responsavel) : undefined,
+        telefone_alternativo: t(formDireto.telefone_alternativo),
+        possui_alergias:      formDireto.possui_alergias || undefined,
+        cuidado_especial:     formDireto.cuidado_especial || undefined,
+        detalhes_cuidado:     t(formDireto.detalhes_cuidado),
+        uso_medicamento:      formDireto.uso_medicamento || undefined,
+        lgpd_aceito:          formDireto.lgpd_aceito,
+        autoriza_imagem:      formDireto.autoriza_imagem,
+        curso_ids:            formDireto.curso_ids,
       };
-      if (menorDeIdadeDireto && formDireto.nome_responsavel.trim()) {
-        payload.nome_responsavel = formDireto.nome_responsavel.trim();
-        payload.maior_18_anos = false;
-      }
       const r = await api.post('/matriculas/aluno-direto', payload);
       setResultadoDireto(r.data);
       fetchMatriculas();
@@ -621,7 +661,7 @@ export default function GestaoMatriculas() {
                   <p className="text-[10px] text-slate-500">Número de Matrícula</p>
                   <p className="font-mono text-2xl font-black text-green-700 tracking-wider">{resultadoDireto.numero_matricula}</p>
                   <div className="flex gap-3 justify-center mt-4">
-                    <button onClick={() => { setResultadoDireto(null); setFormDireto({ nome_completo: '', cpf: '', email: '', celular: '', data_nascimento: '', sexo: '', escolaridade: '', turno_escolar: '', cidade: '', bairro: '', nome_responsavel: '', lgpd_aceito: false, curso_ids: [] }); setErroDireto(null); }}
+                    <button onClick={() => { setResultadoDireto(null); setFormDireto({ ...FORM_DIRETO_VAZIO, curso_ids: [] }); setErroDireto(null); }}
                       className="px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl font-black text-xs uppercase">
                       + Cadastrar Outro
                     </button>
@@ -633,9 +673,10 @@ export default function GestaoMatriculas() {
                 </div>
               ) : (
                 <form onSubmit={salvarCadastroDireto} className="space-y-5">
-                  {/* Identificação */}
+
+                  {/* ── Identificação ── */}
                   <fieldset className="space-y-3">
-                    <legend className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2">Identificação *</legend>
+                    <legend className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2">Identificação</legend>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div className="sm:col-span-2">
                         <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Nome Completo *</label>
@@ -658,9 +699,7 @@ export default function GestaoMatriculas() {
                         <select value={formDireto.sexo} onChange={e => setFormDireto(p => ({ ...p, sexo: e.target.value }))}
                           className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400 bg-white">
                           <option value="">Selecione...</option>
-                          <option value="Masculino">Masculino</option>
-                          <option value="Feminino">Feminino</option>
-                          <option value="Outro">Outro</option>
+                          <option>Masculino</option><option>Feminino</option><option>Outro</option>
                         </select>
                       </div>
                       <div>
@@ -668,55 +707,13 @@ export default function GestaoMatriculas() {
                         <select value={formDireto.escolaridade} onChange={e => setFormDireto(p => ({ ...p, escolaridade: e.target.value }))}
                           className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400 bg-white">
                           <option value="">Selecione...</option>
-                          <option>Fundamental Incompleto</option>
-                          <option>Fundamental Completo</option>
-                          <option>Médio Incompleto</option>
-                          <option>Médio Completo</option>
-                          <option>Superior Incompleto</option>
-                          <option>Superior Completo</option>
+                          <option>Ensino Fundamental Incompleto</option>
+                          <option>Ensino Fundamental Completo</option>
+                          <option>Ensino Médio Incompleto</option>
+                          <option>Ensino Médio Completo</option>
+                          <option>Ensino Superior Incompleto</option>
+                          <option>Ensino Superior Completo</option>
                         </select>
-                      </div>
-                    </div>
-                    {menorDeIdadeDireto && (
-                      <div>
-                        <label className="text-[10px] font-black uppercase text-orange-500 block mb-1">Nome do Responsável (menor de idade)</label>
-                        <input value={formDireto.nome_responsavel} onChange={e => setFormDireto(p => ({ ...p, nome_responsavel: e.target.value }))}
-                          className="w-full border border-orange-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
-                      </div>
-                    )}
-                  </fieldset>
-
-                  {/* Contato */}
-                  <fieldset className="space-y-3">
-                    <legend className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2">Contato *</legend>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">E-mail *</label>
-                        <input required type="email" value={formDireto.email} onChange={e => setFormDireto(p => ({ ...p, email: e.target.value }))}
-                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400" />
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Celular *</label>
-                        <input required value={formDireto.celular} onChange={e => setFormDireto(p => ({ ...p, celular: e.target.value }))}
-                          placeholder="(21) 99999-9999"
-                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400" />
-                      </div>
-                    </div>
-                  </fieldset>
-
-                  {/* Localização */}
-                  <fieldset className="space-y-3">
-                    <legend className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2">Localização</legend>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Cidade</label>
-                        <input value={formDireto.cidade} onChange={e => setFormDireto(p => ({ ...p, cidade: e.target.value }))}
-                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400" />
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Bairro</label>
-                        <input value={formDireto.bairro} onChange={e => setFormDireto(p => ({ ...p, bairro: e.target.value }))}
-                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400" />
                       </div>
                       <div>
                         <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Turno Escolar</label>
@@ -729,7 +726,155 @@ export default function GestaoMatriculas() {
                     </div>
                   </fieldset>
 
-                  {/* Cursos */}
+                  {/* ── Contato ── */}
+                  <fieldset className="space-y-3">
+                    <legend className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2">Contato</legend>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">E-mail *</label>
+                        <input required type="email" value={formDireto.email} onChange={e => setFormDireto(p => ({ ...p, email: e.target.value }))}
+                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Celular *</label>
+                        <input required value={formDireto.celular} onChange={e => setFormDireto(p => ({ ...p, celular: e.target.value }))}
+                          placeholder="(21) 99999-9999"
+                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Telefone Alternativo</label>
+                        <input value={formDireto.telefone_alternativo} onChange={e => setFormDireto(p => ({ ...p, telefone_alternativo: e.target.value }))}
+                          placeholder="(21) 99999-9999"
+                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400" />
+                      </div>
+                    </div>
+                  </fieldset>
+
+                  {/* ── Endereço ── */}
+                  <fieldset className="space-y-3">
+                    <legend className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2">Endereço</legend>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">
+                          CEP {buscandoCep && <span className="text-green-500 ml-1">buscando...</span>}
+                        </label>
+                        <input value={formDireto.cep}
+                          onChange={e => {
+                            const v = e.target.value;
+                            setFormDireto(p => ({ ...p, cep: v }));
+                            if (v.replace(/\D/g, '').length === 8) buscarCep(v);
+                          }}
+                          onBlur={e => buscarCep(e.target.value)}
+                          placeholder="00000-000" maxLength={9}
+                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400" />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Logradouro</label>
+                        <input value={formDireto.logradouro} onChange={e => setFormDireto(p => ({ ...p, logradouro: e.target.value }))}
+                          placeholder="Rua, Avenida..."
+                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Número</label>
+                        <input value={formDireto.numero} onChange={e => setFormDireto(p => ({ ...p, numero: e.target.value }))}
+                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Complemento</label>
+                        <input value={formDireto.complemento} onChange={e => setFormDireto(p => ({ ...p, complemento: e.target.value }))}
+                          placeholder="Apto, Casa..."
+                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Bairro</label>
+                        <input value={formDireto.bairro} onChange={e => setFormDireto(p => ({ ...p, bairro: e.target.value }))}
+                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Cidade</label>
+                        <input value={formDireto.cidade} onChange={e => setFormDireto(p => ({ ...p, cidade: e.target.value }))}
+                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Estado (UF)</label>
+                        <input value={formDireto.estado_uf} onChange={e => setFormDireto(p => ({ ...p, estado_uf: e.target.value }))}
+                          placeholder="RJ" maxLength={2}
+                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400 uppercase" />
+                      </div>
+                    </div>
+                  </fieldset>
+
+                  {/* ── Responsável (somente menores) ── */}
+                  {menorDeIdadeDireto && (
+                    <fieldset className="space-y-3 border border-orange-200 rounded-2xl p-4 bg-orange-50">
+                      <legend className="text-[9px] font-black uppercase tracking-widest text-orange-500 px-1">Responsável (menor de idade)</legend>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="sm:col-span-2">
+                          <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Nome Completo do Responsável</label>
+                          <input value={formDireto.nome_responsavel} onChange={e => setFormDireto(p => ({ ...p, nome_responsavel: e.target.value }))}
+                            className="w-full border border-orange-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Grau de Parentesco</label>
+                          <select value={formDireto.grau_parentesco} onChange={e => setFormDireto(p => ({ ...p, grau_parentesco: e.target.value }))}
+                            className="w-full border border-orange-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white">
+                            <option value="">Selecione...</option>
+                            <option>Mãe</option><option>Pai</option><option>Avó/Avô</option>
+                            <option>Tia/Tio</option><option>Irmã/Irmão</option><option>Responsável Legal</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">CPF do Responsável</label>
+                          <input value={formDireto.cpf_responsavel} onChange={e => setFormDireto(p => ({ ...p, cpf_responsavel: e.target.value }))}
+                            placeholder="000.000.000-00"
+                            className="w-full border border-orange-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">E-mail do Responsável</label>
+                          <input type="email" value={formDireto.email_responsavel} onChange={e => setFormDireto(p => ({ ...p, email_responsavel: e.target.value }))}
+                            className="w-full border border-orange-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                        </div>
+                      </div>
+                    </fieldset>
+                  )}
+
+                  {/* ── Saúde ── */}
+                  <fieldset className="space-y-3">
+                    <legend className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2">Saúde e Cuidados</legend>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Possui Alergias?</label>
+                        <select value={formDireto.possui_alergias} onChange={e => setFormDireto(p => ({ ...p, possui_alergias: e.target.value }))}
+                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400 bg-white">
+                          <option>Não</option><option>Sim</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Cuidado Especial?</label>
+                        <select value={formDireto.cuidado_especial} onChange={e => setFormDireto(p => ({ ...p, cuidado_especial: e.target.value }))}
+                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400 bg-white">
+                          <option>Não</option><option>Sim</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Usa Medicamento?</label>
+                        <select value={formDireto.uso_medicamento} onChange={e => setFormDireto(p => ({ ...p, uso_medicamento: e.target.value }))}
+                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400 bg-white">
+                          <option>Não</option><option>Sim</option>
+                        </select>
+                      </div>
+                    </div>
+                    {(formDireto.possui_alergias === 'Sim' || formDireto.cuidado_especial === 'Sim' || formDireto.uso_medicamento === 'Sim') && (
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Detalhes (alergias, cuidados, medicamentos)</label>
+                        <textarea value={formDireto.detalhes_cuidado} onChange={e => setFormDireto(p => ({ ...p, detalhes_cuidado: e.target.value }))}
+                          rows={2} placeholder="Descreva alergias, cuidados especiais e medicamentos em uso..."
+                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400 resize-none" />
+                      </div>
+                    )}
+                  </fieldset>
+
+                  {/* ── Cursos ── */}
                   {cursosAcademico.length > 0 && (
                     <fieldset>
                       <legend className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-3">
@@ -755,15 +900,26 @@ export default function GestaoMatriculas() {
                     </fieldset>
                   )}
 
-                  {/* LGPD */}
-                  <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl p-3">
-                    <input type="checkbox" id="lgpd_direto" checked={formDireto.lgpd_aceito}
-                      onChange={e => setFormDireto(p => ({ ...p, lgpd_aceito: e.target.checked }))}
-                      className="mt-0.5 rounded" />
-                    <label htmlFor="lgpd_direto" className="text-[11px] font-bold text-amber-700 cursor-pointer">
-                      Confirmo que o aluno autorizou o uso de seus dados conforme a LGPD (Lei 13.709/2018)
-                    </label>
-                  </div>
+                  {/* ── Termos ── */}
+                  <fieldset className="space-y-2">
+                    <legend className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2">Termos</legend>
+                    <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl p-3">
+                      <input type="checkbox" id="lgpd_direto" checked={formDireto.lgpd_aceito}
+                        onChange={e => setFormDireto(p => ({ ...p, lgpd_aceito: e.target.checked }))}
+                        className="mt-0.5 rounded" />
+                      <label htmlFor="lgpd_direto" className="text-[11px] font-bold text-amber-700 cursor-pointer">
+                        Confirmo que o aluno autorizou o uso de seus dados conforme a LGPD (Lei 13.709/2018)
+                      </label>
+                    </div>
+                    <div className="flex items-start gap-3 bg-blue-50 border border-blue-200 rounded-xl p-3">
+                      <input type="checkbox" id="autoriza_imagem_direto" checked={formDireto.autoriza_imagem}
+                        onChange={e => setFormDireto(p => ({ ...p, autoriza_imagem: e.target.checked }))}
+                        className="mt-0.5 rounded" />
+                      <label htmlFor="autoriza_imagem_direto" className="text-[11px] font-bold text-blue-700 cursor-pointer">
+                        Autorizo o ITP a utilizar fotos e vídeos do aluno para fins institucionais e redes sociais
+                      </label>
+                    </div>
+                  </fieldset>
 
                   {erroDireto && (
                     <div className="bg-red-50 border border-red-200 text-red-700 text-[11px] font-bold rounded-xl px-4 py-3">⚠ {erroDireto}</div>
