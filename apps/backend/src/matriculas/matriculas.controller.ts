@@ -4,10 +4,7 @@ import {
   UploadedFile, Query,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
-import { extname, join } from 'path';
-import { mkdirSync, existsSync } from 'fs';
-import { randomUUID } from 'crypto';
+import { memoryStorage } from 'multer';
 import { MatriculasService } from './matriculas.service'; 
 import { StatusMatricula } from './inscricao.entity';
 import { TipoDocumento } from './documento-inscricao.entity';
@@ -237,17 +234,7 @@ export class MatriculasController {
   @Public()
   @UseInterceptors(
     FileInterceptor('arquivo', {
-      storage: diskStorage({
-        destination: (_req, _file, cb) => {
-          // destino provisório — será movido para subpasta por token no service
-          const dir = join(process.cwd(), 'public', 'uploads', 'documentos', 'tmp');
-          if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-          cb(null, dir);
-        },
-        filename: (_req, file, cb) => {
-          cb(null, `${randomUUID()}${extname(file.originalname).toLowerCase()}`);
-        },
-      }),
+      storage: memoryStorage(),
       limits: { fileSize: 8 * 1024 * 1024 },
     }),
   )
@@ -264,16 +251,6 @@ export class MatriculasController {
       ? (tipo as TipoDocumento)
       : null;
     if (!tipoEnum) throw new BadRequestException('Tipo de documento inválido.');
-
-    // Move arquivo do tmp para subpasta do token
-    const inscricao = await this.matriculasService.buscarPorDocToken(token);
-    const destDir = join(process.cwd(), 'public', 'uploads', 'documentos', String(inscricao.id));
-    if (!existsSync(destDir)) mkdirSync(destDir, { recursive: true });
-
-    const { renameSync } = await import('fs');
-    const newPath = join(destDir, file.filename);
-    renameSync(file.path, newPath);
-    file.path = newPath;
 
     return await this.matriculasService.uploadDocumento(token, tipoEnum, file, nomeExtra);
   }

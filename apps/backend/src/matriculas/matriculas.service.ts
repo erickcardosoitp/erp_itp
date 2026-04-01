@@ -2,8 +2,6 @@ import { Injectable, NotFoundException, BadRequestException, InternalServerError
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, Not, In } from 'typeorm';
 import { randomUUID } from 'crypto';
-import { extname, join, resolve } from 'path';
-import { existsSync, mkdirSync, unlinkSync } from 'fs';
 import { Inscricao, StatusMatricula } from './inscricao.entity';
 import { InscricaoAnotacao } from './inscricao-anotacao.entity';
 import { InscricaoMovimentacao } from './inscricao-movimentacao.entity';
@@ -17,25 +15,6 @@ import { Turma } from '../academico/entities/turma.entity';
 import { AcademicoService } from '../academico/academico.service';
 import { NotificacoesService } from '../notificacoes/notificacoes.service';
 
-/** Valida que o caminho de arquivo do banco não escapa do diretório público (path traversal). */
-function safePublicPath(urlArquivo: string): string {
-  const base = resolve(join(process.cwd(), 'public'));
-  const full = resolve(join(base, urlArquivo));
-  if (!full.startsWith(base + require('path').sep) && full !== base) {
-    throw new Error('Caminho de arquivo fora do diretório permitido.');
-  }
-  return full;
-}
-
-/** Remove arquivo temporário (criado pelo multer) garantindo que o caminho fique dentro do dir de uploads. */
-function safeDeleteTempFile(filePath: string): void {
-  const uploadsBase = resolve(join(process.cwd(), 'public', 'uploads'));
-  const resolved = resolve(filePath);
-  if (!resolved.startsWith(uploadsBase + require('path').sep) && resolved !== uploadsBase) {
-    throw new Error('Tentativa de exclusão fora do diretório de uploads.');
-  }
-  if (existsSync(resolved)) unlinkSync(resolved);
-}
 
 /** Tipos obrigatórios que devem estar presentes para considerar o envio completo. */
 const TIPOS_OBRIGATORIOS = [
@@ -902,32 +881,22 @@ export class MatriculasService {
     file: Express.Multer.File,
     nomeExtra?: string,
   ): Promise<DocumentoInscricao> {
-    // Valida token
     const inscricao = await this.buscarPorDocToken(token);
 
-    // Valida mimetype
     if (!MIMETYPES_ACEITOS.includes(file.mimetype)) {
-      // Remove arquivo já gravado pelo multer (valida path contra traversal)
-      safeDeleteTempFile(file.path);
-      throw new BadRequestException(
-        `Tipo de arquivo não permitido. Use JPEG, PNG, WebP ou PDF.`,
-      );
+      throw new BadRequestException(`Tipo de arquivo não permitido. Use JPEG, PNG, WebP ou PDF.`);
     }
 
-    // Valida tamanho
     if (file.size > TAMANHO_MAX_BYTES) {
-      safeDeleteTempFile(file.path);
       throw new BadRequestException('Arquivo excede o limite de 8 MB.');
     }
 
-    // Remove documento anterior do mesmo tipo (exceto EXTRA)
+    // Remove documento anterior do mesmo tipo (exceto EXTRA) — apenas do banco
     if (tipo !== TipoDocumento.EXTRA) {
       const anterior = await this.documentoRepository.findOne({
         where: { inscricao_id: inscricao.id, tipo },
       });
       if (anterior) {
-        const oldPath = safePublicPath(anterior.url_arquivo);
-        if (existsSync(oldPath)) unlinkSync(oldPath);
         await this.documentoRepository.remove(anterior);
       }
     }
@@ -938,13 +907,12 @@ export class MatriculasService {
         where: { inscricao_id: inscricao.id, tipo: TipoDocumento.EXTRA },
       });
       if (qtdExtra >= 5) {
-        safeDeleteTempFile(file.path);
         throw new BadRequestException('Limite de 5 documentos extras atingido.');
       }
     }
 
-    // URL relativa para acesso público via /uploads/...
-    const urlArquivo = `/uploads/documentos/${inscricao.id}/${file.filename}`;
+    // Armazena como data URL base64 (compatível com ambiente serverless)
+    const urlArquivo = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
 
     const doc = this.documentoRepository.create({
       inscricao_id: inscricao.id,
@@ -980,8 +948,6 @@ export class MatriculasService {
   async removerDocumento(docId: string): Promise<void> {
     const doc = await this.documentoRepository.findOneBy({ id: docId });
     if (!doc) throw new NotFoundException('Documento não encontrado.');
-    const filePath = safePublicPath(doc.url_arquivo);
-    if (existsSync(filePath)) unlinkSync(filePath);
     await this.documentoRepository.remove(doc);
   }
 }

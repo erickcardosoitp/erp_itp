@@ -77,7 +77,7 @@ function MeuPerfilTab() {
     const formData = new FormData();
     formData.append('nome', nome);
     formData.append('email', user.email);
-    if (fotoFile) formData.append('file', fotoFile);
+    if (fotoFile) formData.append('foto', fotoFile);
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/usuarios/perfil`, {
         method: 'PATCH',

@@ -13,11 +13,11 @@ const API_ORIGIN = (process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:30
 
 /** Garante que URLs da API usem apenas esquemas seguros (evita DOM XSS via javascript:). */
 const safeUrl = (url: string): string => {
+  if (url.startsWith('data:image/') || url.startsWith('data:application/pdf')) return url;
   try {
     const u = new URL(url, window.location.origin);
     if (u.protocol === 'http:' || u.protocol === 'https:') return url;
   } catch { /* URL relativa ou inválida */ }
-  // Para caminhos relativos (/uploads/...) retorna diretamente
   if (url.startsWith('/')) return url;
   return '#';
 };
@@ -128,22 +128,29 @@ export default function DossieCandidato({ aluno, onClose, onSuccess }: DossiePro
     const load = async () => {
       setLoading(true);
       try {
-        const [resCursos, resAnot, resMov] = await Promise.allSettled([
+        const [resInscricao, resCursos, resAnot, resMov] = await Promise.allSettled([
+          api.get(`/matriculas/inscricao/${aluno.id}`),
           api.get('/matriculas/cursos-disponiveis'),
           api.get(`/matriculas/inscricao/${aluno.id}/anotacoes`),
           api.get(`/matriculas/inscricao/${aluno.id}/movimentacoes`),
         ]);
+        // Atualiza formData com dados frescos do banco (garante bairro, email, cursos_desejados etc.)
+        if (resInscricao.status === 'fulfilled') {
+          setFormData(resInscricao.value.data);
+        }
         if (resCursos.status === 'fulfilled') {
           const cursos: string[] = resCursos.value.data;
           setAvailableCourses(cursos);
-          // Pré-seleciona cursos que batem com o desejo do candidato
-          if (cursos.length > 0 && aluno.cursos_desejados) {
-            const desejados = aluno.cursos_desejados
+          const desejadosStr = resInscricao.status === 'fulfilled'
+            ? resInscricao.value.data.cursos_desejados
+            : aluno.cursos_desejados;
+          if (cursos.length > 0 && desejadosStr) {
+            const desejados = desejadosStr
               .split(/[,;]/)
               .map((s: string) => s.trim().toLowerCase())
               .filter(Boolean);
             const preSelected = cursos.filter(c =>
-              desejados.some(d =>
+              desejados.some((d: string) =>
                 c.toLowerCase().includes(d) || d.includes(c.toLowerCase())
               )
             );
@@ -153,10 +160,6 @@ export default function DossieCandidato({ aluno, onClose, onSuccess }: DossiePro
         setCursosCarregados(true);
         if (resAnot.status === 'fulfilled') setAnotacoes(resAnot.value.data);
         if (resMov.status === 'fulfilled') setMovimentacoes(resMov.value.data);
-        const erros = [resCursos, resAnot, resMov]
-          .filter(r => r.status === 'rejected')
-          .map(r => (r as PromiseRejectedResult).reason?.response?.status);
-        if (erros.length) console.warn('Dossier: erros parciais nos endpoints:', erros);
       } catch (e: any) {
         console.error('Erro no load do Dossier:', e.response?.status);
       } finally {
@@ -164,7 +167,7 @@ export default function DossieCandidato({ aluno, onClose, onSuccess }: DossiePro
       }
     };
     load();
-  }, [aluno.id, aluno.cursos_desejados]);
+  }, [aluno.id]);
 
   // ── Handlers ────────────────────────────────────────────────
   const handleUpdateStatus = async (novoStatus: string, motivo?: string) => {
@@ -211,9 +214,10 @@ export default function DossieCandidato({ aluno, onClose, onSuccess }: DossiePro
     setLoading(true);
     try {
       const res = await api.post(`/matriculas/${aluno.id}/finalizar`, { cursos: cursosSelecionados });
-      setMatriculaNumero(res.data?.numero_matricula ?? null);
+      const numMatricula = res.data?.numero_matricula ?? null;
+      setMatriculaNumero(numMatricula);
+      setFormData(prev => ({ ...prev, status_matricula: 'Matriculado' }));
       onSuccess?.();
-      // não fecha o modal aqui — aguarda o usuário fechar o popup de confirmação
     } catch (e: any) {
       alert('Falha na efetivação: ' + (e.response?.data?.message || e.message));
     } finally {
@@ -677,7 +681,7 @@ export default function DossieCandidato({ aluno, onClose, onSuccess }: DossiePro
                           extra: doc.nome_extra ?? 'Documento Adicional',
                         };
                         const nomeLabel = labelMap[doc.tipo] ?? doc.tipo;
-                        const fileUrl = doc.url_arquivo.startsWith('http')
+                        const fileUrl = (doc.url_arquivo.startsWith('data:') || doc.url_arquivo.startsWith('http'))
                           ? doc.url_arquivo
                           : `${API_ORIGIN}${doc.url_arquivo}`;
                         const bytes = doc.tamanho_bytes ?? 0;

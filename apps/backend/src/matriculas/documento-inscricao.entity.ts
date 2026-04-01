@@ -40,8 +40,8 @@ export class DocumentoInscricao {
   @Column({ type: 'varchar', nullable: true })
   nome_extra: string | null;
 
-  /** Caminho relativo no servidor: /uploads/documentos/<inscricao_id>/<filename> */
-  @Column({ type: 'varchar' })
+  /** data URL base64 ou caminho relativo: data:<mime>;base64,... */
+  @Column({ type: 'text' })
   url_arquivo: string;
 
   /** Mimetype original validado no backend */
