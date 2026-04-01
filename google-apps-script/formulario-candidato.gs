@@ -332,7 +332,8 @@ function aoEnviarFormulario(e) {
     estado_uf:            campo_(r, ['estado_uf', 'Estado (UF)', 'Estado (UF):', 'Estado', 'Estado:']) || 'RJ',
     cep:                  digits_(campo_(r, ['cep', 'CEP', 'CEP:'])),
     nome_responsavel:     campo_(r, ['nome_responsavel', 'Nome Completo do Responsável', 'Nome do Responsável', 'Nome completo do responsável']),
-    email_responsavel:    campo_(r, ['email_responsavel', 'Email do Responsável', 'Email responsável', 'E-mail do Responsável', 'E-mail responsável']),
+    // Para menores de 18, o formulário tem apenas "Email:" que pertence ao responsável
+    email_responsavel:    campo_(r, ['email_responsavel', 'Email do Responsável', 'Email responsável', 'E-mail do Responsável', 'E-mail responsável', 'Email:', 'Email']),
     grau_parentesco:      campo_(r, ['grau_parentesco', 'Grau de Parentesco', 'Grau de parentesco do responsável', 'Grau de parentesco']),
     cpf_responsavel:      digits_(campo_(r, ['cpf_responsavel', 'CPF do Responsável', 'CPF do responsável'])),
     telefone_alternativo: digits_(campo_(r, ['telefone_alternativo', 'Telefone alternativo', 'Telefone alternativo:'])),

@@ -354,9 +354,11 @@ export class MatriculasService {
    */
   async receberInscricao(dados: any): Promise<Inscricao> {
     const cpfLimpo = String(dados.cpf ?? '').replace(/\D/g, '');
+    const ehMenor = dados.maior_18_anos === false || (dados.idade && parseInt(dados.idade) < 18);
 
     // ── Validações com notificação amigável em caso de falha ──────────
-    if (!dados.nome_completo || !cpfLimpo) {
+    // CPF é obrigatório apenas para maiores de 18; menores podem não ter CPF ainda
+    if (!dados.nome_completo || (!cpfLimpo && !ehMenor)) {
       const motivo = !dados.nome_completo ? 'Nome completo ausente' : 'CPF ausente ou inválido';
       this.notificacoes.criar({
         tipo: 'alerta',
@@ -366,20 +368,23 @@ export class MatriculasService {
       }).catch(() => {});
       throw new BadRequestException(`Campos obrigatórios ausentes: ${motivo}.`);
     }
-    
-    const STATUS_INATIVOS = [StatusMatricula.DESISTENTE, StatusMatricula.CANCELADA];
-    const existente = await this.inscricaoRepository.findOne({
-      where: { cpf: cpfLimpo, status_matricula: Not(In(STATUS_INATIVOS)) },
-    });
-    if (existente) {
-      this.notificacoes.criar({
-        tipo: 'alerta',
-        titulo: '⚠️ Inscrição duplicada',
-        mensagem: `Nova tentativa de inscrição para o CPF ${cpfLimpo} (${dados.nome_completo}), mas já existe uma inscrição ativa com status "${existente.status_matricula}". Verifique se é necessário atualizar o status existente antes de aceitar uma nova inscrição.`,
-        referencia_id: String(existente.id),
-        referencia_tipo: 'inscricao',
-      }).catch(() => {});
-      throw new BadRequestException('Este CPF já possui uma inscrição ativa.');
+
+    // Verificação de duplicidade: apenas quando CPF está preenchido
+    if (cpfLimpo) {
+      const STATUS_INATIVOS = [StatusMatricula.DESISTENTE, StatusMatricula.CANCELADA];
+      const existente = await this.inscricaoRepository.findOne({
+        where: { cpf: cpfLimpo, status_matricula: Not(In(STATUS_INATIVOS)) },
+      });
+      if (existente) {
+        this.notificacoes.criar({
+          tipo: 'alerta',
+          titulo: '⚠️ Inscrição duplicada',
+          mensagem: `Nova tentativa de inscrição para o CPF ${cpfLimpo} (${dados.nome_completo}), mas já existe uma inscrição ativa com status "${existente.status_matricula}". Verifique se é necessário atualizar o status existente antes de aceitar uma nova inscrição.`,
+          referencia_id: String(existente.id),
+          referencia_tipo: 'inscricao',
+        }).catch(() => {});
+        throw new BadRequestException('Este CPF já possui uma inscrição ativa.');
+      }
     }
 
     const novaInscricao = this.inscricaoRepository.create({
