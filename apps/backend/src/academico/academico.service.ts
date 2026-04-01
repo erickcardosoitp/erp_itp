@@ -559,7 +559,8 @@ export class AcademicoService {
       SELECT u.id, u.nome, u.email, u.role, g.nome as grupo_nome
       FROM usuarios u
       LEFT JOIN grupos g ON u.grupo_id = g.id
-      WHERE LOWER(g.nome) LIKE '%professor%'
+      WHERE LOWER(g.nome) LIKE '%prof%'
+         OR LOWER(u.role) = 'prof'
       ORDER BY u.nome ASC
     `);
     return rows;
