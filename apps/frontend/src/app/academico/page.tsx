@@ -123,7 +123,38 @@ function FieldSelect({ label, value, onChange, options, required = false }: { la
   );
 }
 
+// ─── KpiCard (Grade) ──────────────────────────────────────────────────────────
+
+const KPI_GRADE_COLORS: Record<string, { bg: string; text: string; sub: string; border: string }> = {
+  purple: { bg: 'bg-purple-50',  text: 'text-purple-700',  sub: 'text-purple-400',  border: 'border-purple-100'  },
+  blue:   { bg: 'bg-blue-50',    text: 'text-blue-700',    sub: 'text-blue-400',    border: 'border-blue-100'    },
+  green:  { bg: 'bg-emerald-50', text: 'text-emerald-700', sub: 'text-emerald-400', border: 'border-emerald-100' },
+  amber:  { bg: 'bg-amber-50',   text: 'text-amber-700',   sub: 'text-amber-400',   border: 'border-amber-100'   },
+  red:    { bg: 'bg-red-50',     text: 'text-red-700',     sub: 'text-red-400',     border: 'border-red-100'     },
+};
+
+function KpiGrade({ label, value, sub, color, isText }: {
+  label: string; value: number | string; sub: string; color: string; isText?: boolean;
+}) {
+  const c = KPI_GRADE_COLORS[color] ?? KPI_GRADE_COLORS.purple;
+  return (
+    <div className={`${c.bg} ${c.border} border rounded-2xl p-4 flex flex-col gap-1 min-w-0`}>
+      <span className={`text-[9px] font-black uppercase tracking-widest ${c.sub}`}>{label}</span>
+      <span className={`font-black ${c.text} leading-tight truncate ${isText ? 'text-sm' : 'text-3xl'}`}>{value}</span>
+      <span className={`text-[9px] font-medium ${c.sub} truncate`}>{sub}</span>
+    </div>
+  );
+}
+
 // ─── Tab: Grade ───────────────────────────────────────────────────────────────
+
+const GRADE_ROW_H  = 44;
+const GRADE_HEAD_H = 40;
+
+function timeToMinsGrade(t: string) {
+  const [h, m] = t.split(':').map(Number);
+  return h * 60 + m;
+}
 
 function GradeTab({ podeEditar, turmas }: { podeEditar: boolean; turmas: Turma[] }) {
   const [grade, setGrade] = useState<GradeCard[]>([]);
@@ -131,11 +162,52 @@ function GradeTab({ podeEditar, turmas }: { podeEditar: boolean; turmas: Turma[]
   const [dragCard, setDragCard] = useState<GradeCard | null>(null);
   const [form, setForm] = useState<Partial<GradeCard>>({ cor: '#7c3aed' });
   const [erroGrade, setErroGrade] = useState<string | null>(null);
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(t);
+  }, []);
 
   const load = useCallback(async () => {
     try { const r = await api.get('/academico/grade'); setGrade(r.data); } catch {}
   }, []);
   useEffect(() => { load(); }, [load]);
+
+  // ── Tempo atual ────────────────────────────────────────────────────────────
+  const currentMins = now.getHours() * 60 + now.getMinutes();
+  const jsDow = now.getDay(); // 0=Dom … 6=Sáb
+  const todayDia = jsDow >= 1 && jsDow <= 6 ? jsDow : 0;
+
+  const slotsComValor = HORARIOS.filter(h => h.value);
+  let currentRowIdx = -1;
+  let slotFraction = 0;
+  for (let i = 0; i < slotsComValor.length; i++) {
+    const start = timeToMinsGrade(slotsComValor[i].value!);
+    const end = i + 1 < slotsComValor.length ? timeToMinsGrade(slotsComValor[i + 1].value!) : start + 30;
+    if (currentMins >= start && currentMins < end) {
+      currentRowIdx = HORARIOS.findIndex(h => h.value === slotsComValor[i].value);
+      slotFraction = (currentMins - start) / (end - start);
+      break;
+    }
+  }
+  const lineTop = currentRowIdx >= 0 ? GRADE_HEAD_H + currentRowIdx * GRADE_ROW_H + slotFraction * GRADE_ROW_H : -1;
+
+  // ── KPIs ───────────────────────────────────────────────────────────────────
+  const professoresArr = [...new Set(grade.map(g => g.nome_professor).filter(Boolean) as string[])];
+  const aulasHoje = grade.filter(g => g.dia_semana === todayDia);
+  const aulaAgora = grade.filter(g =>
+    g.dia_semana === todayDia && g.horario_inicio && g.horario_fim &&
+    timeToMinsGrade(g.horario_inicio) <= currentMins &&
+    timeToMinsGrade(g.horario_fim) > currentMins
+  );
+  const proxAula = grade
+    .filter(g => g.dia_semana === todayDia && g.horario_inicio && timeToMinsGrade(g.horario_inicio) > currentMins)
+    .sort((a, b) => timeToMinsGrade(a.horario_inicio!) - timeToMinsGrade(b.horario_inicio!))[0];
+
+  const profSubtext = professoresArr.length
+    ? professoresArr.slice(0, 2).join(', ') + (professoresArr.length > 2 ? ` +${professoresArr.length - 2}` : '')
+    : 'nenhum cadastrado';
 
   const cardsAt = (dia: number, hora: string) =>
     grade.filter(g => g.dia_semana === dia && g.horario_inicio === hora + ':00');
@@ -174,6 +246,38 @@ function GradeTab({ podeEditar, turmas }: { podeEditar: boolean; turmas: Turma[]
 
   return (
     <div className="space-y-4">
+
+      {/* ── KPIs ─────────────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <KpiGrade
+          label="Aulas na Semana"
+          value={grade.length}
+          sub="horários cadastrados"
+          color="purple"
+        />
+        <KpiGrade
+          label="Professores"
+          value={professoresArr.length}
+          sub={profSubtext}
+          color="blue"
+        />
+        <KpiGrade
+          label="Aulas Hoje"
+          value={aulasHoje.length}
+          sub={todayDia >= 1 ? DIAS_SEMANA[todayDia - 1] : 'Sem aula hoje'}
+          color="green"
+        />
+        <KpiGrade
+          label={aulaAgora.length ? 'Em Aula Agora' : 'Próxima Aula'}
+          value={aulaAgora.length ? (aulaAgora[0].nome_curso || '–') : (proxAula?.nome_curso ?? '–')}
+          sub={aulaAgora.length
+            ? (aulaAgora[0].nome_professor || aulaAgora[0].horario_inicio?.slice(0, 5) || '')
+            : proxAula ? proxAula.horario_inicio?.slice(0, 5) ?? '' : 'Nenhuma hoje'}
+          color={aulaAgora.length ? 'red' : 'amber'}
+          isText
+        />
+      </div>
+
       <div className="flex justify-between items-center">
         <h2 className="text-lg font-black uppercase tracking-tight text-slate-800">Grade Horária Semanal</h2>
         {podeEditar && (
@@ -184,14 +288,36 @@ function GradeTab({ podeEditar, turmas }: { podeEditar: boolean; turmas: Turma[]
       </div>
 
       <div className="bg-white rounded-3xl border border-slate-100 shadow overflow-x-auto">
-        <div className="min-w-[900px]">
+        <div className="min-w-[900px] relative">
+
+          {/* ── Linha de tempo atual ──────────────────────────────────────── */}
+          {lineTop >= 0 && todayDia >= 1 && (
+            <div
+              className="absolute left-0 right-0 z-20 pointer-events-none flex items-center"
+              style={{ top: `${lineTop}px` }}
+            >
+              <span className="text-[9px] font-black text-red-600 bg-white border border-red-300 px-1.5 rounded-full shadow-sm ml-2 shrink-0 leading-4 whitespace-nowrap">
+                {now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+              </span>
+              <div className="flex-1 h-[2px] bg-gradient-to-r from-red-500 via-red-400 to-transparent" />
+              <div className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse shrink-0 mr-2 shadow" />
+            </div>
+          )}
+
           {/* Header dias */}
           <div className="grid border-b border-slate-100" style={{ gridTemplateColumns: '80px repeat(6, 1fr)' }}>
             <div className="p-3 border-r border-slate-50" />
-            {DIAS_SEMANA.map(d => (
-              <div key={d} className="p-3 text-center text-[10px] font-black uppercase text-slate-400 border-r border-slate-50 last:border-0">{d}</div>
-            ))}
+            {DIAS_SEMANA.map((d, i) => {
+              const isToday = (i + 1) === todayDia;
+              return (
+                <div key={d} className={`p-3 text-center text-[10px] font-black uppercase border-r border-slate-50 last:border-0 transition-colors ${isToday ? 'bg-purple-50 text-purple-700' : 'text-slate-400'}`}>
+                  {isToday && <div className="text-[8px] text-purple-400 mb-0.5">HOJE</div>}
+                  {d}
+                </div>
+              );
+            })}
           </div>
+
           {/* Linhas de horário */}
           {HORARIOS.map((h, idx) => {
             if (h.lanche) {
@@ -208,16 +334,19 @@ function GradeTab({ podeEditar, turmas }: { podeEditar: boolean; turmas: Turma[]
               );
             }
             const hora = h.value!;
+            const isCurrentRow = idx === currentRowIdx && todayDia >= 1;
             return (
               <div key={hora} className="grid border-b border-slate-50 hover:bg-slate-50/40 transition-colors" style={{ gridTemplateColumns: '80px repeat(6, 1fr)' }}>
-                <div className="p-2 flex items-center justify-center border-r border-slate-100">
-                  <span className="text-[10px] font-black text-slate-400">{h.label}</span>
+                <div className={`p-2 flex items-center justify-center border-r transition-colors ${isCurrentRow ? 'border-l-2 border-l-red-400 bg-red-50/40' : 'border-slate-100'}`}>
+                  <span className={`text-[10px] font-black ${isCurrentRow ? 'text-red-500' : 'text-slate-400'}`}>{h.label}</span>
                 </div>
                 {DIAS_SEMANA.map((_, di) => {
                   const diaNum = di + 1;
                   const cards = cardsAt(diaNum, hora);
+                  const isToday = diaNum === todayDia;
                   return (
-                    <div key={di} className="p-1 min-h-[44px] border-r border-slate-50 last:border-0"
+                    <div key={di}
+                      className={`p-1 min-h-[44px] border-r border-slate-50 last:border-0 transition-colors ${isToday ? 'bg-purple-50/20' : ''}`}
                       onDragOver={e => { if (podeEditar) e.preventDefault(); }}
                       onDrop={e => handleDrop(e, diaNum, hora)}>
                       {cards.map(card => (
