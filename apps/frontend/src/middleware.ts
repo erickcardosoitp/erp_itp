@@ -97,12 +97,14 @@ export function middleware(request: NextRequest) {
           return NextResponse.redirect(new URL('/dashboard', request.url));
         }
       } else if (!ROLES_FULL_ACCESS.includes(role)) {
-        // Verifica modulos_visiveis do grupo para as demais rotas
+        // Verifica modulos_visiveis do grupo para as demais rotas.
+        // Espelha a lógica do Sidebar: grupo sem config = acesso liberado;
+        // bloqueia apenas quando o módulo está EXPLICITAMENTE definido como false.
         const segment = `/${pathname.split('/').filter(Boolean)[0] ?? ''}`;
         const moduloKey = PATH_TO_MODULE[segment];
         if (moduloKey) {
           const modulosVisiveis = payload?.permissoes?.modulos_visiveis as Record<string, boolean> | undefined;
-          if (!modulosVisiveis || modulosVisiveis[moduloKey] !== true) {
+          if (modulosVisiveis && modulosVisiveis[moduloKey] === false) {
             return NextResponse.redirect(new URL('/dashboard', request.url));
           }
         }
