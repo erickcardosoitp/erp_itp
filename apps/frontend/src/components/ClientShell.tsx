@@ -12,6 +12,16 @@ import SettingsApplier from './SettingsApplier';
 import LaunchPad from './LaunchPad';
 import { Menu } from 'lucide-react';
 
+function isChunkError(msg: string): boolean {
+  return (
+    /ChunkLoadError/i.test(msg) ||
+    /loading chunk/i.test(msg) ||
+    /failed to fetch dynamically imported module/i.test(msg) ||
+    /importing a module script failed/i.test(msg) ||
+    /load failed/i.test(msg)
+  );
+}
+
 export default function ClientShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isPublicPage = pathname === '/login'
@@ -23,6 +33,23 @@ export default function ClientShell({ children }: { children: React.ReactNode })
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+
+  // Detecta ChunkLoadError causado por novo deploy e recarrega a página
+  useEffect(() => {
+    const handleError = (e: ErrorEvent) => {
+      if (isChunkError(e.message || '')) window.location.reload();
+    };
+    const handleRejection = (e: PromiseRejectionEvent) => {
+      const msg = e.reason?.message || String(e.reason || '');
+      if (isChunkError(msg)) window.location.reload();
+    };
+    window.addEventListener('error', handleError);
+    window.addEventListener('unhandledrejection', handleRejection);
+    return () => {
+      window.removeEventListener('error', handleError);
+      window.removeEventListener('unhandledrejection', handleRejection);
+    };
+  }, []);
 
   useEffect(() => { setMounted(true); }, []);
   // Fechar drawer ao trocar de página
