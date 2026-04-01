@@ -140,6 +140,30 @@ export class AppModule implements OnModuleInit {
       await this.dataSource.query(`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS matricula TEXT UNIQUE`);
       this.logger.log('✅ Migrations de matrícula aplicadas (IF NOT EXISTS)');
 
+      // ── Colunas faltantes em funcionarios (schema drift) ─────────────────
+      await this.dataSource.query(`
+        ALTER TABLE IF EXISTS funcionarios
+          ADD COLUMN IF NOT EXISTS raca_cor            TEXT,
+          ADD COLUMN IF NOT EXISTS escolaridade        TEXT,
+          ADD COLUMN IF NOT EXISTS cep                 TEXT,
+          ADD COLUMN IF NOT EXISTS logradouro          TEXT,
+          ADD COLUMN IF NOT EXISTS numero_residencia   TEXT,
+          ADD COLUMN IF NOT EXISTS bairro              TEXT,
+          ADD COLUMN IF NOT EXISTS cidade              TEXT,
+          ADD COLUMN IF NOT EXISTS complemento         TEXT,
+          ADD COLUMN IF NOT EXISTS estado              TEXT,
+          ADD COLUMN IF NOT EXISTS telefone_emergencia_1 TEXT,
+          ADD COLUMN IF NOT EXISTS telefone_emergencia_2 TEXT,
+          ADD COLUMN IF NOT EXISTS possui_deficiencia  BOOLEAN DEFAULT false,
+          ADD COLUMN IF NOT EXISTS deficiencia_descricao TEXT,
+          ADD COLUMN IF NOT EXISTS possui_alergias     BOOLEAN DEFAULT false,
+          ADD COLUMN IF NOT EXISTS alergias_descricao  TEXT,
+          ADD COLUMN IF NOT EXISTS usa_medicamentos    BOOLEAN DEFAULT false,
+          ADD COLUMN IF NOT EXISTS medicamentos_descricao TEXT,
+          ADD COLUMN IF NOT EXISTS interesse_cursos    BOOLEAN DEFAULT false
+      `);
+      this.logger.log('✅ Colunas funcionarios (endereço, emergência, saúde) aplicadas (IF NOT EXISTS)');
+
       // Tabelas de Estoque
       await this.dataSource.query(`
         CREATE TABLE IF NOT EXISTS estoque_produtos (

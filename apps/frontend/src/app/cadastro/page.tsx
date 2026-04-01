@@ -67,6 +67,9 @@ interface Funcionario {
   alergias_descricao?: string;
   usa_medicamentos?: boolean;
   medicamentos_descricao?: string;
+  possui_plano_saude?: boolean;
+  plano_saude?: string;
+  numero_sus?: string;
   interesse_cursos?: boolean;
   ativo?: boolean;
   matricula?: string;
@@ -659,6 +662,14 @@ function FuncionariosTab({ onCount }: { onCount: (n: number) => void }) {
                 <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">Faz uso contínuo de algum medicamento?</span>
               </label>
               {form.usa_medicamentos && <FieldInput label="Quais medicamentos? (Nome e dosagem)" value={form.medicamentos_descricao ?? ''} onChange={v => setForm(p => ({ ...p, medicamentos_descricao: v }))} placeholder="Ex: Metformina 500mg" />}
+
+              <label className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-700/50 cursor-pointer hover:bg-purple-50/60 dark:hover:bg-purple-900/20 transition-colors">
+                <input type="checkbox" checked={!!form.possui_plano_saude} onChange={e => setForm(p => ({ ...p, possui_plano_saude: e.target.checked, plano_saude: e.target.checked ? p.plano_saude : '' }))} className="w-4 h-4 accent-purple-600 flex-shrink-0" />
+                <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">Possui plano de saúde?</span>
+              </label>
+              {form.possui_plano_saude && <FieldInput label="Qual plano de saúde?" value={form.plano_saude ?? ''} onChange={v => setForm(p => ({ ...p, plano_saude: v }))} placeholder="Ex: Unimed, Bradesco Saúde..." />}
+
+              <FieldInput label="Número do SUS (Cartão Nacional de Saúde)" value={form.numero_sus ?? ''} onChange={v => setForm(p => ({ ...p, numero_sus: v }))} placeholder="000 0000 0000 0000" />
 
               <label className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-700/50 cursor-pointer hover:bg-purple-50/60 dark:hover:bg-purple-900/20 transition-colors">
                 <input type="checkbox" checked={!!form.interesse_cursos} onChange={e => setForm(p => ({ ...p, interesse_cursos: e.target.checked }))} className="w-4 h-4 accent-purple-600 flex-shrink-0" />
