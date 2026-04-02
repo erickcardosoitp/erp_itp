@@ -6,7 +6,7 @@ import {
   GraduationCap, Users, BookOpen, LayoutGrid, History,
   Plus, Trash2, Search, X, ClipboardList,
   Edit3, Coffee, UserPlus, RefreshCw, ClipboardCheck, CheckSquare, Square,
-  ChevronDown, ChevronUp, FileText, Eye, Smartphone, Copy, Check,
+  ChevronDown, ChevronUp, FileText, Eye, Smartphone, Copy, Check, Save,
 } from 'lucide-react';
 import api from '@/services/api';
 import { useAuth } from '@/context/auth-context';
@@ -19,7 +19,14 @@ interface Turma { id: string; nome: string; curso_id?: string; professor_id?: st
 interface TurmaAlunoRecord { id: string; turma_id: string | null; aluno_id: string; status: string; created_at: string; }
 interface GradeCard { id: string; dia_semana: number; horario_inicio: string; horario_fim: string; nome_curso?: string; nome_professor?: string; turma_id?: string; sala?: string; cor?: string; }
 interface DiarioEntry { id: string; tipo: string; titulo?: string; descricao?: string; aluno_id?: string; aluno_nome?: string; turma_id?: string; data: string; usuario_nome?: string; created_at: string; }
-interface Aluno { id: string; nome_completo: string; numero_matricula?: string; cpf?: string; celular?: string; email?: string; sexo?: string; data_nascimento?: string; cidade?: string; bairro?: string; cursos_matriculados?: string; turno_escolar?: string; ativo?: boolean; data_matricula?: string; }
+interface Aluno {
+  id: string; nome_completo: string; numero_matricula?: string; cpf?: string; celular?: string; email?: string;
+  sexo?: string; data_nascimento?: string; idade?: number; escolaridade?: string; turno_escolar?: string;
+  cidade?: string; bairro?: string; logradouro?: string; numero?: string; complemento?: string; estado_uf?: string; cep?: string;
+  cursos_matriculados?: string; ativo?: boolean; data_matricula?: string; lgpd_aceito?: boolean; autoriza_imagem?: boolean;
+  maior_18_anos?: boolean; nome_responsavel?: string; email_responsavel?: string; grau_parentesco?: string; cpf_responsavel?: string; telefone_alternativo?: string;
+  possui_alergias?: string; cuidado_especial?: string; detalhes_cuidado?: string; uso_medicamento?: string;
+}
 interface PresencaSessao { id: string; turma_id: string; turma_nome?: string; data: string; tema_aula?: string; conteudo_abordado?: string; usuario_nome?: string; total_presentes: number; total_ausentes: number; created_at: string; }
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
@@ -85,12 +92,12 @@ function TabBtn({ id, active, set, label, Icon }: { id: string; active: string; 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
     <div className="fixed inset-0 z-[300] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden">
-        <div className="flex justify-between items-center p-5 border-b">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden max-h-[90vh] flex flex-col">
+        <div className="flex justify-between items-center p-5 border-b shrink-0">
           <h3 className="font-black text-sm uppercase tracking-tight text-slate-800">{title}</h3>
           <button onClick={onClose} className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-400"><X size={16}/></button>
         </div>
-        <div className="p-5">{children}</div>
+        <div className="p-5 overflow-y-auto">{children}</div>
       </div>
     </div>
   );
@@ -449,6 +456,10 @@ function AlunosTab({ cursos, turmas }: { cursos: Curso[]; turmas: Turma[] }) {
   const [dossieCandidato, setDossieCandidato] = useState<any>(null);
   const [fichaErro, setFichaErro] = useState<string | null>(null);
   const [fichaLoading, setFichaLoading] = useState(false);
+  const [fichaEditando, setFichaEditando] = useState(false);
+  const [fichaForm, setFichaForm] = useState<Partial<Aluno>>({});
+  const [fichaEditSalvando, setFichaEditSalvando] = useState(false);
+  const [fichaEditErro, setFichaEditErro] = useState<string | null>(null);
 
   // ── Cadastro Rápido ───────────────────────────────────────────────────────
   const [showCadastroRapido, setShowCadastroRapido] = useState(false);
@@ -482,6 +493,8 @@ function AlunosTab({ cursos, turmas }: { cursos: Curso[]; turmas: Turma[] }) {
 
   const verFicha = async (id: string) => {
     setFichaErro(null);
+    setFichaEditando(false);
+    setFichaEditErro(null);
     setFichaLoading(true);
     try {
       const r = await api.get(`/academico/alunos/${id}/ficha`);
@@ -492,6 +505,23 @@ function AlunosTab({ cursos, turmas }: { cursos: Curso[]; turmas: Turma[] }) {
       setFichaErro(Array.isArray(msg) ? msg.join(', ') : msg);
     } finally {
       setFichaLoading(false);
+    }
+  };
+
+  const salvarFicha = async () => {
+    if (!fichaAluno?.aluno?.id) return;
+    setFichaEditSalvando(true);
+    setFichaEditErro(null);
+    try {
+      await api.patch(`/academico/alunos/${fichaAluno.aluno.id}`, fichaForm);
+      const r = await api.get(`/academico/alunos/${fichaAluno.aluno.id}/ficha`);
+      setFichaAluno(r.data);
+      setFichaEditando(false);
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || err?.message || 'Erro ao salvar.';
+      setFichaEditErro(Array.isArray(msg) ? msg.join(', ') : msg);
+    } finally {
+      setFichaEditSalvando(false);
     }
   };
 
@@ -685,7 +715,7 @@ function AlunosTab({ cursos, turmas }: { cursos: Curso[]; turmas: Turma[] }) {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                {fichaAluno.inscricao_id && (
+                {fichaAluno.inscricao_id && !fichaEditando && (
                   <button
                     onClick={() => {
                       api.get(`/matriculas/inscricao/${fichaAluno.inscricao_id}`)
@@ -698,7 +728,24 @@ function AlunosTab({ cursos, turmas }: { cursos: Curso[]; turmas: Turma[] }) {
                     <FileText size={11}/> Dossier Completo
                   </button>
                 )}
-                <button onClick={() => setFichaAluno(null)} className="p-1.5 hover:bg-slate-100 rounded-xl text-slate-400"><X size={16}/></button>
+                {fichaEditando ? (
+                  <div className="flex gap-1.5">
+                    <button onClick={() => { setFichaEditando(false); setFichaEditErro(null); }}
+                      className="px-3 py-1.5 rounded-xl text-[9px] font-black uppercase border border-slate-200 text-slate-500 hover:bg-slate-50">
+                      Cancelar
+                    </button>
+                    <button onClick={salvarFicha} disabled={fichaEditSalvando}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-[9px] font-black uppercase disabled:opacity-50">
+                      <Save size={11}/> {fichaEditSalvando ? 'Salvando...' : 'Salvar'}
+                    </button>
+                  </div>
+                ) : (
+                  <button onClick={() => { setFichaForm({ ...fichaAluno.aluno }); setFichaEditErro(null); setFichaEditando(true); }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-[9px] font-black uppercase">
+                    <Edit3 size={11}/> Editar
+                  </button>
+                )}
+                <button onClick={() => { setFichaAluno(null); setFichaEditando(false); }} className="p-1.5 hover:bg-slate-100 rounded-xl text-slate-400"><X size={16}/></button>
               </div>
             </div>
 
@@ -716,7 +763,116 @@ function AlunosTab({ cursos, turmas }: { cursos: Curso[]; turmas: Turma[] }) {
 
             {/* Content */}
             <div className="overflow-y-auto flex-1 p-5 space-y-4">
-              {fichaAba === 'dados' && (
+              {fichaAba === 'dados' && fichaEditando ? (
+                /* ── Modo Edição ──────────────────────────────────────── */
+                <div className="space-y-4">
+                  {fichaEditErro && (
+                    <div className="bg-red-50 border border-red-200 text-red-700 text-[11px] font-bold rounded-xl px-4 py-2.5">⚠ {fichaEditErro}</div>
+                  )}
+                  {/* Identificação */}
+                  <section>
+                    <h4 className="text-[9px] font-black uppercase text-purple-600 mb-2 tracking-widest border-b border-purple-100 pb-1">Identificação</h4>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="col-span-2 space-y-1">
+                        <label className="text-[9px] font-black uppercase text-slate-400">Nome Completo</label>
+                        <input value={fichaForm.nome_completo || ''} onChange={e => setFichaForm(p => ({ ...p, nome_completo: e.target.value }))}
+                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400" />
+                      </div>
+                      {([
+                        ['CPF', 'cpf'], ['Celular', 'celular'], ['E-mail', 'email'], ['Tel. Alternativo', 'telefone_alternativo'],
+                      ] as [string, keyof Aluno][]).map(([label, field]) => (
+                        <div key={field} className="space-y-1">
+                          <label className="text-[9px] font-black uppercase text-slate-400">{label}</label>
+                          <input value={(fichaForm[field] as string) || ''} onChange={e => setFichaForm(p => ({ ...p, [field]: e.target.value }))}
+                            className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400" />
+                        </div>
+                      ))}
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-black uppercase text-slate-400">Nascimento</label>
+                        <input type="date" value={fichaForm.data_nascimento || ''} onChange={e => setFichaForm(p => ({ ...p, data_nascimento: e.target.value }))}
+                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400" />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-black uppercase text-slate-400">Sexo</label>
+                        <select value={fichaForm.sexo || ''} onChange={e => setFichaForm(p => ({ ...p, sexo: e.target.value }))}
+                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white">
+                          <option value="">—</option>
+                          {['Masculino', 'Feminino', 'Outro', 'Prefiro não informar'].map(o => <option key={o}>{o}</option>)}
+                        </select>
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-black uppercase text-slate-400">Escolaridade</label>
+                        <select value={fichaForm.escolaridade || ''} onChange={e => setFichaForm(p => ({ ...p, escolaridade: e.target.value }))}
+                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white">
+                          <option value="">—</option>
+                          {['Fund. Incompleto', 'Fund. Completo', 'Médio Incompleto', 'Médio Completo', 'Superior Incompleto', 'Superior Completo'].map(o => <option key={o}>{o}</option>)}
+                        </select>
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-black uppercase text-slate-400">Turno Escolar</label>
+                        <select value={fichaForm.turno_escolar || ''} onChange={e => setFichaForm(p => ({ ...p, turno_escolar: e.target.value }))}
+                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white">
+                          <option value="">—</option>
+                          {['Manhã', 'Tarde', 'Noite', 'Integral', 'Não estuda'].map(o => <option key={o}>{o}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                  </section>
+                  {/* Endereço */}
+                  <section>
+                    <h4 className="text-[9px] font-black uppercase text-purple-600 mb-2 tracking-widest border-b border-purple-100 pb-1">Endereço</h4>
+                    <div className="grid grid-cols-2 gap-2">
+                      {([
+                        ['Logradouro', 'logradouro'], ['Número', 'numero'], ['Complemento', 'complemento'],
+                        ['Bairro', 'bairro'], ['Cidade', 'cidade'], ['CEP', 'cep'],
+                      ] as [string, keyof Aluno][]).map(([label, field]) => (
+                        <div key={field} className="space-y-1">
+                          <label className="text-[9px] font-black uppercase text-slate-400">{label}</label>
+                          <input value={(fichaForm[field] as string) || ''} onChange={e => setFichaForm(p => ({ ...p, [field]: e.target.value }))}
+                            className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400" />
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                  {/* Responsável */}
+                  <section>
+                    <h4 className="text-[9px] font-black uppercase text-purple-600 mb-2 tracking-widest border-b border-purple-100 pb-1">Responsável</h4>
+                    <div className="grid grid-cols-2 gap-2">
+                      {([
+                        ['Nome', 'nome_responsavel'], ['Parentesco', 'grau_parentesco'],
+                        ['E-mail', 'email_responsavel'], ['CPF', 'cpf_responsavel'],
+                      ] as [string, keyof Aluno][]).map(([label, field]) => (
+                        <div key={field} className="space-y-1">
+                          <label className="text-[9px] font-black uppercase text-slate-400">{label}</label>
+                          <input value={(fichaForm[field] as string) || ''} onChange={e => setFichaForm(p => ({ ...p, [field]: e.target.value }))}
+                            className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400" />
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                  {/* Saúde */}
+                  <section>
+                    <h4 className="text-[9px] font-black uppercase text-amber-600 mb-2 tracking-widest border-b border-amber-100 pb-1">Saúde / Cuidados</h4>
+                    <div className="grid grid-cols-2 gap-2">
+                      {([
+                        ['Alergias', 'possui_alergias'], ['Cuidado Especial', 'cuidado_especial'], ['Medicamentos', 'uso_medicamento'],
+                      ] as [string, keyof Aluno][]).map(([label, field]) => (
+                        <div key={field} className="space-y-1">
+                          <label className="text-[9px] font-black uppercase text-slate-400">{label}</label>
+                          <input value={(fichaForm[field] as string) || ''} onChange={e => setFichaForm(p => ({ ...p, [field]: e.target.value }))}
+                            className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400" />
+                        </div>
+                      ))}
+                      <div className="col-span-2 space-y-1">
+                        <label className="text-[9px] font-black uppercase text-slate-400">Detalhes do Cuidado</label>
+                        <textarea rows={2} value={fichaForm.detalhes_cuidado || ''} onChange={e => setFichaForm(p => ({ ...p, detalhes_cuidado: e.target.value }))}
+                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400 resize-none" />
+                      </div>
+                    </div>
+                  </section>
+                </div>
+              ) : fichaAba === 'dados' ? (
+                /* ── Modo Visualização ────────────────────────────────── */
                 <>
                   {/* Dados Pessoais */}
                   <section>
@@ -799,7 +955,7 @@ function AlunosTab({ cursos, turmas }: { cursos: Curso[]; turmas: Turma[] }) {
                     </section>
                   )}
                 </>
-              )}
+              ) : null}
 
               {fichaAba === 'presenca' && (
                 <>
@@ -980,6 +1136,11 @@ function calcularTurno(horaInicio: string): string {
 }
 
 interface UsuarioProf { id: string; nome: string; email?: string; grupo_nome?: string; }
+interface HorarioDia { ativo: boolean; hora_inicio: string; hora_fim: string; }
+const DIAS_GRADE = [
+  { idx: 1, label: 'Segunda' }, { idx: 2, label: 'Terça' }, { idx: 3, label: 'Quarta' },
+  { idx: 4, label: 'Quinta' }, { idx: 5, label: 'Sexta' }, { idx: 6, label: 'Sábado' },
+];
 
 function TurmasTab({ cursos, professores, alunos }: { cursos: Curso[]; professores: Professor[]; alunos: Aluno[] }) {
   const [turmas, setTurmas] = useState<Turma[]>([]);
@@ -988,6 +1149,8 @@ function TurmasTab({ cursos, professores, alunos }: { cursos: Curso[]; professor
   const [form, setForm] = useState<Partial<Turma>>({ ano: '2026' });
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
+  const [horariosDia, setHorariosDia] = useState<Record<number, HorarioDia>>({});
+  const [gradeCardsTurma, setGradeCardsTurma] = useState<GradeCard[]>([]);
   const [showIncluir, setShowIncluir] = useState(false);
   const [incluirAlunoId, setIncluirAlunoId] = useState('');
   const [incluirTurmaId, setIncluirTurmaId] = useState('');
@@ -1023,11 +1186,27 @@ function TurmasTab({ cursos, professores, alunos }: { cursos: Curso[]; professor
   }, []);
   useEffect(() => { load(); }, [load]);
 
-  const abrir = (t?: Turma) => {
+  const abrir = async (t?: Turma) => {
     setErro(null);
+    setHorariosDia({});
+    setGradeCardsTurma([]);
     if (t) {
       setEditando(t);
       setForm({ ...t });
+      try {
+        const r = await api.get('/academico/grade');
+        const cards: GradeCard[] = (r.data as GradeCard[]).filter(g => g.turma_id === t.id);
+        setGradeCardsTurma(cards);
+        const horarios: Record<number, HorarioDia> = {};
+        for (const c of cards) {
+          horarios[c.dia_semana] = {
+            ativo: true,
+            hora_inicio: (c.horario_inicio || '').substring(0, 5),
+            hora_fim:    (c.horario_fim    || '').substring(0, 5),
+          };
+        }
+        setHorariosDia(horarios);
+      } catch {}
     } else {
       setEditando(null);
       setForm({ ano: new Date().getFullYear().toString() });
@@ -1061,8 +1240,26 @@ function TurmasTab({ cursos, professores, alunos }: { cursos: Curso[]; professor
     setErro(null);
     setSalvando(true);
     try {
-      if (editando) await api.patch(`/academico/turmas/${editando.id}`, form);
-      else await api.post('/academico/turmas', form);
+      let turmaId: string;
+      if (editando) {
+        await api.patch(`/academico/turmas/${editando.id}`, form);
+        turmaId = editando.id;
+        // Remove grade cards antigos da turma e recria
+        await Promise.all(gradeCardsTurma.map(g => api.delete(`/academico/grade/${g.id}`).catch(() => {})));
+      } else {
+        const r = await api.post('/academico/turmas', form);
+        turmaId = r.data.id;
+      }
+      // Cria novos grade cards para cada dia ativo
+      const diasAtivos = Object.entries(horariosDia).filter(([, v]) => v.ativo && v.hora_inicio && v.hora_fim);
+      await Promise.all(diasAtivos.map(([dia, h]) =>
+        api.post('/academico/grade', {
+          turma_id: turmaId,
+          dia_semana: parseInt(dia),
+          horario_inicio: h.hora_inicio.length === 5 ? h.hora_inicio + ':00' : h.hora_inicio,
+          horario_fim:    h.hora_fim.length    === 5 ? h.hora_fim    + ':00' : h.hora_fim,
+        }).catch(() => {})
+      ));
       setShowModal(false); await load();
     } catch (e: any) {
       const msg = e?.response?.data?.message || e?.message || 'Erro desconhecido ao salvar turma.';
@@ -1262,6 +1459,44 @@ function TurmasTab({ cursos, professores, alunos }: { cursos: Curso[]; professor
               </div>
             </div>
             <FieldInput label="Ano" value={form.ano} onChange={v => setForm(p => ({ ...p, ano: v }))} />
+
+            {/* ── Horários por Dia da Semana ── */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black uppercase text-slate-500">Horários por Dia da Semana</label>
+              <div className="border border-slate-200 rounded-2xl overflow-hidden divide-y divide-slate-100">
+                {DIAS_GRADE.map(({ idx, label }) => {
+                  const dia = horariosDia[idx];
+                  const ativo = dia?.ativo || false;
+                  return (
+                    <div key={idx} className={`flex items-center gap-3 px-3 py-2 transition-colors ${ativo ? 'bg-purple-50/60' : ''}`}>
+                      <button type="button"
+                        onClick={() => setHorariosDia(p => ({
+                          ...p,
+                          [idx]: { ativo: !ativo, hora_inicio: dia?.hora_inicio || '', hora_fim: dia?.hora_fim || '' }
+                        }))}
+                        className={`w-5 h-5 rounded flex items-center justify-center border-2 shrink-0 transition-all ${ativo ? 'bg-purple-600 border-purple-600 text-white' : 'border-slate-300 bg-white'}`}>
+                        {ativo && <Check size={11}/>}
+                      </button>
+                      <span className={`text-[10px] font-black uppercase w-16 shrink-0 ${ativo ? 'text-purple-700' : 'text-slate-400'}`}>{label}</span>
+                      {ativo ? (
+                        <>
+                          <input type="time" value={dia?.hora_inicio || ''}
+                            onChange={e => setHorariosDia(p => ({ ...p, [idx]: { ...p[idx], hora_inicio: e.target.value } }))}
+                            className="flex-1 border border-slate-200 rounded-xl px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-purple-400" />
+                          <span className="text-slate-400 text-xs shrink-0">–</span>
+                          <input type="time" value={dia?.hora_fim || ''}
+                            onChange={e => setHorariosDia(p => ({ ...p, [idx]: { ...p[idx], hora_fim: e.target.value } }))}
+                            className="flex-1 border border-slate-200 rounded-xl px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-purple-400" />
+                        </>
+                      ) : (
+                        <span className="text-[9px] text-slate-300 italic">Sem aula</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
             {erro && (
               <div className="bg-red-50 border border-red-200 text-red-700 text-[11px] font-bold rounded-xl px-4 py-2.5 uppercase tracking-wide">
                 ⚠ {erro}
