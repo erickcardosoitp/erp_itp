@@ -738,28 +738,29 @@ export class MatriculasService {
       if (cursoIds.length > 0) {
         let backlogCriado = false;
         for (const cursoId of cursoIds) {
-          // Busca a turma ativa do curso (assume que cada curso tem uma turma ativa)
+          // Busca a turma ativa do curso
           const turma = await queryRunner.manager.findOne(Turma, {
             where: { curso_id: cursoId, ativo: true }
           });
 
           if (turma) {
             // Cria registro de TurmaAluno já como 'ativo' (não backlog)
-            await queryRunner.manager.save(
-              queryRunner.manager.create(TurmaAluno, {
-                aluno_id: alunoSalvo.id,
-                turma_id: turma.id,
-                status: 'ativo'
-              })
+            this.logger.log(`⏳ [criarAlunoDireto] Inserindo TurmaAluno ativo: aluno=${alunoSalvo.id} turma=${turma.id}`);
+            await queryRunner.manager.query(
+              `INSERT INTO turma_alunos (id, aluno_id, turma_id, status, tipo_vinculo, created_at)
+               VALUES (gen_random_uuid(), $1, $2, 'ativo', 'aluno', NOW())
+               ON CONFLICT (aluno_id) DO NOTHING`,
+              [alunoSalvo.id, turma.id]
             );
             this.logger.log(`✅ Aluno ${alunoSalvo.numero_matricula} adicionado à turma ${turma.id} (${turma.nome})`);
           } else if (!backlogCriado) {
             // Se não houver turma ativa, adiciona ao backlog (apenas uma vez por aluno)
-            await queryRunner.manager.save(
-              queryRunner.manager.create(TurmaAluno, {
-                aluno_id: alunoSalvo.id,
-                status: 'backlog'
-              })
+            this.logger.log(`⏳ [criarAlunoDireto] Inserindo TurmaAluno backlog: aluno=${alunoSalvo.id} curso=${cursoId}`);
+            await queryRunner.manager.query(
+              `INSERT INTO turma_alunos (id, aluno_id, status, tipo_vinculo, created_at)
+               VALUES (gen_random_uuid(), $1, 'backlog', 'aluno', NOW())
+               ON CONFLICT (aluno_id) DO NOTHING`,
+              [alunoSalvo.id]
             );
             backlogCriado = true;
             this.logger.warn(`⚠️ Aluno ${alunoSalvo.numero_matricula} adicionado ao backlog (nenhuma turma ativa para o curso)`);
@@ -769,14 +770,17 @@ export class MatriculasService {
         }
       } else {
         // Se nenhum curso foi selecionado, adiciona ao backlog
-        try {
-          await queryRunner.manager.save(
-            queryRunner.manager.create(TurmaAluno, { aluno_id: alunoSalvo.id, status: 'backlog' })
-          );
-        } catch (_) { /* ignora se já existir */ }
+        await queryRunner.manager.query(
+          `INSERT INTO turma_alunos (id, aluno_id, status, tipo_vinculo, created_at)
+           VALUES (gen_random_uuid(), $1, 'backlog', 'aluno', NOW())
+           ON CONFLICT (aluno_id) DO NOTHING`,
+          [alunoSalvo.id]
+        );
       }
 
+      this.logger.log(`⏳ [criarAlunoDireto] Iniciando commitTransaction para aluno=${alunoSalvo.id}`);
       await queryRunner.commitTransaction();
+      this.logger.log(`✅ [criarAlunoDireto] commitTransaction concluído para aluno=${alunoSalvo.id}`);
       this.logger.log(`🎉 Aluno criado diretamente: ${alunoSalvo.numero_matricula} – ${alunoSalvo.nome_completo} | Cursos: ${descricaoCursos}`);
       await this.notificacoes.criar({
         tipo: 'nova_matricula',
@@ -788,7 +792,7 @@ export class MatriculasService {
       return alunoSalvo;
     } catch (err: any) {
       await queryRunner.rollbackTransaction();
-      this.logger.error(`💥 Falha ao criar aluno direto: ${err.message}`);
+      this.logger.error(`💥 Falha ao criar aluno direto: ${err.message}\nStack: ${err.stack}`);
       throw new BadRequestException(err.message || 'Erro interno ao criar aluno.');
     } finally {
       await queryRunner.release();
