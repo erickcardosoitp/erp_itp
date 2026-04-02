@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -8,7 +8,8 @@ import {
 import {
   BarChart2, Download, TrendingUp, Users, BookOpen,
   Package, Heart, DollarSign, Globe, Filter, RefreshCw,
-  Leaf, HandHeart, Eye, EyeOff,
+  Leaf, HandHeart, Eye, EyeOff, Mail, Send, X, CheckCircle,
+  AlertCircle,
 } from 'lucide-react';
 import api from '@/services/api';
 
@@ -30,6 +31,117 @@ function exportarExcel(dados: Record<string, unknown>[], nomeArquivo: string) {
 const CORES_PIZZA = ['#7c3aed', '#a855f7', '#c084fc', '#d8b4fe', '#ede9fe', '#4f46e5', '#818cf8'];
 
 type AbaId = 'financeiro' | 'academico' | 'social' | 'estoque' | 'dre' | 'ong';
+
+/* ── Modal de Envio por E-mail ── */
+function ModalEmail({
+  tipo, params, onClose,
+}: { tipo: string; params: Record<string, string>; onClose: () => void }) {
+  const [email, setEmail] = React.useState('');
+  const [enviando, setEnviando] = React.useState(false);
+  const [sucesso, setSucesso] = React.useState(false);
+  const [erro, setErro] = React.useState<string | null>(null);
+
+  const enviar = async () => {
+    if (!email.includes('@')) { setErro('E-mail inválido.'); return; }
+    setEnviando(true); setErro(null);
+    try {
+      await api.post('/relatorios/enviar-email', { tipo, params, destinatario: email });
+      setSucesso(true);
+    } catch (e: any) {
+      setErro(e?.response?.data?.message || e?.message || 'Erro ao enviar.');
+    } finally { setEnviando(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[500] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+        <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-slate-800">
+          <div className="flex items-center gap-2">
+            <Mail size={16} className="text-purple-600" />
+            <h3 className="font-black text-sm uppercase tracking-tight text-slate-800 dark:text-slate-100">Enviar por E-mail</h3>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400"><X size={15}/></button>
+        </div>
+        <div className="p-5 space-y-4">
+          {sucesso ? (
+            <div className="flex flex-col items-center gap-3 py-4">
+              <CheckCircle size={40} className="text-green-500" />
+              <p className="font-black text-sm text-slate-700 dark:text-slate-200">Relatório enviado com sucesso!</p>
+              <button onClick={onClose} className="px-4 py-2 bg-green-600 text-white rounded-xl text-xs font-black uppercase hover:bg-green-700">Fechar</button>
+            </div>
+          ) : (
+            <>
+              <div>
+                <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5">Destinatário</label>
+                <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+                  placeholder="email@exemplo.com"
+                  className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 dark:bg-slate-800 dark:text-slate-100" />
+              </div>
+              {erro && (
+                <div className="flex items-center gap-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 rounded-xl px-3 py-2.5 text-xs font-bold">
+                  <AlertCircle size={13}/> {erro}
+                </div>
+              )}
+              <div className="flex gap-2">
+                <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-black text-xs uppercase hover:bg-slate-50 dark:hover:bg-slate-800">Cancelar</button>
+                <button onClick={enviar} disabled={enviando}
+                  className="flex-1 py-2.5 bg-purple-600 text-white rounded-xl font-black text-xs uppercase hover:bg-purple-700 disabled:opacity-50 flex items-center justify-center gap-1.5">
+                  {enviando ? <RefreshCw size={12} className="animate-spin"/> : <Send size={12}/>}
+                  {enviando ? 'Enviando...' : 'Enviar'}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Barra de ações padronizada para cada seção de relatório ── */
+function AcoesRelatorio({
+  tipo, params, dados, onGerar, carregando, onExportar, labelGerar = 'Gerar', corGerar = 'bg-purple-600 hover:bg-purple-700',
+}: {
+  tipo: string; params?: Record<string, string>; dados: unknown; onGerar: () => void;
+  carregando: boolean; onExportar?: () => void; labelGerar?: string; corGerar?: string;
+}) {
+  const [showEmail, setShowEmail] = React.useState(false);
+  return (
+    <div className="flex gap-2 flex-wrap items-center">
+      <button onClick={onGerar} disabled={carregando}
+        className={`px-3 py-1.5 text-xs font-bold ${corGerar} text-white rounded-lg flex items-center gap-1 disabled:opacity-50`}>
+        {carregando ? <RefreshCw size={12} className="animate-spin"/> : <Filter size={12}/>} {labelGerar}
+      </button>
+      {!!dados && onExportar && (
+        <button onClick={onExportar}
+          className="px-3 py-1.5 text-xs font-bold border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-1">
+          <Download size={12}/> Excel
+        </button>
+      )}
+      {!!dados && (
+        <button onClick={() => setShowEmail(true)}
+          className="px-3 py-1.5 text-xs font-bold border border-purple-200 text-purple-600 dark:border-purple-700 dark:text-purple-400 rounded-lg hover:bg-purple-50 dark:hover:bg-purple-900/20 flex items-center gap-1">
+          <Mail size={12}/> E-mail
+        </button>
+      )}
+      {showEmail && <ModalEmail tipo={tipo} params={params ?? {}} onClose={() => setShowEmail(false)} />}
+    </div>
+  );
+}
+
+/* ── Empty state padrão (relatório não gerado) ── */
+function EmptyRelatorio({ onClick, loading }: { onClick: () => void; loading: boolean }) {
+  return (
+    <div className="p-10 flex flex-col items-center gap-3 text-slate-400 dark:text-slate-600">
+      <BarChart2 size={32} className="opacity-30" />
+      <p className="text-sm font-bold">Relatório não gerado</p>
+      <button onClick={onClick} disabled={loading}
+        className="px-4 py-2 bg-purple-600 text-white rounded-xl text-xs font-black uppercase hover:bg-purple-700 disabled:opacity-50 flex items-center gap-1.5">
+        {loading ? <RefreshCw size={12} className="animate-spin"/> : <Filter size={12}/>} Gerar agora
+      </button>
+    </div>
+  );
+}
 
 /* ════════════════════════════════════════════════════════
    ABAS FINANCEIRO
@@ -65,6 +177,11 @@ function AbaFinanceiro() {
       }
     } catch {/* silencia */} finally { setCarregando(null); }
   }, [dataIni, dataFim, ano, mes]);
+
+  useEffect(() => {
+    carregar('resumo'); carregar('fluxo'); carregar('doacoes'); carregar('contabil');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -102,20 +219,16 @@ function AbaFinanceiro() {
           <h3 className="font-black text-sm uppercase tracking-widest text-slate-700 dark:text-slate-200 flex items-center gap-2">
             <TrendingUp size={16} className="text-purple-600" /> Resumo Financeiro
           </h3>
-          <div className="flex gap-2">
-            <button onClick={() => carregar('resumo')}
-              className="px-3 py-1.5 text-xs font-bold bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center gap-1 disabled:opacity-50"
-              disabled={carregando === 'resumo'}>
-              {carregando === 'resumo' ? <RefreshCw size={12} className="animate-spin" /> : <Filter size={12} />} Gerar
-            </button>
-            {resumo && (
-              <button onClick={() => exportarExcel([(resumo.categorias as unknown[])].flat() as Record<string, unknown>[], 'resumo_financeiro')}
-                className="px-3 py-1.5 text-xs font-bold border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-1">
-                <Download size={12} /> Excel
-              </button>
-            )}
-          </div>
+          <AcoesRelatorio
+            tipo="resumo_financeiro"
+            params={{ data_ini: dataIni, data_fim: dataFim }}
+            dados={resumo}
+            onGerar={() => carregar('resumo')}
+            carregando={carregando === 'resumo'}
+            onExportar={() => resumo && exportarExcel([(resumo.categorias as unknown[])].flat() as Record<string, unknown>[], 'resumo_financeiro')}
+          />
         </div>
+        {!resumo && <EmptyRelatorio onClick={() => carregar('resumo')} loading={carregando === 'resumo'} />}
         {resumo && (
           <div className="p-5 space-y-4">
             {/* ── 3 KPIs ── */}
@@ -153,20 +266,17 @@ function AbaFinanceiro() {
           <h3 className="font-black text-sm uppercase tracking-widest text-slate-700 dark:text-slate-200 flex items-center gap-2">
             <TrendingUp size={16} className="text-green-600" /> Fluxo de Caixa Mensal
           </h3>
-          <div className="flex gap-2">
-            <button onClick={() => carregar('fluxo')}
-              className="px-3 py-1.5 text-xs font-bold bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-1 disabled:opacity-50"
-              disabled={carregando === 'fluxo'}>
-              {carregando === 'fluxo' ? <RefreshCw size={12} className="animate-spin" /> : <Filter size={12} />} Gerar
-            </button>
-            {fluxo.length > 0 && (
-              <button onClick={() => exportarExcel(fluxo as Record<string, unknown>[], 'fluxo_caixa')}
-                className="px-3 py-1.5 text-xs font-bold border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-1">
-                <Download size={12} /> Excel
-              </button>
-            )}
-          </div>
+          <AcoesRelatorio
+            tipo="fluxo_caixa"
+            params={{ ano }}
+            dados={fluxo.length > 0 ? fluxo : null}
+            onGerar={() => carregar('fluxo')}
+            carregando={carregando === 'fluxo'}
+            corGerar="bg-green-600 hover:bg-green-700"
+            onExportar={() => exportarExcel(fluxo as Record<string, unknown>[], 'fluxo_caixa')}
+          />
         </div>
+        {fluxo.length === 0 && <EmptyRelatorio onClick={() => carregar('fluxo')} loading={carregando === 'fluxo'} />}
         {fluxo.length > 0 && (
           <div className="p-5">
             <ResponsiveContainer width="100%" height={280}>
@@ -191,20 +301,17 @@ function AbaFinanceiro() {
           <h3 className="font-black text-sm uppercase tracking-widest text-slate-700 dark:text-slate-200 flex items-center gap-2">
             <Heart size={16} className="text-pink-500" /> Relatório de Doações
           </h3>
-          <div className="flex gap-2">
-            <button onClick={() => carregar('doacoes')}
-              className="px-3 py-1.5 text-xs font-bold bg-pink-600 text-white rounded-lg hover:bg-pink-700 flex items-center gap-1 disabled:opacity-50"
-              disabled={carregando === 'doacoes'}>
-              {carregando === 'doacoes' ? <RefreshCw size={12} className="animate-spin" /> : <Filter size={12} />} Gerar
-            </button>
-            {doacoes && (
-              <button onClick={() => exportarExcel((doacoes.maiores_doadores as unknown[]) as Record<string, unknown>[], 'doacoes')}
-                className="px-3 py-1.5 text-xs font-bold border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-1">
-                <Download size={12} /> Excel
-              </button>
-            )}
-          </div>
+          <AcoesRelatorio
+            tipo="doacoes"
+            params={{ data_ini: dataIni, data_fim: dataFim }}
+            dados={doacoes}
+            onGerar={() => carregar('doacoes')}
+            carregando={carregando === 'doacoes'}
+            corGerar="bg-pink-600 hover:bg-pink-700"
+            onExportar={() => doacoes && exportarExcel((doacoes.maiores_doadores as unknown[]) as Record<string, unknown>[], 'doacoes')}
+          />
         </div>
+        {!doacoes && <EmptyRelatorio onClick={() => carregar('doacoes')} loading={carregando === 'doacoes'} />}
         {doacoes && (
           <div className="p-5 space-y-4">
             <div className="grid grid-cols-2 gap-3">
@@ -238,20 +345,17 @@ function AbaFinanceiro() {
           <h3 className="font-black text-sm uppercase tracking-widest text-slate-700 dark:text-slate-200 flex items-center gap-2">
             <DollarSign size={16} className="text-yellow-500" /> Relatório Contábil
           </h3>
-          <div className="flex gap-2">
-            <button onClick={() => carregar('contabil')}
-              className="px-3 py-1.5 text-xs font-bold bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 flex items-center gap-1 disabled:opacity-50"
-              disabled={carregando === 'contabil'}>
-              {carregando === 'contabil' ? <RefreshCw size={12} className="animate-spin" /> : <Filter size={12} />} Gerar
-            </button>
-            {contabil.length > 0 && (
-              <button onClick={() => exportarExcel(contabil as Record<string, unknown>[], 'contabil')}
-                className="px-3 py-1.5 text-xs font-bold border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-1">
-                <Download size={12} /> Excel
-              </button>
-            )}
-          </div>
+          <AcoesRelatorio
+            tipo="fluxo_caixa"
+            params={{ mes, ano }}
+            dados={contabil.length > 0 ? contabil : null}
+            onGerar={() => carregar('contabil')}
+            carregando={carregando === 'contabil'}
+            corGerar="bg-yellow-500 hover:bg-yellow-600"
+            onExportar={() => exportarExcel(contabil as Record<string, unknown>[], 'contabil')}
+          />
         </div>
+        {contabil.length === 0 && <EmptyRelatorio onClick={() => carregar('contabil')} loading={carregando === 'contabil'} />}
         {contabil.length > 0 && (
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
@@ -307,6 +411,11 @@ function AbaAcademico() {
     } catch {/* silencia */} finally { setCarregando(null); }
   }, []);
 
+  useEffect(() => {
+    carregar('alunos'); carregar('academico'); carregar('matriculas');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <div className="space-y-6">
       {/* ── Alunos ── */}
@@ -315,20 +424,16 @@ function AbaAcademico() {
           <h3 className="font-black text-sm uppercase tracking-widest text-slate-700 dark:text-slate-200 flex items-center gap-2">
             <Users size={16} className="text-blue-600" /> Relatório de Alunos
           </h3>
-          <div className="flex gap-2">
-            <button onClick={() => carregar('alunos')}
-              className="px-3 py-1.5 text-xs font-bold bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-1 disabled:opacity-50"
-              disabled={carregando === 'alunos'}>
-              {carregando === 'alunos' ? <RefreshCw size={12} className="animate-spin" /> : <Filter size={12} />} Gerar
-            </button>
-            {alunos && (
-              <button onClick={() => exportarExcel((alunos.por_curso as unknown[]) as Record<string, unknown>[], 'alunos')}
-                className="px-3 py-1.5 text-xs font-bold border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-1">
-                <Download size={12} /> Excel
-              </button>
-            )}
-          </div>
+          <AcoesRelatorio
+            tipo="alunos"
+            dados={alunos}
+            onGerar={() => carregar('alunos')}
+            carregando={carregando === 'alunos'}
+            corGerar="bg-blue-600 hover:bg-blue-700"
+            onExportar={() => alunos && exportarExcel((alunos.por_curso as unknown[]) as Record<string, unknown>[], 'alunos')}
+          />
         </div>
+        {!alunos && <EmptyRelatorio onClick={() => carregar('alunos')} loading={carregando === 'alunos'} />}
         {alunos && (
           <div className="p-5 space-y-4">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -385,12 +490,14 @@ function AbaAcademico() {
           <h3 className="font-black text-sm uppercase tracking-widest text-slate-700 dark:text-slate-200 flex items-center gap-2">
             <BookOpen size={16} className="text-purple-600" /> Visão Geral Acadêmica
           </h3>
-          <button onClick={() => carregar('academico')}
-            className="px-3 py-1.5 text-xs font-bold bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center gap-1 disabled:opacity-50"
-            disabled={carregando === 'academico'}>
-            {carregando === 'academico' ? <RefreshCw size={12} className="animate-spin" /> : <Filter size={12} />} Gerar
-          </button>
+          <AcoesRelatorio
+            tipo="academico"
+            dados={academico}
+            onGerar={() => carregar('academico')}
+            carregando={carregando === 'academico'}
+          />
         </div>
+        {!academico && <EmptyRelatorio onClick={() => carregar('academico')} loading={carregando === 'academico'} />}
         {academico && (
           <div className="p-5">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
@@ -416,20 +523,16 @@ function AbaAcademico() {
           <h3 className="font-black text-sm uppercase tracking-widest text-slate-700 dark:text-slate-200 flex items-center gap-2">
             <BookOpen size={16} className="text-indigo-600" /> Pipeline de Matrículas
           </h3>
-          <div className="flex gap-2">
-            <button onClick={() => carregar('matriculas')}
-              className="px-3 py-1.5 text-xs font-bold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center gap-1 disabled:opacity-50"
-              disabled={carregando === 'matriculas'}>
-              {carregando === 'matriculas' ? <RefreshCw size={12} className="animate-spin" /> : <Filter size={12} />} Gerar
-            </button>
-            {matriculas && (
-              <button onClick={() => exportarExcel((matriculas.por_status as unknown[]) as Record<string, unknown>[], 'matriculas')}
-                className="px-3 py-1.5 text-xs font-bold border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-1">
-                <Download size={12} /> Excel
-              </button>
-            )}
-          </div>
+          <AcoesRelatorio
+            tipo="matriculas"
+            dados={matriculas}
+            onGerar={() => carregar('matriculas')}
+            carregando={carregando === 'matriculas'}
+            corGerar="bg-indigo-600 hover:bg-indigo-700"
+            onExportar={() => matriculas && exportarExcel((matriculas.por_status as unknown[]) as Record<string, unknown>[], 'matriculas')}
+          />
         </div>
+        {!matriculas && <EmptyRelatorio onClick={() => carregar('matriculas')} loading={carregando === 'matriculas'} />}
         {matriculas && (
           <div className="p-5 space-y-4">
             {Array.isArray(matriculas.por_status) && (
@@ -466,6 +569,8 @@ function AbaSocial() {
     } catch {/* silencia */} finally { setCarregando(false); }
   }, []);
 
+  useEffect(() => { carregar(); }, [carregar]);
+
   return (
     <div className="space-y-6">
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
@@ -473,20 +578,16 @@ function AbaSocial() {
           <h3 className="font-black text-sm uppercase tracking-widest text-slate-700 dark:text-slate-200 flex items-center gap-2">
             <Globe size={16} className="text-emerald-600" /> Impacto Social — ITP
           </h3>
-          <div className="flex gap-2">
-            <button onClick={carregar}
-              className="px-3 py-1.5 text-xs font-bold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 flex items-center gap-1 disabled:opacity-50"
-              disabled={carregando}>
-              {carregando ? <RefreshCw size={12} className="animate-spin" /> : <Filter size={12} />} Gerar
-            </button>
-            {impacto && (
-              <button onClick={() => exportarExcel([impacto as Record<string, unknown>], 'impacto_social')}
-                className="px-3 py-1.5 text-xs font-bold border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-1">
-                <Download size={12} /> Excel
-              </button>
-            )}
-          </div>
+          <AcoesRelatorio
+            tipo="impacto_social"
+            dados={impacto}
+            onGerar={carregar}
+            carregando={carregando}
+            corGerar="bg-emerald-600 hover:bg-emerald-700"
+            onExportar={() => impacto && exportarExcel([impacto as Record<string, unknown>], 'impacto_social')}
+          />
         </div>
+        {!impacto && <EmptyRelatorio onClick={carregar} loading={carregando} />}
         {impacto && (
           <div className="p-5">
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
@@ -537,6 +638,11 @@ function AbaEstoque() {
     } catch {/* silencia */} finally { setCarregando(null); }
   }, [dataIni, dataFim]);
 
+  useEffect(() => {
+    carregar('posicao'); carregar('movimentos');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <div className="space-y-6">
       {/* ── Posição Atual ── */}
@@ -545,20 +651,16 @@ function AbaEstoque() {
           <h3 className="font-black text-sm uppercase tracking-widest text-slate-700 dark:text-slate-200 flex items-center gap-2">
             <Package size={16} className="text-orange-500" /> Posição de Estoque
           </h3>
-          <div className="flex gap-2">
-            <button onClick={() => carregar('posicao')}
-              className="px-3 py-1.5 text-xs font-bold bg-orange-500 text-white rounded-lg hover:bg-orange-600 flex items-center gap-1 disabled:opacity-50"
-              disabled={carregando === 'posicao'}>
-              {carregando === 'posicao' ? <RefreshCw size={12} className="animate-spin" /> : <Filter size={12} />} Gerar
-            </button>
-            {posicao && (
-              <button onClick={() => exportarExcel((posicao.produtos as unknown[]) as Record<string, unknown>[], 'estoque')}
-                className="px-3 py-1.5 text-xs font-bold border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-1">
-                <Download size={12} /> Excel
-              </button>
-            )}
-          </div>
+          <AcoesRelatorio
+            tipo="estoque"
+            dados={posicao}
+            onGerar={() => carregar('posicao')}
+            carregando={carregando === 'posicao'}
+            corGerar="bg-orange-500 hover:bg-orange-600"
+            onExportar={() => posicao && exportarExcel((posicao.produtos as unknown[]) as Record<string, unknown>[], 'estoque')}
+          />
         </div>
+        {!posicao && <EmptyRelatorio onClick={() => carregar('posicao')} loading={carregando === 'posicao'} />}
         {posicao && (
           <div className="p-5 space-y-4">
             <div className="grid grid-cols-3 gap-3">
@@ -620,19 +722,18 @@ function AbaEstoque() {
               className="border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-xs bg-white dark:bg-slate-800 dark:text-slate-100" />
             <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)}
               className="border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-xs bg-white dark:bg-slate-800 dark:text-slate-100" />
-            <button onClick={() => carregar('movimentos')}
-              className="px-3 py-1.5 text-xs font-bold bg-slate-600 text-white rounded-lg hover:bg-slate-700 flex items-center gap-1 disabled:opacity-50"
-              disabled={carregando === 'movimentos'}>
-              {carregando === 'movimentos' ? <RefreshCw size={12} className="animate-spin" /> : <Filter size={12} />} Gerar
-            </button>
-            {movimentos && (
-              <button onClick={() => exportarExcel((movimentos.movimentos as unknown[]) as Record<string, unknown>[], 'movimentos_estoque')}
-                className="px-3 py-1.5 text-xs font-bold border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-1">
-                <Download size={12} /> Excel
-              </button>
-            )}
+            <AcoesRelatorio
+              tipo="estoque"
+              params={{ data_ini: dataIni, data_fim: dataFim }}
+              dados={movimentos}
+              onGerar={() => carregar('movimentos')}
+              carregando={carregando === 'movimentos'}
+              corGerar="bg-slate-600 hover:bg-slate-700"
+              onExportar={() => movimentos && exportarExcel((movimentos.movimentos as unknown[]) as Record<string, unknown>[], 'movimentos_estoque')}
+            />
           </div>
         </div>
+        {!movimentos && <EmptyRelatorio onClick={() => carregar('movimentos')} loading={carregando === 'movimentos'} />}
         {movimentos && Array.isArray(movimentos.movimentos) && (
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
@@ -756,6 +857,19 @@ const COR_NIVEL = {
     btn:     'border-rose-400 text-rose-700 dark:text-rose-300',
   },
 } as const;
+
+function DreBtnEmail({ ano, mesIni, mesFim }: { ano: string; mesIni: string; mesFim: string }) {
+  const [show, setShow] = React.useState(false);
+  return (
+    <>
+      <button onClick={() => setShow(true)}
+        className="px-3 py-2 text-xs font-black border border-purple-200 text-purple-600 dark:border-purple-700 dark:text-purple-400 rounded-xl hover:bg-purple-50 dark:hover:bg-purple-900/20 flex items-center gap-1.5">
+        <Mail size={13} /> E-mail
+      </button>
+      {show && <ModalEmail tipo="dre" params={{ ano, mes_ini: mesIni, mes_fim: mesFim }} onClose={() => setShow(false)} />}
+    </>
+  );
+}
 
 function AbaDRE() {
   const anoAtual = new Date().getFullYear();
@@ -913,6 +1027,7 @@ function AbaDRE() {
                 className="px-3 py-2 text-xs font-black border border-blue-200 text-blue-600 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/20 flex items-center gap-1.5 disabled:opacity-50">
                 {exportando === 'png' ? <RefreshCw size={13} className="animate-spin" /> : <Download size={13} />} PNG
               </button>
+              <DreBtnEmail ano={ano} mesIni={mesIni} mesFim={mesFim} />
             </>
           )}
         </div>
@@ -1163,6 +1278,12 @@ function AbaONG() {
     } catch { /* silencia */ } finally { setCarregando(null); }
   }, [dataIni, dataFim, ano]);
 
+  useEffect(() => {
+    carregar('sustentabilidade'); carregar('origem'); carregar('diversificacao');
+    carregar('despcat'); carregar('custo'); carregar('anual');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <div className="space-y-6">
       {/* Filtros */}
@@ -1190,11 +1311,16 @@ function AbaONG() {
           <h3 className="font-black text-sm uppercase tracking-widest text-slate-700 dark:text-slate-200 flex items-center gap-2">
             <Leaf size={16} className="text-green-600" /> Sustentabilidade Financeira
           </h3>
-          <button onClick={() => carregar('sustentabilidade')} disabled={carregando === 'sustentabilidade'}
-            className="px-3 py-1.5 text-xs font-bold bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-1 disabled:opacity-50">
-            {carregando === 'sustentabilidade' ? <RefreshCw size={12} className="animate-spin" /> : <Filter size={12} />} Calcular
-          </button>
+          <AcoesRelatorio
+            tipo="sustentabilidade_financeira"
+            dados={sustentabilidade}
+            onGerar={() => carregar('sustentabilidade')}
+            carregando={carregando === 'sustentabilidade'}
+            corGerar="bg-green-600 hover:bg-green-700"
+            labelGerar="Calcular"
+          />
         </div>
+        {!sustentabilidade && <EmptyRelatorio onClick={() => carregar('sustentabilidade')} loading={carregando === 'sustentabilidade'} />}
         {sustentabilidade && (
           <div className="p-5">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -1220,19 +1346,17 @@ function AbaONG() {
           <h3 className="font-black text-sm uppercase tracking-widest text-slate-700 dark:text-slate-200 flex items-center gap-2">
             <DollarSign size={16} className="text-blue-600" /> Origem de Recursos
           </h3>
-          <div className="flex gap-2">
-            <button onClick={() => carregar('origem')} disabled={carregando === 'origem'}
-              className="px-3 py-1.5 text-xs font-bold bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-1 disabled:opacity-50">
-              {carregando === 'origem' ? <RefreshCw size={12} className="animate-spin" /> : <Filter size={12} />} Gerar
-            </button>
-            {origRecursos && (
-              <button onClick={() => exportarExcel((origRecursos.fontes as Record<string, unknown>[]), 'origem_recursos')}
-                className="px-3 py-1.5 text-xs font-bold border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-1">
-                <Download size={12} /> Excel
-              </button>
-            )}
-          </div>
+          <AcoesRelatorio
+            tipo="origem_recursos"
+            params={{ data_ini: dataIni, data_fim: dataFim }}
+            dados={origRecursos}
+            onGerar={() => carregar('origem')}
+            carregando={carregando === 'origem'}
+            corGerar="bg-blue-600 hover:bg-blue-700"
+            onExportar={() => origRecursos && exportarExcel((origRecursos.fontes as Record<string, unknown>[]), 'origem_recursos')}
+          />
         </div>
+        {!origRecursos && <EmptyRelatorio onClick={() => carregar('origem')} loading={carregando === 'origem'} />}
         {origRecursos && Array.isArray(origRecursos.fontes) && (
           <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
             <ResponsiveContainer width="100%" height={240}>
@@ -1266,11 +1390,16 @@ function AbaONG() {
           <h3 className="font-black text-sm uppercase tracking-widest text-slate-700 dark:text-slate-200 flex items-center gap-2">
             <BarChart2 size={16} className="text-indigo-600" /> Diversificação de Receitas
           </h3>
-          <button onClick={() => carregar('diversificacao')} disabled={carregando === 'diversificacao'}
-            className="px-3 py-1.5 text-xs font-bold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center gap-1 disabled:opacity-50">
-            {carregando === 'diversificacao' ? <RefreshCw size={12} className="animate-spin" /> : <Filter size={12} />} Gerar
-          </button>
+          <AcoesRelatorio
+            tipo="diversificacao_receitas"
+            params={{ data_ini: dataIni, data_fim: dataFim }}
+            dados={diversificacao}
+            onGerar={() => carregar('diversificacao')}
+            carregando={carregando === 'diversificacao'}
+            corGerar="bg-indigo-600 hover:bg-indigo-700"
+          />
         </div>
+        {!diversificacao && <EmptyRelatorio onClick={() => carregar('diversificacao')} loading={carregando === 'diversificacao'} />}
         {diversificacao && (
           <div className="p-5 space-y-3">
             <div className="flex gap-4">
@@ -1308,19 +1437,17 @@ function AbaONG() {
           <h3 className="font-black text-sm uppercase tracking-widest text-slate-700 dark:text-slate-200 flex items-center gap-2">
             <Package size={16} className="text-orange-500" /> Despesas por Categoria / Plano de Contas
           </h3>
-          <div className="flex gap-2">
-            <button onClick={() => carregar('despcat')} disabled={carregando === 'despcat'}
-              className="px-3 py-1.5 text-xs font-bold bg-orange-500 text-white rounded-lg hover:bg-orange-600 flex items-center gap-1 disabled:opacity-50">
-              {carregando === 'despcat' ? <RefreshCw size={12} className="animate-spin" /> : <Filter size={12} />} Gerar
-            </button>
-            {despCat && (
-              <button onClick={() => exportarExcel((despCat.categorias as Record<string, unknown>[]), 'despesas_categoria')}
-                className="px-3 py-1.5 text-xs font-bold border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-1">
-                <Download size={12} /> Excel
-              </button>
-            )}
-          </div>
+          <AcoesRelatorio
+            tipo="despesas_categoria"
+            params={{ data_ini: dataIni, data_fim: dataFim }}
+            dados={despCat}
+            onGerar={() => carregar('despcat')}
+            carregando={carregando === 'despcat'}
+            corGerar="bg-orange-500 hover:bg-orange-600"
+            onExportar={() => despCat && exportarExcel((despCat.categorias as Record<string, unknown>[]), 'despesas_categoria')}
+          />
         </div>
+        {!despCat && <EmptyRelatorio onClick={() => carregar('despcat')} loading={carregando === 'despcat'} />}
         {despCat && Array.isArray(despCat.categorias) && (
           <div className="p-5">
             <p className="text-xs text-slate-500 mb-3">Total: <span className="font-black text-red-500">{moeda(Number(despCat.total_despesas))}</span></p>
@@ -1354,19 +1481,18 @@ function AbaONG() {
           <h3 className="font-black text-sm uppercase tracking-widest text-slate-700 dark:text-slate-200 flex items-center gap-2">
             <HandHeart size={16} className="text-pink-600" /> Custo por Beneficiário
           </h3>
-          <div className="flex gap-2">
-            <button onClick={() => carregar('custo')} disabled={carregando === 'custo'}
-              className="px-3 py-1.5 text-xs font-bold bg-pink-600 text-white rounded-lg hover:bg-pink-700 flex items-center gap-1 disabled:opacity-50">
-              {carregando === 'custo' ? <RefreshCw size={12} className="animate-spin" /> : <Filter size={12} />} Calcular
-            </button>
-            {custoBenef && (
-              <button onClick={() => exportarExcel((custoBenef.por_projeto as Record<string, unknown>[]), 'custo_beneficiario')}
-                className="px-3 py-1.5 text-xs font-bold border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-1">
-                <Download size={12} /> Excel
-              </button>
-            )}
-          </div>
+          <AcoesRelatorio
+            tipo="custo_beneficiario"
+            params={{ data_ini: dataIni, data_fim: dataFim }}
+            dados={custoBenef}
+            onGerar={() => carregar('custo')}
+            carregando={carregando === 'custo'}
+            corGerar="bg-pink-600 hover:bg-pink-700"
+            labelGerar="Calcular"
+            onExportar={() => custoBenef && exportarExcel((custoBenef.por_projeto as Record<string, unknown>[]), 'custo_beneficiario')}
+          />
         </div>
+        {!custoBenef && <EmptyRelatorio onClick={() => carregar('custo')} loading={carregando === 'custo'} />}
         {custoBenef && (
           <div className="p-5">
             <div className="grid grid-cols-3 gap-3">
@@ -1391,19 +1517,17 @@ function AbaONG() {
           <h3 className="font-black text-sm uppercase tracking-widest text-slate-700 dark:text-slate-200 flex items-center gap-2">
             <TrendingUp size={16} className="text-emerald-600" /> Relatório Financeiro Anual
           </h3>
-          <div className="flex gap-2">
-            <button onClick={() => carregar('anual')} disabled={carregando === 'anual'}
-              className="px-3 py-1.5 text-xs font-bold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 flex items-center gap-1 disabled:opacity-50">
-              {carregando === 'anual' ? <RefreshCw size={12} className="animate-spin" /> : <Filter size={12} />} Gerar
-            </button>
-            {anual && (
-              <button onClick={() => exportarExcel((anual.meses as Record<string, unknown>[]), `relatorio_anual_${ano}`)}
-                className="px-3 py-1.5 text-xs font-bold border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-1">
-                <Download size={12} /> Excel
-              </button>
-            )}
-          </div>
+          <AcoesRelatorio
+            tipo="relatorio_anual"
+            params={{ ano }}
+            dados={anual}
+            onGerar={() => carregar('anual')}
+            carregando={carregando === 'anual'}
+            corGerar="bg-emerald-600 hover:bg-emerald-700"
+            onExportar={() => anual && exportarExcel((anual.meses as Record<string, unknown>[]), `relatorio_anual_${ano}`)}
+          />
         </div>
+        {!anual && <EmptyRelatorio onClick={() => carregar('anual')} loading={carregando === 'anual'} />}
         {anual && (
           <div className="p-5 space-y-4">
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">

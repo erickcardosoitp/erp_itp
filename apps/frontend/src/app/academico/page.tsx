@@ -297,12 +297,10 @@ function GradeTab({ podeEditar, turmas }: { podeEditar: boolean; turmas: Turma[]
       <div className="bg-white rounded-3xl border border-slate-100 shadow overflow-x-auto">
         <div className="min-w-[900px] relative">
 
-          {/* ── Linha de tempo atual ──────────────────────────────────────── */}
+          {/* ── Indicador de hora atual (sobreposto ao flex) ── */}
           {lineTop >= 0 && todayDia >= 1 && (
-            <div
-              className="absolute left-0 right-0 z-20 pointer-events-none flex items-center"
-              style={{ top: `${lineTop}px` }}
-            >
+            <div className="absolute left-0 right-0 z-20 pointer-events-none flex items-center"
+              style={{ top: `${lineTop}px` }}>
               <span className="text-[9px] font-black text-red-600 bg-white border border-red-300 px-1.5 rounded-full shadow-sm ml-2 shrink-0 leading-4 whitespace-nowrap">
                 {now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
               </span>
@@ -311,75 +309,90 @@ function GradeTab({ podeEditar, turmas }: { podeEditar: boolean; turmas: Turma[]
             </div>
           )}
 
-          {/* Header dias */}
-          <div className="grid border-b border-slate-100" style={{ gridTemplateColumns: '80px repeat(6, 1fr)' }}>
-            <div className="p-3 border-r border-slate-50" />
-            {DIAS_SEMANA.map((d, i) => {
-              const isToday = (i + 1) === todayDia;
-              return (
-                <div key={d} className={`p-3 text-center text-[10px] font-black uppercase border-r border-slate-50 last:border-0 transition-colors ${isToday ? 'bg-purple-50 text-purple-700' : 'text-slate-400'}`}>
-                  {isToday && <div className="text-[8px] text-purple-400 mb-0.5">HOJE</div>}
-                  {d}
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Linhas de horário */}
-          {HORARIOS.map((h, idx) => {
-            if (h.lanche) {
-              return (
-                <div key={`lanche-${idx}`} className="grid border-b border-slate-50 bg-amber-50/60" style={{ gridTemplateColumns: '80px repeat(6, 1fr)' }}>
-                  <div className="p-2 flex items-center justify-center gap-1 border-r border-slate-100">
-                    <Coffee size={10} className="text-amber-500" />
-                    <span className="text-[9px] font-black uppercase text-amber-500">Lanche</span>
+          {/* ── Grade: layout flex com colunas por dia ── */}
+          <div className="flex">
+            {/* Coluna de horários */}
+            <div style={{ width: 80, flexShrink: 0 }}>
+              <div style={{ height: GRADE_HEAD_H }} className="border-b border-r border-slate-100" />
+              {HORARIOS.map((h, idx) => {
+                const isCurrentRow = idx === currentRowIdx && todayDia >= 1;
+                return (
+                  <div key={idx}
+                    style={{ height: GRADE_ROW_H }}
+                    className={`border-b border-r border-slate-100 flex items-center justify-center
+                      ${h.lanche ? 'bg-amber-50/60' : ''}
+                      ${isCurrentRow ? 'border-l-2 border-l-red-400 bg-red-50/40' : ''}`}>
+                    {h.lanche
+                      ? <Coffee size={10} className="text-amber-500" />
+                      : <span className={`text-[10px] font-black ${isCurrentRow ? 'text-red-500' : 'text-slate-400'}`}>{h.label}</span>}
                   </div>
-                  {Array.from({ length: 6 }).map((_, di) => (
-                    <div key={di} className="p-2 border-r border-slate-50 last:border-0 bg-amber-50/40" />
-                  ))}
-                </div>
-              );
-            }
-            const hora = h.value!;
-            const isCurrentRow = idx === currentRowIdx && todayDia >= 1;
-            return (
-              <div key={hora} className="grid border-b border-slate-50 hover:bg-slate-50/40 transition-colors" style={{ gridTemplateColumns: '80px repeat(6, 1fr)' }}>
-                <div className={`p-2 flex items-center justify-center border-r transition-colors ${isCurrentRow ? 'border-l-2 border-l-red-400 bg-red-50/40' : 'border-slate-100'}`}>
-                  <span className={`text-[10px] font-black ${isCurrentRow ? 'text-red-500' : 'text-slate-400'}`}>{h.label}</span>
-                </div>
-                {DIAS_SEMANA.map((_, di) => {
-                  const diaNum = di + 1;
-                  const cards = cardsAt(diaNum, hora);
-                  const isToday = diaNum === todayDia;
-                  return (
-                    <div key={di}
-                      className={`p-1 min-h-[44px] border-r border-slate-50 last:border-0 transition-colors ${isToday ? 'bg-purple-50/20' : ''}`}
-                      onDragOver={e => { if (podeEditar) e.preventDefault(); }}
-                      onDrop={e => handleDrop(e, diaNum, hora)}>
-                      {cards.map(card => (
-                        <div key={card.id} draggable={podeEditar}
+                );
+              })}
+            </div>
+
+            {/* Colunas dos dias */}
+            {DIAS_SEMANA.map((d, di) => {
+              const diaNum = di + 1;
+              const isToday = diaNum === todayDia;
+              const cardsForDay = grade.filter(g => g.dia_semana === diaNum);
+              const totalBodyH = HORARIOS.length * GRADE_ROW_H;
+
+              return (
+                <div key={d} className="flex-1 border-r border-slate-100 last:border-0 flex flex-col min-w-0">
+                  {/* Cabeçalho do dia */}
+                  <div style={{ height: GRADE_HEAD_H }}
+                    className={`border-b border-slate-100 flex flex-col items-center justify-center shrink-0
+                      ${isToday ? 'bg-purple-50 text-purple-700' : 'text-slate-400'}`}>
+                    {isToday && <div className="text-[8px] text-purple-400 mb-0.5">HOJE</div>}
+                    <span className="text-[10px] font-black uppercase">{d}</span>
+                  </div>
+
+                          {/* Corpo: fundo de slots + cards absolutos */}
+                  <div className="relative" style={{ height: totalBodyH }}>
+                    {/* Linhas de fundo (drop zones) */}
+                    {HORARIOS.map((h, idx) => (
+                      <div key={idx}
+                        style={{ position: 'absolute', top: idx * GRADE_ROW_H, height: GRADE_ROW_H, left: 0, right: 0 }}
+                        className={`border-b border-slate-50 transition-colors
+                          ${isToday ? 'bg-purple-50/20' : ''}
+                          ${h.lanche ? 'bg-amber-50/40' : ''}`}
+                        onDragOver={e => { if (podeEditar && !h.lanche) e.preventDefault(); }}
+                        onDrop={e => { if (!h.lanche && h.value) handleDrop(e, diaNum, h.value); }}
+                      />
+                    ))}
+
+                    {/* Cards posicionados do início ao fim */}
+                    {cardsForDay.map(card => {
+                      const startIdx = HORARIOS.findIndex(h => h.value === card.horario_inicio?.slice(0, 5));
+                      const endIdx   = HORARIOS.findIndex(h => h.value === card.horario_fim?.slice(0, 5));
+                      if (startIdx < 0) return null;
+                      const top    = startIdx * GRADE_ROW_H + 2;
+                      const height = endIdx > startIdx ? (endIdx - startIdx) * GRADE_ROW_H - 4 : GRADE_ROW_H - 4;
+                      return (
+                        <div key={card.id}
+                          draggable={podeEditar}
                           onDragStart={() => setDragCard(card)}
                           onDragEnd={() => setDragCard(null)}
-                          className="rounded-lg p-1.5 mb-1 text-white text-[9px] font-bold cursor-grab active:cursor-grabbing shadow-sm relative group/card"
-                          style={{ backgroundColor: card.cor || '#7c3aed' }}>
+                          className="absolute left-0.5 right-0.5 rounded-lg p-1.5 text-white text-[9px] font-bold shadow-sm group/card overflow-hidden z-10"
+                          style={{ top, height, backgroundColor: card.cor || '#7c3aed', cursor: podeEditar ? 'grab' : 'default' }}>
                           {podeEditar && (
                             <button onClick={() => handleDeletar(card.id)}
-                              className="absolute -top-1 -right-1 bg-red-500 rounded-full p-0.5 opacity-0 group-hover/card:opacity-100 transition-opacity">
+                              className="absolute top-0.5 right-0.5 bg-black/30 rounded-full p-0.5 opacity-0 group-hover/card:opacity-100 transition-opacity z-20">
                               <X size={9}/>
                             </button>
                           )}
                           <div className="font-black leading-tight truncate">{card.nome_curso || '–'}</div>
-                          <div className="opacity-80 text-[8px] truncate">{card.nome_professor || ''}</div>
-                          <div className="opacity-70 text-[8px]">{card.horario_inicio?.slice(0,5)} – {card.horario_fim?.slice(0,5)}</div>
-                          {card.sala && <div className="opacity-60 text-[8px]">Sala: {card.sala}</div>}
+                          {height > 30 && <div className="opacity-80 text-[8px] truncate">{card.nome_professor || ''}</div>}
+                          {height > 46 && <div className="opacity-70 text-[8px]">{card.horario_inicio?.slice(0,5)} – {card.horario_fim?.slice(0,5)}</div>}
+                          {height > 62 && card.sala && <div className="opacity-60 text-[8px]">Sala: {card.sala}</div>}
                         </div>
-                      ))}
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          })}
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
 

@@ -1,12 +1,16 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
+import { EmailService } from '../email.service';
 
 @Injectable()
 export class RelatoriosService {
   private readonly logger = new Logger(RelatoriosService.name);
 
-  constructor(@InjectDataSource() private readonly db: DataSource) {}
+  constructor(
+    @InjectDataSource() private readonly db: DataSource,
+    private readonly email: EmailService,
+  ) {}
 
   // ── UTILITÁRIO ─────────────────────────────────────────────────────────────
 
@@ -988,6 +992,174 @@ export class RelatoriosService {
       nivel:              mesesOp >= 6 ? 'Saudável' : mesesOp >= 3 ? 'Atenção' : 'Crítico',
       cor:                mesesOp >= 6 ? 'green'    : mesesOp >= 3 ? 'yellow'   : 'red',
     };
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  //  ENVIO DE RELATÓRIOS POR E-MAIL
+  // ══════════════════════════════════════════════════════════════════════════
+
+  private moeda(v: number) {
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v ?? 0);
+  }
+
+  private htmlWrapper(titulo: string, corpo: string, periodo?: string) {
+    return `<!DOCTYPE html><html lang="pt-br"><head><meta charset="UTF-8">
+<title>${titulo}</title></head>
+<body style="margin:0;padding:0;background:#f4f6f9;font-family:Arial,sans-serif">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f9;padding:32px 16px">
+<tr><td align="center">
+<table width="620" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,0.08)">
+<tr><td style="background:#1e3a5f;padding:28px 36px">
+  <h1 style="margin:0;color:#fff;font-size:20px;font-weight:700">Instituto Tia Pretinha</h1>
+  <p style="margin:4px 0 0;color:#93c5fd;font-size:13px">${titulo}</p>
+  ${periodo ? `<p style="margin:4px 0 0;color:#bfdbfe;font-size:11px">Período: ${periodo}</p>` : ''}
+</td></tr>
+<tr><td style="padding:28px 36px">${corpo}</td></tr>
+<tr><td style="padding:16px 36px;background:#f8fafc;border-top:1px solid #e2e8f0;text-align:center">
+  <p style="margin:0;color:#94a3b8;font-size:11px">Relatório gerado automaticamente pelo sistema ERP ITP</p>
+</td></tr>
+</table>
+</td></tr></table>
+</body></html>`;
+  }
+
+  private kpiHtml(items: { label: string; value: string; color?: string }[]) {
+    return `<table width="100%" cellspacing="8" style="margin-bottom:20px"><tr>
+${items.map(i => `<td style="background:#f8fafc;border-radius:8px;padding:14px;text-align:center;width:${Math.floor(100/items.length)}%">
+  <p style="margin:0;font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.05em">${i.label}</p>
+  <p style="margin:4px 0 0;font-size:20px;font-weight:900;color:${i.color || '#1e3a5f'}">${i.value}</p>
+</td>`).join('')}
+</tr></table>`;
+  }
+
+  private tabelaHtml(headers: string[], rows: string[][]) {
+    return `<table width="100%" cellspacing="0" style="border-collapse:collapse;font-size:12px;margin-top:12px">
+<thead><tr>${headers.map(h => `<th style="background:#f1f5f9;padding:8px 10px;text-align:left;font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;border-bottom:1px solid #e2e8f0">${h}</th>`).join('')}</tr></thead>
+<tbody>${rows.map((r, i) =>
+  `<tr style="background:${i % 2 === 0 ? '#fff' : '#f8fafc'}">${r.map(c => `<td style="padding:7px 10px;border-bottom:1px solid #f1f5f9;color:#334155">${c}</td>`).join('')}</tr>`
+).join('')}</tbody>
+</table>`;
+  }
+
+  async enviarRelatorioEmail(
+    tipo: string,
+    params: Record<string, string>,
+    destinatario: string,
+  ): Promise<void> {
+    const now  = new Date();
+    const hoje = now.toLocaleDateString('pt-BR');
+    const ini  = params.data_ini || `${now.getFullYear()}-01-01`;
+    const fim  = params.data_fim || now.toISOString().slice(0, 10);
+    const ano  = Number(params.ano) || now.getFullYear();
+    const periodoFmt = `${new Date(ini + 'T12:00').toLocaleDateString('pt-BR')} a ${new Date(fim + 'T12:00').toLocaleDateString('pt-BR')}`;
+
+    let titulo = 'Relatório ITP';
+    let corpo  = '';
+
+    if (tipo === 'resumo_financeiro') {
+      titulo = 'Resumo Financeiro';
+      const d = await this.resumoFinanceiro(ini, fim);
+      corpo = this.kpiHtml([
+        { label: 'Receitas',  value: this.moeda(d.total_receitas as number), color: '#16a34a' },
+        { label: 'Despesas',  value: this.moeda(d.total_despesas as number), color: '#dc2626' },
+        { label: 'Saldo',     value: this.moeda(d.saldo as number), color: (d.saldo as number) >= 0 ? '#16a34a' : '#dc2626' },
+      ]);
+      if (Array.isArray(d.categorias) && d.categorias.length > 0) {
+        const cats = d.categorias as any[];
+        corpo += this.tabelaHtml(
+          ['Categoria', 'Receita', 'Despesa'],
+          cats.map(c => [String(c.categoria || '–'), this.moeda(Number(c.receita)), this.moeda(Number(c.despesa))]),
+        );
+      }
+    } else if (tipo === 'fluxo_caixa') {
+      titulo = `Fluxo de Caixa — ${ano}`;
+      const d = await this.fluxoCaixaMensal(ano);
+      const meses = (d.meses || []) as any[];
+      corpo = this.tabelaHtml(
+        ['Mês', 'Receita', 'Despesa', 'Saldo'],
+        meses.map(m => [String(m.mes), this.moeda(Number(m.receita)), this.moeda(Number(m.despesa)), this.moeda(Number(m.saldo))]),
+      );
+    } else if (tipo === 'doacoes') {
+      titulo = 'Relatório de Doações';
+      const d = await this.relatorioDoacoes(ini, fim);
+      corpo = this.kpiHtml([
+        { label: 'Total Doado', value: this.moeda(d.total_doacoes as number), color: '#db2777' },
+        { label: 'Nº Doadores', value: String(d.num_doadores), color: '#7c3aed' },
+      ]);
+      if (Array.isArray(d.maiores_doadores) && (d.maiores_doadores as any[]).length > 0) {
+        const doad = d.maiores_doadores as any[];
+        corpo += '<p style="margin:16px 0 6px;font-size:11px;font-weight:700;color:#475569;text-transform:uppercase">Maiores Doadores</p>';
+        corpo += this.tabelaHtml(
+          ['Doador', 'Total'],
+          doad.slice(0, 10).map(d => [String(d.nome_doador || d.nome || '–'), this.moeda(Number(d.total))]),
+        );
+      }
+    } else if (tipo === 'alunos') {
+      titulo = 'Relatório Acadêmico — Alunos';
+      const d = await this.relatorioAlunos();
+      corpo = this.kpiHtml([
+        { label: 'Ativos',   value: String(d.total_ativos),   color: '#2563eb' },
+        { label: 'Inativos', value: String(d.total_inativos), color: '#64748b' },
+      ]);
+      if (Array.isArray(d.por_curso) && (d.por_curso as any[]).length > 0) {
+        corpo += '<p style="margin:16px 0 6px;font-size:11px;font-weight:700;color:#475569;text-transform:uppercase">Por Curso</p>';
+        corpo += this.tabelaHtml(
+          ['Curso', 'Alunos'],
+          (d.por_curso as any[]).map(c => [String(c.cursos_matriculados || c.curso || '–'), String(c.total)]),
+        );
+      }
+    } else if (tipo === 'estoque') {
+      titulo = 'Posição de Estoque';
+      const d = await this.relatorioEstoque();
+      corpo = this.kpiHtml([
+        { label: 'Total Produtos', value: String(d.total_produtos), color: '#ea580c' },
+        { label: 'Críticos',       value: String(d.total_criticos),  color: '#dc2626' },
+      ]);
+      if (Array.isArray(d.produtos) && (d.produtos as any[]).length > 0) {
+        const criticos = (d.produtos as any[]).filter(p => p.critico);
+        if (criticos.length > 0) {
+          corpo += '<p style="margin:16px 0 6px;font-size:11px;font-weight:700;color:#dc2626;text-transform:uppercase">Itens em Nível Crítico</p>';
+          corpo += this.tabelaHtml(
+            ['Produto', 'Qtd Atual', 'Estoque Mínimo'],
+            criticos.map(p => [String(p.nome), String(p.quantidade_atual), String(p.estoque_minimo)]),
+          );
+        }
+      }
+    } else if (tipo === 'impacto_social') {
+      titulo = 'Impacto Social — ITP';
+      const d = await this.relatorioImpactoSocial();
+      corpo = this.kpiHtml([
+        { label: 'Alunos Beneficiados', value: String(d.total_alunos_ativos), color: '#2563eb' },
+        { label: 'Doadores Ativos',     value: String(d.doadores_ativos),     color: '#db2777' },
+        { label: 'Receita Total',        value: this.moeda(d.receita_total as number), color: '#16a34a' },
+      ]);
+    } else if (tipo === 'matriculas') {
+      titulo = 'Pipeline de Matrículas';
+      const d = await this.relatorioMatriculas(ini, fim);
+      if (Array.isArray(d.por_status)) {
+        corpo = this.tabelaHtml(
+          ['Status', 'Total'],
+          (d.por_status as any[]).map(s => [String(s.status_matricula), String(s.total)]),
+        );
+      }
+    } else if (tipo === 'dre') {
+      titulo = `DRE — ${ano}`;
+      const mesIni = Number(params.mes_ini) || 1;
+      const mesFim = Number(params.mes_fim) || 12;
+      const d = await this.dre(ano, mesIni, mesFim);
+      corpo = this.kpiHtml([
+        { label: 'Receita Bruta',   value: this.moeda(d.totalReceitasBrutas as number), color: '#16a34a' },
+        { label: 'Total Despesas',  value: this.moeda(d.totalDespesas as number),        color: '#dc2626' },
+        { label: 'Resultado',       value: this.moeda(d.resultadoExercicio as number),   color: (d.resultadoExercicio as number) >= 0 ? '#16a34a' : '#dc2626' },
+        { label: 'Margem',          value: `${d.margem}%`,                               color: '#7c3aed' },
+      ]);
+    } else {
+      corpo = `<p style="color:#64748b;font-size:13px">Relatório <strong>${tipo}</strong> gerado em ${hoje}.</p>`;
+    }
+
+    const html = this.htmlWrapper(titulo, corpo, tipo !== 'alunos' && tipo !== 'impacto_social' && tipo !== 'estoque' ? periodoFmt : undefined);
+    await this.email.enviarGenerico(destinatario, `[ITP] ${titulo} — ${hoje}`, html);
+    this.logger.log(`📧 Relatório "${titulo}" enviado para ${destinatario}`);
   }
 }
 

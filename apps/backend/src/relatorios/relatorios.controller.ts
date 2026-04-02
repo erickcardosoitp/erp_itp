@@ -1,4 +1,4 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, BadRequestException } from '@nestjs/common';
 import { RelatoriosService } from './relatorios.service';
 
 @Controller('relatorios')
@@ -212,6 +212,18 @@ export class RelatoriosController {
     @Query('data_fim') data_fim?: string,
   ) {
     return this.svc.impactoFinanceiroProjeto(data_ini || this._ini(), data_fim || this._fim());
+  }
+
+  // ── ENVIO POR E-MAIL ───────────────────────────────────────────────────────
+
+  @Post('enviar-email')
+  async enviarEmail(
+    @Body() body: { tipo: string; destinatario: string; params?: Record<string, string> },
+  ) {
+    if (!body?.destinatario?.includes('@')) throw new BadRequestException('E-mail inválido.');
+    if (!body?.tipo) throw new BadRequestException('Tipo de relatório obrigatório.');
+    await this.svc.enviarRelatorioEmail(body.tipo, body.params ?? {}, body.destinatario);
+    return { ok: true, mensagem: `Relatório "${body.tipo}" enviado para ${body.destinatario}.` };
   }
 }
 

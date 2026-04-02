@@ -790,5 +790,24 @@ export class EmailService implements OnModuleInit {
     this.logger.log(`📧 Notificação de grupo enviada para ${email} (${titulo})`);
     if (this.isEthereal) this.logger.warn(`👁️  Preview: ${nodemailer.getTestMessageUrl(info)}`);
   }
+
+  /**
+   * Método genérico: envia um e-mail com assunto e HTML arbitrários.
+   * Usado para envio de relatórios e outros usos internos.
+   */
+  async enviarGenerico(para: string, assunto: string, html: string): Promise<void> {
+    if (!this.transporter) {
+      this.logger.warn(`📧 [SEM-SMTP] Envio genérico para ${para} (${assunto})`);
+      return;
+    }
+    const info = await this.transporter.sendMail({
+      from: `"Instituto Tia Pretinha" <${this.config.get<string>('SMTP_FROM_ADDRESS') || this.config.get<string>('SMTP_USER')}>`,
+      to: para,
+      subject: assunto,
+      html,
+    });
+    this.logger.log(`📧 E-mail genérico enviado para ${para} (${assunto})`);
+    if (this.isEthereal) this.logger.warn(`👁️  Preview: ${nodemailer.getTestMessageUrl(info)}`);
+  }
 }
 
