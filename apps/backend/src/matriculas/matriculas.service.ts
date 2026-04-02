@@ -736,12 +736,13 @@ export class MatriculasService {
 
       // Cria registros TurmaAluno para cada curso selecionado
       if (cursoIds.length > 0) {
+        let backlogCriado = false;
         for (const cursoId of cursoIds) {
           // Busca a turma ativa do curso (assume que cada curso tem uma turma ativa)
           const turma = await queryRunner.manager.findOne(Turma, {
             where: { curso_id: cursoId, ativo: true }
           });
-          
+
           if (turma) {
             // Cria registro de TurmaAluno já como 'ativo' (não backlog)
             await queryRunner.manager.save(
@@ -752,15 +753,18 @@ export class MatriculasService {
               })
             );
             this.logger.log(`✅ Aluno ${alunoSalvo.numero_matricula} adicionado à turma ${turma.id} (${turma.nome})`);
-          } else {
-            // Se não houver turma ativa, adiciona ao backlog
+          } else if (!backlogCriado) {
+            // Se não houver turma ativa, adiciona ao backlog (apenas uma vez por aluno)
             await queryRunner.manager.save(
               queryRunner.manager.create(TurmaAluno, {
                 aluno_id: alunoSalvo.id,
                 status: 'backlog'
               })
             );
+            backlogCriado = true;
             this.logger.warn(`⚠️ Aluno ${alunoSalvo.numero_matricula} adicionado ao backlog (nenhuma turma ativa para o curso)`);
+          } else {
+            this.logger.warn(`⚠️ Aluno ${alunoSalvo.numero_matricula} – curso ${cursoId} sem turma ativa (backlog já registrado)`);
           }
         }
       } else {
