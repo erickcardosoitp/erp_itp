@@ -36,6 +36,9 @@ export class Turma {
   @Column({ name: 'hora_fim', type: 'time', nullable: true })
   hora_fim: string;
 
+  @Column({ type: 'varchar', nullable: true, default: '#7c3aed' })
+  cor: string;
+
   @CreateDateColumn({ name: 'created_at' })
   created_at: Date;
 }

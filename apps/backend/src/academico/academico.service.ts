@@ -158,6 +158,9 @@ export class AcademicoService {
     this.logger.log(`Editando turma id=${id}`);
     const turma = await this.turmaRepo.findOneBy({ id });
     if (!turma) throw new NotFoundException('Turma não encontrada');
+    // Sanitize: empty string em campos UUID deve virar null (evita erro no PostgreSQL)
+    if (dto.professor_id === '') (dto as any).professor_id = null;
+    if (dto.curso_id === '') (dto as any).curso_id = null;
     await this.turmaRepo.update(id, dto);
     return this.turmaRepo.findOneByOrFail({ id });
   }
@@ -199,13 +202,23 @@ export class AcademicoService {
     if (turma.professor_id) {
       const prof = await this.professorRepo.findOneBy({ id: turma.professor_id });
       if (prof) { nomeProfessor = prof.nome; professorId = prof.id; }
+      else {
+        // Fallback: professor pode ser um usuário do sistema (tabela usuarios)
+        const rows = await this.dataSource.query(
+          `SELECT nome FROM usuarios WHERE id = $1 LIMIT 1`, [turma.professor_id]
+        );
+        if (rows[0]) { nomeProfessor = rows[0].nome; professorId = turma.professor_id; }
+      }
     }
 
+    // Usar cor da turma se não foi especificada explicitamente no dto
+    const corCard = dto.cor || (turma as any).cor || '#7c3aed';
     const card = this.gradeRepo.create({
       ...dto,
       nome_curso: nomeCurso,
       nome_professor: nomeProfessor,
       professor_id: professorId,
+      cor: corCard,
     });
     const salvo = await this.gradeRepo.save(card);
     this.logger.log(`Card grade criado: ${salvo.id}`);

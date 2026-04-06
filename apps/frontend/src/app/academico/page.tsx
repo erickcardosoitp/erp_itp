@@ -15,7 +15,7 @@ import { useAuth } from '@/context/auth-context';
 
 interface Curso { id: string; nome: string; sigla: string; status: string; periodo?: string; }
 interface Professor { id: string; nome: string; especialidade?: string; email?: string; ativo?: boolean; }
-interface Turma { id: string; nome: string; curso_id?: string; professor_id?: string; turno?: string; ano?: string; max_alunos?: number; ativo?: boolean; hora_inicio?: string; hora_fim?: string; }
+interface Turma { id: string; nome: string; curso_id?: string; professor_id?: string; turno?: string; ano?: string; max_alunos?: number; ativo?: boolean; hora_inicio?: string; hora_fim?: string; cor?: string; }
 interface TurmaAlunoRecord { id: string; turma_id: string | null; aluno_id: string; status: string; created_at: string; }
 interface GradeCard { id: string; dia_semana: number; horario_inicio: string; horario_fim: string; nome_curso?: string; nome_professor?: string; turma_id?: string; sala?: string; cor?: string; }
 interface DiarioEntry { id: string; tipo: string; titulo?: string; descricao?: string; aluno_id?: string; aluno_nome?: string; turma_id?: string; data: string; usuario_nome?: string; created_at: string; }
@@ -155,12 +155,31 @@ function KpiGrade({ label, value, sub, color, isText }: {
 
 // ─── Tab: Grade ───────────────────────────────────────────────────────────────
 
-const GRADE_ROW_H  = 44;
-const GRADE_HEAD_H = 40;
+const GRADE_ROW_H  = 48;
+const GRADE_HEAD_H = 48;
 
 function timeToMinsGrade(t: string) {
-  const [h, m] = t.split(':').map(Number);
+  const [h, m] = (t || '00:00').split(':').map(Number);
   return h * 60 + m;
+}
+
+/** Calcula layout de cards do dia, detectando sobreposições e atribuindo colunas */
+function buildDayLayout(cards: GradeCard[]): Array<{ card: GradeCard; col: number; totalCols: number }> {
+  if (!cards.length) return [];
+  const sorted = [...cards]
+    .filter(c => c.horario_inicio)
+    .sort((a, b) => timeToMinsGrade(a.horario_inicio!.slice(0, 5)) - timeToMinsGrade(b.horario_inicio!.slice(0, 5)));
+  const colsEnd: number[] = [];
+  const withCols = sorted.map(card => {
+    const startM = timeToMinsGrade(card.horario_inicio!.slice(0, 5));
+    const endM   = card.horario_fim ? timeToMinsGrade(card.horario_fim.slice(0, 5)) : startM + 60;
+    let col = colsEnd.findIndex(end => startM >= end);
+    if (col === -1) { col = colsEnd.length; colsEnd.push(endM); }
+    else colsEnd[col] = Math.max(colsEnd[col], endM);
+    return { card, col };
+  });
+  const totalCols = colsEnd.length;
+  return withCols.map(i => ({ ...i, totalCols }));
 }
 
 function GradeTab({ podeEditar, turmas }: { podeEditar: boolean; turmas: Turma[] }) {
@@ -294,7 +313,7 @@ function GradeTab({ podeEditar, turmas }: { podeEditar: boolean; turmas: Turma[]
         )}
       </div>
 
-      <div className="bg-white rounded-3xl border border-slate-100 shadow overflow-x-auto">
+      <div className="bg-white rounded-3xl border border-slate-100 shadow-md overflow-x-auto">
         <div className="min-w-[900px] relative">
 
           {/* ── Indicador de hora atual (sobreposto ao flex) ── */}
@@ -312,19 +331,21 @@ function GradeTab({ podeEditar, turmas }: { podeEditar: boolean; turmas: Turma[]
           {/* ── Grade: layout flex com colunas por dia ── */}
           <div className="flex">
             {/* Coluna de horários */}
-            <div style={{ width: 80, flexShrink: 0 }}>
-              <div style={{ height: GRADE_HEAD_H }} className="border-b border-r border-slate-100" />
+            <div style={{ width: 72, flexShrink: 0 }} className="bg-slate-50/80">
+              <div style={{ height: GRADE_HEAD_H }} className="border-b border-r border-slate-100 flex items-center justify-center">
+                <span className="text-[8px] font-black uppercase text-slate-400 tracking-widest">Hora</span>
+              </div>
               {HORARIOS.map((h, idx) => {
                 const isCurrentRow = idx === currentRowIdx && todayDia >= 1;
                 return (
                   <div key={idx}
                     style={{ height: GRADE_ROW_H }}
                     className={`border-b border-r border-slate-100 flex items-center justify-center
-                      ${h.lanche ? 'bg-amber-50/60' : ''}
-                      ${isCurrentRow ? 'border-l-2 border-l-red-400 bg-red-50/40' : ''}`}>
+                      ${h.lanche ? 'bg-amber-50/80' : ''}
+                      ${isCurrentRow ? 'bg-red-50/60' : ''}`}>
                     {h.lanche
-                      ? <Coffee size={10} className="text-amber-500" />
-                      : <span className={`text-[10px] font-black ${isCurrentRow ? 'text-red-500' : 'text-slate-400'}`}>{h.label}</span>}
+                      ? <Coffee size={10} className="text-amber-400" />
+                      : <span className={`text-[10px] font-bold tabular-nums ${isCurrentRow ? 'text-red-500 font-black' : 'text-slate-400'}`}>{h.label}</span>}
                   </div>
                 );
               })}
@@ -336,55 +357,74 @@ function GradeTab({ podeEditar, turmas }: { podeEditar: boolean; turmas: Turma[]
               const isToday = diaNum === todayDia;
               const cardsForDay = grade.filter(g => g.dia_semana === diaNum);
               const totalBodyH = HORARIOS.length * GRADE_ROW_H;
+              const layout = buildDayLayout(cardsForDay);
 
               return (
                 <div key={d} className="flex-1 border-r border-slate-100 last:border-0 flex flex-col min-w-0">
                   {/* Cabeçalho do dia */}
                   <div style={{ height: GRADE_HEAD_H }}
-                    className={`border-b border-slate-100 flex flex-col items-center justify-center shrink-0
-                      ${isToday ? 'bg-purple-50 text-purple-700' : 'text-slate-400'}`}>
-                    {isToday && <div className="text-[8px] text-purple-400 mb-0.5">HOJE</div>}
-                    <span className="text-[10px] font-black uppercase">{d}</span>
+                    className={`border-b border-slate-100 flex flex-col items-center justify-center shrink-0 transition-colors
+                      ${isToday ? 'bg-purple-600 text-white' : 'bg-slate-50 text-slate-500'}`}>
+                    {isToday && <div className="text-[7px] font-black uppercase tracking-widest opacity-70 mb-0.5">HOJE</div>}
+                    <span className="text-[11px] font-black uppercase tracking-wide">{d}</span>
+                    {cardsForDay.length > 0 && (
+                      <span className={`text-[7px] font-bold mt-0.5 ${isToday ? 'text-purple-200' : 'text-slate-400'}`}>
+                        {cardsForDay.length} aula{cardsForDay.length > 1 ? 's' : ''}
+                      </span>
+                    )}
                   </div>
 
-                          {/* Corpo: fundo de slots + cards absolutos */}
+                  {/* Corpo: fundo de slots + cards absolutos */}
                   <div className="relative" style={{ height: totalBodyH }}>
                     {/* Linhas de fundo (drop zones) */}
                     {HORARIOS.map((h, idx) => (
                       <div key={idx}
                         style={{ position: 'absolute', top: idx * GRADE_ROW_H, height: GRADE_ROW_H, left: 0, right: 0 }}
-                        className={`border-b border-slate-50 transition-colors
-                          ${isToday ? 'bg-purple-50/20' : ''}
-                          ${h.lanche ? 'bg-amber-50/40' : ''}`}
+                        className={`border-b border-slate-100/80 transition-colors
+                          ${isToday ? 'bg-purple-50/30' : ''}
+                          ${h.lanche ? 'bg-amber-50/60' : ''}`}
                         onDragOver={e => { if (podeEditar && !h.lanche) e.preventDefault(); }}
                         onDrop={e => { if (!h.lanche && h.value) handleDrop(e, diaNum, h.value); }}
                       />
                     ))}
 
-                    {/* Cards posicionados do início ao fim */}
-                    {cardsForDay.map(card => {
+                    {/* Cards posicionados com suporte a sobreposição */}
+                    {layout.map(({ card, col, totalCols }) => {
                       const startIdx = HORARIOS.findIndex(h => h.value === card.horario_inicio?.slice(0, 5));
-                      const endIdx   = HORARIOS.findIndex(h => h.value === card.horario_fim?.slice(0, 5));
                       if (startIdx < 0) return null;
+                      const endIdx = HORARIOS.findIndex(h => h.value === card.horario_fim?.slice(0, 5));
                       const top    = startIdx * GRADE_ROW_H + 2;
                       const height = endIdx > startIdx ? (endIdx - startIdx) * GRADE_ROW_H - 4 : GRADE_ROW_H - 4;
+                      const colW   = 100 / totalCols;
+                      const leftPct  = col * colW + 0.5;
+                      const rightPct = (totalCols - col - 1) * colW + 0.5;
                       return (
                         <div key={card.id}
                           draggable={podeEditar}
                           onDragStart={() => setDragCard(card)}
                           onDragEnd={() => setDragCard(null)}
-                          className="absolute left-0.5 right-0.5 rounded-lg p-1.5 text-white text-[9px] font-bold shadow-sm group/card overflow-hidden z-10"
-                          style={{ top, height, backgroundColor: card.cor || '#7c3aed', cursor: podeEditar ? 'grab' : 'default' }}>
+                          className="absolute rounded-xl text-white shadow-md group/card overflow-hidden z-10 border border-white/20"
+                          style={{ top, height, left: `${leftPct}%`, right: `${rightPct}%`, backgroundColor: card.cor || '#7c3aed', cursor: podeEditar ? 'grab' : 'default' }}>
                           {podeEditar && (
                             <button onClick={() => handleDeletar(card.id)}
-                              className="absolute top-0.5 right-0.5 bg-black/30 rounded-full p-0.5 opacity-0 group-hover/card:opacity-100 transition-opacity z-20">
+                              className="absolute top-1 right-1 bg-black/30 hover:bg-black/50 rounded-full p-0.5 opacity-0 group-hover/card:opacity-100 transition-opacity z-20">
                               <X size={9}/>
                             </button>
                           )}
-                          <div className="font-black leading-tight truncate">{card.nome_curso || '–'}</div>
-                          {height > 30 && <div className="opacity-80 text-[8px] truncate">{card.nome_professor || ''}</div>}
-                          {height > 46 && <div className="opacity-70 text-[8px]">{card.horario_inicio?.slice(0,5)} – {card.horario_fim?.slice(0,5)}</div>}
-                          {height > 62 && card.sala && <div className="opacity-60 text-[8px]">Sala: {card.sala}</div>}
+                          <div className="p-1.5 h-full flex flex-col justify-between">
+                            <div>
+                              <div className="text-[9px] font-black leading-tight truncate">{card.nome_curso || '–'}</div>
+                              {height > 36 && card.nome_professor && (
+                                <div className="text-[8px] opacity-85 truncate mt-0.5">{card.nome_professor}</div>
+                              )}
+                            </div>
+                            {height > 52 && (
+                              <div className="text-[8px] opacity-70 font-bold">
+                                {card.horario_inicio?.slice(0,5)} – {card.horario_fim?.slice(0,5)}
+                                {card.sala && <span className="ml-1 opacity-80">· {card.sala}</span>}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       );
                     })}
@@ -396,6 +436,28 @@ function GradeTab({ podeEditar, turmas }: { podeEditar: boolean; turmas: Turma[]
         </div>
       </div>
 
+      {/* ── Legenda de turmas ─────────────────────────────────────────── */}
+      {grade.length > 0 && (() => {
+        const turmasNaGrade = [...new Map(
+          grade.filter(g => g.turma_id && g.nome_curso)
+            .map(g => [g.turma_id, { id: g.turma_id!, nome: g.nome_curso!, cor: g.cor || '#7c3aed' }])
+        ).values()];
+        if (!turmasNaGrade.length) return null;
+        return (
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
+            <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-2.5">Legenda de Turmas</p>
+            <div className="flex flex-wrap gap-2">
+              {turmasNaGrade.map(t => (
+                <div key={t.id} className="flex items-center gap-1.5 bg-slate-50 border border-slate-100 rounded-lg px-3 py-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: t.cor }} />
+                  <span className="text-[10px] font-bold text-slate-700">{t.nome}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
       {!podeEditar && (
         <p className="text-[10px] text-center text-slate-400 font-bold uppercase tracking-widest">
           Visualização apenas · Edição restrita a ADMIN / PRT / VP / DRT
@@ -406,7 +468,10 @@ function GradeTab({ podeEditar, turmas }: { podeEditar: boolean; turmas: Turma[]
         <Modal title="Adicionar Horário na Grade" onClose={() => { setShowModal(false); setForm({ cor: '#7c3aed' }); setErroGrade(null); }}>
           <form onSubmit={handleCriar} className="space-y-3">
             <FieldSelect label="Turma *" value={form.turma_id ?? ''}
-              onChange={v => setForm(p => ({ ...p, turma_id: v }))}
+              onChange={v => {
+                const t = turmas.find(t => t.id === v);
+                setForm(p => ({ ...p, turma_id: v, cor: t?.cor || p.cor || '#7c3aed' }));
+              }}
               options={turmas.map(t => ({ value: t.id, label: t.nome }))} required />
             <FieldSelect label="Dia da Semana" value={String(form.dia_semana ?? '')}
               onChange={v => setForm(p => ({ ...p, dia_semana: Number(v) }))}
@@ -458,9 +523,10 @@ function calcularIdade(dataNasc: string): number {
   return idade;
 }
 
-function AlunosTab({ cursos, turmas }: { cursos: Curso[]; turmas: Turma[] }) {
+function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Turma[]; podeEditar: boolean }) {
   const [alunos, setAlunos] = useState<Aluno[]>([]);
   const [loading, setLoading] = useState(true);
+  const [inativandoId, setInativandoId] = useState<string | null>(null);
   const [filtroNome, setFiltroNome] = useState('');
   const [filtroCursoNome, setFiltroCursoNome] = useState('');
   const [filtroTurmaId, setFiltroTurmaId] = useState('');
@@ -535,6 +601,25 @@ function AlunosTab({ cursos, turmas }: { cursos: Curso[]; turmas: Turma[] }) {
       setFichaEditErro(Array.isArray(msg) ? msg.join(', ') : msg);
     } finally {
       setFichaEditSalvando(false);
+    }
+  };
+
+  const inativarAluno = async (a: Aluno) => {
+    const acao = a.ativo ? 'inativar' : 'reativar';
+    if (!confirm(`Deseja ${acao} o aluno "${a.nome_completo}"?`)) return;
+    setInativandoId(a.id);
+    try {
+      if (a.ativo) {
+        await api.delete(`/academico/alunos/${a.id}`);
+      } else {
+        await api.patch(`/academico/alunos/${a.id}`, { ativo: true });
+      }
+      await load();
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || err?.message || `Erro ao ${acao} aluno.`;
+      alert(Array.isArray(msg) ? msg.join(', ') : msg);
+    } finally {
+      setInativandoId(null);
     }
   };
 
@@ -622,6 +707,7 @@ function AlunosTab({ cursos, turmas }: { cursos: Curso[]; turmas: Turma[] }) {
                   <th className="text-left px-4 py-3">Turno</th>
                   <th className="text-left px-4 py-3">Data Matr.</th>
                   <th className="text-center px-4 py-3">Ficha</th>
+                  {podeEditar && <th className="text-center px-4 py-3">Ações</th>}
                 </tr>
               </thead>
               <tbody>
@@ -642,6 +728,17 @@ function AlunosTab({ cursos, turmas }: { cursos: Curso[]; turmas: Turma[] }) {
                         {fichaLoading ? '...' : 'Ver'}
                       </button>
                     </td>
+                    {podeEditar && (
+                      <td className="px-4 py-3 text-center">
+                        <button
+                          onClick={() => inativarAluno(a)}
+                          disabled={inativandoId === a.id}
+                          title={a.ativo ? 'Inativar aluno' : 'Reativar aluno'}
+                          className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase transition-colors disabled:opacity-50 ${a.ativo ? 'bg-red-50 text-red-500 hover:bg-red-100' : 'bg-green-50 text-green-600 hover:bg-green-100'}`}>
+                          {inativandoId === a.id ? '...' : a.ativo ? 'Inativar' : 'Reativar'}
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -1205,7 +1302,7 @@ function TurmasTab({ cursos, professores, alunos }: { cursos: Curso[]; professor
     setGradeCardsTurma([]);
     if (t) {
       setEditando(t);
-      setForm({ ...t });
+      setForm({ ...t, cor: t.cor || '#7c3aed' });
       try {
         const r = await api.get('/academico/grade');
         const cards: GradeCard[] = (r.data as GradeCard[]).filter(g => g.turma_id === t.id);
@@ -1222,7 +1319,7 @@ function TurmasTab({ cursos, professores, alunos }: { cursos: Curso[]; professor
       } catch {}
     } else {
       setEditando(null);
-      setForm({ ano: new Date().getFullYear().toString() });
+      setForm({ ano: new Date().getFullYear().toString(), cor: '#7c3aed' });
     }
     setShowModal(true);
   };
@@ -1411,7 +1508,12 @@ function TurmasTab({ cursos, professores, alunos }: { cursos: Curso[]; professor
             <tbody>
               {turmas.map((t, i) => (
                 <tr key={t.id} className={`border-b border-slate-50 hover:bg-purple-50/30 ${i % 2 === 0 ? '' : 'bg-slate-50/20'}`}>
-                  <td className="px-4 py-3 font-bold text-slate-800">{t.nome}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: t.cor || '#7c3aed' }} />
+                      <span className="font-bold text-slate-800">{t.nome}</span>
+                    </div>
+                  </td>
                   <td className="px-4 py-3 text-slate-600">{nomeCurso(t.curso_id)}</td>
                   <td className="px-4 py-3 text-slate-600">{nomeProf(t.professor_id)}</td>
                   <td className="px-4 py-3 text-slate-500">{t.turno || '–'}</td>
@@ -1472,6 +1574,16 @@ function TurmasTab({ cursos, professores, alunos }: { cursos: Curso[]; professor
               </div>
             </div>
             <FieldInput label="Ano" value={form.ano} onChange={v => setForm(p => ({ ...p, ano: v }))} />
+            <div className="space-y-1">
+              <label className="text-[10px] font-black uppercase text-slate-500">Cor da Turma</label>
+              <div className="flex gap-2 flex-wrap">
+                {CORES_CARD.map(c => (
+                  <button key={c} type="button" onClick={() => setForm(p => ({ ...p, cor: c }))}
+                    className={`w-7 h-7 rounded-lg transition-all ${form.cor === c ? 'ring-2 ring-offset-2 ring-slate-800 scale-110' : ''}`}
+                    style={{ backgroundColor: c }} />
+                ))}
+              </div>
+            </div>
 
             {/* ── Horários por Dia da Semana ── */}
             <div className="space-y-1.5">
@@ -2270,7 +2382,7 @@ export default function AcademicoPage() {
         </header>
         <main>
           {activeTab === 'grade'    && <GradeTab podeEditar={podeEditar} turmas={turmas} />}
-          {activeTab === 'alunos'   && <AlunosTab cursos={cursos} turmas={turmas} />}
+          {activeTab === 'alunos'   && <AlunosTab cursos={cursos} turmas={turmas} podeEditar={podeEditar} />}
           {activeTab === 'presenca' && <PresencaTab turmas={turmas} podeEditar={podeEditar} />}
           {activeTab === 'cursos'   && <CursosTab />}
           {activeTab === 'turmas'   && <TurmasTab cursos={cursos} professores={professores} alunos={alunos} />}

@@ -376,6 +376,13 @@ export class AppModule implements OnModuleInit {
       `);
       this.logger.log('✅ Colunas diario_academico (inscricao_id, pessoa_nome) aplicadas (IF NOT EXISTS)');
 
+      // ── Coluna cor em turmas ───────────────────────────────────────────────
+      await this.dataSource.query(`
+        ALTER TABLE IF EXISTS turmas
+          ADD COLUMN IF NOT EXISTS cor VARCHAR DEFAULT '#7c3aed'
+      `);
+      this.logger.log('✅ Coluna turmas.cor aplicada (IF NOT EXISTS)');
+
     } catch (err: any) {
       this.logger.error(`❌ Erro nas migrations automáticas: ${err.message}`);
     }
