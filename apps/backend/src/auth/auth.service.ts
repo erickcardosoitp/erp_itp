@@ -61,7 +61,7 @@ export class AuthService {
    * LOGIN: Autentica com e-mail OU matrícula (ITP-...).
    * ✅ Corrigido para evitar o erro "argument name is invalid"
    */
-  async login(identifier: string, pass: string) {
+  async login(identifier: string, pass: string, lembrar = false) {
     // 1. Validação de Pré-voo
     if (!identifier || !pass || identifier.trim() === '' || pass.trim() === '') {
       throw new UnauthorizedException('Identificador e senha devem ser preenchidos.');
@@ -131,8 +131,11 @@ export class AuthService {
       const deveTracar = Boolean((usuario as any).deve_trocar_senha);
       const payloadComFlag = { ...payload, deve_trocar_senha: deveTracar };
 
+      // "Lembrar acesso" → token de 30 dias; caso contrário → 8 horas
+      const expiresIn = lembrar ? '30d' : '8h';
+
       return {
-        access_token: await this.jwtService.signAsync(payloadComFlag),
+        access_token: await this.jwtService.signAsync(payloadComFlag, { expiresIn }),
         usuario: { ...usuarioSemSenha, deve_trocar_senha: deveTracar },
         deve_trocar_senha: deveTracar,
       };

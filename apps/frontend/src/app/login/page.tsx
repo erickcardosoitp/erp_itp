@@ -41,6 +41,7 @@ function LoginForm() {
         body: JSON.stringify({
           ...(isEmail ? { email: email.trim().toLowerCase() } : { matricula: email.trim().toUpperCase() }),
           password: password.trim(),
+          lembrar: lembrar,
         }),
       });
 

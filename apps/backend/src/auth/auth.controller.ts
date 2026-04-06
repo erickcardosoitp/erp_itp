@@ -17,29 +17,32 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ) {
     try {
-      const { email, matricula, password } = body;
+      const { email, matricula, password, lembrar } = body;
       // Aceita e-mail ou matrícula como identificador
       const identifier = (matricula || email || '').toString();
-      const result = await this.authService.login(identifier, password);
+      const result = await this.authService.login(identifier, password, !!lembrar);
 
       const isProd = process.env.NODE_ENV === 'production';
-
-      // ✅ MUDANÇA CRÍTICA: Renomeado de '@ITP:token' para 'itp_token'
-      // Nomes com @ ou : podem causar o erro "argument name is invalid" em alguns sistemas
-      res.cookie('itp_token', result.access_token, {
+      // Se "lembrar": cookie de 30 dias; caso contrário, session cookie (some ao fechar browser)
+      const cookieOpts: Record<string, any> = {
         httpOnly: true,
         secure: isProd,
         sameSite: 'lax',
-        // Sem maxAge/expires → session cookie: apagado ao fechar o navegador
         path: '/',
-      });
+      };
+      if (lembrar) {
+        cookieOpts.maxAge = 30 * 24 * 60 * 60; // 30 dias em segundos
+      }
 
-      this.logger.log(`✅ Login Sucesso: ${email} | Cargo: ${result.usuario.role}`);
-      
-      return { 
+      res.cookie('itp_token', result.access_token, cookieOpts);
+
+      this.logger.log(`✅ Login Sucesso: ${identifier} | Cargo: ${result.usuario.role} | Lembrar: ${!!lembrar}`);
+
+      return {
         access_token: result.access_token,
-        usuario: result.usuario, 
-        message: 'Login realizado com sucesso' 
+        usuario: result.usuario,
+        deve_trocar_senha: result.deve_trocar_senha,
+        message: 'Login realizado com sucesso'
       };
 
     } catch (error: any) {

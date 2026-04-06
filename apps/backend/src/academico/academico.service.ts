@@ -584,8 +584,8 @@ export class AcademicoService {
       SELECT d.inscricao_id, COALESCE(d.pessoa_nome, i.nome_completo, 'Candidato') AS candidato_nome,
              d.data, ps.turma_nome, ps.id AS sessao_id
       FROM diario_academico d
-      JOIN presenca_sessoes ps ON ps.id = d.sessao_id
-      LEFT JOIN inscricoes i   ON i.id   = d.inscricao_id
+      JOIN presenca_sessoes ps ON ps.id::text = d.sessao_id
+      LEFT JOIN inscricoes i   ON i.id::text = d.inscricao_id::text
       WHERE d.tipo = 'Presença' AND d.inscricao_id IS NOT NULL AND d.descricao = 'Presente'
       ORDER BY d.data DESC
       LIMIT 30
