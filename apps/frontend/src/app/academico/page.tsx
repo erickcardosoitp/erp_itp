@@ -163,23 +163,27 @@ function timeToMinsGrade(t: string) {
   return h * 60 + m;
 }
 
-/** Calcula layout de cards do dia, detectando sobreposições e atribuindo colunas */
-function buildDayLayout(cards: GradeCard[]): Array<{ card: GradeCard; col: number; totalCols: number }> {
-  if (!cards.length) return [];
-  const sorted = [...cards]
-    .filter(c => c.horario_inicio)
-    .sort((a, b) => timeToMinsGrade(a.horario_inicio!.slice(0, 5)) - timeToMinsGrade(b.horario_inicio!.slice(0, 5)));
-  const colsEnd: number[] = [];
-  const withCols = sorted.map(card => {
-    const startM = timeToMinsGrade(card.horario_inicio!.slice(0, 5));
-    const endM   = card.horario_fim ? timeToMinsGrade(card.horario_fim.slice(0, 5)) : startM + 60;
-    let col = colsEnd.findIndex(end => startM >= end);
-    if (col === -1) { col = colsEnd.length; colsEnd.push(endM); }
-    else colsEnd[col] = Math.max(colsEnd[col], endM);
-    return { card, col };
-  });
-  const totalCols = colsEnd.length;
-  return withCols.map(i => ({ ...i, totalCols }));
+/**
+ * Converte um horário (HH:MM ou HH:MM:SS) em pixels Y dentro da grade.
+ * Interpola para horários que não estejam exatamente no array HORARIOS.
+ */
+function timeToPixelGrade(t: string): number {
+  const targetMins = timeToMinsGrade((t || '').slice(0, 5));
+  const knownSlots = HORARIOS
+    .map((h, idx) => h.value ? { mins: timeToMinsGrade(h.value), idx } : null)
+    .filter(Boolean) as { mins: number; idx: number }[];
+
+  const exact = knownSlots.find(s => s.mins === targetMins);
+  if (exact) return exact.idx * GRADE_ROW_H;
+
+  const prev = [...knownSlots].reverse().find(s => s.mins < targetMins);
+  const next = knownSlots.find(s => s.mins > targetMins);
+
+  if (!prev) return 0;
+  if (!next) return (prev.idx + 1) * GRADE_ROW_H;
+
+  const frac = (targetMins - prev.mins) / (next.mins - prev.mins);
+  return (prev.idx + frac * (next.idx - prev.idx)) * GRADE_ROW_H;
 }
 
 function GradeTab({ podeEditar, turmas }: { podeEditar: boolean; turmas: Turma[] }) {
@@ -357,7 +361,6 @@ function GradeTab({ podeEditar, turmas }: { podeEditar: boolean; turmas: Turma[]
               const isToday = diaNum === todayDia;
               const cardsForDay = grade.filter(g => g.dia_semana === diaNum);
               const totalBodyH = HORARIOS.length * GRADE_ROW_H;
-              const layout = buildDayLayout(cardsForDay);
 
               return (
                 <div key={d} className="flex-1 border-r border-slate-100 last:border-0 flex flex-col min-w-0">
@@ -388,23 +391,19 @@ function GradeTab({ podeEditar, turmas }: { podeEditar: boolean; turmas: Turma[]
                       />
                     ))}
 
-                    {/* Cards posicionados com suporte a sobreposição */}
-                    {layout.map(({ card, col, totalCols }) => {
-                      const startIdx = HORARIOS.findIndex(h => h.value === card.horario_inicio?.slice(0, 5));
-                      if (startIdx < 0) return null;
-                      const endIdx = HORARIOS.findIndex(h => h.value === card.horario_fim?.slice(0, 5));
-                      const top    = startIdx * GRADE_ROW_H + 2;
-                      const height = endIdx > startIdx ? (endIdx - startIdx) * GRADE_ROW_H - 4 : GRADE_ROW_H - 4;
-                      const colW   = 100 / totalCols;
-                      const leftPct  = col * colW + 0.5;
-                      const rightPct = (totalCols - col - 1) * colW + 0.5;
+                    {/* Cards — 1 coluna por dia, altura baseada em tempo real */}
+                    {cardsForDay.filter(card => card.horario_inicio).map(card => {
+                      const topY   = timeToPixelGrade(card.horario_inicio!);
+                      const endY   = card.horario_fim ? timeToPixelGrade(card.horario_fim) : topY + GRADE_ROW_H;
+                      const top    = topY + 2;
+                      const height = Math.max(endY - topY, GRADE_ROW_H) - 4;
                       return (
                         <div key={card.id}
                           draggable={podeEditar}
                           onDragStart={() => setDragCard(card)}
                           onDragEnd={() => setDragCard(null)}
                           className="absolute rounded-xl text-white shadow-md group/card overflow-hidden z-10 border border-white/20"
-                          style={{ top, height, left: `${leftPct}%`, right: `${rightPct}%`, backgroundColor: card.cor || '#7c3aed', cursor: podeEditar ? 'grab' : 'default' }}>
+                          style={{ top, height, left: '2px', right: '2px', backgroundColor: card.cor || '#7c3aed', cursor: podeEditar ? 'grab' : 'default' }}>
                           {podeEditar && (
                             <button onClick={() => handleDeletar(card.id)}
                               className="absolute top-1 right-1 bg-black/30 hover:bg-black/50 rounded-full p-0.5 opacity-0 group-hover/card:opacity-100 transition-opacity z-20">
