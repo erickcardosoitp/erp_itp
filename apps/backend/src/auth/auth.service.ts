@@ -140,8 +140,10 @@ export class AuthService {
         deve_trocar_senha: deveTracar,
       };
     } catch (err: any) {
-      this.logger.error(`💥 Erro interno no processo de login: ${err.message}`);
-      throw new UnauthorizedException('Erro ao validar credenciais.');
+      // Re-throw erros intencionais (ex: senha errada) sem poluir os logs como "erro interno"
+      if (err instanceof UnauthorizedException) throw err;
+      this.logger.error(`💥 Erro técnico no processo de login: ${err.message}`);
+      throw new UnauthorizedException('Erro ao processar login. Tente novamente.');
     }
   }
 
