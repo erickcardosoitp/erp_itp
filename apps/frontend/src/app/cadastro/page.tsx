@@ -5,7 +5,7 @@ import {
   Users, Briefcase, ShieldCheck, GraduationCap, UserCheck,
   Package, Heart, Landmark, MapPin, Phone, User, Activity,
   Plus, Trash2, Edit3, Search, X, AlertCircle, Eye, EyeOff, Settings2, UserPlus, RefreshCw,
-  ArrowLeftRight, BookOpen, Tag, UserCog, CreditCard, Repeat, BarChart2, Copy, Check, ChevronDown, ChevronUp, Star, StopCircle,
+  ArrowLeftRight, BookOpen, Tag, UserCog, CreditCard, Repeat, BarChart2, Copy, Check, ChevronDown, ChevronUp, Star, StopCircle, AlertTriangle,
 } from 'lucide-react';
 import api from '@/services/api';
 import { useAuth } from '@/context/auth-context';
@@ -2037,9 +2037,10 @@ interface PqPergunta { id: string; texto: string; tipo: PqTipoPergunta; opcoes?:
 interface PqItem {
   id: string; titulo: string; tipo: string; categoria?: string; status: string;
   link_unico: string; total_respostas: number; expirada?: boolean;
-  criado_por_nome?: string; data_limite?: string;
+  criado_por_nome?: string; data_limite?: string; perguntas?: PqPergunta[];
 }
-interface PqStat { id: string; texto: string; tipo: string; media?: number; total_respostas: number; distribuicao?: { nota: number; total: number }[]; textos?: string[]; }
+interface PqStat { id: string; texto: string; tipo: string; media?: number; total_respostas: number; distribuicao?: { nota: number; total: number }[]; textos?: string[]; contagem?: Record<string, number>; }
+interface PqRespostaItem { id: string; created_at: string; expurgado: boolean; respostas: { pergunta_id: string; nota?: number; texto?: string; opcoes_selecionadas?: string[] }[]; }
 
 const EXTERNAL_URL_CAD = 'https://itp.institutotiapretinha.org';
 
@@ -2062,7 +2063,7 @@ function PesquisasTab({ onCount }: { onCount: (n: number) => void }) {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [expandida, setExpandida] = useState<string | null>(null);
-  const [resultados, setResultados] = useState<Record<string, { stats: PqStat[]; total_respostas: number }>>({});
+  const [resultados, setResultados] = useState<Record<string, { stats: PqStat[]; total_respostas: number; respostas: PqRespostaItem[] }>>({});
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [titulo, setTitulo] = useState('');
@@ -2107,9 +2108,22 @@ function PesquisasTab({ onCount }: { onCount: (n: number) => void }) {
     if (!resultados[id]) {
       try {
         const r = await api.get(`/pesquisas/${id}/resultados`);
-        setResultados(prev => ({ ...prev, [id]: { stats: r.data.stats, total_respostas: r.data.total_respostas } }));
+        setResultados(prev => ({ ...prev, [id]: { stats: r.data.stats, total_respostas: r.data.total_respostas, respostas: r.data.respostas || [] } }));
       } catch {}
     }
+  };
+
+  const toggleExpurgar = async (pesquisaId: string, respostaId: string, expurgado: boolean) => {
+    try {
+      await api.patch(`/pesquisas/respostas/${respostaId}/expurgar`, { expurgado });
+      setResultados(prev => ({
+        ...prev,
+        [pesquisaId]: {
+          ...prev[pesquisaId],
+          respostas: prev[pesquisaId].respostas.map(r => r.id === respostaId ? { ...r, expurgado } : r),
+        },
+      }));
+    } catch {}
   };
 
   if (loading) return <div className="py-16 text-center text-slate-400 text-sm">Carregando...</div>;
@@ -2264,27 +2278,77 @@ function PesquisasTab({ onCount }: { onCount: (n: number) => void }) {
               </div>
 
               {expandida === p.id && (
-                <div className="border-t border-slate-50 dark:border-slate-700 px-4 py-3 bg-slate-50/50 dark:bg-slate-700/20 space-y-3">
+                <div className="border-t border-slate-50 dark:border-slate-700 px-4 py-3 bg-slate-50/50 dark:bg-slate-700/20 space-y-4">
                   {!resultados[p.id] ? (
                     <p className="text-xs text-slate-400 text-center py-4">Carregando...</p>
                   ) : resultados[p.id].total_respostas === 0 ? (
                     <p className="text-xs text-slate-400 text-center py-4">Nenhuma resposta ainda.</p>
-                  ) : resultados[p.id].stats.map(s => (
-                    <div key={s.id} className="space-y-1">
-                      <p className="text-[11px] font-black text-slate-700 dark:text-slate-200">{s.texto}</p>
-                      {s.tipo === 'nota' && s.distribuicao ? (
-                        <div className="flex items-center gap-2">
-                          {[1,2,3,4,5].map(n => <Star key={n} size={12} className={n <= Math.round(s.media||0) ? 'text-amber-400 fill-amber-400' : 'text-slate-200'}/>)}
-                          <span className="text-xs font-black text-slate-600">{s.media?.toFixed(1)} / 5</span>
-                          <span className="text-[9px] text-slate-400">({s.total_respostas})</span>
+                  ) : (
+                    <>
+                      {/* Estatísticas agregadas */}
+                      <div className="space-y-2">
+                        {resultados[p.id].stats.map(s => (
+                          <div key={s.id} className="space-y-1">
+                            <p className="text-[11px] font-black text-slate-700 dark:text-slate-200">{s.texto}</p>
+                            {s.tipo === 'nota' && s.distribuicao ? (
+                              <div className="flex items-center gap-2">
+                                {[1,2,3,4,5].map(n => <Star key={n} size={12} className={n <= Math.round(s.media||0) ? 'text-amber-400 fill-amber-400' : 'text-slate-200'}/>)}
+                                <span className="text-xs font-black text-slate-600">{s.media?.toFixed(1)} / 5</span>
+                                <span className="text-[9px] text-slate-400">({s.total_respostas})</span>
+                              </div>
+                            ) : s.tipo === 'texto' && s.textos ? (
+                              <div className="space-y-1 max-h-24 overflow-y-auto">
+                                {s.textos.map((t, i) => <p key={i} className="text-[10px] text-slate-600 bg-white rounded-lg px-3 py-1 border border-slate-100">&quot;{t}&quot;</p>)}
+                              </div>
+                            ) : (s.tipo === 'multipla_escolha' || s.tipo === 'checkbox') && s.contagem ? (
+                              <div className="space-y-1">
+                                {Object.entries(s.contagem).map(([opc, cnt]) => (
+                                  <div key={opc} className="flex items-center gap-2">
+                                    <span className="text-[10px] text-slate-600 w-28 truncate">{opc}</span>
+                                    <div className="flex-1 bg-slate-100 rounded-full h-1.5">
+                                      <div className="bg-purple-500 h-1.5 rounded-full" style={{ width: s.total_respostas > 0 ? `${Math.round((cnt / s.total_respostas) * 100)}%` : '0%' }}/>
+                                    </div>
+                                    <span className="text-[9px] font-black text-slate-500 w-6 text-right">{cnt}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Respostas individuais com expurgação */}
+                      <div className="space-y-1.5">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Respostas individuais · Expurgação do NPS</p>
+                        <div className="max-h-56 overflow-y-auto space-y-1">
+                          {resultados[p.id].respostas.map((r, idx) => (
+                            <div key={r.id} className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-[10px] transition-all ${r.expurgado ? 'bg-red-50 border-red-100 opacity-60' : 'bg-white border-slate-100'}`}>
+                              <span className="text-slate-400 shrink-0 font-mono w-5">#{idx + 1}</span>
+                              <span className="text-slate-400 shrink-0">{new Date(r.created_at).toLocaleDateString('pt-BR')}</span>
+                              <div className="flex-1 flex gap-2 flex-wrap min-w-0">
+                                {r.respostas.map(rp => {
+                                  if (rp.nota != null) return <span key={rp.pergunta_id} className="text-amber-600 font-black shrink-0">{rp.nota}★</span>;
+                                  if (rp.texto) return <span key={rp.pergunta_id} className="text-slate-500 truncate max-w-[100px]">&quot;{rp.texto}&quot;</span>;
+                                  if (rp.opcoes_selecionadas?.length) return <span key={rp.pergunta_id} className="text-purple-600 truncate max-w-[100px]">{rp.opcoes_selecionadas.join(', ')}</span>;
+                                  return null;
+                                })}
+                              </div>
+                              {r.expurgado && (
+                                <span className="shrink-0 flex items-center gap-0.5 text-[8px] font-black uppercase text-red-500">
+                                  <AlertTriangle size={9}/> Expurgado
+                                </span>
+                              )}
+                              <button
+                                onClick={() => toggleExpurgar(p.id, r.id, !r.expurgado)}
+                                className={`shrink-0 text-[8px] font-black uppercase px-2 py-0.5 rounded-lg transition-colors ${r.expurgado ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-red-100 text-red-600 hover:bg-red-200'}`}>
+                                {r.expurgado ? 'Incluir' : 'Expurgar'}
+                              </button>
+                            </div>
+                          ))}
                         </div>
-                      ) : s.tipo === 'texto' && s.textos ? (
-                        <div className="space-y-1 max-h-24 overflow-y-auto">
-                          {s.textos.map((t, i) => <p key={i} className="text-[10px] text-slate-600 bg-white rounded-lg px-3 py-1 border border-slate-100">&quot;{t}&quot;</p>)}
-                        </div>
-                      ) : null}
-                    </div>
-                  ))}
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
             </div>
