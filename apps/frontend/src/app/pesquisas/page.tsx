@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/context/auth-context';
 import { useRouter } from 'next/navigation';
-import api from '@/lib/api';
+import api from '@/services/api';
 import { Plus, X, Trash2, StopCircle, RefreshCw, BarChart2, Copy, Check, ChevronDown, ChevronUp, Star } from 'lucide-react';
 
 interface Pergunta { id: string; texto: string; tipo: 'nota' | 'texto'; }
