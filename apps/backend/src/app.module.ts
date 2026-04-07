@@ -442,6 +442,13 @@ export class AppModule implements OnModuleInit {
       `);
       this.logger.log('✅ Coluna pesquisas.categoria aplicada (IF NOT EXISTS)');
 
+      // ── Coluna expurgado em pesquisas_respostas ────────────────────────────
+      await this.dataSource.query(`
+        ALTER TABLE IF EXISTS pesquisas_respostas
+          ADD COLUMN IF NOT EXISTS expurgado BOOLEAN NOT NULL DEFAULT false
+      `);
+      this.logger.log('✅ Coluna pesquisas_respostas.expurgado aplicada (IF NOT EXISTS)');
+
     } catch (err: any) {
       this.logger.error(`❌ Erro nas migrations automáticas: ${err.message}`);
     }

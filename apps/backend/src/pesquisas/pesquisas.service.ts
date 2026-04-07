@@ -25,9 +25,10 @@ export class PesquisasService {
       order: { created_at: 'DESC' },
     });
     if (!pesquisa) return { nps: null, total_respostas: 0 };
-    const respostas = await this.respostaRepo.find({ where: { pesquisa_id: pesquisa.id } });
+    const todasRespostas = await this.respostaRepo.find({ where: { pesquisa_id: pesquisa.id } });
+    const respostas = todasRespostas.filter(r => !r.expurgado);
     const perguntasNota = (pesquisa.perguntas || []).filter(p => p.tipo === 'nota');
-    if (!perguntasNota.length || !respostas.length) return { nps: null, total_respostas: respostas.length, pesquisa_titulo: pesquisa.titulo };
+    if (!perguntasNota.length || !respostas.length) return { nps: null, total_respostas: todasRespostas.length, pesquisa_titulo: pesquisa.titulo };
     const allNotas: number[] = [];
     for (const resposta of respostas) {
       for (const p of perguntasNota) {
@@ -36,7 +37,14 @@ export class PesquisasService {
       }
     }
     const media = allNotas.length ? allNotas.reduce((a, b) => a + b, 0) / allNotas.length : null;
-    return { nps: media != null ? parseFloat(media.toFixed(1)) : null, total_respostas: respostas.length, pesquisa_titulo: pesquisa.titulo };
+    return { nps: media != null ? parseFloat(media.toFixed(1)) : null, total_respostas: todasRespostas.length, pesquisa_titulo: pesquisa.titulo };
+  }
+
+  async expurgarResposta(id: string, expurgado: boolean) {
+    const resposta = await this.respostaRepo.findOneBy({ id });
+    if (!resposta) throw new NotFoundException('Resposta não encontrada');
+    await this.respostaRepo.update(id, { expurgado });
+    return { ok: true, expurgado };
   }
 
   async criar(dto: {
@@ -99,6 +107,7 @@ export class PesquisasService {
     const stats = (pesquisa.perguntas || []).map(p => {
       if (p.tipo === 'nota') {
         const notas = respostas
+          .filter(r => !r.expurgado)
           .map(r => r.respostas.find(rp => rp.pergunta_id === p.id)?.nota)
           .filter((n): n is number => n != null);
         const media = notas.length ? (notas.reduce((a, b) => a + b, 0) / notas.length) : null;
@@ -107,6 +116,19 @@ export class PesquisasService {
           total: notas.filter(n => n === v).length,
         }));
         return { ...p, media, total_respostas: notas.length, distribuicao };
+      } else if (p.tipo === 'multipla_escolha' || p.tipo === 'checkbox') {
+        // Contagem por opção
+        const contagem: Record<string, number> = {};
+        for (const opc of (p.opcoes || [])) contagem[opc] = 0;
+        for (const resposta of respostas) {
+          const rp = resposta.respostas.find(rp => rp.pergunta_id === p.id);
+          if (rp?.opcoes_selecionadas) {
+            for (const opc of rp.opcoes_selecionadas) {
+              contagem[opc] = (contagem[opc] || 0) + 1;
+            }
+          }
+        }
+        return { ...p, contagem, total_respostas: respostas.filter(r => r.respostas.some(rp => rp.pergunta_id === p.id && rp.opcoes_selecionadas?.length)).length };
       } else {
         const textos = respostas
           .map(r => r.respostas.find(rp => rp.pergunta_id === p.id)?.texto)

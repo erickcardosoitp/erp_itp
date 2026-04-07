@@ -2032,7 +2032,8 @@ const TIPO_LABELS_CAD: Record<string, string> = { Academica: 'Acadêmica', Inter
 
 function gerarIdPq() { return Math.random().toString(36).substring(2, 10); }
 
-interface PqPergunta { id: string; texto: string; tipo: 'nota' | 'texto'; }
+type PqTipoPergunta = 'nota' | 'texto' | 'multipla_escolha' | 'checkbox';
+interface PqPergunta { id: string; texto: string; tipo: PqTipoPergunta; opcoes?: string[]; }
 interface PqItem {
   id: string; titulo: string; tipo: string; categoria?: string; status: string;
   link_unico: string; total_respostas: number; expirada?: boolean;
@@ -2040,9 +2041,11 @@ interface PqItem {
 }
 interface PqStat { id: string; texto: string; tipo: string; media?: number; total_respostas: number; distribuicao?: { nota: number; total: number }[]; textos?: string[]; }
 
+const EXTERNAL_URL_CAD = process.env.NEXT_PUBLIC_APP_URL || 'https://itp.institutotiapretinha.org';
+
 function CopiarLinkCad({ link }: { link: string }) {
   const [copiado, setCopiado] = useState(false);
-  const url = typeof window !== 'undefined' ? `${window.location.origin}/pesquisa/${link}` : `/pesquisa/${link}`;
+  const url = `${EXTERNAL_URL_CAD}/pesquisa/${link}`;
   return (
     <div className="flex items-center gap-2 bg-purple-50 rounded-xl px-3 py-1.5 mt-1 max-w-full">
       <span className="text-[9px] text-purple-700 font-mono flex-1 truncate">{url}</span>
@@ -2084,6 +2087,9 @@ function PesquisasTab({ onCount }: { onCount: (n: number) => void }) {
     e.preventDefault();
     if (!titulo.trim()) { setErro('Título é obrigatório'); return; }
     if (perguntas.some(p => !p.texto.trim())) { setErro('Preencha o texto de todas as perguntas'); return; }
+    if (perguntas.some(p => (p.tipo === 'multipla_escolha' || p.tipo === 'checkbox') && (!p.opcoes?.length || p.opcoes.some(o => !o.trim())))) {
+      setErro('Preencha todas as opções das perguntas de múltipla escolha'); return;
+    }
     setSalvando(true); setErro(null);
     try {
       await api.post('/pesquisas', { titulo, tipo, categoria, perguntas, data_limite: dataLimite || undefined });
@@ -2161,16 +2167,39 @@ function PesquisasTab({ onCount }: { onCount: (n: number) => void }) {
               </button>
             </div>
             {perguntas.map((p, i) => (
-              <div key={p.id} className="flex gap-2 items-start">
-                <input value={p.texto} onChange={e => setPerguntas(pqs => pqs.map(q => q.id === p.id ? { ...q, texto: e.target.value } : q))}
-                  placeholder={`Pergunta ${i + 1}...`} required
-                  className="flex-1 border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400" />
-                <select value={p.tipo} onChange={e => setPerguntas(pqs => pqs.map(q => q.id === p.id ? { ...q, tipo: e.target.value as 'nota'|'texto' } : q))}
-                  className="border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-xl px-2 py-2 text-xs bg-white shrink-0">
-                  <option value="nota">⭐ Nota</option>
-                  <option value="texto">✏ Texto</option>
-                </select>
-                {perguntas.length > 1 && <button type="button" onClick={() => { const pid = p.id; setPerguntas(prev => prev.filter(q => q.id !== pid)); }} className="text-red-400 hover:text-red-600 mt-2"><X size={13}/></button>}
+              <div key={p.id} className="border border-slate-100 dark:border-slate-700 rounded-xl p-2.5 space-y-1.5">
+                <div className="flex gap-2 items-start">
+                  <input value={p.texto} onChange={e => setPerguntas(pqs => pqs.map(q => q.id === p.id ? { ...q, texto: e.target.value } : q))}
+                    placeholder={`Pergunta ${i + 1}...`} required
+                    className="flex-1 border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400" />
+                  <select value={p.tipo} onChange={e => {
+                    const t = e.target.value as PqTipoPergunta;
+                    setPerguntas(pqs => pqs.map(q => q.id === p.id ? { ...q, tipo: t, opcoes: (t === 'multipla_escolha' || t === 'checkbox') ? (q.opcoes?.length ? q.opcoes : ['']) : undefined } : q));
+                  }}
+                    className="border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-xl px-2 py-2 text-xs bg-white shrink-0">
+                    <option value="nota">⭐ Nota</option>
+                    <option value="texto">✏ Texto</option>
+                    <option value="multipla_escolha">◉ Múltipla</option>
+                    <option value="checkbox">☑ Checkbox</option>
+                  </select>
+                  {perguntas.length > 1 && <button type="button" onClick={() => { const pid = p.id; setPerguntas(prev => prev.filter(q => q.id !== pid)); }} className="text-red-400 hover:text-red-600 mt-2"><X size={13}/></button>}
+                </div>
+                {(p.tipo === 'multipla_escolha' || p.tipo === 'checkbox') && (
+                  <div className="pl-2 space-y-1">
+                    {(p.opcoes || []).map((opc, idx) => (
+                      <div key={idx} className="flex gap-1.5 items-center">
+                        <input value={opc} onChange={e => setPerguntas(pqs => pqs.map(q => q.id === p.id ? { ...q, opcoes: (q.opcoes||[]).map((o,ii) => ii===idx ? e.target.value : o) } : q))}
+                          placeholder={`Opção ${idx+1}`} required
+                          className="flex-1 border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400" />
+                        {(p.opcoes||[]).length > 1 && <button type="button" onClick={() => setPerguntas(pqs => pqs.map(q => q.id === p.id ? { ...q, opcoes: (q.opcoes||[]).filter((_,ii) => ii !== idx) } : q))} className="text-red-400"><X size={10}/></button>}
+                      </div>
+                    ))}
+                    <button type="button" onClick={() => setPerguntas(pqs => pqs.map(q => q.id === p.id ? { ...q, opcoes: [...(q.opcoes||[]), ''] } : q))}
+                      className="text-[9px] font-black uppercase text-purple-500 hover:text-purple-700 flex items-center gap-1">
+                      <Plus size={9}/> Opção
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>

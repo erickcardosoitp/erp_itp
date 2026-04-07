@@ -4,6 +4,7 @@ export interface RespostaPergunta {
   pergunta_id: string;
   nota?: number;   // 1-5 para tipo 'nota'
   texto?: string;  // para tipo 'texto'
+  opcoes_selecionadas?: string[]; // para multipla_escolha e checkbox
 }
 
 @Entity('pesquisas_respostas')
@@ -16,6 +17,9 @@ export class PesquisaResposta {
 
   @Column({ type: 'jsonb' })
   respostas: RespostaPergunta[];
+
+  @Column({ type: 'boolean', default: false })
+  expurgado: boolean;
 
   @CreateDateColumn({ name: 'created_at' })
   created_at: Date;

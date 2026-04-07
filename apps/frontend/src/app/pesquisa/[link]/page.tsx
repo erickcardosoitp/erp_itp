@@ -6,9 +6,10 @@ import { Star, CheckCircle, AlertTriangle } from 'lucide-react';
 
 const API_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '/backend-api';
 
-interface Pergunta { id: string; texto: string; tipo: 'nota' | 'texto'; }
+type TipoPergunta = 'nota' | 'texto' | 'multipla_escolha' | 'checkbox';
+interface Pergunta { id: string; texto: string; tipo: TipoPergunta; opcoes?: string[]; }
 interface Pesquisa { id: string; titulo: string; tipo: string; perguntas: Pergunta[]; data_limite?: string; }
-interface Resposta { pergunta_id: string; nota?: number; texto?: string; }
+interface Resposta { pergunta_id: string; nota?: number; texto?: string; opcoes_selecionadas?: string[]; }
 
 export default function PesquisaPublicaPage() {
   const params = useParams();
@@ -40,14 +41,27 @@ export default function PesquisaPublicaPage() {
     setRespostas(prev => ({ ...prev, [perguntaId]: { pergunta_id: perguntaId, texto } }));
   };
 
+  const setOpcaoUnica = (perguntaId: string, opcao: string) => {
+    setRespostas(prev => ({ ...prev, [perguntaId]: { pergunta_id: perguntaId, opcoes_selecionadas: [opcao] } }));
+  };
+
+  const toggleOpcao = (perguntaId: string, opcao: string) => {
+    setRespostas(prev => {
+      const atual = prev[perguntaId]?.opcoes_selecionadas || [];
+      const selecionadas = atual.includes(opcao) ? atual.filter(o => o !== opcao) : [...atual, opcao];
+      return { ...prev, [perguntaId]: { pergunta_id: perguntaId, opcoes_selecionadas: selecionadas } };
+    });
+  };
+
   const enviar = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!pesquisa) return;
 
-    // Validar que todas as perguntas de nota foram respondidas
+    // Validar que todas as perguntas obrigatórias foram respondidas
     const perguntasSemResposta = pesquisa.perguntas.filter(p => {
       const r = respostas[p.id];
       if (p.tipo === 'nota') return !r?.nota;
+      if (p.tipo === 'multipla_escolha') return !r?.opcoes_selecionadas?.length;
       return false;
     });
     if (perguntasSemResposta.length > 0) {
@@ -144,6 +158,26 @@ export default function PesquisaPublicaPage() {
                       />
                       <span className="text-[9px] text-slate-400 font-bold">{n}</span>
                     </button>
+                  ))}
+                </div>
+              ) : p.tipo === 'multipla_escolha' ? (
+                <div className="space-y-2 py-1">
+                  {(p.opcoes || []).map(opc => (
+                    <label key={opc} className={`flex items-center gap-3 px-4 py-2.5 rounded-xl border cursor-pointer transition-all ${respostas[p.id]?.opcoes_selecionadas?.includes(opc) ? 'border-purple-400 bg-purple-50' : 'border-slate-200 hover:border-purple-300'}`}>
+                      <input type="radio" name={`radio-${p.id}`} value={opc} checked={!!respostas[p.id]?.opcoes_selecionadas?.includes(opc)}
+                        onChange={() => setOpcaoUnica(p.id, opc)} className="accent-purple-600" />
+                      <span className="text-sm text-slate-700">{opc}</span>
+                    </label>
+                  ))}
+                </div>
+              ) : p.tipo === 'checkbox' ? (
+                <div className="space-y-2 py-1">
+                  {(p.opcoes || []).map(opc => (
+                    <label key={opc} className={`flex items-center gap-3 px-4 py-2.5 rounded-xl border cursor-pointer transition-all ${respostas[p.id]?.opcoes_selecionadas?.includes(opc) ? 'border-purple-400 bg-purple-50' : 'border-slate-200 hover:border-purple-300'}`}>
+                      <input type="checkbox" value={opc} checked={!!respostas[p.id]?.opcoes_selecionadas?.includes(opc)}
+                        onChange={() => toggleOpcao(p.id, opc)} className="accent-purple-600" />
+                      <span className="text-sm text-slate-700">{opc}</span>
+                    </label>
                   ))}
                 </div>
               ) : (

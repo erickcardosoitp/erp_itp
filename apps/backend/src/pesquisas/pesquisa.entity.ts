@@ -3,7 +3,8 @@ import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from 'typeor
 export interface PerguntaPesquisa {
   id: string;
   texto: string;
-  tipo: 'nota' | 'texto'; // nota = estrelas 1-5, texto = campo aberto
+  tipo: 'nota' | 'texto' | 'multipla_escolha' | 'checkbox';
+  opcoes?: string[]; // para multipla_escolha e checkbox
 }
 
 @Entity('pesquisas')

@@ -50,6 +50,12 @@ export class PesquisasController {
     return this.svc.reiniciar(id);
   }
 
+  @Patch('respostas/:id/expurgar')
+  @Roles(Role.DRT)
+  expurgar(@Param('id') id: string, @Body() body: { expurgado: boolean }) {
+    return this.svc.expurgarResposta(id, body.expurgado ?? true);
+  }
+
   @Delete(':id')
   @Roles(Role.ADMIN)
   deletar(@Param('id') id: string) {
