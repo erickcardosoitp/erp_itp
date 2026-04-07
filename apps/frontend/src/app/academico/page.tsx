@@ -707,6 +707,7 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
             <option value="Tarde">Tarde</option>
             <option value="Noite">Noite</option>
             <option value="Integral">Integral</option>
+            <option value="Não estuda no momento">Não estuda no momento</option>
           </select>
         </div>
         <div className="min-w-[110px]">

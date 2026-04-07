@@ -273,7 +273,7 @@ export class RelatoriosService {
   async relatorioAcademico() {
     const [cursos, professores, turmas, grade]: [any[], any[], any[], any[]] = await Promise.all([
       this.db.query(`SELECT nome, sigla FROM cursos ORDER BY nome`),
-      this.db.query(`SELECT nome, especialidade, status FROM professores ORDER BY nome`),
+      this.db.query(`SELECT nome, especialidade, ativo FROM professores ORDER BY nome`),
       this.db.query(`
         SELECT t.nome, t.codigo, c.nome AS curso,
           COUNT(ta.aluno_id) FILTER (WHERE ta.status = 'ativo') AS alunos_ativos
@@ -442,7 +442,7 @@ export class RelatoriosService {
 
     const [porStatus, porCurso, mensal, recentes]: [any[], any[], any[], any[]] = await Promise.all([
       this.db.query(`
-        SELECT status, COUNT(*) AS qtd FROM inscricoes
+        SELECT status, COUNT(*) AS qtd FROM inscricoes i
         WHERE 1=1 ${whereData} GROUP BY status ORDER BY qtd DESC
       `, filterParams),
       this.db.query(`

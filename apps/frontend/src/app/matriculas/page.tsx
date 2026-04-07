@@ -720,7 +720,7 @@ export default function GestaoMatriculas() {
                         <select value={formDireto.turno_escolar} onChange={e => setFormDireto(p => ({ ...p, turno_escolar: e.target.value }))}
                           className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400 bg-white">
                           <option value="">Selecione...</option>
-                          <option>Manhã</option><option>Tarde</option><option>Noite</option><option>Integral</option>
+                          <option>Manhã</option><option>Tarde</option><option>Noite</option><option>Integral</option><option>Não estuda no momento</option>
                         </select>
                       </div>
                     </div>

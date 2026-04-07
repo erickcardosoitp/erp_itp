@@ -45,6 +45,7 @@ import { FinanceiroModule } from './financeiro/financeiro.module';
 import { EstoqueModule } from './estoque/estoque.module';
 import { NotificacoesModule } from './notificacoes/notificacoes.module';
 import { RelatoriosModule } from './relatorios/relatorios.module';
+import { PesquisasModule } from './pesquisas/pesquisas.module';
 
 @Module({
   imports: [
@@ -108,6 +109,7 @@ import { RelatoriosModule } from './relatorios/relatorios.module';
     EstoqueModule,
     NotificacoesModule,
     RelatoriosModule,
+    PesquisasModule,
     MatriculasModule,
     EmailModule,
   ],
@@ -382,6 +384,31 @@ export class AppModule implements OnModuleInit {
           ADD COLUMN IF NOT EXISTS cor VARCHAR DEFAULT '#7c3aed'
       `);
       this.logger.log('✅ Coluna turmas.cor aplicada (IF NOT EXISTS)');
+
+      // ── Tabelas de Pesquisas de Satisfação ───────────────────────────────────
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS pesquisas (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          titulo TEXT NOT NULL,
+          tipo TEXT NOT NULL,
+          perguntas JSONB,
+          data_limite TIMESTAMPTZ,
+          status TEXT NOT NULL DEFAULT 'aberta',
+          link_unico TEXT UNIQUE NOT NULL,
+          criado_por_id TEXT,
+          criado_por_nome TEXT,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `);
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS pesquisas_respostas (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          pesquisa_id UUID NOT NULL REFERENCES pesquisas(id) ON DELETE CASCADE,
+          respostas JSONB NOT NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `);
+      this.logger.log('✅ Tabelas pesquisas/pesquisas_respostas criadas (IF NOT EXISTS)');
 
       // ── Remover FK turmas→professores (professor_id agora referencia usuarios) ──
       await this.dataSource.query(`
