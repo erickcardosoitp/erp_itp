@@ -17,6 +17,9 @@ export class Pesquisa {
   @Column({ type: 'text' })
   tipo: string; // 'Academica' | 'Interna' | 'Programa'
 
+  @Column({ type: 'text', nullable: true })
+  categoria: string | null; // 'Academico' | 'Financeiro' | 'Estoque' | 'Matriculas' | 'Institucional' | 'Operacional'
+
   @Column({ type: 'jsonb', nullable: true })
   perguntas: PerguntaPesquisa[];
 

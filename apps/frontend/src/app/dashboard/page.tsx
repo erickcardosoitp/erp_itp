@@ -31,21 +31,24 @@ export default function DashboardEstrategico() {
   const [cursos,       setCursos]       = useState<any[]>([]);
   const [movimentacoes, setMovimentacoes] = useState<any[]>([]);
   const [alertasCandidatos, setAlertasCandidatos] = useState<any[]>([]);
+  const [nps, setNps] = useState<{ nps: number | null; total_respostas: number; pesquisa_titulo?: string } | null>(null);
   const [carregando,   setCarregando]   = useState(false);
 
   const carregar = useCallback(async () => {
     setCarregando(true);
     try {
-      const [ra, rc, rm, rca] = await Promise.allSettled([
+      const [ra, rc, rm, rca, rnps] = await Promise.allSettled([
         api.get('/academico/alunos'),
         api.get('/academico/cursos'),
         api.get('/financeiro/movimentacoes'),
         api.get('/academico/presenca/alertas-candidatos'),
+        api.get('/pesquisas/nps'),
       ]);
       if (ra.status === 'fulfilled') setAlunos(ra.value.data ?? []);
       if (rc.status === 'fulfilled') setCursos(rc.value.data ?? []);
       if (rm.status === 'fulfilled') setMovimentacoes(rm.value.data ?? []);
       if (rca.status === 'fulfilled') setAlertasCandidatos(rca.value.data ?? []);
+      if (rnps.status === 'fulfilled') setNps(rnps.value.data);
     } catch { /* silencioso */ }
     setCarregando(false);
   }, []);
@@ -153,7 +156,7 @@ export default function DashboardEstrategico() {
           </div>
 
           <div className="flex gap-4 bg-white p-3 rounded-3xl shadow-sm border border-slate-100">
-            <HeaderStat label="NPS Comunitário" value="4.9" icon={Heart} color="text-rose-500" />
+            <HeaderStat label="NPS Comunitário" value={nps?.nps != null ? String(nps.nps) : '–'} icon={Heart} color="text-rose-500" />
             <div className="w-[1px] bg-slate-100 h-10 self-center" />
             <HeaderStat label="Taxa de Retenção" value={alunos.length ? (100 - parseFloat(taxaEvasao)).toFixed(1) + '%' : '–'} icon={ShieldCheck} color="text-emerald-500" />
           </div>

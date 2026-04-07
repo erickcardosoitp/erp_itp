@@ -435,6 +435,13 @@ export class AppModule implements OnModuleInit {
       `);
       this.logger.log('✅ Colunas valor_compra/preco_pago aplicadas (IF NOT EXISTS)');
 
+      // ── Coluna categoria em pesquisas ─────────────────────────────────────
+      await this.dataSource.query(`
+        ALTER TABLE IF EXISTS pesquisas
+          ADD COLUMN IF NOT EXISTS categoria TEXT
+      `);
+      this.logger.log('✅ Coluna pesquisas.categoria aplicada (IF NOT EXISTS)');
+
     } catch (err: any) {
       this.logger.error(`❌ Erro nas migrations automáticas: ${err.message}`);
     }

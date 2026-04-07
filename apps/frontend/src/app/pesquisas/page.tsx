@@ -8,7 +8,7 @@ import { Plus, X, Trash2, StopCircle, RefreshCw, BarChart2, Copy, Check, Chevron
 
 interface Pergunta { id: string; texto: string; tipo: 'nota' | 'texto'; }
 interface Pesquisa {
-  id: string; titulo: string; tipo: string; perguntas: Pergunta[];
+  id: string; titulo: string; tipo: string; categoria?: string; perguntas: Pergunta[];
   data_limite?: string; status: string; link_unico: string;
   criado_por_nome?: string; created_at: string; total_respostas: number; expirada?: boolean;
 }
@@ -21,6 +21,8 @@ interface StatPergunta {
 
 const TIPOS = ['Academica', 'Interna', 'Programa'];
 const TIPO_LABELS: Record<string, string> = { Academica: 'Acadêmica', Interna: 'Interna', Programa: 'Programa' };
+const CATEGORIAS = ['Academico', 'Financeiro', 'Estoque', 'Matriculas', 'Institucional', 'Operacional'];
+const CAT_LABELS: Record<string, string> = { Academico: 'Acadêmico', Financeiro: 'Financeiro', Estoque: 'Estoque', Matriculas: 'Matrículas', Institucional: 'Institucional', Operacional: 'Operacional' };
 const APP_URL = process.env.NEXT_PUBLIC_API_BASE_URL?.replace('/api', '') || '';
 
 function gerarId() { return Math.random().toString(36).substring(2, 10); }
@@ -55,6 +57,7 @@ export default function PesquisasPage() {
   // Form
   const [titulo, setTitulo] = useState('');
   const [tipo, setTipo] = useState('Academica');
+  const [categoria, setCategoria] = useState('Academico');
   const [dataLimite, setDataLimite] = useState('');
   const [perguntas, setPerguntas] = useState<Pergunta[]>([
     { id: gerarId(), texto: '', tipo: 'nota' },
@@ -89,8 +92,8 @@ export default function PesquisasPage() {
     if (perguntas.some(p => !p.texto.trim())) { setErro('Preencha o texto de todas as perguntas'); return; }
     setSalvando(true); setErro(null);
     try {
-      await api.post('/pesquisas', { titulo, tipo, perguntas, data_limite: dataLimite || undefined });
-      setShowForm(false); setTitulo(''); setTipo('Academica'); setDataLimite('');
+      await api.post('/pesquisas', { titulo, tipo, categoria, perguntas, data_limite: dataLimite || undefined });
+      setShowForm(false); setTitulo(''); setTipo('Academica'); setCategoria('Academico'); setDataLimite('');
       setPerguntas([{ id: gerarId(), texto: '', tipo: 'nota' }]);
       await load();
     } catch (err: any) {
@@ -169,6 +172,13 @@ export default function PesquisasPage() {
                 </select>
               </div>
               <div className="space-y-1">
+                <label className="text-[9px] font-black uppercase text-slate-400">Categoria (Módulo)</label>
+                <select value={categoria} onChange={e => setCategoria(e.target.value)}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white">
+                  {CATEGORIAS.map(c => <option key={c} value={c}>{CAT_LABELS[c]}</option>)}
+                </select>
+              </div>
+              <div className="space-y-1">
                 <label className="text-[9px] font-black uppercase text-slate-400">Prazo (até)</label>
                 <input type="datetime-local" value={dataLimite} onChange={e => setDataLimite(e.target.value)}
                   className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400" />
@@ -230,6 +240,7 @@ export default function PesquisasPage() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-black text-sm text-slate-800 truncate">{p.titulo}</span>
                       <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">{TIPO_LABELS[p.tipo] || p.tipo}</span>
+                      {p.categoria && <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full bg-purple-100 text-purple-600">{CAT_LABELS[p.categoria] || p.categoria}</span>}
                       {statusBadge(p)}
                     </div>
                     <div className="text-[9px] text-slate-400 mt-0.5 flex items-center gap-3 flex-wrap">

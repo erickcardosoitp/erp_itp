@@ -5,14 +5,14 @@ import {
   Users, Briefcase, ShieldCheck, GraduationCap, UserCheck,
   Package, Heart, Landmark, MapPin, Phone, User, Activity,
   Plus, Trash2, Edit3, Search, X, AlertCircle, Eye, EyeOff, Settings2, UserPlus, RefreshCw,
-  ArrowLeftRight, BookOpen, Tag, UserCog, CreditCard, Repeat,
+  ArrowLeftRight, BookOpen, Tag, UserCog, CreditCard, Repeat, BarChart2, Copy, Check, ChevronDown, ChevronUp, Star, StopCircle,
 } from 'lucide-react';
 import api from '@/services/api';
 import { useAuth } from '@/context/auth-context';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
-type TabId = 'funcionarios' | 'usuarios' | 'grupos' | 'cursos' | 'alunos' | 'insumos' | 'doadores' | 'contas'
+type TabId = 'funcionarios' | 'usuarios' | 'grupos' | 'cursos' | 'alunos' | 'insumos' | 'doadores' | 'contas' | 'pesquisas'
   | 'fin_tipos_mov' | 'fin_planos' | 'fin_categorias' | 'fin_tipos_pessoa' | 'fin_formas_pag' | 'fin_recorrencias';
 
 interface Professor {
@@ -140,7 +140,7 @@ export default function CadastroBasicoPage() {
   const [isMounted, setIsMounted] = useState(false);
   const [counts, setCounts] = useState<Record<TabId, number>>({
     funcionarios: 0, usuarios: 0, grupos: 0, cursos: 0,
-    alunos: 0, insumos: 0, doadores: 0, contas: 0,
+    alunos: 0, insumos: 0, doadores: 0, contas: 0, pesquisas: 0,
     fin_tipos_mov: 0, fin_planos: 0, fin_categorias: 0,
     fin_tipos_pessoa: 0, fin_formas_pag: 0, fin_recorrencias: 0,
   });
@@ -159,6 +159,7 @@ export default function CadastroBasicoPage() {
       ['insumos',      '/estoque/categorias'],
       ['doadores',     '/cadastro/doadores'],
       ['contas',       '/cadastro/contas-bancarias'],
+      ['pesquisas',    '/pesquisas'],
       ['fin_tipos_mov',    '/financeiro/tipos-movimentacao'],
       ['fin_planos',       '/financeiro/planos-contas'],
       ['fin_categorias',   '/financeiro/categorias'],
@@ -188,7 +189,7 @@ export default function CadastroBasicoPage() {
     return {
       funcionarios: m('funcionarios'), usuarios: m('usuarios'), grupos: m('grupos'),
       cursos: m('cursos'), alunos: m('alunos'), insumos: m('insumos'),
-      doadores: m('doadores'), contas: m('contas'),
+      doadores: m('doadores'), contas: m('contas'), pesquisas: m('pesquisas'),
       fin_tipos_mov: m('fin_tipos_mov'), fin_planos: m('fin_planos'),
       fin_categorias: m('fin_categorias'), fin_tipos_pessoa: m('fin_tipos_pessoa'),
       fin_formas_pag: m('fin_formas_pag'), fin_recorrencias: m('fin_recorrencias'),
@@ -206,6 +207,7 @@ export default function CadastroBasicoPage() {
     { id: 'insumos',      label: 'Insumos',        icon: Package,       cor: 'orange' },
     { id: 'doadores',     label: 'Doadores',       icon: Heart,         cor: 'rose' },
     { id: 'contas',       label: 'Contas Banc.',   icon: Landmark,      cor: 'indigo' },
+    { id: 'pesquisas',    label: 'Pesquisas',      icon: BarChart2,     cor: 'purple' },
   ];
 
   const TABS_FINANCEIRO: typeof TABS = [
@@ -281,6 +283,7 @@ export default function CadastroBasicoPage() {
         {activeTab === 'insumos'      && <InsumosTab      key={refreshKey} onCount={countSetters.insumos} />}
         {activeTab === 'doadores'     && <DoadoresTab     key={refreshKey} onCount={countSetters.doadores} />}
         {activeTab === 'contas'       && <ContasTab       key={refreshKey} onCount={countSetters.contas} />}
+        {activeTab === 'pesquisas'    && <PesquisasTab    key={refreshKey} onCount={countSetters.pesquisas} />}
         {activeTab === 'fin_tipos_mov'    && <FinLookupTab key={`${refreshKey}-ftm`} onCount={countSetters.fin_tipos_mov}    endpoint="/financeiro/tipos-movimentacao" titulo="Tipo de Movimentação" cor="teal" />}
         {activeTab === 'fin_planos'       && <FinLookupTab key={`${refreshKey}-fpc`} onCount={countSetters.fin_planos}       endpoint="/financeiro/planos-contas"      titulo="Plano de Contas"       cor="teal" />}
         {activeTab === 'fin_categorias'   && <FinLookupTab key={`${refreshKey}-fca`} onCount={countSetters.fin_categorias}   endpoint="/financeiro/categorias"          titulo="Categoria Financeira"  cor="teal" />}
@@ -2018,4 +2021,247 @@ function formatarCPF(cpf: string): string {
   const n = cpf.replace(/\D/g, '');
   if (n.length !== 11) return cpf;
   return `${n.slice(0, 3)}.${n.slice(3, 6)}.${n.slice(6, 9)}-${n.slice(9)}`;
+}
+
+// ─── Tab: Pesquisas de Satisfação ─────────────────────────────────────────────
+
+const CATEGORIAS_PESQUISA = ['Academico', 'Financeiro', 'Estoque', 'Matriculas', 'Institucional', 'Operacional'];
+const CAT_LABELS: Record<string, string> = { Academico: 'Acadêmico', Financeiro: 'Financeiro', Estoque: 'Estoque', Matriculas: 'Matrículas', Institucional: 'Institucional', Operacional: 'Operacional' };
+const TIPOS_PESQUISA = ['Academica', 'Interna', 'Programa'];
+const TIPO_LABELS_CAD: Record<string, string> = { Academica: 'Acadêmica', Interna: 'Interna', Programa: 'Programa' };
+
+function gerarIdPq() { return Math.random().toString(36).substring(2, 10); }
+
+interface PqPergunta { id: string; texto: string; tipo: 'nota' | 'texto'; }
+interface PqItem {
+  id: string; titulo: string; tipo: string; categoria?: string; status: string;
+  link_unico: string; total_respostas: number; expirada?: boolean;
+  criado_por_nome?: string; data_limite?: string;
+}
+interface PqStat { id: string; texto: string; tipo: string; media?: number; total_respostas: number; distribuicao?: { nota: number; total: number }[]; textos?: string[]; }
+
+function CopiarLinkCad({ link }: { link: string }) {
+  const [copiado, setCopiado] = useState(false);
+  const url = typeof window !== 'undefined' ? `${window.location.origin}/pesquisa/${link}` : `/pesquisa/${link}`;
+  return (
+    <div className="flex items-center gap-2 bg-purple-50 rounded-xl px-3 py-1.5 mt-1 max-w-full">
+      <span className="text-[9px] text-purple-700 font-mono flex-1 truncate">{url}</span>
+      <button onClick={() => { navigator.clipboard.writeText(url).then(() => { setCopiado(true); setTimeout(() => setCopiado(false), 2000); }); }} className="shrink-0 text-purple-500 hover:text-purple-700">
+        {copiado ? <Check size={11}/> : <Copy size={11}/>}
+      </button>
+    </div>
+  );
+}
+
+function PesquisasTab({ onCount }: { onCount: (n: number) => void }) {
+  const { user } = useAuth();
+  const [lista, setLista] = useState<PqItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [expandida, setExpandida] = useState<string | null>(null);
+  const [resultados, setResultados] = useState<Record<string, { stats: PqStat[]; total_respostas: number }>>({});
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const [titulo, setTitulo] = useState('');
+  const [tipo, setTipo] = useState('Interna');
+  const [categoria, setCategoria] = useState('Academico');
+  const [dataLimite, setDataLimite] = useState('');
+  const [perguntas, setPerguntas] = useState<PqPergunta[]>([{ id: gerarIdPq(), texto: '', tipo: 'nota' }]);
+
+  const role = user?.role?.toLowerCase() ?? '';
+  const podeGerenciar = ['drt', 'vp', 'prt', 'admin'].includes(role);
+  const podeReiniciar = ['prt', 'admin'].includes(role);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try { const r = await api.get('/pesquisas'); setLista(r.data); onCount(r.data.length); } catch { onCount(0); }
+    setLoading(false);
+  }, [onCount]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const salvar = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!titulo.trim()) { setErro('Título é obrigatório'); return; }
+    if (perguntas.some(p => !p.texto.trim())) { setErro('Preencha o texto de todas as perguntas'); return; }
+    setSalvando(true); setErro(null);
+    try {
+      await api.post('/pesquisas', { titulo, tipo, categoria, perguntas, data_limite: dataLimite || undefined });
+      setShowForm(false); setTitulo(''); setTipo('Interna'); setCategoria('Academico'); setDataLimite('');
+      setPerguntas([{ id: gerarIdPq(), texto: '', tipo: 'nota' }]);
+      await load();
+    } catch (err: any) {
+      setErro(err?.response?.data?.message || err?.message || 'Erro ao criar');
+    } finally { setSalvando(false); }
+  };
+
+  const verResultados = async (id: string) => {
+    if (expandida === id) { setExpandida(null); return; }
+    setExpandida(id);
+    if (!resultados[id]) {
+      try {
+        const r = await api.get(`/pesquisas/${id}/resultados`);
+        setResultados(prev => ({ ...prev, [id]: { stats: r.data.stats, total_respostas: r.data.total_respostas } }));
+      } catch {}
+    }
+  };
+
+  if (loading) return <div className="py-16 text-center text-slate-400 text-sm">Carregando...</div>;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Pesquisas de Satisfação Anônimas</p>
+          <p className="text-[9px] text-slate-400 mt-0.5">Resultados alimentam o NPS Comunitário no Dashboard</p>
+        </div>
+        {podeGerenciar && (
+          <button onClick={() => { setShowForm(v => !v); setErro(null); }}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-black text-xs uppercase tracking-widest transition-all">
+            {showForm ? <X size={13}/> : <Plus size={13}/>} {showForm ? 'Cancelar' : 'Nova Pesquisa'}
+          </button>
+        )}
+      </div>
+
+      {showForm && (
+        <form onSubmit={salvar} className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 p-5 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="sm:col-span-3 space-y-1">
+              <label className="text-[9px] font-black uppercase text-slate-400">Título *</label>
+              <input value={titulo} onChange={e => setTitulo(e.target.value)} required placeholder="Ex: Satisfação Acadêmica 2026"
+                className="w-full border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[9px] font-black uppercase text-slate-400">Tipo *</label>
+              <select value={tipo} onChange={e => setTipo(e.target.value)}
+                className="w-full border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white">
+                {TIPOS_PESQUISA.map(t => <option key={t} value={t}>{TIPO_LABELS_CAD[t]}</option>)}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-[9px] font-black uppercase text-slate-400">Categoria (Módulo)</label>
+              <select value={categoria} onChange={e => setCategoria(e.target.value)}
+                className="w-full border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white">
+                {CATEGORIAS_PESQUISA.map(c => <option key={c} value={c}>{CAT_LABELS[c]}</option>)}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-[9px] font-black uppercase text-slate-400">Prazo (até)</label>
+              <input type="datetime-local" value={dataLimite} onChange={e => setDataLimite(e.target.value)}
+                className="w-full border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400" />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-[9px] font-black uppercase text-slate-400">Perguntas</label>
+              <button type="button" onClick={() => setPerguntas(p => [...p, { id: gerarIdPq(), texto: '', tipo: 'nota' }])}
+                className="flex items-center gap-1 text-[9px] font-black uppercase text-purple-600 hover:text-purple-800">
+                <Plus size={10}/> Adicionar
+              </button>
+            </div>
+            {perguntas.map((p, i) => (
+              <div key={p.id} className="flex gap-2 items-start">
+                <input value={p.texto} onChange={e => setPerguntas(pqs => pqs.map(q => q.id === p.id ? { ...q, texto: e.target.value } : q))}
+                  placeholder={`Pergunta ${i + 1}...`} required
+                  className="flex-1 border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400" />
+                <select value={p.tipo} onChange={e => setPerguntas(pqs => pqs.map(q => q.id === p.id ? { ...q, tipo: e.target.value as 'nota'|'texto' } : q))}
+                  className="border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-xl px-2 py-2 text-xs bg-white shrink-0">
+                  <option value="nota">⭐ Nota</option>
+                  <option value="texto">✏ Texto</option>
+                </select>
+                {perguntas.length > 1 && <button type="button" onClick={() => setPerguntas(p => p.filter(q => q.id !== p.id))} className="text-red-400 hover:text-red-600 mt-2"><X size={13}/></button>}
+              </div>
+            ))}
+          </div>
+          {erro && <p className="text-[11px] text-red-600 font-bold bg-red-50 rounded-xl px-3 py-2">⚠ {erro}</p>}
+          <button type="submit" disabled={salvando}
+            className="w-full bg-purple-600 hover:bg-purple-700 text-white py-2.5 rounded-xl font-black text-xs uppercase disabled:opacity-50">
+            {salvando ? 'Criando...' : 'Criar Pesquisa'}
+          </button>
+        </form>
+      )}
+
+      {lista.length === 0 ? (
+        <div className="py-16 text-center bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700">
+          <BarChart2 size={36} className="mx-auto mb-2 text-slate-200"/>
+          <p className="text-sm text-slate-400 font-bold">Nenhuma pesquisa criada ainda.</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {lista.map(p => (
+            <div key={p.id} className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 overflow-hidden">
+              <div className="flex flex-wrap items-center gap-3 px-4 py-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-black text-sm text-slate-800 dark:text-slate-100">{p.titulo}</span>
+                    <span className="text-[8px] font-black px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300">{TIPO_LABELS_CAD[p.tipo] || p.tipo}</span>
+                    {p.categoria && <span className="text-[8px] font-black px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-300">{CAT_LABELS[p.categoria] || p.categoria}</span>}
+                    {(p.status === 'encerrada' || p.expirada)
+                      ? <span className="text-[8px] font-black px-2 py-0.5 rounded-full bg-red-100 text-red-600">{p.status === 'encerrada' ? 'Encerrada' : 'Expirada'}</span>
+                      : <span className="text-[8px] font-black px-2 py-0.5 rounded-full bg-green-100 text-green-700">Aberta</span>}
+                  </div>
+                  <div className="text-[9px] text-slate-400 mt-0.5 flex gap-3 flex-wrap">
+                    <span>{p.total_respostas} resposta{p.total_respostas !== 1 ? 's' : ''}</span>
+                    {p.data_limite && <span>Prazo: {new Date(p.data_limite).toLocaleDateString('pt-BR')}</span>}
+                    <span>Por: {p.criado_por_nome || '–'}</span>
+                  </div>
+                  <CopiarLinkCad link={p.link_unico} />
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+                  <button onClick={() => verResultados(p.id)}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[9px] font-black uppercase bg-purple-50 dark:bg-purple-900/20 text-purple-600 hover:bg-purple-100">
+                    <BarChart2 size={10}/> {expandida === p.id ? <ChevronUp size={10}/> : <ChevronDown size={10}/>}
+                  </button>
+                  {(p.status === 'aberta' && !p.expirada) && (
+                    <button onClick={async () => { if (!confirm('Encerrar?')) return; try { await api.patch(`/pesquisas/${p.id}/encerrar`); await load(); } catch {} }}
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[9px] font-black uppercase bg-red-50 text-red-500 hover:bg-red-100">
+                      <StopCircle size={10}/>
+                    </button>
+                  )}
+                  {(p.status === 'encerrada' || p.expirada) && podeReiniciar && (
+                    <button onClick={async () => { if (!confirm('Reabrir?')) return; try { await api.patch(`/pesquisas/${p.id}/reiniciar`); await load(); } catch {} }}
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[9px] font-black uppercase bg-green-50 text-green-600 hover:bg-green-100">
+                      <RefreshCw size={10}/>
+                    </button>
+                  )}
+                  {podeReiniciar && (
+                    <button onClick={async () => { if (!confirm('Excluir?')) return; try { await api.delete(`/pesquisas/${p.id}`); await load(); } catch {} }}
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[9px] font-black uppercase bg-red-50 text-red-400 hover:bg-red-100">
+                      <Trash2 size={10}/>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {expandida === p.id && (
+                <div className="border-t border-slate-50 dark:border-slate-700 px-4 py-3 bg-slate-50/50 dark:bg-slate-700/20 space-y-3">
+                  {!resultados[p.id] ? (
+                    <p className="text-xs text-slate-400 text-center py-4">Carregando...</p>
+                  ) : resultados[p.id].total_respostas === 0 ? (
+                    <p className="text-xs text-slate-400 text-center py-4">Nenhuma resposta ainda.</p>
+                  ) : resultados[p.id].stats.map(s => (
+                    <div key={s.id} className="space-y-1">
+                      <p className="text-[11px] font-black text-slate-700 dark:text-slate-200">{s.texto}</p>
+                      {s.tipo === 'nota' && s.distribuicao ? (
+                        <div className="flex items-center gap-2">
+                          {[1,2,3,4,5].map(n => <Star key={n} size={12} className={n <= Math.round(s.media||0) ? 'text-amber-400 fill-amber-400' : 'text-slate-200'}/>)}
+                          <span className="text-xs font-black text-slate-600">{s.media?.toFixed(1)} / 5</span>
+                          <span className="text-[9px] text-slate-400">({s.total_respostas})</span>
+                        </div>
+                      ) : s.tipo === 'texto' && s.textos ? (
+                        <div className="space-y-1 max-h-24 overflow-y-auto">
+                          {s.textos.map((t, i) => <p key={i} className="text-[10px] text-slate-600 bg-white rounded-lg px-3 py-1 border border-slate-100">&quot;{t}&quot;</p>)}
+                        </div>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }

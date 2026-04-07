@@ -77,6 +77,18 @@ function fmtDate(v?: string | null) {
   return isNaN(d.getTime()) ? '---' : d.toLocaleDateString('pt-BR');
 }
 
+function calcularIdade(dataNasc?: string | null): number | null {
+  if (!dataNasc) return null;
+  const s = /^\d{4}-\d{2}-\d{2}$/.test(dataNasc) ? dataNasc + 'T12:00' : dataNasc;
+  const nasc = new Date(s);
+  if (isNaN(nasc.getTime())) return null;
+  const hoje = new Date();
+  let idade = hoje.getFullYear() - nasc.getFullYear();
+  const m = hoje.getMonth() - nasc.getMonth();
+  if (m < 0 || (m === 0 && hoje.getDate() < nasc.getDate())) idade--;
+  return idade;
+}
+
 // ─── Componentes auxiliares ───────────────────────────────────────────────────
 
 function TabBtn({ id, active, set, label, Icon }: { id: string; active: string; set: (id: string) => void; label: string; Icon: any }) {
@@ -878,6 +890,7 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
                     <span className={`text-[10px] font-black px-2 py-0.5 rounded ${fichaAluno.aluno?.ativo ? 'bg-green-50 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
                       {fichaAluno.aluno?.ativo ? 'Ativo' : 'Inativo'}
                     </span>
+                    {(() => { const idade = calcularIdade(fichaAluno.aluno?.data_nascimento); return idade != null ? <span className="text-[10px] font-black text-amber-700 bg-amber-50 px-2 py-0.5 rounded">{idade} anos</span> : null; })()}
                   </div>
                 </div>
               </div>
@@ -1048,13 +1061,12 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
                       {([
                         ['CPF', fichaAluno.aluno?.cpf],
                         ['Celular', fichaAluno.aluno?.celular],
-                        ['E-mail', fichaAluno.aluno?.email],
+                        ['E-mail', fichaAluno.aluno?.email?.toUpperCase()],
                         ['Nascimento', fmtDate(fichaAluno.aluno?.data_nascimento)],
                         ['Sexo', fichaAluno.aluno?.sexo],
                         ['Escolaridade', fichaAluno.aluno?.escolaridade],
                         ['Turno', fichaAluno.aluno?.turno_escolar],
                         ['Cursos Matriculados', fichaAluno.aluno?.cursos_matriculados],
-                        ['LGPD Aceito', fichaAluno.aluno?.lgpd_aceito ? 'Sim' : 'Não'],
                       ] as [string, string][]).map(([k, v]) => (
                         <div key={k} className="bg-slate-50 rounded-xl p-2">
                           <span className="text-[8px] font-black uppercase text-slate-400 block">{k}</span>
@@ -1079,6 +1091,28 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
                           <span className="font-bold text-slate-700 truncate block">{v || '–'}</span>
                         </div>
                       ))}
+                    </div>
+                  </section>
+
+                  {/* LGPD & Documentos */}
+                  <section>
+                    <h4 className="text-[9px] font-black uppercase text-purple-600 mb-2 tracking-widest">LGPD & Documentos</h4>
+                    <div className="flex flex-wrap gap-2">
+                      <div className={`flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] font-black ${fichaAluno.aluno?.lgpd_aceito ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
+                        {fichaAluno.aluno?.lgpd_aceito ? '✔ LGPD Assinado' : '⏳ LGPD Pendente'}
+                      </div>
+                      {fichaAluno.inscricao_id && (
+                        <button
+                          onClick={() => {
+                            api.get(`/matriculas/inscricao/${fichaAluno.inscricao_id}`)
+                              .then(r => { setFichaAluno(null); setDossieCandidato(r.data); })
+                              .catch(() => alert('Não foi possível carregar o dossier.'));
+                          }}
+                          className="flex items-center gap-1.5 px-3 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-xl text-[10px] font-black uppercase transition-colors"
+                        >
+                          Ver Documentos & Dossier
+                        </button>
+                      )}
                     </div>
                   </section>
 

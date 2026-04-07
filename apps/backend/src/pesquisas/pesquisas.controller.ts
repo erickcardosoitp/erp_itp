@@ -3,10 +3,19 @@ import { PesquisasService } from './pesquisas.service';
 import { Public } from '../auth/decorators/public.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '../auth/constants/roles.enum';
+// Role.USER is the lowest role — used for endpoints any logged-in user can access
 
 @Controller('pesquisas')
 export class PesquisasController {
   constructor(private readonly svc: PesquisasService) {}
+
+  // ── NPS público (qualquer usuário autenticado) ────────────────────────────
+
+  @Get('nps')
+  @Roles(Role.USER)
+  nps() {
+    return this.svc.npsAtual();
+  }
 
   // ── Endpoints protegidos (DRT / VP / ADMIN) ───────────────────────────────
 

@@ -19,9 +19,30 @@ export class PesquisasService {
     return `${parte1}-${parte2}`;
   }
 
+  async npsAtual(): Promise<{ nps: number | null; total_respostas: number; pesquisa_titulo?: string }> {
+    const pesquisa = await this.pesquisaRepo.findOne({
+      where: { tipo: 'Interna', categoria: 'Academico' } as any,
+      order: { created_at: 'DESC' },
+    });
+    if (!pesquisa) return { nps: null, total_respostas: 0 };
+    const respostas = await this.respostaRepo.find({ where: { pesquisa_id: pesquisa.id } });
+    const perguntasNota = (pesquisa.perguntas || []).filter(p => p.tipo === 'nota');
+    if (!perguntasNota.length || !respostas.length) return { nps: null, total_respostas: respostas.length, pesquisa_titulo: pesquisa.titulo };
+    const allNotas: number[] = [];
+    for (const resposta of respostas) {
+      for (const p of perguntasNota) {
+        const r = resposta.respostas.find(rp => rp.pergunta_id === p.id);
+        if (r?.nota != null) allNotas.push(r.nota);
+      }
+    }
+    const media = allNotas.length ? allNotas.reduce((a, b) => a + b, 0) / allNotas.length : null;
+    return { nps: media != null ? parseFloat(media.toFixed(1)) : null, total_respostas: respostas.length, pesquisa_titulo: pesquisa.titulo };
+  }
+
   async criar(dto: {
     titulo: string;
     tipo: string;
+    categoria?: string;
     perguntas: PerguntaPesquisa[];
     data_limite?: string;
   }, usuario: { id: string; nome: string }) {
@@ -40,6 +61,7 @@ export class PesquisasService {
     const pesquisa = this.pesquisaRepo.create({
       titulo: dto.titulo.trim(),
       tipo: dto.tipo,
+      categoria: dto.categoria || null,
       perguntas: dto.perguntas,
       ...(dto.data_limite ? { data_limite: new Date(dto.data_limite) } : {}),
       status: 'aberta',
