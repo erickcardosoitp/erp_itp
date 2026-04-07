@@ -23,6 +23,9 @@ export class Produto {
   @Column({ name: 'codigo_interno', type: 'text', nullable: true, unique: true })
   codigo_interno: string | null;
 
+  @Column({ type: 'decimal', precision: 12, scale: 2, nullable: true })
+  valor_compra: number | null;
+
   @Column({ type: 'boolean', default: true })
   ativo: boolean;
 

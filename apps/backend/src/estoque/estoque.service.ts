@@ -29,6 +29,7 @@ export class EstoqueService {
     unidade_medida?: string;
     estoque_minimo?: number;
     quantidade_atual?: number;
+    valor_compra?: number;
   }): Promise<Produto> {
     if (!dados.nome?.trim()) throw new BadRequestException('Nome é obrigatório.');
     const produto = this.produtoRepo.create({
@@ -37,6 +38,7 @@ export class EstoqueService {
       unidade_medida: dados.unidade_medida || 'un',
       estoque_minimo: Number(dados.estoque_minimo ?? 0),
       quantidade_atual: Number(dados.quantidade_atual ?? 0),
+      valor_compra: dados.valor_compra != null ? Number(dados.valor_compra) : null,
     });
     // Gera código interno único: ITP-INSM-YYYYMM-NNN
     const now = new Date();
@@ -62,6 +64,7 @@ export class EstoqueService {
     // Campos numéricos: forçar conversão
     if (dados.estoque_minimo !== undefined) dados.estoque_minimo = Number(dados.estoque_minimo);
     if (dados.quantidade_atual !== undefined) dados.quantidade_atual = Number(dados.quantidade_atual);
+    if (dados.valor_compra !== undefined) dados.valor_compra = dados.valor_compra != null ? Number(dados.valor_compra) : null;
     Object.assign(p, dados);
     return this.produtoRepo.save(p);
   }
@@ -89,16 +92,23 @@ export class EstoqueService {
     quantidade: number,
     observacao?: string,
     usuarioNome?: string,
+    precoPago?: number,
   ): Promise<{ produto: Produto; movimento: MovimentoEstoque }> {
     const p = await this.produtoRepo.findOneBy({ id });
     if (!p) throw new NotFoundException('Produto não encontrado.');
     if (quantidade <= 0) throw new BadRequestException('Quantidade deve ser maior que zero.');
 
     p.quantidade_atual = Number(p.quantidade_atual) + Number(quantidade);
+    // Atualiza valor_compra se informado na entrada
+    if (precoPago != null) p.valor_compra = Number(precoPago);
     const produtoAtualizado = await this.produtoRepo.save(p);
 
     const mov = await this.movimentoRepo.save(
-      this.movimentoRepo.create({ produto_id: id, tipo: 'entrada', quantidade, observacao, usuario_nome: usuarioNome }),
+      this.movimentoRepo.create({
+        produto_id: id, tipo: 'entrada', quantidade, observacao,
+        usuario_nome: usuarioNome,
+        preco_pago: precoPago != null ? Number(precoPago) : null,
+      }),
     );
     this.logger.log(`➕ Entrada: +${quantidade} ${p.unidade_medida} | ${p.nome}`);
     return { produto: produtoAtualizado, movimento: mov };
@@ -146,6 +156,25 @@ export class EstoqueService {
       .take(limit);
     if (produtoId) qb.where('m.produto_id = :produtoId', { produtoId });
     return qb.getMany();
+  }
+
+  // ── Relatório de Valor ────────────────────────────────────────────────────
+
+  async relatorioValor() {
+    const produtos = await this.produtoRepo.find({ where: { ativo: true }, order: { categoria: 'ASC', nome: 'ASC' } });
+    const itens = produtos.map(p => ({
+      id: p.id,
+      nome: p.nome,
+      categoria: p.categoria,
+      unidade_medida: p.unidade_medida,
+      quantidade_atual: Number(p.quantidade_atual),
+      estoque_minimo: Number(p.estoque_minimo),
+      valor_compra: p.valor_compra != null ? Number(p.valor_compra) : null,
+      valor_total: p.valor_compra != null ? Number(p.quantidade_atual) * Number(p.valor_compra) : null,
+    }));
+    const valor_total_estoque = itens.reduce((acc, i) => acc + (i.valor_total ?? 0), 0);
+    const itens_com_preco = itens.filter(i => i.valor_compra != null).length;
+    return { itens, valor_total_estoque, itens_com_preco, total_itens: itens.length };
   }
 
   // ── Coletor (público) ────────────────────────────────────────────────────

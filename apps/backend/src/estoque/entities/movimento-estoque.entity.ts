@@ -25,6 +25,9 @@ export class MovimentoEstoque {
   @Column({ type: 'text', nullable: true })
   usuario_nome: string;
 
+  @Column({ type: 'decimal', precision: 12, scale: 2, nullable: true })
+  preco_pago: number | null;
+
   @CreateDateColumn()
   createdAt: Date;
 }

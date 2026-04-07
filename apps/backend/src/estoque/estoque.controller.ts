@@ -54,7 +54,14 @@ export class EstoqueController {
   @Roles(...ESTOQUE_ENTRADA_ROLES)
   entrada(@Param('id') id: string, @Body() body: any, @Req() req: any) {
     const nome = req.user?.nome || req.user?.email || 'Sistema';
-    return this.svc.registrarEntrada(id, Number(body.quantidade), body.observacao, nome);
+    const preco = body.preco_pago != null ? Number(body.preco_pago) : undefined;
+    return this.svc.registrarEntrada(id, Number(body.quantidade), body.observacao, nome, preco);
+  }
+
+  @Get('valor')
+  @Roles(...ESTOQUE_READ_ROLES)
+  valorEstoque() {
+    return this.svc.relatorioValor();
   }
 
   @Post('produtos/:id/baixa')

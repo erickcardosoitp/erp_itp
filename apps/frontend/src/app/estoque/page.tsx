@@ -4,27 +4,32 @@ import api from '@/services/api';
 import {
   Package, PackagePlus, PackageMinus, AlertTriangle, RefreshCw,
   Plus, Search, Edit2, Trash2, X, CheckCircle2, History,
-  ClipboardList, Link2, Tag, BarChart3,
+  ClipboardList, Link2, Tag, BarChart3, DollarSign, ShoppingCart, Calculator,
 } from 'lucide-react';
 
 type Produto = {
   id: string; nome: string; categoria: string; unidade_medida: string;
   quantidade_atual: number; estoque_minimo: number; ativo: boolean;
+  valor_compra?: number | null;
 };
 type Movimento = {
   id: string; tipo: 'entrada' | 'baixa'; quantidade: number;
-  observacao?: string; usuario_nome?: string; createdAt: string;
+  observacao?: string; usuario_nome?: string; createdAt: string; preco_pago?: number | null;
   produto?: { nome: string; unidade_medida: string };
 };
 type CategoriaInsumo = { id: string; nome: string; createdAt: string };
 
-type Aba = 'visao' | 'produtos' | 'movimentos' | 'categorias';
+type Aba = 'visao' | 'produtos' | 'movimentos' | 'categorias' | 'valor';
 
 const UN_MEDIDAS = ['un', 'kg', 'g', 'L', 'mL', 'cx', 'pct', 'saco', 'par', 'fardo', 'rolo', 'ds'];
 
 function fmt(n: number | string) {
   const v = Number(n);
   return isNaN(v) ? '0' : v % 1 === 0 ? String(v) : v.toFixed(3).replace(/\.?0+$/, '');
+}
+function fmtMoeda(n: number | string | null | undefined) {
+  if (n == null) return '—';
+  return Number(n).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 function fmtData(s: string) {
   const d = new Date(s);
@@ -62,6 +67,7 @@ export default function EstoquePage() {
   const [formCategoria, setFormCategoria] = useState('');
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState('');
+  const [simulacao, setSimulacao] = useState<Record<string, string>>({}); // produto_id → qty
 
   const load = useCallback(async () => {
     setLoading(true); setLoadErro('');
@@ -106,7 +112,7 @@ export default function EstoquePage() {
 
   // ── Produto CRUD ──────────────────────────────────────────────────────────
   const abrirNovo = () => { setFormProduto({ categoria: nomCategorias[0] ?? '', unidade_medida: 'un', estoque_minimo: 0, quantidade_atual: 0 }); setErro(''); setModalProduto({ aberto: true, editando: null }); };
-  const abrirEditar = (p: Produto) => { setFormProduto({ nome: p.nome, categoria: p.categoria, unidade_medida: p.unidade_medida, estoque_minimo: p.estoque_minimo, quantidade_atual: p.quantidade_atual }); setErro(''); setModalProduto({ aberto: true, editando: p }); };
+  const abrirEditar = (p: Produto) => { setFormProduto({ nome: p.nome, categoria: p.categoria, unidade_medida: p.unidade_medida, estoque_minimo: p.estoque_minimo, quantidade_atual: p.quantidade_atual, valor_compra: p.valor_compra ?? '' }); setErro(''); setModalProduto({ aberto: true, editando: p }); };
 
   const salvarProduto = async (e: React.FormEvent) => {
     e.preventDefault(); setSalvando(true); setErro('');
@@ -132,13 +138,15 @@ export default function EstoquePage() {
   };
 
   // ── Movimentos ────────────────────────────────────────────────────────────
-  const abrirMov = (tipo: 'entrada' | 'baixa', produto: Produto) => { setFormMov({ quantidade: '', observacao: '' }); setErro(''); setModalMov({ aberto: true, tipo, produto }); };
+  const abrirMov = (tipo: 'entrada' | 'baixa', produto: Produto) => { setFormMov({ quantidade: '', observacao: '', preco_pago: '' }); setErro(''); setModalMov({ aberto: true, tipo, produto }); };
 
   const salvarMov = async (e: React.FormEvent) => {
     e.preventDefault(); setSalvando(true); setErro('');
     if (!modalMov.produto) return;
     try {
-      await api.post(`/estoque/produtos/${modalMov.produto.id}/${modalMov.tipo}`, { quantidade: Number(formMov.quantidade), observacao: formMov.observacao });
+      const body: any = { quantidade: Number(formMov.quantidade), observacao: formMov.observacao };
+      if (modalMov.tipo === 'entrada' && formMov.preco_pago) body.preco_pago = Number(formMov.preco_pago);
+      await api.post(`/estoque/produtos/${modalMov.produto.id}/${modalMov.tipo}`, body);
       setModalMov({ aberto: false, tipo: 'entrada', produto: null }); load();
     } catch (err: any) {
       const status = err.response?.status;
@@ -251,6 +259,7 @@ export default function EstoquePage() {
             { id: 'produtos', label: 'Produtos', icon: <Package size={13} /> },
             { id: 'movimentos', label: 'Movimentos', icon: <History size={13} /> },
             { id: 'categorias', label: 'Categorias', icon: <Tag size={13} /> },
+            { id: 'valor', label: 'Valor & Simulação', icon: <DollarSign size={13} /> },
           ] as { id: Aba; label: string; icon: React.ReactNode }[]).map(t => (
             <button key={t.id} onClick={() => setAba(t.id)}
               className={`flex items-center gap-1.5 px-4 py-2 rounded-xl font-black text-[11px] uppercase tracking-widest transition-all ${aba === t.id ? 'bg-green-600 text-white shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'}`}>
@@ -477,6 +486,110 @@ export default function EstoquePage() {
           </div>
         )}
 
+        {/* ── ABA: VALOR & SIMULAÇÃO ───────────────────────────────────────── */}
+        {aba === 'valor' && (() => {
+          const prodAtivos = produtos.filter(p => p.ativo);
+          const comPreco = prodAtivos.filter(p => p.valor_compra != null);
+          const valorTotal = comPreco.reduce((acc, p) => acc + Number(p.quantidade_atual) * Number(p.valor_compra!), 0);
+
+          // Simulação
+          const totalSimulacao = prodAtivos.reduce((acc, p) => {
+            const qty = Number(simulacao[p.id] || 0);
+            const preco = Number(p.valor_compra || 0);
+            return acc + qty * preco;
+          }, 0);
+
+          return (
+            <div className="space-y-6">
+              {/* KPIs de valor */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl p-5 flex items-center gap-4">
+                  <div className="bg-emerald-600 p-3 rounded-xl text-white"><DollarSign size={18} /></div>
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Valor Total em Estoque</p>
+                    <p className="text-xl font-black text-slate-800 dark:text-slate-100 tracking-tighter">{fmtMoeda(valorTotal)}</p>
+                    <p className="text-[9px] text-slate-400">{comPreco.length} de {prodAtivos.length} itens com preço</p>
+                  </div>
+                </div>
+                <div className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl p-5 flex items-center gap-4">
+                  <div className="bg-blue-600 p-3 rounded-xl text-white"><ShoppingCart size={18} /></div>
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total da Simulação</p>
+                    <p className="text-xl font-black text-slate-800 dark:text-slate-100 tracking-tighter">{fmtMoeda(totalSimulacao)}</p>
+                    <p className="text-[9px] text-slate-400">Preencha as qtds abaixo</p>
+                  </div>
+                </div>
+                <div className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl p-5 flex items-center gap-4">
+                  <div className="bg-purple-600 p-3 rounded-xl text-white"><Calculator size={18} /></div>
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Sem Preço Cadastrado</p>
+                    <p className="text-xl font-black text-slate-800 dark:text-slate-100 tracking-tighter">{prodAtivos.length - comPreco.length}</p>
+                    <p className="text-[9px] text-slate-400">itens sem valor de compra</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Tabela de valor + simulação */}
+              <div className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl overflow-hidden">
+                <div className="px-5 py-3 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Produtos · Valor e Simulação de Compra</p>
+                  <button onClick={() => setSimulacao({})} className="text-[10px] font-black uppercase text-slate-400 hover:text-red-500 transition-colors">Limpar simulação</button>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="bg-slate-50 dark:bg-slate-700/40">
+                        {['Produto', 'Categoria', 'Qtd Atual', 'Valor Unit. Compra', 'Valor em Estoque', 'Simular Compra (qtd)', 'Custo Simulado'].map(h => (
+                          <th key={h} className="px-4 py-3 text-left font-black text-[10px] uppercase tracking-widest text-slate-500 dark:text-slate-400">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50 dark:divide-slate-700/50">
+                      {prodAtivos.length === 0 ? (
+                        <tr><td colSpan={7} className="text-center py-12 text-slate-400 text-xs font-bold">Nenhum produto ativo.</td></tr>
+                      ) : prodAtivos.map(p => {
+                        const valorEstoque = p.valor_compra != null ? Number(p.quantidade_atual) * Number(p.valor_compra) : null;
+                        const qtdSim = Number(simulacao[p.id] || 0);
+                        const custoSim = p.valor_compra != null ? qtdSim * Number(p.valor_compra) : null;
+                        return (
+                          <tr key={p.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-700/20 transition-colors">
+                            <td className="px-4 py-3 font-bold text-sm text-slate-800 dark:text-slate-200">{p.nome}</td>
+                            <td className="px-4 py-3 text-[11px] text-slate-500">{p.categoria}</td>
+                            <td className="px-4 py-3 font-mono font-black text-sm text-slate-700 dark:text-slate-300">{fmt(p.quantidade_atual)} {p.unidade_medida}</td>
+                            <td className="px-4 py-3 font-mono text-sm text-emerald-700 dark:text-emerald-400 font-black">{fmtMoeda(p.valor_compra)}</td>
+                            <td className="px-4 py-3 font-mono text-sm font-black text-slate-800 dark:text-slate-100">{fmtMoeda(valorEstoque)}</td>
+                            <td className="px-4 py-3">
+                              <input
+                                type="number" min="0" step="0.001"
+                                value={simulacao[p.id] ?? ''}
+                                onChange={e => setSimulacao(prev => ({ ...prev, [p.id]: e.target.value }))}
+                                placeholder="0"
+                                className="w-24 border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg px-2 py-1 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-400"
+                              />
+                            </td>
+                            <td className="px-4 py-3 font-mono text-sm font-black text-blue-700 dark:text-blue-400">
+                              {custoSim != null && qtdSim > 0 ? fmtMoeda(custoSim) : <span className="text-slate-300">—</span>}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    {totalSimulacao > 0 && (
+                      <tfoot>
+                        <tr className="bg-blue-50 dark:bg-blue-900/20 border-t-2 border-blue-200 dark:border-blue-700">
+                          <td colSpan={6} className="px-4 py-3 font-black text-sm text-blue-700 dark:text-blue-300 text-right uppercase tracking-widest">Total da Compra Simulada</td>
+                          <td className="px-4 py-3 font-black text-lg text-blue-700 dark:text-blue-300">{fmtMoeda(totalSimulacao)}</td>
+                        </tr>
+                      </tfoot>
+                    )}
+                  </table>
+                </div>
+              </div>
+              <p className="text-[10px] text-slate-400 text-center">* Valor de compra é configurado ao criar/editar produto ou ao registrar uma entrada com preço pago.</p>
+            </div>
+          );
+        })()}
+
       </div>
 
       {/* MODAL: Criar / Editar Produto */}
@@ -518,6 +631,7 @@ export default function EstoquePage() {
               {!modalProduto.editando && (
                 <FInput label="Quantidade Inicial" type="number" step="0.001" value={String(formProduto.quantidade_atual ?? 0)} onChange={v => setFormProduto((p: any) => ({ ...p, quantidade_atual: v }))} />
               )}
+              <FInput label="Valor de Compra (R$) — opcional" type="number" step="0.01" value={String(formProduto.valor_compra ?? '')} onChange={v => setFormProduto((p: any) => ({ ...p, valor_compra: v }))} placeholder="0,00" />
               <button type="submit" disabled={salvando}
                 className="w-full py-2.5 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white font-black text-xs uppercase tracking-widest rounded-xl transition-colors flex items-center justify-center gap-2">
                 {salvando ? <><RefreshCw size={13} className="animate-spin" /> Salvando...</> : <><CheckCircle2 size={13} /> {modalProduto.editando ? 'Salvar' : 'Criar Produto'}</>}
@@ -551,6 +665,9 @@ export default function EstoquePage() {
                 )}
               </div>
               <FInput label={`Quantidade (${modalMov.produto.unidade_medida}) *`} type="number" step="0.001" value={formMov.quantidade} onChange={v => setFormMov((p: any) => ({ ...p, quantidade: v }))} required placeholder="0" />
+              {modalMov.tipo === 'entrada' && (
+                <FInput label="Preço pago por unidade (R$) — opcional" type="number" step="0.01" value={formMov.preco_pago ?? ''} onChange={v => setFormMov((p: any) => ({ ...p, preco_pago: v }))} placeholder="0,00" />
+              )}
               <FInput label="Observação" value={formMov.observacao} onChange={v => setFormMov((p: any) => ({ ...p, observacao: v }))} placeholder="Opcional" />
               <button type="submit" disabled={salvando}
                 className={`w-full py-2.5 disabled:opacity-60 text-white font-black text-xs uppercase tracking-widest rounded-xl transition-colors flex items-center justify-center gap-2 ${modalMov.tipo === 'entrada' ? 'bg-green-600 hover:bg-green-700' : 'bg-orange-500 hover:bg-orange-600'}`}>

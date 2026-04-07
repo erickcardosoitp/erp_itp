@@ -424,6 +424,17 @@ export class AppModule implements OnModuleInit {
       `);
       this.logger.log('✅ Coluna grade_horaria.nome_turma aplicada (IF NOT EXISTS)');
 
+      // ── Colunas de valor/preço no estoque ────────────────────────────────
+      await this.dataSource.query(`
+        ALTER TABLE IF EXISTS estoque_produtos
+          ADD COLUMN IF NOT EXISTS valor_compra NUMERIC(12,2)
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE IF EXISTS estoque_movimentos
+          ADD COLUMN IF NOT EXISTS preco_pago NUMERIC(12,2)
+      `);
+      this.logger.log('✅ Colunas valor_compra/preco_pago aplicadas (IF NOT EXISTS)');
+
     } catch (err: any) {
       this.logger.error(`❌ Erro nas migrations automáticas: ${err.message}`);
     }
