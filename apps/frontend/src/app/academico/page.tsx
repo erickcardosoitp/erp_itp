@@ -404,7 +404,7 @@ function GradeTab({ podeEditar, turmas }: { podeEditar: boolean; turmas: Turma[]
                           draggable={podeEditar}
                           onDragStart={() => setDragCard(card)}
                           onDragEnd={() => setDragCard(null)}
-                          className="absolute rounded-xl text-white shadow-md group/card overflow-hidden z-10 border border-white/20"
+                          className="absolute rounded-xl text-white shadow-md group/card overflow-hidden z-10 border border-white/20 hover:z-50 hover:shadow-2xl hover:scale-[1.04] hover:-translate-y-0.5 transition-all duration-150"
                           style={{ top, height, left: '2px', right: '2px', backgroundColor: card.cor || '#7c3aed', cursor: podeEditar ? 'grab' : 'default' }}>
                           {podeEditar && (
                             <button onClick={() => handleDeletar(card.id)}
