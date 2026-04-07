@@ -21,7 +21,7 @@ export class PesquisasService {
 
   async npsAtual(): Promise<{ nps: number | null; total_respostas: number; pesquisa_titulo?: string }> {
     const pesquisa = await this.pesquisaRepo.findOne({
-      where: { tipo: 'Interna', categoria: 'Academico' } as any,
+      where: { categoria: 'Academico' } as any,
       order: { created_at: 'DESC' },
     });
     if (!pesquisa) return { nps: null, total_respostas: 0 };

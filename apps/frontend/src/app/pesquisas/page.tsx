@@ -27,7 +27,7 @@ const TIPOS = ['Academica', 'Interna', 'Programa'];
 const TIPO_LABELS: Record<string, string> = { Academica: 'Acadêmica', Interna: 'Interna', Programa: 'Programa' };
 const CATEGORIAS = ['Academico', 'Financeiro', 'Estoque', 'Matriculas', 'Institucional', 'Operacional'];
 const CAT_LABELS: Record<string, string> = { Academico: 'Acadêmico', Financeiro: 'Financeiro', Estoque: 'Estoque', Matriculas: 'Matrículas', Institucional: 'Institucional', Operacional: 'Operacional' };
-const EXTERNAL_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://itp.institutotiapretinha.org';
+const EXTERNAL_URL = 'https://itp.institutotiapretinha.org';
 
 function gerarId() { return Math.random().toString(36).substring(2, 10); }
 

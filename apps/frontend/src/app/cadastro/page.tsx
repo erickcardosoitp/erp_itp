@@ -2041,7 +2041,7 @@ interface PqItem {
 }
 interface PqStat { id: string; texto: string; tipo: string; media?: number; total_respostas: number; distribuicao?: { nota: number; total: number }[]; textos?: string[]; }
 
-const EXTERNAL_URL_CAD = process.env.NEXT_PUBLIC_APP_URL || 'https://itp.institutotiapretinha.org';
+const EXTERNAL_URL_CAD = 'https://itp.institutotiapretinha.org';
 
 function CopiarLinkCad({ link }: { link: string }) {
   const [copiado, setCopiado] = useState(false);
