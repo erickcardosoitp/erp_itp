@@ -2170,7 +2170,7 @@ function PesquisasTab({ onCount }: { onCount: (n: number) => void }) {
                   <option value="nota">⭐ Nota</option>
                   <option value="texto">✏ Texto</option>
                 </select>
-                {perguntas.length > 1 && <button type="button" onClick={() => setPerguntas(p => p.filter(q => q.id !== p.id))} className="text-red-400 hover:text-red-600 mt-2"><X size={13}/></button>}
+                {perguntas.length > 1 && <button type="button" onClick={() => { const pid = p.id; setPerguntas(prev => prev.filter(q => q.id !== pid)); }} className="text-red-400 hover:text-red-600 mt-2"><X size={13}/></button>}
               </div>
             ))}
           </div>
