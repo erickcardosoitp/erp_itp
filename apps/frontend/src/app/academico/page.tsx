@@ -61,8 +61,10 @@ const HORARIOS: Array<{ label: string; value?: string; lanche?: boolean }> = [
 const GRUPOS_EDITOR = ['ADMIN', 'PRT', 'VP', 'DRT', 'DRT ADJ'];
 
 const CORES_CARD = [
-  '#7c3aed', '#0891b2', '#16a34a', '#d97706',
-  '#dc2626', '#db2777', '#0284c7', '#059669',
+  '#7c3aed', '#6d28d9', '#4f46e5', '#0284c7',
+  '#0891b2', '#0d9488', '#059669', '#16a34a',
+  '#65a30d', '#d97706', '#ea580c', '#dc2626',
+  '#db2777', '#9333ea', '#475569', '#1e293b',
 ];
 
 const TIPOS_DIARIO = ['Avaliação', 'Presença', 'Incidente', 'Observação', 'Comunicado'];
@@ -1690,38 +1692,24 @@ function TurmasTab({ cursos, professores, alunos }: { cursos: Curso[]; professor
         </Modal>
       )}
 
-      {/* ── Modal: Atribuir Professor (usuários grupo Professor) ──────────── */}
+      {/* ── Modal: Atribuir Professor ──────────── */}
       {showAtribuirProf && turmaAtribuir && (
         <Modal title={`Atribuir Professor — ${turmaAtribuir.nome}`} onClose={() => setShowAtribuirProf(false)}>
           <div className="space-y-4">
-            {usuariosProfessores.length === 0 && professores.length === 0 ? (
-              <p className="text-sm text-slate-400 text-center py-4">Nenhum professor encontrado.<br/>Cadastre usuários no grupo &quot;Professor&quot;.</p>
+            {professores.filter(p => p.ativo !== false).length === 0 ? (
+              <p className="text-sm text-slate-400 text-center py-4">Nenhum professor cadastrado.<br/>Cadastre professores no módulo acadêmico antes de atribuir.</p>
             ) : (
               <>
-                {usuariosProfessores.length > 0 && (
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black uppercase text-slate-500">Professores (Sistema)</label>
-                    <select value={profSelecionadoId} onChange={e => setProfSelecionadoId(e.target.value)}
-                      className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white">
-                      <option value="">— Nenhum —</option>
-                      {usuariosProfessores.map(u => (
-                        <option key={u.id} value={u.id}>{u.nome}{u.email ? ` (${u.email})` : ''}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-                {professores.length > 0 && (
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black uppercase text-slate-500">Professores (Cadastro Acadêmico)</label>
-                    <select value={profSelecionadoId} onChange={e => setProfSelecionadoId(e.target.value)}
-                      className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white">
-                      <option value="">— Nenhum —</option>
-                      {professores.filter(p => p.ativo !== false).map(p => (
-                        <option key={p.id} value={p.id}>{p.nome}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase text-slate-500">Professor</label>
+                  <select value={profSelecionadoId} onChange={e => setProfSelecionadoId(e.target.value)}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white">
+                    <option value="">— Nenhum —</option>
+                    {professores.filter(p => p.ativo !== false).map(p => (
+                      <option key={p.id} value={p.id}>{p.nome}</option>
+                    ))}
+                  </select>
+                </div>
                 {erroAtribuir && (
                   <div className="bg-red-50 border border-red-200 text-red-700 text-[11px] font-bold rounded-xl px-4 py-2.5">⚠ {erroAtribuir}</div>
                 )}

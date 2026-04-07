@@ -161,6 +161,10 @@ export class AcademicoService {
     // Sanitize: empty string em campos UUID deve virar null (evita erro no PostgreSQL)
     if (dto.professor_id === '') (dto as any).professor_id = null;
     if (dto.curso_id === '') (dto as any).curso_id = null;
+    if (dto.professor_id) {
+      const professor = await this.professorRepo.findOneBy({ id: dto.professor_id });
+      if (!professor) throw new NotFoundException('Professor não encontrado na tabela de professores. Cadastre o professor no módulo acadêmico antes de atribuí-lo a uma turma.');
+    }
     await this.turmaRepo.update(id, dto);
     return this.turmaRepo.findOneByOrFail({ id });
   }
