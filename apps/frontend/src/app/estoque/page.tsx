@@ -4,7 +4,7 @@ import api from '@/services/api';
 import {
   Package, PackagePlus, PackageMinus, AlertTriangle, RefreshCw,
   Plus, Search, Edit2, Trash2, X, CheckCircle2, History,
-  ClipboardList, Link2, Tag, BarChart3, DollarSign, ShoppingCart, Calculator,
+  ClipboardList, Link2, Tag, BarChart3, DollarSign, ShoppingCart, Calculator, Printer,
 } from 'lucide-react';
 
 type Produto = {
@@ -68,6 +68,8 @@ export default function EstoquePage() {
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState('');
   const [simulacao, setSimulacao] = useState<Record<string, string>>({}); // produto_id → qty
+  const [buscaCotacao, setBuscaCotacao] = useState('');
+  const [cotacaoSelecionados, setCotacaoSelecionados] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     setLoading(true); setLoadErro('');
@@ -259,7 +261,7 @@ export default function EstoquePage() {
             { id: 'produtos', label: 'Produtos', icon: <Package size={13} /> },
             { id: 'movimentos', label: 'Movimentos', icon: <History size={13} /> },
             { id: 'categorias', label: 'Categorias', icon: <Tag size={13} /> },
-            { id: 'valor', label: 'Valor & Simulação', icon: <DollarSign size={13} /> },
+            { id: 'valor', label: 'Cotação', icon: <DollarSign size={13} /> },
           ] as { id: Aba; label: string; icon: React.ReactNode }[]).map(t => (
             <button key={t.id} onClick={() => setAba(t.id)}
               className={`flex items-center gap-1.5 px-4 py-2 rounded-xl font-black text-[11px] uppercase tracking-widest transition-all ${aba === t.id ? 'bg-green-600 text-white shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'}`}>
@@ -486,81 +488,153 @@ export default function EstoquePage() {
           </div>
         )}
 
-        {/* ── ABA: VALOR & SIMULAÇÃO ───────────────────────────────────────── */}
+        {/* ── ABA: COTAÇÃO ────────────────────────────────────────────────── */}
         {aba === 'valor' && (() => {
           const prodAtivos = produtos.filter(p => p.ativo);
           const comPreco = prodAtivos.filter(p => p.valor_compra != null);
           const valorTotal = comPreco.reduce((acc, p) => acc + Number(p.quantidade_atual) * Number(p.valor_compra!), 0);
 
-          // Simulação
-          const totalSimulacao = prodAtivos.reduce((acc, p) => {
-            const qty = Number(simulacao[p.id] || 0);
-            const preco = Number(p.valor_compra || 0);
-            return acc + qty * preco;
-          }, 0);
+          const prodFiltrados = prodAtivos.filter(p =>
+            !buscaCotacao || p.nome.toLowerCase().includes(buscaCotacao.toLowerCase()) || p.categoria.toLowerCase().includes(buscaCotacao.toLowerCase())
+          );
+
+          const totalCotacao = prodFiltrados
+            .filter(p => cotacaoSelecionados.size === 0 || cotacaoSelecionados.has(p.id))
+            .reduce((acc, p) => {
+              const qty = Number(simulacao[p.id] || 0);
+              return acc + qty * Number(p.valor_compra || 0);
+            }, 0);
+
+          const toggleSelecionado = (id: string) => {
+            setCotacaoSelecionados(prev => {
+              const next = new Set(prev);
+              next.has(id) ? next.delete(id) : next.add(id);
+              return next;
+            });
+          };
+
+          const selecionarTodos = () => {
+            if (cotacaoSelecionados.size === prodFiltrados.length) {
+              setCotacaoSelecionados(new Set());
+            } else {
+              setCotacaoSelecionados(new Set(prodFiltrados.map(p => p.id)));
+            }
+          };
+
+          const imprimirCotacao = () => {
+            const itens = prodFiltrados.filter(p => cotacaoSelecionados.size === 0 || cotacaoSelecionados.has(p.id));
+            const totalImp = itens.reduce((acc, p) => {
+              const qty = Number(simulacao[p.id] || 0);
+              return acc + qty * Number(p.valor_compra || 0);
+            }, 0);
+            const linhas = itens.map(p => {
+              const qty = Number(simulacao[p.id] || 0);
+              const custo = p.valor_compra != null && qty > 0 ? (qty * Number(p.valor_compra)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—';
+              return `<tr>
+                <td>${p.nome}</td><td>${p.categoria}</td>
+                <td>${fmt(p.quantidade_atual)} ${p.unidade_medida}</td>
+                <td>${p.valor_compra != null ? Number(p.valor_compra).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—'}</td>
+                <td>${qty > 0 ? fmt(qty) : '—'}</td>
+                <td>${custo}</td>
+              </tr>`;
+            }).join('');
+            const html = `<!DOCTYPE html><html><head><title>Cotação — ITP</title>
+<style>body{font-family:Arial,sans-serif;font-size:12px;padding:24px}h1{font-size:16px;margin-bottom:4px}p.sub{color:#666;font-size:11px;margin-bottom:16px}
+table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:6px 10px;text-align:left}th{background:#f0f0f0;font-weight:700;font-size:11px;text-transform:uppercase}
+.tot td{font-weight:700;background:#eff6ff;font-size:13px}</style></head>
+<body><h1>Cotação de Compra</h1><p class="sub">Instituto Tia Pretinha · Gerado em ${new Date().toLocaleString('pt-BR')}</p>
+<table><thead><tr><th>Produto</th><th>Categoria</th><th>Qtd Atual</th><th>Custo Unitário</th><th>Qtd a Comprar</th><th>Custo Total</th></tr></thead>
+<tbody>${linhas}</tbody>${totalImp > 0 ? `<tfoot><tr class="tot"><td colspan="5" style="text-align:right">TOTAL DA COTAÇÃO</td><td>${totalImp.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td></tr></tfoot>` : ''}
+</table></body></html>`;
+            const win = window.open('', '_blank');
+            if (win) { win.document.write(html); win.document.close(); win.print(); }
+          };
 
           return (
             <div className="space-y-6">
-              {/* KPIs de valor */}
+              {/* KPIs */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl p-5 flex items-center gap-4">
                   <div className="bg-emerald-600 p-3 rounded-xl text-white"><DollarSign size={18} /></div>
                   <div>
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Valor Total em Estoque</p>
                     <p className="text-xl font-black text-slate-800 dark:text-slate-100 tracking-tighter">{fmtMoeda(valorTotal)}</p>
-                    <p className="text-[9px] text-slate-400">{comPreco.length} de {prodAtivos.length} itens com preço</p>
+                    <p className="text-[9px] text-slate-400">{comPreco.length} de {prodAtivos.length} itens com custo</p>
                   </div>
                 </div>
                 <div className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl p-5 flex items-center gap-4">
                   <div className="bg-blue-600 p-3 rounded-xl text-white"><ShoppingCart size={18} /></div>
                   <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total da Simulação</p>
-                    <p className="text-xl font-black text-slate-800 dark:text-slate-100 tracking-tighter">{fmtMoeda(totalSimulacao)}</p>
-                    <p className="text-[9px] text-slate-400">Preencha as qtds abaixo</p>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total da Cotação</p>
+                    <p className="text-xl font-black text-slate-800 dark:text-slate-100 tracking-tighter">{fmtMoeda(totalCotacao)}</p>
+                    <p className="text-[9px] text-slate-400">{cotacaoSelecionados.size > 0 ? `${cotacaoSelecionados.size} itens selecionados` : 'Preencha as qtds abaixo'}</p>
                   </div>
                 </div>
                 <div className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl p-5 flex items-center gap-4">
                   <div className="bg-purple-600 p-3 rounded-xl text-white"><Calculator size={18} /></div>
                   <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Sem Preço Cadastrado</p>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Sem Custo Cadastrado</p>
                     <p className="text-xl font-black text-slate-800 dark:text-slate-100 tracking-tighter">{prodAtivos.length - comPreco.length}</p>
-                    <p className="text-[9px] text-slate-400">itens sem valor de compra</p>
+                    <p className="text-[9px] text-slate-400">itens sem custo unitário</p>
                   </div>
                 </div>
               </div>
 
-              {/* Tabela de valor + simulação */}
+              {/* Tabela de cotação */}
               <div className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl overflow-hidden">
-                <div className="px-5 py-3 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Produtos · Valor e Simulação de Compra</p>
-                  <button onClick={() => setSimulacao({})} className="text-[10px] font-black uppercase text-slate-400 hover:text-red-500 transition-colors">Limpar simulação</button>
+                <div className="px-5 py-3 border-b border-slate-100 dark:border-slate-700 flex flex-wrap items-center gap-3">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex-1">Cotação de Compra</p>
+                  <div className="relative">
+                    <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input value={buscaCotacao} onChange={e => setBuscaCotacao(e.target.value)} placeholder="Buscar produto..."
+                      className="pl-7 pr-3 py-1.5 border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-400 w-40" />
+                  </div>
+                  <button onClick={selecionarTodos}
+                    className="text-[9px] font-black uppercase text-slate-500 hover:text-blue-600 border border-slate-200 dark:border-slate-600 rounded-lg px-2.5 py-1.5 transition-colors">
+                    {cotacaoSelecionados.size === prodFiltrados.length && prodFiltrados.length > 0 ? 'Limpar seleção' : 'Selecionar todos'}
+                  </button>
+                  <button onClick={() => setSimulacao({})}
+                    className="text-[9px] font-black uppercase text-slate-400 hover:text-red-500 border border-slate-200 dark:border-slate-600 rounded-lg px-2.5 py-1.5 transition-colors">
+                    Limpar qtds
+                  </button>
+                  <button onClick={imprimirCotacao}
+                    className="flex items-center gap-1.5 text-[9px] font-black uppercase bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-3 py-1.5 transition-colors">
+                    <Printer size={11}/> Imprimir / PDF
+                  </button>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
                       <tr className="bg-slate-50 dark:bg-slate-700/40">
-                        {['Produto', 'Categoria', 'Qtd Atual', 'Valor Unit. Compra', 'Valor em Estoque', 'Simular Compra (qtd)', 'Custo Simulado'].map(h => (
+                        <th className="px-4 py-3 w-8">
+                          <input type="checkbox" checked={cotacaoSelecionados.size === prodFiltrados.length && prodFiltrados.length > 0}
+                            onChange={selecionarTodos} className="accent-blue-600 w-3.5 h-3.5" />
+                        </th>
+                        {['Produto', 'Categoria', 'Qtd Atual', 'Custo Unitário', 'Valor em Estoque', 'Qtd a Comprar', 'Custo Total'].map(h => (
                           <th key={h} className="px-4 py-3 text-left font-black text-[10px] uppercase tracking-widest text-slate-500 dark:text-slate-400">{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50 dark:divide-slate-700/50">
-                      {prodAtivos.length === 0 ? (
-                        <tr><td colSpan={7} className="text-center py-12 text-slate-400 text-xs font-bold">Nenhum produto ativo.</td></tr>
-                      ) : prodAtivos.map(p => {
+                      {prodFiltrados.length === 0 ? (
+                        <tr><td colSpan={8} className="text-center py-12 text-slate-400 text-xs font-bold">Nenhum produto encontrado.</td></tr>
+                      ) : prodFiltrados.map(p => {
                         const valorEstoque = p.valor_compra != null ? Number(p.quantidade_atual) * Number(p.valor_compra) : null;
                         const qtdSim = Number(simulacao[p.id] || 0);
                         const custoSim = p.valor_compra != null ? qtdSim * Number(p.valor_compra) : null;
+                        const selecionado = cotacaoSelecionados.has(p.id);
                         return (
-                          <tr key={p.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-700/20 transition-colors">
+                          <tr key={p.id} className={`hover:bg-slate-50/50 dark:hover:bg-slate-700/20 transition-colors ${selecionado ? 'bg-blue-50/40 dark:bg-blue-900/10' : ''}`}>
+                            <td className="px-4 py-3">
+                              <input type="checkbox" checked={selecionado} onChange={() => toggleSelecionado(p.id)} className="accent-blue-600 w-3.5 h-3.5" />
+                            </td>
                             <td className="px-4 py-3 font-bold text-sm text-slate-800 dark:text-slate-200">{p.nome}</td>
                             <td className="px-4 py-3 text-[11px] text-slate-500">{p.categoria}</td>
                             <td className="px-4 py-3 font-mono font-black text-sm text-slate-700 dark:text-slate-300">{fmt(p.quantidade_atual)} {p.unidade_medida}</td>
                             <td className="px-4 py-3 font-mono text-sm text-emerald-700 dark:text-emerald-400 font-black">{fmtMoeda(p.valor_compra)}</td>
                             <td className="px-4 py-3 font-mono text-sm font-black text-slate-800 dark:text-slate-100">{fmtMoeda(valorEstoque)}</td>
                             <td className="px-4 py-3">
-                              <input
-                                type="number" min="0" step="0.001"
+                              <input type="number" min="0" step="0.001"
                                 value={simulacao[p.id] ?? ''}
                                 onChange={e => setSimulacao(prev => ({ ...prev, [p.id]: e.target.value }))}
                                 placeholder="0"
@@ -574,18 +648,18 @@ export default function EstoquePage() {
                         );
                       })}
                     </tbody>
-                    {totalSimulacao > 0 && (
+                    {totalCotacao > 0 && (
                       <tfoot>
                         <tr className="bg-blue-50 dark:bg-blue-900/20 border-t-2 border-blue-200 dark:border-blue-700">
-                          <td colSpan={6} className="px-4 py-3 font-black text-sm text-blue-700 dark:text-blue-300 text-right uppercase tracking-widest">Total da Compra Simulada</td>
-                          <td className="px-4 py-3 font-black text-lg text-blue-700 dark:text-blue-300">{fmtMoeda(totalSimulacao)}</td>
+                          <td colSpan={7} className="px-4 py-3 font-black text-sm text-blue-700 dark:text-blue-300 text-right uppercase tracking-widest">Total da Cotação</td>
+                          <td className="px-4 py-3 font-black text-lg text-blue-700 dark:text-blue-300">{fmtMoeda(totalCotacao)}</td>
                         </tr>
                       </tfoot>
                     )}
                   </table>
                 </div>
               </div>
-              <p className="text-[10px] text-slate-400 text-center">* Valor de compra é configurado ao criar/editar produto ou ao registrar uma entrada com preço pago.</p>
+              <p className="text-[10px] text-slate-400 text-center">* Custo unitário é configurado ao criar/editar produto ou ao registrar uma entrada com preço pago.</p>
             </div>
           );
         })()}
@@ -631,7 +705,7 @@ export default function EstoquePage() {
               {!modalProduto.editando && (
                 <FInput label="Quantidade Inicial" type="number" step="0.001" value={String(formProduto.quantidade_atual ?? 0)} onChange={v => setFormProduto((p: any) => ({ ...p, quantidade_atual: v }))} />
               )}
-              <FInput label="Valor de Compra (R$) — opcional" type="number" step="0.01" value={String(formProduto.valor_compra ?? '')} onChange={v => setFormProduto((p: any) => ({ ...p, valor_compra: v }))} placeholder="0,00" />
+              <FInput label="Custo Unitário (R$) — opcional" type="number" step="0.01" value={String(formProduto.valor_compra ?? '')} onChange={v => setFormProduto((p: any) => ({ ...p, valor_compra: v }))} placeholder="0,00" />
               <button type="submit" disabled={salvando}
                 className="w-full py-2.5 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white font-black text-xs uppercase tracking-widest rounded-xl transition-colors flex items-center justify-center gap-2">
                 {salvando ? <><RefreshCw size={13} className="animate-spin" /> Salvando...</> : <><CheckCircle2 size={13} /> {modalProduto.editando ? 'Salvar' : 'Criar Produto'}</>}

@@ -29,7 +29,9 @@ export default function ClientShell({ children }: { children: React.ReactNode })
     || pathname?.startsWith('/estoque/coletor')
     || pathname?.startsWith('/esqueci-senha')
     || pathname?.startsWith('/reset-senha')
-    || pathname?.startsWith('/trocar-senha');
+    || pathname?.startsWith('/trocar-senha')
+    || pathname?.startsWith('/pesquisa')
+    || pathname?.startsWith('/documentos');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mounted, setMounted] = useState(false);

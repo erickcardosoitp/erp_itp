@@ -363,6 +363,8 @@ export class RelatoriosService {
         SELECT
           p.codigo_interno, p.nome, p.categoria, p.unidade_medida,
           p.quantidade_atual, p.estoque_minimo, p.ativo,
+          p.valor_compra,
+          ROUND(p.quantidade_atual * COALESCE(p.valor_compra, 0), 2) AS valor_em_estoque,
           CASE WHEN p.estoque_minimo > 0 AND p.quantidade_atual <= p.estoque_minimo
             THEN true ELSE false END AS critico
         FROM estoque_produtos p
@@ -383,6 +385,7 @@ export class RelatoriosService {
           p.categoria,
           COUNT(*) AS qtd_produtos,
           SUM(p.quantidade_atual) AS quantidade_total,
+          SUM(p.quantidade_atual * COALESCE(p.valor_compra, 0)) AS valor_total,
           COUNT(*) FILTER (WHERE p.quantidade_atual <= p.estoque_minimo AND p.estoque_minimo > 0) AS criticos
         FROM estoque_produtos p
         WHERE p.ativo = true
@@ -390,13 +393,15 @@ export class RelatoriosService {
       `),
     ]);
 
+    const valor_total_estoque = produtos.reduce((acc: number, p: any) => acc + Number(p.valor_em_estoque || 0), 0);
+
     return {
       produtos,
       movimentos_recentes: movimentos,
       por_categoria: porCategoria,
-      total_produtos:        produtos.length,
-      total_criticos:        produtos.filter((p: any) => p.critico).length,
-      valor_total_estoque:   0, // campo de preço não está no schema atual
+      total_produtos:     produtos.length,
+      total_criticos:     produtos.filter((p: any) => p.critico).length,
+      valor_total_estoque: Math.round(valor_total_estoque * 100) / 100,
     };
   }
 

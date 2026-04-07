@@ -624,6 +624,10 @@ function AbaEstoque() {
   const [dataIni, setDataIni] = useState(`${anoAtual}-${mesAtual}-01`);
   const [dataFim, setDataFim] = useState(`${anoAtual}-${mesAtual}-31`);
   const [carregando, setCarregando] = useState<string | null>(null);
+  const [filtroCategoria, setFiltroCategoria] = useState('');
+  const [filtroCritico, setFiltroCritico] = useState(false);
+  const [buscaProduto, setBuscaProduto] = useState('');
+  const [filtroTipoMov, setFiltroTipoMov] = useState('');
 
   const carregar = useCallback(async (tipo: string) => {
     setCarregando(tipo);
@@ -661,9 +665,19 @@ function AbaEstoque() {
           />
         </div>
         {!posicao && <EmptyRelatorio onClick={() => carregar('posicao')} loading={carregando === 'posicao'} />}
-        {posicao && (
+        {posicao && (() => {
+          const todosProds = (posicao.produtos as Record<string, unknown>[]) || [];
+          const categorias = [...new Set(todosProds.map(p => String(p.categoria)))].sort();
+          const prodsFiltrados = todosProds.filter(p => {
+            if (filtroCritico && !p.critico) return false;
+            if (filtroCategoria && p.categoria !== filtroCategoria) return false;
+            if (buscaProduto && !String(p.nome).toLowerCase().includes(buscaProduto.toLowerCase())) return false;
+            return true;
+          });
+          const valorTotal = todosProds.reduce((acc, p) => acc + Number(p.valor_em_estoque || 0), 0);
+          return (
           <div className="p-5 space-y-4">
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-4 text-center">
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Total Produtos</p>
                 <p className="text-xl font-black text-orange-500 mt-1">{String(posicao.total_produtos)}</p>
@@ -674,26 +688,51 @@ function AbaEstoque() {
               </div>
               <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-4 text-center">
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Categorias</p>
-                <p className="text-xl font-black text-slate-700 dark:text-slate-200 mt-1">{Array.isArray(posicao.por_categoria) ? String((posicao.por_categoria as unknown[]).length) : '—'}</p>
+                <p className="text-xl font-black text-slate-700 dark:text-slate-200 mt-1">{categorias.length}</p>
+              </div>
+              <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-xl p-4 text-center">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Valor em Estoque</p>
+                <p className="text-base font-black text-emerald-600 mt-1">{valorTotal > 0 ? valorTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—'}</p>
               </div>
             </div>
-            {Array.isArray(posicao.produtos) && posicao.produtos.length > 0 && (
+            {/* Filtros */}
+            <div className="flex flex-wrap gap-2 items-center">
+              <input value={buscaProduto} onChange={e => setBuscaProduto(e.target.value)} placeholder="Buscar produto..."
+                className="border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs bg-white dark:bg-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-orange-400 w-40" />
+              <select value={filtroCategoria} onChange={e => setFiltroCategoria(e.target.value)}
+                className="border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 text-xs bg-white dark:bg-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-orange-400">
+                <option value="">Todas as categorias</option>
+                {categorias.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <label className="flex items-center gap-1.5 text-xs text-slate-500 cursor-pointer">
+                <input type="checkbox" checked={filtroCritico} onChange={e => setFiltroCritico(e.target.checked)} className="accent-red-500 w-3.5 h-3.5" />
+                Apenas críticos
+              </label>
+              <span className="text-[10px] text-slate-400">{prodsFiltrados.length} de {todosProds.length} itens</span>
+            </div>
+            {prodsFiltrados.length > 0 && (
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="bg-slate-50 dark:bg-slate-800">
                       <th className="px-3 py-2 text-left font-black text-slate-500 uppercase tracking-wider">Produto</th>
+                      <th className="px-3 py-2 text-left font-black text-slate-500 uppercase tracking-wider">Categoria</th>
                       <th className="px-3 py-2 text-right font-black text-slate-500 uppercase tracking-wider">Qtd</th>
                       <th className="px-3 py-2 text-right font-black text-slate-500 uppercase tracking-wider">Mínimo</th>
+                      <th className="px-3 py-2 text-right font-black text-slate-500 uppercase tracking-wider">Custo Unit.</th>
+                      <th className="px-3 py-2 text-right font-black text-slate-500 uppercase tracking-wider">Valor Estoque</th>
                       <th className="px-3 py-2 text-center font-black text-slate-500 uppercase tracking-wider">Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                    {(posicao.produtos as Record<string, unknown>[]).map((p, i) => (
+                    {prodsFiltrados.map((p, i) => (
                       <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
                         <td className="px-3 py-2 text-slate-700 dark:text-slate-300 font-medium">{String(p.nome)}</td>
-                        <td className="px-3 py-2 text-right text-slate-600 dark:text-slate-400">{String(p.quantidade_atual)}</td>
-                        <td className="px-3 py-2 text-right text-slate-500">{String(p.estoque_minimo)}</td>
+                        <td className="px-3 py-2 text-slate-500">{String(p.categoria)}</td>
+                        <td className="px-3 py-2 text-right font-mono text-slate-600 dark:text-slate-400">{String(p.quantidade_atual)} {String(p.unidade_medida)}</td>
+                        <td className="px-3 py-2 text-right text-slate-500">{Number(p.estoque_minimo) > 0 ? String(p.estoque_minimo) : '—'}</td>
+                        <td className="px-3 py-2 text-right font-mono text-emerald-600">{p.valor_compra != null ? Number(p.valor_compra).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—'}</td>
+                        <td className="px-3 py-2 text-right font-mono font-black text-slate-700 dark:text-slate-200">{Number(p.valor_em_estoque) > 0 ? Number(p.valor_em_estoque).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—'}</td>
                         <td className="px-3 py-2 text-center">
                           {p.critico ? (
                             <span className="px-2 py-0.5 bg-red-100 text-red-600 rounded-full text-[10px] font-black uppercase">Crítico</span>
@@ -708,7 +747,8 @@ function AbaEstoque() {
               </div>
             )}
           </div>
-        )}
+          );
+        })()}
       </div>
 
       {/* ── Movimentos ── */}
@@ -734,34 +774,82 @@ function AbaEstoque() {
           </div>
         </div>
         {!movimentos && <EmptyRelatorio onClick={() => carregar('movimentos')} loading={carregando === 'movimentos'} />}
-        {movimentos && Array.isArray(movimentos.movimentos) && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="bg-slate-50 dark:bg-slate-800">
-                  <th className="px-3 py-2 text-left font-black text-slate-500 uppercase tracking-wider">Produto</th>
-                  <th className="px-3 py-2 text-center font-black text-slate-500 uppercase tracking-wider">Tipo</th>
-                  <th className="px-3 py-2 text-right font-black text-slate-500 uppercase tracking-wider">Qtd</th>
-                  <th className="px-3 py-2 text-left font-black text-slate-500 uppercase tracking-wider">Data</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {(movimentos.movimentos as Record<string, unknown>[]).slice(0, 50).map((m, i) => (
-                  <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                    <td className="px-3 py-2 text-slate-700 dark:text-slate-300">{String(m.nome ?? m.produto_id)}</td>
-                    <td className="px-3 py-2 text-center">
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
-                        m.tipo === 'entrada' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'
-                      }`}>{String(m.tipo)}</span>
-                    </td>
-                    <td className="px-3 py-2 text-right text-slate-600 dark:text-slate-400">{String(m.quantidade)}</td>
-                    <td className="px-3 py-2 text-slate-500">{new Date(String(m.data_movimento)).toLocaleDateString('pt-BR')}</td>
+        {movimentos && Array.isArray(movimentos.movimentos) && (() => {
+          const movsFiltrados = (movimentos.movimentos as Record<string, unknown>[])
+            .filter(m => !filtroTipoMov || m.tipo === filtroTipoMov);
+          const resumo = movimentos.resumo as Record<string, unknown> | undefined;
+          return (
+          <div className="p-4 space-y-3">
+            {/* KPIs movimentos */}
+            {resumo && (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-3 text-center">
+                  <p className="text-[9px] font-black text-slate-400 uppercase">Entradas</p>
+                  <p className="text-lg font-black text-green-600">{String(resumo.qtdEntradas ?? 0)}</p>
+                  <p className="text-[9px] text-slate-400">registros</p>
+                </div>
+                <div className="bg-orange-50 dark:bg-orange-900/20 rounded-xl p-3 text-center">
+                  <p className="text-[9px] font-black text-slate-400 uppercase">Baixas</p>
+                  <p className="text-lg font-black text-orange-500">{String(resumo.qtdBaixas ?? 0)}</p>
+                  <p className="text-[9px] text-slate-400">registros</p>
+                </div>
+                <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-3 text-center">
+                  <p className="text-[9px] font-black text-slate-400 uppercase">Qtd Entradas</p>
+                  <p className="text-lg font-black text-slate-700 dark:text-slate-200">{Number(resumo.totalEntradas ?? 0).toLocaleString('pt-BR')}</p>
+                </div>
+                <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-3 text-center">
+                  <p className="text-[9px] font-black text-slate-400 uppercase">Qtd Baixas</p>
+                  <p className="text-lg font-black text-slate-700 dark:text-slate-200">{Number(resumo.totalBaixas ?? 0).toLocaleString('pt-BR')}</p>
+                </div>
+              </div>
+            )}
+            {/* Filtro tipo */}
+            <div className="flex gap-2 items-center">
+              <select value={filtroTipoMov} onChange={e => setFiltroTipoMov(e.target.value)}
+                className="border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 text-xs bg-white dark:bg-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400">
+                <option value="">Todos os tipos</option>
+                <option value="entrada">Entradas</option>
+                <option value="baixa">Baixas</option>
+              </select>
+              <span className="text-[10px] text-slate-400">{movsFiltrados.length} registro{movsFiltrados.length !== 1 ? 's' : ''}</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-slate-50 dark:bg-slate-800">
+                    <th className="px-3 py-2 text-left font-black text-slate-500 uppercase tracking-wider">Produto</th>
+                    <th className="px-3 py-2 text-left font-black text-slate-500 uppercase tracking-wider">Categoria</th>
+                    <th className="px-3 py-2 text-center font-black text-slate-500 uppercase tracking-wider">Tipo</th>
+                    <th className="px-3 py-2 text-right font-black text-slate-500 uppercase tracking-wider">Qtd</th>
+                    <th className="px-3 py-2 text-left font-black text-slate-500 uppercase tracking-wider">Observação</th>
+                    <th className="px-3 py-2 text-left font-black text-slate-500 uppercase tracking-wider">Usuário</th>
+                    <th className="px-3 py-2 text-left font-black text-slate-500 uppercase tracking-wider">Data</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {movsFiltrados.length === 0 ? (
+                    <tr><td colSpan={7} className="text-center py-8 text-slate-400">Nenhum movimento no período.</td></tr>
+                  ) : movsFiltrados.map((m, i) => (
+                    <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                      <td className="px-3 py-2 text-slate-700 dark:text-slate-300 font-medium">{String(m.nome ?? m.produto_id)}</td>
+                      <td className="px-3 py-2 text-slate-500">{String(m.categoria ?? '—')}</td>
+                      <td className="px-3 py-2 text-center">
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                          m.tipo === 'entrada' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'
+                        }`}>{m.tipo === 'entrada' ? '▲ Entrada' : '▼ Baixa'}</span>
+                      </td>
+                      <td className="px-3 py-2 text-right font-mono text-slate-600 dark:text-slate-400">{String(m.quantidade)} {String(m.unidade_medida ?? '')}</td>
+                      <td className="px-3 py-2 text-slate-500 max-w-[160px] truncate">{String(m.observacao ?? '—')}</td>
+                      <td className="px-3 py-2 text-slate-500">{String(m.usuario_nome ?? '—')}</td>
+                      <td className="px-3 py-2 text-slate-500">{new Date(String(m.data_movimento)).toLocaleDateString('pt-BR')}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        )}
+          );
+        })()}
       </div>
     </div>
   );
