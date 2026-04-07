@@ -174,7 +174,7 @@ export class AcademicoService {
     return this.dataSource.query(`
       SELECT g.*, COALESCE(t.nome, g.nome_turma) AS nome_turma
       FROM grade_horaria g
-      LEFT JOIN turmas t ON t.id::text = g.turma_id
+      LEFT JOIN turmas t ON t.id = g.turma_id::uuid
       ORDER BY g.dia_semana ASC, g.horario_inicio ASC
     `);
   }
