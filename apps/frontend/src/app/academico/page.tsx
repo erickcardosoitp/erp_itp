@@ -486,15 +486,25 @@ function GradeTab({ podeEditar, turmas }: { podeEditar: boolean; turmas: Turma[]
                 options={HORARIOS.filter(h => h.value).map(h => ({ value: h.value!, label: h.label }))} required />
             </div>
             <FieldInput label="Sala (opcional)" value={form.sala} onChange={v => setForm(p => ({ ...p, sala: v }))} />
-            <div className="space-y-1">
+            <div className="space-y-1.5">
               <label className="text-[10px] font-black uppercase text-slate-500">Cor do Card</label>
-              <div className="flex gap-2 flex-wrap">
-                {CORES_CARD.map(c => (
-                  <button key={c} type="button" onClick={() => setForm(p => ({ ...p, cor: c }))}
-                    className={`w-7 h-7 rounded-lg transition-all ${form.cor === c ? 'ring-2 ring-offset-2 ring-slate-800 scale-110' : ''}`}
-                    style={{ backgroundColor: c }} />
-                ))}
+              <div className="flex items-center gap-3">
+                <input
+                  type="color"
+                  value={form.cor || '#7c3aed'}
+                  onChange={e => setForm(p => ({ ...p, cor: e.target.value }))}
+                  className="w-10 h-10 rounded-xl cursor-pointer border border-slate-200 p-0.5 bg-white"
+                  title="Escolher cor personalizada"
+                />
+                <div className="flex gap-1.5 flex-wrap">
+                  {CORES_CARD.map(c => (
+                    <button key={c} type="button" onClick={() => setForm(p => ({ ...p, cor: c }))}
+                      className={`w-6 h-6 rounded-lg transition-all ${form.cor === c ? 'ring-2 ring-offset-1 ring-slate-800 scale-110' : 'hover:scale-105'}`}
+                      style={{ backgroundColor: c }} />
+                  ))}
+                </div>
               </div>
+              <p className="text-[9px] text-slate-400">Clique no quadrado colorido para escolher qualquer cor</p>
             </div>
             {erroGrade && (
               <div className="bg-red-50 border border-red-200 text-red-700 text-[11px] font-bold rounded-xl px-4 py-2.5 uppercase tracking-wide">
@@ -1625,15 +1635,25 @@ function TurmasTab({ cursos, professores, alunos }: { cursos: Curso[]; professor
               </div>
             </div>
             <FieldInput label="Ano" value={form.ano} onChange={v => setForm(p => ({ ...p, ano: v }))} />
-            <div className="space-y-1">
+            <div className="space-y-1.5">
               <label className="text-[10px] font-black uppercase text-slate-500">Cor da Turma</label>
-              <div className="flex gap-2 flex-wrap">
-                {CORES_CARD.map(c => (
-                  <button key={c} type="button" onClick={() => setForm(p => ({ ...p, cor: c }))}
-                    className={`w-7 h-7 rounded-lg transition-all ${form.cor === c ? 'ring-2 ring-offset-2 ring-slate-800 scale-110' : ''}`}
-                    style={{ backgroundColor: c }} />
-                ))}
+              <div className="flex items-center gap-3">
+                <input
+                  type="color"
+                  value={form.cor || '#7c3aed'}
+                  onChange={e => setForm(p => ({ ...p, cor: e.target.value }))}
+                  className="w-10 h-10 rounded-xl cursor-pointer border border-slate-200 p-0.5 bg-white"
+                  title="Escolher cor personalizada"
+                />
+                <div className="flex gap-1.5 flex-wrap">
+                  {CORES_CARD.map(c => (
+                    <button key={c} type="button" onClick={() => setForm(p => ({ ...p, cor: c }))}
+                      className={`w-6 h-6 rounded-lg transition-all ${form.cor === c ? 'ring-2 ring-offset-1 ring-slate-800 scale-110' : 'hover:scale-105'}`}
+                      style={{ backgroundColor: c }} />
+                  ))}
+                </div>
               </div>
+              <p className="text-[9px] text-slate-400">Clique no quadrado colorido para escolher qualquer cor</p>
             </div>
 
             {/* ── Horários por Dia da Semana ── */}
