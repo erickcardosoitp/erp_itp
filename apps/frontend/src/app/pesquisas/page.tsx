@@ -296,7 +296,7 @@ export default function PesquisasPage() {
                           ) : s.tipo === 'texto' && s.textos ? (
                             <div className="space-y-1 max-h-32 overflow-y-auto">
                               {s.textos.map((t, i) => (
-                                <p key={i} className="text-[11px] text-slate-600 bg-white rounded-lg px-3 py-1.5 border border-slate-100">"{t}"</p>
+                                <p key={i} className="text-[11px] text-slate-600 bg-white rounded-lg px-3 py-1.5 border border-slate-100">&quot;{t}&quot;</p>
                               ))}
                             </div>
                           ) : null}
