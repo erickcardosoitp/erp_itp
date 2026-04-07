@@ -142,11 +142,6 @@ export class AcademicoService {
     const curso = await this.cursoRepo.findOneBy({ id: dto.curso_id });
     if (!curso) throw new NotFoundException('Curso não encontrado');
 
-    if (dto.professor_id) {
-      const professor = await this.professorRepo.findOneBy({ id: dto.professor_id });
-      if (!professor) throw new NotFoundException('Professor não encontrado');
-    }
-
     const codigo = await this.gerarCodigoTurma(curso.sigla);
     const turma = this.turmaRepo.create({ ...dto, codigo });
     const salva = await this.turmaRepo.save(turma);
@@ -161,10 +156,6 @@ export class AcademicoService {
     // Sanitize: empty string em campos UUID deve virar null (evita erro no PostgreSQL)
     if (dto.professor_id === '') (dto as any).professor_id = null;
     if (dto.curso_id === '') (dto as any).curso_id = null;
-    if (dto.professor_id) {
-      const professor = await this.professorRepo.findOneBy({ id: dto.professor_id });
-      if (!professor) throw new NotFoundException('Professor não encontrado na tabela de professores. Cadastre o professor no módulo acadêmico antes de atribuí-lo a uma turma.');
-    }
     await this.turmaRepo.update(id, dto);
     return this.turmaRepo.findOneByOrFail({ id });
   }
@@ -180,7 +171,12 @@ export class AcademicoService {
 
   listarGrade() {
     this.logger.log('Listando grade horária');
-    return this.gradeRepo.find({ order: { dia_semana: 'ASC', horario_inicio: 'ASC' } });
+    return this.dataSource.query(`
+      SELECT g.*, COALESCE(t.nome, g.nome_turma) AS nome_turma
+      FROM grade_horaria g
+      LEFT JOIN turmas t ON t.id::text = g.turma_id
+      ORDER BY g.dia_semana ASC, g.horario_inicio ASC
+    `);
   }
 
   async criarCardGrade(dto: Partial<GradeHoraria>) {
@@ -219,6 +215,7 @@ export class AcademicoService {
     const corCard = dto.cor || (turma as any).cor || '#7c3aed';
     const card = this.gradeRepo.create({
       ...dto,
+      nome_turma: turma.nome,
       nome_curso: nomeCurso,
       nome_professor: nomeProfessor,
       professor_id: professorId,

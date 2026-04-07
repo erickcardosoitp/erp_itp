@@ -383,6 +383,20 @@ export class AppModule implements OnModuleInit {
       `);
       this.logger.log('✅ Coluna turmas.cor aplicada (IF NOT EXISTS)');
 
+      // ── Remover FK turmas→professores (professor_id agora referencia usuarios) ──
+      await this.dataSource.query(`
+        ALTER TABLE IF EXISTS turmas
+          DROP CONSTRAINT IF EXISTS turmas_professor_id_fkey
+      `);
+      this.logger.log('✅ FK turmas_professor_id_fkey removida (IF EXISTS)');
+
+      // ── Coluna nome_turma em grade_horaria ────────────────────────────────
+      await this.dataSource.query(`
+        ALTER TABLE IF EXISTS grade_horaria
+          ADD COLUMN IF NOT EXISTS nome_turma TEXT
+      `);
+      this.logger.log('✅ Coluna grade_horaria.nome_turma aplicada (IF NOT EXISTS)');
+
     } catch (err: any) {
       this.logger.error(`❌ Erro nas migrations automáticas: ${err.message}`);
     }

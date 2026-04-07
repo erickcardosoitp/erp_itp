@@ -21,6 +21,9 @@ export class GradeHoraria {
   @Column({ name: 'nome_curso', type: 'varchar', nullable: true })
   nome_curso: string;
 
+  @Column({ name: 'nome_turma', type: 'varchar', nullable: true })
+  nome_turma: string;
+
   @Column({ name: 'professor_id', type: 'uuid', nullable: true })
   professor_id: string;
 

@@ -17,7 +17,7 @@ interface Curso { id: string; nome: string; sigla: string; status: string; perio
 interface Professor { id: string; nome: string; especialidade?: string; email?: string; ativo?: boolean; }
 interface Turma { id: string; nome: string; curso_id?: string; professor_id?: string; turno?: string; ano?: string; max_alunos?: number; ativo?: boolean; hora_inicio?: string; hora_fim?: string; cor?: string; }
 interface TurmaAlunoRecord { id: string; turma_id: string | null; aluno_id: string; status: string; created_at: string; }
-interface GradeCard { id: string; dia_semana: number; horario_inicio: string; horario_fim: string; nome_curso?: string; nome_professor?: string; turma_id?: string; sala?: string; cor?: string; }
+interface GradeCard { id: string; dia_semana: number; horario_inicio: string; horario_fim: string; nome_turma?: string; nome_curso?: string; nome_professor?: string; turma_id?: string; sala?: string; cor?: string; }
 interface DiarioEntry { id: string; tipo: string; titulo?: string; descricao?: string; aluno_id?: string; aluno_nome?: string; turma_id?: string; data: string; usuario_nome?: string; created_at: string; }
 interface Aluno {
   id: string; nome_completo: string; numero_matricula?: string; cpf?: string; celular?: string; email?: string;
@@ -301,7 +301,7 @@ function GradeTab({ podeEditar, turmas }: { podeEditar: boolean; turmas: Turma[]
         />
         <KpiGrade
           label={aulaAgora.length ? 'Em Aula Agora' : 'Próxima Aula'}
-          value={aulaAgora.length ? (aulaAgora[0].nome_curso || '–') : (proxAula?.nome_curso ?? '–')}
+          value={aulaAgora.length ? (aulaAgora[0].nome_turma || '–') : (proxAula?.nome_turma ?? '–')}
           sub={aulaAgora.length
             ? (aulaAgora[0].nome_professor || aulaAgora[0].horario_inicio?.slice(0, 5) || '')
             : proxAula ? proxAula.horario_inicio?.slice(0, 5) ?? '' : 'Nenhuma hoje'}
@@ -414,7 +414,7 @@ function GradeTab({ podeEditar, turmas }: { podeEditar: boolean; turmas: Turma[]
                           )}
                           <div className="p-1.5 h-full flex flex-col justify-between">
                             <div>
-                              <div className="text-[9px] font-black leading-tight truncate">{card.nome_curso || '–'}</div>
+                              <div className="text-[9px] font-black leading-tight truncate">{card.nome_turma || card.nome_curso || '–'}</div>
                               {height > 36 && card.nome_professor && (
                                 <div className="text-[8px] opacity-85 truncate mt-0.5">{card.nome_professor}</div>
                               )}
@@ -440,8 +440,8 @@ function GradeTab({ podeEditar, turmas }: { podeEditar: boolean; turmas: Turma[]
       {/* ── Legenda de turmas ─────────────────────────────────────────── */}
       {grade.length > 0 && (() => {
         const turmasNaGrade = [...new Map(
-          grade.filter(g => g.turma_id && g.nome_curso)
-            .map(g => [g.turma_id, { id: g.turma_id!, nome: g.nome_curso!, cor: g.cor || '#7c3aed' }])
+          grade.filter(g => g.turma_id && (g.nome_turma || g.nome_curso))
+            .map(g => [g.turma_id, { id: g.turma_id!, nome: g.nome_turma || g.nome_curso!, cor: g.cor || '#7c3aed' }])
         ).values()];
         if (!turmasNaGrade.length) return null;
         return (
@@ -1696,8 +1696,8 @@ function TurmasTab({ cursos, professores, alunos }: { cursos: Curso[]; professor
       {showAtribuirProf && turmaAtribuir && (
         <Modal title={`Atribuir Professor — ${turmaAtribuir.nome}`} onClose={() => setShowAtribuirProf(false)}>
           <div className="space-y-4">
-            {professores.filter(p => p.ativo !== false).length === 0 ? (
-              <p className="text-sm text-slate-400 text-center py-4">Nenhum professor cadastrado.<br/>Cadastre professores no módulo acadêmico antes de atribuir.</p>
+            {usuariosProfessores.length === 0 ? (
+              <p className="text-sm text-slate-400 text-center py-4">Nenhum professor encontrado.<br/>Cadastre usuários com o grupo &quot;Professor&quot; no sistema.</p>
             ) : (
               <>
                 <div className="space-y-1">
@@ -1705,8 +1705,8 @@ function TurmasTab({ cursos, professores, alunos }: { cursos: Curso[]; professor
                   <select value={profSelecionadoId} onChange={e => setProfSelecionadoId(e.target.value)}
                     className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white">
                     <option value="">— Nenhum —</option>
-                    {professores.filter(p => p.ativo !== false).map(p => (
-                      <option key={p.id} value={p.id}>{p.nome}</option>
+                    {usuariosProfessores.map(u => (
+                      <option key={u.id} value={u.id}>{u.nome}{u.email ? ` (${u.email})` : ''}</option>
                     ))}
                   </select>
                 </div>
