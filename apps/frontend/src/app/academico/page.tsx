@@ -77,18 +77,6 @@ function fmtDate(v?: string | null) {
   return isNaN(d.getTime()) ? '---' : d.toLocaleDateString('pt-BR');
 }
 
-function calcularIdade(dataNasc?: string | null): number | null {
-  if (!dataNasc) return null;
-  const s = /^\d{4}-\d{2}-\d{2}$/.test(dataNasc) ? dataNasc + 'T12:00' : dataNasc;
-  const nasc = new Date(s);
-  if (isNaN(nasc.getTime())) return null;
-  const hoje = new Date();
-  let idade = hoje.getFullYear() - nasc.getFullYear();
-  const m = hoje.getMonth() - nasc.getMonth();
-  if (m < 0 || (m === 0 && hoje.getDate() < nasc.getDate())) idade--;
-  return idade;
-}
-
 // ─── Componentes auxiliares ───────────────────────────────────────────────────
 
 function TabBtn({ id, active, set, label, Icon }: { id: string; active: string; set: (id: string) => void; label: string; Icon: any }) {
@@ -623,6 +611,7 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
       const r = await api.get(`/academico/alunos/${fichaAluno.aluno.id}/ficha`);
       setFichaAluno(r.data);
       setFichaEditando(false);
+      load(); // recarrega a lista para refletir alterações
     } catch (err: any) {
       const msg = err?.response?.data?.message || err?.message || 'Erro ao salvar.';
       setFichaEditErro(Array.isArray(msg) ? msg.join(', ') : msg);
@@ -890,7 +879,7 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
                     <span className={`text-[10px] font-black px-2 py-0.5 rounded ${fichaAluno.aluno?.ativo ? 'bg-green-50 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
                       {fichaAluno.aluno?.ativo ? 'Ativo' : 'Inativo'}
                     </span>
-                    {(() => { const idade = calcularIdade(fichaAluno.aluno?.data_nascimento); return idade != null ? <span className="text-[10px] font-black text-amber-700 bg-amber-50 px-2 py-0.5 rounded">{idade} anos</span> : null; })()}
+                    {(() => { const dn = fichaAluno.aluno?.data_nascimento; const idade = dn ? calcularIdade(dn) : 99; return idade < 99 ? <span className="text-[10px] font-black text-amber-700 bg-amber-50 px-2 py-0.5 rounded">{idade} anos</span> : null; })()}
                   </div>
                 </div>
               </div>
