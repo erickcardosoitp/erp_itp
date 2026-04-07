@@ -346,7 +346,7 @@ function AbaFinanceiro() {
             <DollarSign size={16} className="text-yellow-500" /> Relatório Contábil
           </h3>
           <AcoesRelatorio
-            tipo="fluxo_caixa"
+            tipo="contabil"
             params={{ mes, ano }}
             dados={contabil.length > 0 ? contabil : null}
             onGerar={() => carregar('contabil')}

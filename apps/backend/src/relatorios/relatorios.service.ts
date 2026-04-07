@@ -1046,6 +1046,7 @@ ${items.map(i => `<td style="background:#f8fafc;border-radius:8px;padding:14px;t
     params: Record<string, string>,
     destinatario: string,
   ): Promise<void> {
+    try {
     const now  = new Date();
     const hoje = now.toLocaleDateString('pt-BR');
     const ini  = params.data_ini || `${now.getFullYear()}-01-01`;
@@ -1091,7 +1092,7 @@ ${items.map(i => `<td style="background:#f8fafc;border-radius:8px;padding:14px;t
         corpo += '<p style="margin:16px 0 6px;font-size:11px;font-weight:700;color:#475569;text-transform:uppercase">Maiores Doadores</p>';
         corpo += this.tabelaHtml(
           ['Doador', 'Total'],
-          doad.slice(0, 10).map(d => [String(d.nome_doador || d.nome || '–'), this.moeda(Number(d.total))]),
+          doad.slice(0, 10).map(d => [String(d.nome || '–'), this.moeda(Number(d.total))]),
         );
       }
     } else if (tipo === 'alunos') {
@@ -1160,6 +1161,10 @@ ${items.map(i => `<td style="background:#f8fafc;border-radius:8px;padding:14px;t
     const html = this.htmlWrapper(titulo, corpo, tipo !== 'alunos' && tipo !== 'impacto_social' && tipo !== 'estoque' ? periodoFmt : undefined);
     await this.email.enviarGenerico(destinatario, `[ITP] ${titulo} — ${hoje}`, html);
     this.logger.log(`📧 Relatório "${titulo}" enviado para ${destinatario}`);
+    } catch (err: any) {
+      this.logger.error(`Erro ao enviar relatório "${tipo}" para ${destinatario}: ${err?.message}`);
+      throw err;
+    }
   }
 }
 
