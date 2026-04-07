@@ -412,18 +412,14 @@ function GradeTab({ podeEditar, turmas }: { podeEditar: boolean; turmas: Turma[]
                               <X size={9}/>
                             </button>
                           )}
-                          <div className="p-1.5 h-full flex flex-col justify-between">
-                            <div>
-                              <div className="text-[9px] font-black leading-tight truncate">{card.nome_turma || card.nome_curso || '–'}</div>
-                              {height > 36 && card.nome_professor && (
-                                <div className="text-[8px] opacity-85 truncate mt-0.5">{card.nome_professor}</div>
-                              )}
+                          <div className="p-1.5 h-full flex flex-col">
+                            <div className="text-[9px] font-black leading-tight truncate">{card.nome_turma || card.nome_curso || '–'}</div>
+                            <div className="text-[8px] opacity-70 font-bold mt-0.5">
+                              {card.horario_inicio?.slice(0,5)} – {card.horario_fim?.slice(0,5)}
+                              {card.sala && <span className="ml-1 opacity-80">· {card.sala}</span>}
                             </div>
-                            {height > 52 && (
-                              <div className="text-[8px] opacity-70 font-bold">
-                                {card.horario_inicio?.slice(0,5)} – {card.horario_fim?.slice(0,5)}
-                                {card.sala && <span className="ml-1 opacity-80">· {card.sala}</span>}
-                              </div>
+                            {height > 48 && card.nome_professor && (
+                              <div className="text-[8px] opacity-85 truncate mt-1">{card.nome_professor}</div>
                             )}
                           </div>
                         </div>
