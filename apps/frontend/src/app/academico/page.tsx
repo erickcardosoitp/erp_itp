@@ -531,6 +531,10 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
   const [filtroNome, setFiltroNome] = useState('');
   const [filtroCursoNome, setFiltroCursoNome] = useState('');
   const [filtroTurmaId, setFiltroTurmaId] = useState('');
+  const [filtroStatus, setFiltroStatus] = useState('');
+  const [filtroTurno, setFiltroTurno] = useState('');
+  const [filtroSexo, setFiltroSexo] = useState('');
+  const [filtroCidade, setFiltroCidade] = useState('');
   const [fichaAluno, setFichaAluno] = useState<any>(null);
   const [fichaAba, setFichaAba] = useState<'dados' | 'presenca'>('dados');
   const [dossieCandidato, setDossieCandidato] = useState<any>(null);
@@ -563,11 +567,15 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
       if (filtroNome)      params.nome     = filtroNome;
       if (filtroCursoNome) params.curso    = filtroCursoNome;
       if (filtroTurmaId)   params.turma_id = filtroTurmaId;
+      if (filtroStatus)    params.status   = filtroStatus;
+      if (filtroTurno)     params.turno    = filtroTurno;
+      if (filtroSexo)      params.sexo     = filtroSexo;
+      if (filtroCidade)    params.cidade   = filtroCidade;
       const r = await api.get('/academico/alunos', { params });
       setAlunos(r.data);
     } catch {}
     setLoading(false);
-  }, [filtroNome, filtroCursoNome, filtroTurmaId]);
+  }, [filtroNome, filtroCursoNome, filtroTurmaId, filtroStatus, filtroTurno, filtroSexo, filtroCidade]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -663,25 +671,60 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
               className="w-full pl-8 pr-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-400" />
           </div>
         </div>
-        <div className="min-w-[160px]">
+        <div className="min-w-[120px]">
+          <label className="text-[9px] font-black uppercase text-slate-400 mb-1 block">Status</label>
+          <select value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)}
+            className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white">
+            <option value="">Todos</option>
+            <option value="ativo">Ativos</option>
+            <option value="inativo">Inativos</option>
+          </select>
+        </div>
+        <div className="min-w-[140px]">
           <label className="text-[9px] font-black uppercase text-slate-400 mb-1 block">Curso</label>
           <select value={filtroCursoNome} onChange={e => { setFiltroCursoNome(e.target.value); setFiltroTurmaId(''); }}
             className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white">
-            <option value="">Todos os cursos</option>
+            <option value="">Todos</option>
             {cursos.map(c => <option key={c.id} value={c.nome}>{c.nome}</option>)}
           </select>
         </div>
         {filtroCursoNome && turmasDoCurso.length > 0 && (
-          <div className="min-w-[160px]">
+          <div className="min-w-[140px]">
             <label className="text-[9px] font-black uppercase text-slate-400 mb-1 block">Turma</label>
             <select value={filtroTurmaId} onChange={e => setFiltroTurmaId(e.target.value)}
               className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white">
-              <option value="">Todas as turmas</option>
+              <option value="">Todas</option>
               {turmasDoCurso.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
             </select>
           </div>
         )}
-        <button onClick={() => { setFiltroNome(''); setFiltroCursoNome(''); setFiltroTurmaId(''); }}
+        <div className="min-w-[120px]">
+          <label className="text-[9px] font-black uppercase text-slate-400 mb-1 block">Turno</label>
+          <select value={filtroTurno} onChange={e => setFiltroTurno(e.target.value)}
+            className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white">
+            <option value="">Todos</option>
+            <option value="Manhã">Manhã</option>
+            <option value="Tarde">Tarde</option>
+            <option value="Noite">Noite</option>
+            <option value="Integral">Integral</option>
+          </select>
+        </div>
+        <div className="min-w-[110px]">
+          <label className="text-[9px] font-black uppercase text-slate-400 mb-1 block">Sexo</label>
+          <select value={filtroSexo} onChange={e => setFiltroSexo(e.target.value)}
+            className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white">
+            <option value="">Todos</option>
+            <option value="Masculino">Masculino</option>
+            <option value="Feminino">Feminino</option>
+            <option value="Outro">Outro</option>
+          </select>
+        </div>
+        <div className="min-w-[140px]">
+          <label className="text-[9px] font-black uppercase text-slate-400 mb-1 block">Cidade</label>
+          <input value={filtroCidade} onChange={e => setFiltroCidade(e.target.value)} placeholder="Cidade..."
+            className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-400" />
+        </div>
+        <button onClick={() => { setFiltroNome(''); setFiltroCursoNome(''); setFiltroTurmaId(''); setFiltroStatus(''); setFiltroTurno(''); setFiltroSexo(''); setFiltroCidade(''); }}
           className="text-[10px] font-black uppercase text-red-400 hover:text-red-600 flex items-center gap-1">
           <X size={11}/> Limpar
         </button>
@@ -706,6 +749,7 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
                   <th className="text-left px-4 py-3">CPF</th>
                   <th className="text-left px-4 py-3">Cursos</th>
                   <th className="text-left px-4 py-3">Turno</th>
+                  <th className="text-center px-4 py-3">Status</th>
                   <th className="text-left px-4 py-3">Data Matr.</th>
                   <th className="text-center px-4 py-3">Ficha</th>
                   {podeEditar && <th className="text-center px-4 py-3">Ações</th>}
@@ -713,7 +757,7 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
               </thead>
               <tbody>
                 {alunos.map((a, i) => (
-                  <tr key={a.id} className={`border-b border-slate-50 hover:bg-purple-50/30 transition-colors ${i % 2 === 0 ? '' : 'bg-slate-50/30'}`}>
+                  <tr key={a.id} className={`border-b border-slate-50 hover:bg-purple-50/30 transition-colors ${!a.ativo ? 'opacity-60' : ''} ${i % 2 === 0 ? '' : 'bg-slate-50/30'}`}>
                     <td className="px-4 py-3">
                       <div className="font-bold text-slate-800">{a.nome_completo}</div>
                       <div className="text-[9px] text-slate-400">{a.celular || a.email || '–'}</div>
@@ -722,6 +766,11 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
                     <td className="px-4 py-3 text-slate-500">{a.cpf || '–'}</td>
                     <td className="px-4 py-3 max-w-[160px] truncate text-slate-600">{a.cursos_matriculados || '–'}</td>
                     <td className="px-4 py-3 text-slate-500">{a.turno_escolar || '–'}</td>
+                    <td className="px-4 py-3 text-center">
+                      <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase ${a.ativo ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-500'}`}>
+                        {a.ativo ? 'Ativo' : 'Inativo'}
+                      </span>
+                    </td>
                     <td className="px-4 py-3 text-slate-500">{fmtDate(a.data_matricula)}</td>
                     <td className="px-4 py-3 text-center">
                       <button onClick={() => verFicha(a.id)} disabled={fichaLoading}

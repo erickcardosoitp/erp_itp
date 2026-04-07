@@ -241,11 +241,15 @@ export class AcademicoService {
 
   async listarAlunos(filtros: any) {
     this.logger.log(`Listando alunos filtros=${JSON.stringify(filtros)}`);
-    let qb = this.alunoRepo.createQueryBuilder('a').where('a.ativo = true');
+    let qb = this.alunoRepo.createQueryBuilder('a');
+    // Filtro de status: 'ativo' | 'inativo' | ausente = todos
+    if (filtros.status === 'ativo')   qb = qb.where('a.ativo = true');
+    else if (filtros.status === 'inativo') qb = qb.where('a.ativo = false');
     if (filtros.nome)     qb = qb.andWhere('LOWER(a.nome_completo) LIKE :nome', { nome: `%${filtros.nome.toLowerCase()}%` });
     if (filtros.cpf)      qb = qb.andWhere('a.cpf LIKE :cpf', { cpf: `%${filtros.cpf.replace(/\D/g, '')}%` });
-    if (filtros.cidade)   qb = qb.andWhere('a.cidade = :cidade', { cidade: filtros.cidade });
+    if (filtros.cidade)   qb = qb.andWhere('LOWER(a.cidade) LIKE :cidade', { cidade: `%${filtros.cidade.toLowerCase()}%` });
     if (filtros.turno)    qb = qb.andWhere('a.turno_escolar = :turno', { turno: filtros.turno });
+    if (filtros.sexo)     qb = qb.andWhere('a.sexo = :sexo', { sexo: filtros.sexo });
     if (filtros.curso)    qb = qb.andWhere('LOWER(a.cursos_matriculados) LIKE :curso', { curso: `%${filtros.curso.toLowerCase()}%` });
     if (filtros.turma_id) {
       qb = qb
@@ -253,7 +257,7 @@ export class AcademicoService {
         .andWhere('ta.turma_id = :turmaId', { turmaId: filtros.turma_id })
         .andWhere('ta.status = :taStatus', { taStatus: 'ativo' });
     }
-    return qb.orderBy('a.nome_completo', 'ASC').getMany();
+    return qb.orderBy('a.ativo', 'DESC').addOrderBy('a.nome_completo', 'ASC').getMany();
   }
 
   async fichaAluno(id: string) {
