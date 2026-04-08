@@ -1,63 +1,64 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Req } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Req, UseGuards } from '@nestjs/common';
 import { PesquisasService } from './pesquisas.service';
 import { Public } from '../auth/decorators/public.decorator';
-import { Roles } from '../auth/decorators/roles.decorator';
-import { Role } from '../auth/constants/roles.enum';
-// Role.USER is the lowest role — used for endpoints any logged-in user can access
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { ModuloPermGuard } from '../auth/guards/modulo-perm.guard';
+import { ModuloPerm } from '../auth/decorators/modulo-perm.decorator';
 
 @Controller('pesquisas')
+@UseGuards(JwtAuthGuard, ModuloPermGuard)
 export class PesquisasController {
   constructor(private readonly svc: PesquisasService) {}
 
-  // ── NPS público (qualquer usuário autenticado) ────────────────────────────
+  // ── NPS público (qualquer usuário autenticado com acesso ao módulo) ───────
 
   @Get('nps')
-  @Roles(Role.USER)
+  @ModuloPerm('pesquisas', 'visualizar')
   nps() {
     return this.svc.npsAtual();
   }
 
-  // ── Endpoints protegidos (DRT / VP / ADMIN) ───────────────────────────────
+  // ── Endpoints protegidos ──────────────────────────────────────────────────
 
   @Post()
-  @Roles(Role.DRT)
+  @ModuloPerm('pesquisas', 'incluir')
   criar(@Body() dto: any, @Req() req: any) {
     const usuario = { id: req.user?.userId || req.user?.sub, nome: req.user?.nome || req.user?.email };
     return this.svc.criar(dto, usuario);
   }
 
   @Get()
-  @Roles(Role.DRT)
+  @ModuloPerm('pesquisas', 'visualizar')
   listar() {
     return this.svc.listar();
   }
 
   @Get(':id/resultados')
-  @Roles(Role.DRT)
+  @ModuloPerm('pesquisas', 'visualizar')
   resultados(@Param('id') id: string) {
     return this.svc.buscarResultados(id);
   }
 
   @Patch(':id/encerrar')
-  @Roles(Role.DRT)
+  @ModuloPerm('pesquisas', 'editar')
   encerrar(@Param('id') id: string) {
     return this.svc.encerrar(id);
   }
 
   @Patch(':id/reiniciar')
-  @Roles(Role.ADMIN)
+  @ModuloPerm('pesquisas', 'editar')
   reiniciar(@Param('id') id: string) {
     return this.svc.reiniciar(id);
   }
 
   @Patch('respostas/:id/expurgar')
-  @Roles(Role.DRT)
+  @ModuloPerm('pesquisas', 'editar')
   expurgar(@Param('id') id: string, @Body() body: { expurgado: boolean }) {
     return this.svc.expurgarResposta(id, body.expurgado ?? true);
   }
 
   @Delete(':id')
-  @Roles(Role.ADMIN)
+  @ModuloPerm('pesquisas', 'excluir')
   deletar(@Param('id') id: string) {
     return this.svc.deletar(id);
   }

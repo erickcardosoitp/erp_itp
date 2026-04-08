@@ -1,7 +1,12 @@
-import { Controller, Get, Post, Body, Query, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, BadRequestException, UseGuards } from '@nestjs/common';
 import { RelatoriosService } from './relatorios.service';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { ModuloPermGuard } from '../auth/guards/modulo-perm.guard';
+import { ModuloPerm } from '../auth/decorators/modulo-perm.decorator';
 
 @Controller('relatorios')
+@UseGuards(JwtAuthGuard, ModuloPermGuard)
+@ModuloPerm('relatorios', 'visualizar')
 export class RelatoriosController {
   constructor(private readonly svc: RelatoriosService) {}
 
@@ -217,6 +222,7 @@ export class RelatoriosController {
   // ── ENVIO POR E-MAIL ───────────────────────────────────────────────────────
 
   @Post('enviar-email')
+  @ModuloPerm('relatorios', 'incluir')
   async enviarEmail(
     @Body() body: { tipo: string; destinatario: string; params?: Record<string, string> },
   ) {

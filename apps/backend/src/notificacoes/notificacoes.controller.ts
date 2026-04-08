@@ -1,9 +1,12 @@
-import { Controller, Get, Patch, Delete, Param, Query, Req } from '@nestjs/common';
+import { Controller, Get, Patch, Delete, Param, Query, Req, UseGuards } from '@nestjs/common';
 import { NotificacoesService } from './notificacoes.service';
-import { Roles } from '../auth/decorators/roles.decorator';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { ModuloPermGuard } from '../auth/guards/modulo-perm.guard';
+import { ModuloPerm } from '../auth/decorators/modulo-perm.decorator';
 import { Role, RoleLevel } from '../auth/constants/roles.enum';
 
 @Controller('notificacoes')
+@UseGuards(JwtAuthGuard, ModuloPermGuard)
 export class NotificacoesController {
   constructor(private readonly svc: NotificacoesService) {}
 
@@ -50,7 +53,7 @@ export class NotificacoesController {
   }
 
   @Delete('manutencao/antigos')
-  @Roles(Role.ADMIN)
+  @ModuloPerm('notificacoes', 'excluir')
   limparAntigos() {
     return this.svc.limparAntigos();
   }

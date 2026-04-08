@@ -1,15 +1,16 @@
 import { Controller, Post, Get, Body, Param, Delete, Patch, UseGuards } from '@nestjs/common';
 import { GruposService } from './grupos.service';
-import { Roles } from '../auth/decorators/roles.decorator';
-import { Role } from '../auth/constants/roles.enum';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { ModuloPermGuard } from '../auth/guards/modulo-perm.guard';
+import { ModuloPerm } from '../auth/decorators/modulo-perm.decorator';
 
 @Controller('grupos')
+@UseGuards(JwtAuthGuard, ModuloPermGuard)
 export class GruposController {
   constructor(private readonly gruposService: GruposService) {}
 
-  // Criação e exclusão de grupos: somente DRT ou superior
   @Post()
-  @Roles(Role.DRT)
+  @ModuloPerm('config', 'incluir')
   async criarGrupo(@Body() body: { nome: string; permissoes: any }) {
     return await this.gruposService.criar(body.nome, body.permissoes);
   }
@@ -25,15 +26,14 @@ export class GruposController {
     return await this.gruposService.buscarPorId(id);
   }
 
-  // Edição e exclusão: somente DRT ou superior
   @Patch(':id')
-  @Roles(Role.DRT)
+  @ModuloPerm('config', 'editar')
   async atualizar(@Param('id') id: string, @Body() body: Partial<{ nome: string; grupo_permissoes: any }>) {
     return await this.gruposService.atualizar(id, body);
   }
 
   @Delete(':id')
-  @Roles(Role.DRT)
+  @ModuloPerm('config', 'excluir')
   async deletar(@Param('id') id: string) {
     return await this.gruposService.deletar(id);
   }
