@@ -1,7 +1,12 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Req } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Req, UseGuards } from '@nestjs/common';
 import { FinanceiroService } from './financeiro.service';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { Role } from '../auth/constants/roles.enum';
 
 @Controller('financeiro')
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class FinanceiroController {
   constructor(private readonly svc: FinanceiroService) {}
 
@@ -92,20 +97,25 @@ export class FinanceiroController {
   // ── MOVIMENTAÇÕES FINANCEIRAS ─────────────────────────────────────────────
 
   @Get('movimentacoes')
+  @Roles(Role.USER)
   listarMovimentacoes() { return this.svc.listarMovimentacoes(); }
 
   @Get('doacoes')
+  @Roles(Role.USER)
   listarDoacoes() { return this.svc.listarDoacoes(); }
 
   @Post('movimentacoes')
+  @Roles(Role.ASSIST)
   criarMovimentacao(@Body() dto: any, @Req() req: any) {
     const usuarioNome = req.user?.nome || req.user?.email || 'Sistema';
     return this.svc.criarMovimentacao({ ...dto, usuario_nome: usuarioNome });
   }
 
   @Patch('movimentacoes/:id')
+  @Roles(Role.ASSIST)
   editarMovimentacao(@Param('id') id: string, @Body() dto: any) { return this.svc.editarMovimentacao(id, dto); }
 
   @Delete('movimentacoes/:id')
+  @Roles(Role.DRT)
   deletarMovimentacao(@Param('id') id: string) { return this.svc.deletarMovimentacao(id); }
 }
