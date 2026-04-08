@@ -42,13 +42,15 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('Token inválido.');
     }
 
-    // Injeta os dados no objeto req.user para o RolesGuard usar
+    // Injeta os dados no objeto req.user para os guards usarem
     return {
       userId: payload.sub,
       sub: payload.sub,
       email: payload.email,
       nome: payload.nome,
       role: payload.role,
+      grupo: payload.grupo,           // nome do grupo, ex: "AUX", "ADMIN"
+      permissoes: payload.permissoes, // grupo_permissoes completo
     };
   }
 }

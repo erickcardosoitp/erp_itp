@@ -4,11 +4,13 @@ import {
   InternalServerErrorException, Headers, UnauthorizedException,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { ModuloPermGuard } from '../auth/guards/modulo-perm.guard';
+import { ModuloPerm } from '../auth/decorators/modulo-perm.decorator';
 import { Public } from '../auth/decorators/public.decorator';
 import { AcademicoService } from './academico.service';
 
 @Controller('academico')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, ModuloPermGuard)
 export class AcademicoController {
   private readonly logger = new Logger(AcademicoController.name);
   constructor(private readonly svc: AcademicoService) {}
@@ -42,7 +44,6 @@ export class AcademicoController {
     );
   }
 
-  /** Cadastro rápido de aluno via link de chamada (sem autenticação JWT). */
   @Public()
   @Post('chamada/aluno-rapido')
   async criarAlunoRapidoChamada(@Body() dto: any) {
@@ -57,7 +58,9 @@ export class AcademicoController {
   }
 
   // ── CURSOS ────────────────────────────────────────────────────────────────
+
   @Get('cursos')
+  @ModuloPerm('academico', 'visualizar')
   getCursos() { return this.svc.listarCursos(); }
 
   @Public()
@@ -65,37 +68,44 @@ export class AcademicoController {
   getCursosAtivos() { return this.svc.listarCursosAtivos(); }
 
   @Post('cursos')
+  @ModuloPerm('academico', 'incluir')
   async criarCurso(@Body() dto: any) {
     try { return await this.svc.criarCurso(dto); }
     catch (e) { this.logger.error('criarCurso falhou', (e as any)?.stack); throw e; }
   }
 
   @Patch('cursos/:id')
+  @ModuloPerm('academico', 'editar')
   async editarCurso(@Param('id') id: string, @Body() dto: any) {
     try { return await this.svc.editarCurso(id, dto); }
     catch (e) { this.logger.error('editarCurso falhou', (e as any)?.stack); throw e; }
   }
 
   @Delete('cursos/:id')
+  @ModuloPerm('academico', 'excluir')
   async deletarCurso(@Param('id') id: string) {
     try { return await this.svc.deletarCurso(id); }
     catch (e) { this.logger.error('deletarCurso falhou', (e as any)?.stack); throw e; }
   }
 
   // ── PROFESSORES ───────────────────────────────────────────────────────────
+
   @Get('professores')
+  @ModuloPerm('academico', 'visualizar')
   getProfessores() { return this.svc.listarProfessores(); }
 
   @Post('professores')
+  @ModuloPerm('academico', 'incluir')
   criarProfessor(@Body() dto: any) { return this.svc.criarProfessor(dto); }
 
   @Patch('professores/:id')
+  @ModuloPerm('academico', 'editar')
   editarProfessor(@Param('id') id: string, @Body() dto: any) { return this.svc.editarProfessor(id, dto); }
 
   @Delete('professores/:id')
+  @ModuloPerm('academico', 'excluir')
   deletarProfessor(@Param('id') id: string) { return this.svc.deletarProfessor(id); }
 
-  // ── WEBHOOK: Google Forms → Cadastro de Funcionário (rota pública) ────────
   @Public()
   @Post('professores/webhook')
   async webhookGoogleForms(
@@ -103,101 +113,114 @@ export class AcademicoController {
     @Body() payload: any,
   ) {
     const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || 'itp-forms-2026';
-    if (secret !== WEBHOOK_SECRET) {
-      throw new UnauthorizedException('Secret inválido.');
-    }
-    // O Google Apps Script já envia os campos mapeados em snake_case
-    // (nome, email, cpf, ...) — apenas repassamos para o serviço.
+    if (secret !== WEBHOOK_SECRET) throw new UnauthorizedException('Secret inválido.');
     const dto = {
-      nome:                   payload.nome,
-      email:                  payload.email,
-      cpf:                    payload.cpf,
-      data_nascimento:        payload.data_nascimento,
-      celular:                payload.celular,
-      sexo:                   payload.sexo,
-      raca_cor:               payload.raca_cor,
-      escolaridade:           payload.escolaridade,
-      cep:                    payload.cep,
-      numero_residencia:      payload.numero_residencia,
-      complemento:            payload.complemento,
-      estado:                 payload.estado,
-      telefone_emergencia_1:  payload.telefone_emergencia_1,
-      telefone_emergencia_2:  payload.telefone_emergencia_2,
-      possui_deficiencia:     payload.possui_deficiencia === true,
-      deficiencia_descricao:  payload.deficiencia_descricao,
-      possui_alergias:        payload.possui_alergias === true,
-      alergias_descricao:     payload.alergias_descricao,
-      usa_medicamentos:       payload.usa_medicamentos === true,
+      nome: payload.nome, email: payload.email, cpf: payload.cpf,
+      data_nascimento: payload.data_nascimento, celular: payload.celular,
+      sexo: payload.sexo, raca_cor: payload.raca_cor, escolaridade: payload.escolaridade,
+      cep: payload.cep, numero_residencia: payload.numero_residencia,
+      complemento: payload.complemento, estado: payload.estado,
+      telefone_emergencia_1: payload.telefone_emergencia_1,
+      telefone_emergencia_2: payload.telefone_emergencia_2,
+      possui_deficiencia: payload.possui_deficiencia === true,
+      deficiencia_descricao: payload.deficiencia_descricao,
+      possui_alergias: payload.possui_alergias === true,
+      alergias_descricao: payload.alergias_descricao,
+      usa_medicamentos: payload.usa_medicamentos === true,
       medicamentos_descricao: payload.medicamentos_descricao,
-      interesse_cursos:       payload.interesse_cursos === true,
-      ativo:                  true,
+      interesse_cursos: payload.interesse_cursos === true,
+      ativo: true,
     };
-    this.logger.log(`[Webhook Google Forms] Cadastrando funcionário: ${dto.nome}`);
+    this.logger.log(`[Webhook Google Forms] Cadastrando professor: ${dto.nome}`);
     return this.svc.criarProfessor(dto);
   }
 
   // ── TURMAS ────────────────────────────────────────────────────────────────
+
   @Get('turmas')
+  @ModuloPerm('academico', 'visualizar')
   getTurmas() { return this.svc.listarTurmas(); }
 
   @Post('turmas')
+  @ModuloPerm('academico', 'incluir')
   criarTurma(@Body() dto: any) { return this.svc.criarTurma(dto); }
 
   @Patch('turmas/:id')
+  @ModuloPerm('academico', 'editar')
   editarTurma(@Param('id') id: string, @Body() dto: any) { return this.svc.editarTurma(id, dto); }
 
   @Delete('turmas/:id')
+  @ModuloPerm('academico', 'excluir')
   deletarTurma(@Param('id') id: string) { return this.svc.deletarTurma(id); }
 
   // ── GRADE HORÁRIA ─────────────────────────────────────────────────────────
+
   @Get('grade')
+  @ModuloPerm('academico', 'visualizar')
   getGrade() { return this.svc.listarGrade(); }
 
   @Post('grade')
+  @ModuloPerm('academico', 'incluir')
   criarCard(@Body() dto: any) { return this.svc.criarCardGrade(dto); }
 
   @Patch('grade/:id')
+  @ModuloPerm('academico', 'editar')
   moverCard(@Param('id') id: string, @Body() dto: any) { return this.svc.moverCardGrade(id, dto); }
 
   @Delete('grade/:id')
+  @ModuloPerm('academico', 'excluir')
   deletarCard(@Param('id') id: string) { return this.svc.deletarCardGrade(id); }
 
-  // ── TURMA ALUNOS / BACKLOG ─────────────────────────────────────────────────
+  // ── TURMA ALUNOS / BACKLOG ────────────────────────────────────────────────
+
   @Get('turma-alunos/backlog')
+  @ModuloPerm('academico', 'visualizar')
   getBacklog() { return this.svc.listarBacklog(); }
 
   @Get('turma-alunos/:turmaId')
+  @ModuloPerm('academico', 'visualizar')
   getAlunosDaTurma(@Param('turmaId') turmaId: string) { return this.svc.listarAlunosDaTurma(turmaId); }
 
   @Post('turma-alunos/incluir')
+  @ModuloPerm('academico', 'incluir')
   incluirAluno(@Body() dto: { aluno_id: string; turma_id: string }) {
     return this.svc.incluirAlunoNaTurma(dto.aluno_id, dto.turma_id);
   }
 
   @Patch('turma-alunos/:id/remover')
+  @ModuloPerm('academico', 'editar')
   removerAluno(@Param('id') id: string) { return this.svc.removerAlunoDaTurma(id); }
 
   // ── ALUNOS ────────────────────────────────────────────────────────────────
+
   @Get('alunos')
+  @ModuloPerm('academico', 'visualizar')
   getAlunos(@Query() q: any) { return this.svc.listarAlunos(q); }
 
   @Post('alunos')
+  @ModuloPerm('academico', 'incluir')
   criarAluno(@Body() dto: any) { return this.svc.criarAluno(dto); }
 
   @Patch('alunos/:id')
+  @ModuloPerm('academico', 'editar')
   editarAluno(@Param('id') id: string, @Body() dto: any) { return this.svc.editarAluno(id, dto); }
 
   @Delete('alunos/:id')
+  @ModuloPerm('academico', 'excluir')
   deletarAluno(@Param('id') id: string) { return this.svc.deletarAluno(id); }
 
   @Get('alunos/:id/ficha')
+  @ModuloPerm('academico', 'visualizar')
   fichaAluno(@Param('id') id: string) { return this.svc.fichaAluno(id); }
 
   // ── DIÁRIO ────────────────────────────────────────────────────────────────
+
   @Get('diario')
+  @ModuloPerm('academico', 'visualizar')
   getDiario(@Query() q: any) { return this.svc.listarDiario(q); }
 
   @Post('diario')
+  @ModuloPerm('academico', 'incluir')
   criarDiario(@Body() dto: any, @Req() req: any) {
     return this.svc.criarRegistroDiario({
       ...dto,
@@ -207,37 +230,48 @@ export class AcademicoController {
   }
 
   @Delete('diario/:id')
+  @ModuloPerm('academico', 'excluir')
   deletarDiario(@Param('id') id: string) { return this.svc.deletarRegistroDiario(id); }
 
   // ── PRESENÇA ──────────────────────────────────────────────────────────────
+
   @Get('presenca/sessoes')
+  @ModuloPerm('academico', 'visualizar')
   getSessoes(@Query() q: any) { return this.svc.listarSessoes(q); }
 
   @Post('presenca/sessoes')
+  @ModuloPerm('academico', 'incluir')
   criarSessao(@Body() dto: any, @Req() req: any) {
     const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip || req.connection?.remoteAddress;
     return this.svc.criarSessaoComPresenca(dto, req.user?.userId, req.user?.email, ip);
   }
 
   @Patch('presenca/sessoes/:id')
+  @ModuloPerm('academico', 'editar')
   editarSessao(@Param('id') id: string, @Body() dto: any) { return this.svc.editarSessao(id, dto); }
 
   @Delete('presenca/sessoes/:id')
+  @ModuloPerm('academico', 'excluir')
   estornarSessao(@Param('id') id: string) { return this.svc.estornarSessao(id); }
 
   @Get('presenca/alertas-candidatos')
+  @ModuloPerm('academico', 'visualizar')
   alertasCandidatos() { return this.svc.listarAlertasCandidatos(); }
 
   @Get('usuarios-professores')
+  @ModuloPerm('academico', 'visualizar')
   listarUsuariosProfessores() { return this.svc.listarUsuariosProfessores(); }
 
   @Get('presenca/sessoes/:id/registros')
+  @ModuloPerm('academico', 'visualizar')
   getRegistrosSessao(@Param('id') id: string) { return this.svc.listarRegistrosSessao(id); }
 
   @Get('presenca')
+  @ModuloPerm('academico', 'visualizar')
   getPresenca(@Query() q: any) { return this.svc.listarPresenca(q); }
 
   @Post('presenca')
+  @ModuloPerm('academico', 'incluir')
   registrarPresenca(@Body() dto: any, @Req() req: any) {
     return this.svc.registrarPresenca(dto, req.user?.userId, req.user?.email);
   }

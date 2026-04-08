@@ -8,14 +8,13 @@ import { memoryStorage } from 'multer';
 import { MatriculasService } from './matriculas.service'; 
 import { StatusMatricula } from './inscricao.entity';
 import { TipoDocumento } from './documento-inscricao.entity';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard'; 
-import { RolesGuard } from '../auth/guards/roles.guard'; 
-import { Roles } from '../auth/decorators/roles.decorator'; 
-import { Role } from '../auth/constants/roles.enum'; 
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { ModuloPermGuard } from '../auth/guards/modulo-perm.guard';
+import { ModuloPerm } from '../auth/decorators/modulo-perm.decorator';
 import { Public } from '../auth/decorators/public.decorator';
 
 @Controller('matriculas')
-@UseGuards(JwtAuthGuard, RolesGuard) // Proteção Global do Controller
+@UseGuards(JwtAuthGuard, ModuloPermGuard)
 export class MatriculasController {
   constructor(private readonly matriculasService: MatriculasService) {}
 
@@ -24,7 +23,7 @@ export class MatriculasController {
    * Suporta paginação (?pagina=1&limite=50) e filtros como query params.
    */
   @Get()
-  @Roles(Role.CZNH)
+  @ModuloPerm('matriculas', 'visualizar')
   async listarInscricoes(
     @Query('pagina') pagina?: string,
     @Query('limite') limite?: string,
@@ -50,7 +49,7 @@ export class MatriculasController {
    * Retorna cidades e bairros distintos para popular dropdowns do frontend.
    */
   @Get('localidades')
-  @Roles(Role.CZNH)
+  @ModuloPerm('matriculas', 'visualizar')
   async localidades() {
     return await this.matriculasService.listarLocalidades();
   }
@@ -89,7 +88,7 @@ export class MatriculasController {
    * Campos obrigatórios: nome_completo, cpf, email, celular, cursos_matriculados
    */
   @Post('aluno-direto')
-  @Roles(Role.DRT)
+  @ModuloPerm('matriculas', 'editar')
   async criarAlunoDireto(@Body() dados: any) {
     return await this.matriculasService.criarAlunoDireto(dados);
   }
@@ -98,19 +97,19 @@ export class MatriculasController {
    * EDIÇÃO E STATUS: Exige nível DRT (8).
    */
   @Patch(':id/enviar-lgpd')
-  @Roles(Role.DRT) 
+  @ModuloPerm('matriculas', 'editar') 
   async enviarLGPD(@Param('id', ParseIntPipe) id: number) {
     return await this.matriculasService.marcarComoAguardandoLGPD(id);
   }
 
   @Patch(':id/confirmar-lgpd')
-  @Roles(Role.DRT) 
+  @ModuloPerm('matriculas', 'editar') 
   async confirmarLGPD(@Param('id', ParseIntPipe) id: number) {
     return await this.matriculasService.confirmarAssinaturaLGPD(id);
   }
 
   @Post(':id/finalizar')
-  @Roles(Role.DRT) 
+  @ModuloPerm('matriculas', 'editar') 
   async finalizarMatricula(
     @Param('id', ParseIntPipe) id: number,
     @Body() body: { cursos?: string[] }
@@ -119,7 +118,7 @@ export class MatriculasController {
   }
 
   @Patch(':id/status')
-  @Roles(Role.DRT) 
+  @ModuloPerm('matriculas', 'editar') 
   async atualizarStatus(
     @Param('id', ParseIntPipe) id: number,
     @Body() body: { status: StatusMatricula; motivo?: string },
@@ -129,13 +128,13 @@ export class MatriculasController {
   }
 
   @Get('inscricao/:id')
-  @Roles(Role.CZNH)
+  @ModuloPerm('matriculas', 'visualizar')
   async buscarInscricao(@Param('id', ParseIntPipe) id: number) {
     return await this.matriculasService.buscarPorId(id);
   }
 
   @Patch('inscricao/:id')
-  @Roles(Role.DRT)
+  @ModuloPerm('matriculas', 'editar')
   async editarInscricao(
     @Param('id', ParseIntPipe) id: number,
     @Body() body: any,
@@ -145,13 +144,13 @@ export class MatriculasController {
   }
 
   @Get('inscricao/:id/anotacoes')
-  @Roles(Role.CZNH)
+  @ModuloPerm('matriculas', 'visualizar')
   async listarAnotacoes(@Param('id', ParseIntPipe) id: number) {
     return await this.matriculasService.listarAnotacoes(id);
   }
 
   @Post('inscricao/:id/anotacoes')
-  @Roles(Role.CZNH)
+  @ModuloPerm('matriculas', 'visualizar')
   async adicionarAnotacao(
     @Param('id', ParseIntPipe) id: number,
     @Body() body: { texto_anotacao: string },
@@ -162,7 +161,7 @@ export class MatriculasController {
   }
 
   @Get('inscricao/:id/movimentacoes')
-  @Roles(Role.CZNH)
+  @ModuloPerm('matriculas', 'visualizar')
   async listarMovimentacoes(@Param('id', ParseIntPipe) id: number) {
     return await this.matriculasService.listarMovimentacoes(id);
   }
@@ -212,7 +211,7 @@ export class MatriculasController {
    * Admin dispara link de envio de documentos para o candidato.
    */
   @Post('inscricao/:id/enviar-link-documentos')
-  @Roles(Role.DRT)
+  @ModuloPerm('matriculas', 'editar')
   async enviarLinkDocumentos(@Param('id', ParseIntPipe) id: number) {
     return await this.matriculasService.enviarLinkDocumentos(id);
   }
@@ -259,7 +258,7 @@ export class MatriculasController {
    * Admin remove um documento específico.
    */
   @Delete('documentos/:docId')
-  @Roles(Role.DRT)
+  @ModuloPerm('matriculas', 'excluir')
   async removerDocumento(@Param('docId') docId: string) {
     await this.matriculasService.removerDocumento(docId);
     return { ok: true };
@@ -269,7 +268,7 @@ export class MatriculasController {
    * Admin lista documentos de uma inscrição por ID (uso interno).
    */
   @Get('inscricao/:id/documentos')
-  @Roles(Role.CZNH)
+  @ModuloPerm('matriculas', 'visualizar')
   async listarDocumentosAdmin(@Param('id', ParseIntPipe) id: number) {
     const inscricao = await this.matriculasService.buscarPorId(id);
     if (!inscricao.doc_token) {

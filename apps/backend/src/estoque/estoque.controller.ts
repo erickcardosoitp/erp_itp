@@ -4,13 +4,13 @@ import {
   UnauthorizedException, UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { RolesGuard } from '../auth/guards/roles.guard';
-import { Roles } from '../auth/decorators/roles.decorator';
-import { Role, ESTOQUE_READ_ROLES, ESTOQUE_WRITE_ROLES, ESTOQUE_BAIXA_ROLES, ESTOQUE_ENTRADA_ROLES } from '../auth/constants/roles.enum';
+import { ModuloPermGuard } from '../auth/guards/modulo-perm.guard';
+import { ModuloPerm } from '../auth/decorators/modulo-perm.decorator';
 import { Public } from '../auth/decorators/public.decorator';
 import { EstoqueService } from './estoque.service';
 
 @Controller('estoque')
+@UseGuards(JwtAuthGuard, ModuloPermGuard)
 export class EstoqueController {
   private readonly logger = new Logger(EstoqueController.name);
 
@@ -19,31 +19,31 @@ export class EstoqueController {
   // ── Produtos ──────────────────────────────────────────────────────────────
 
   @Get('produtos')
-  @Roles(...ESTOQUE_READ_ROLES)
+  @ModuloPerm('estoque', 'visualizar')
   listar() {
     return this.svc.listarTodos();
   }
 
   @Post('produtos')
-  @Roles(...ESTOQUE_WRITE_ROLES)
+  @ModuloPerm('estoque', 'incluir')
   criar(@Body() body: any) {
     return this.svc.criarProduto(body);
   }
 
   @Patch('produtos/:id')
-  @Roles(...ESTOQUE_WRITE_ROLES)
+  @ModuloPerm('estoque', 'editar')
   atualizar(@Param('id') id: string, @Body() body: any) {
     return this.svc.atualizarProduto(id, body);
   }
 
   @Delete('produtos/:id')
-  @Roles(Role.ADMIN, Role.DRT)
+  @ModuloPerm('estoque', 'excluir')
   deletar(@Param('id') id: string) {
     return this.svc.deletarProduto(id);
   }
 
   @Get('alertas')
-  @Roles(...ESTOQUE_BAIXA_ROLES)
+  @ModuloPerm('estoque', 'visualizar')
   alertas() {
     return this.svc.listarAlertas();
   }
@@ -51,7 +51,7 @@ export class EstoqueController {
   // ── Movimentos autenticados ───────────────────────────────────────────────
 
   @Post('produtos/:id/entrada')
-  @Roles(...ESTOQUE_ENTRADA_ROLES)
+  @ModuloPerm('estoque', 'incluir')
   entrada(@Param('id') id: string, @Body() body: any, @Req() req: any) {
     const nome = req.user?.nome || req.user?.email || 'Sistema';
     const preco = body.preco_pago != null ? Number(body.preco_pago) : undefined;
@@ -59,20 +59,20 @@ export class EstoqueController {
   }
 
   @Get('valor')
-  @Roles(...ESTOQUE_READ_ROLES)
+  @ModuloPerm('estoque', 'visualizar')
   valorEstoque() {
     return this.svc.relatorioValor();
   }
 
   @Post('produtos/:id/baixa')
-  @Roles(...ESTOQUE_BAIXA_ROLES)
+  @ModuloPerm('estoque', 'incluir')
   baixa(@Param('id') id: string, @Body() body: any, @Req() req: any) {
     const nome = req.user?.nome || req.user?.email || 'Sistema';
     return this.svc.registrarBaixa(id, Number(body.quantidade), body.observacao, nome);
   }
 
   @Get('movimentos')
-  @Roles(...ESTOQUE_ENTRADA_ROLES)
+  @ModuloPerm('estoque', 'visualizar')
   movimentos(
     @Query('produto_id') produtoId?: string,
     @Query('limit') limit?: string,
@@ -104,35 +104,33 @@ export class EstoqueController {
   // ── Categorias ────────────────────────────────────────────────────────────
 
   @Get('categorias')
-  @Roles(...ESTOQUE_READ_ROLES)
+  @ModuloPerm('estoque', 'visualizar')
   listarCategorias() {
     return this.svc.listarCategorias();
   }
 
   @Post('categorias')
-  @Roles(...ESTOQUE_WRITE_ROLES)
+  @ModuloPerm('estoque', 'incluir')
   criarCategoria(@Body() body: { nome: string; codigo?: string }) {
     return this.svc.criarCategoria(body.nome, body.codigo);
   }
 
   @Patch('categorias/:id')
-  @Roles(...ESTOQUE_WRITE_ROLES)
+  @ModuloPerm('estoque', 'editar')
   atualizarCategoria(@Param('id') id: string, @Body() body: { nome: string; codigo?: string }) {
     return this.svc.atualizarCategoria(id, body.nome, body.codigo);
   }
 
   @Delete('categorias/:id')
-  @Roles(Role.ADMIN, Role.DRT)
+  @ModuloPerm('estoque', 'excluir')
   deletarCategoria(@Param('id') id: string) {
     return this.svc.deletarCategoria(id);
   }
 
   private validarTokenColetor(token?: string) {
-    // Aceita o token do env var E o token padrão para evitar falha quando
-    // COLETOR_TOKEN está definido com valor diferente em algum ambiente
     const tokens = new Set(
       [
-        'itp-coletor-2026', // sempre aceito como fallback
+        'itp-coletor-2026',
         process.env.COLETOR_TOKEN,
         process.env.NEXT_PUBLIC_COLETOR_TOKEN,
       ].filter(Boolean) as string[],
