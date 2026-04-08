@@ -30,12 +30,6 @@ export class Turma {
   @Column({ type: 'boolean', default: true })
   ativo: boolean;
 
-  @Column({ name: 'hora_inicio', type: 'time', nullable: true })
-  hora_inicio: string;
-
-  @Column({ name: 'hora_fim', type: 'time', nullable: true })
-  hora_fim: string;
-
   @Column({ type: 'varchar', nullable: true, default: '#7c3aed' })
   cor: string;
 

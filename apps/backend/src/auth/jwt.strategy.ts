@@ -43,11 +43,12 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     }
 
     // Injeta os dados no objeto req.user para o RolesGuard usar
-    return { 
+    return {
       userId: payload.sub,
-      sub: payload.sub,   // alias mantido para compatibilidade com guards existentes
-      email: payload.email, 
-      role: payload.role 
+      sub: payload.sub,
+      email: payload.email,
+      nome: payload.nome,
+      role: payload.role,
     };
   }
 }

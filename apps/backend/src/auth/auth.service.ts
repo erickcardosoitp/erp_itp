@@ -114,12 +114,13 @@ export class AuthService {
         .replace(/^aadmin$/, 'admin'); 
 
       // 5. Montagem do Payload JWT
-      const payload = { 
-        sub: usuario.id, 
-        email: usuario.email, 
+      const payload = {
+        sub: usuario.id,
+        email: usuario.email,
+        nome: usuario.nome || usuario.email,
         role: roleLimpa,
         grupo: usuario.grupo?.nome || 'SEM_GRUPO',
-        permissoes: usuario.grupo?.grupo_permissoes || {} 
+        permissoes: usuario.grupo?.grupo_permissoes || {}
       };
       
       const { password, ...usuarioSemSenha } = usuario;

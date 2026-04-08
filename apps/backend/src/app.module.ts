@@ -142,6 +142,17 @@ export class AppModule implements OnModuleInit {
       await this.dataSource.query(`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS matricula TEXT UNIQUE`);
       this.logger.log('✅ Migrations de matrícula aplicadas (IF NOT EXISTS)');
 
+      // Coluna usuario_nome em movimentacoes_financeiras
+      await this.dataSource.query(`ALTER TABLE movimentacoes_financeiras ADD COLUMN IF NOT EXISTS usuario_nome VARCHAR`);
+      this.logger.log('✅ usuario_nome em movimentacoes_financeiras aplicado');
+
+      // Remove FK indevida em grade_horaria (professor_id pode ser de usuarios, não só professores)
+      await this.dataSource.query(`ALTER TABLE grade_horaria DROP CONSTRAINT IF EXISTS grade_horaria_professor_id_fkey`);
+      // Remove hora_inicio/hora_fim da turma (horários ficam apenas por dia na grade_horaria)
+      await this.dataSource.query(`ALTER TABLE turmas DROP COLUMN IF EXISTS hora_inicio`);
+      await this.dataSource.query(`ALTER TABLE turmas DROP COLUMN IF EXISTS hora_fim`);
+      this.logger.log('✅ grade_horaria FK removida e hora_inicio/hora_fim de turmas removidos');
+
       // ── Colunas faltantes em funcionarios (schema drift) ─────────────────
       await this.dataSource.query(`
         ALTER TABLE IF EXISTS funcionarios

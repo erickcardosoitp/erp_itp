@@ -4,18 +4,19 @@ import React, { useState, useEffect, useCallback } from 'react';
 import DossieCandidato from '@/components/DossieCandidato';
 import {
   GraduationCap, Users, BookOpen, LayoutGrid, History,
-  Plus, Trash2, Search, X, ClipboardList,
+  Plus, Trash2, Search, X, ClipboardList, AlertCircle,
   Edit3, Coffee, UserPlus, RefreshCw, ClipboardCheck, CheckSquare, Square,
   ChevronDown, ChevronUp, FileText, Eye, Smartphone, Copy, Check, Save,
 } from 'lucide-react';
 import api from '@/services/api';
 import { useAuth } from '@/context/auth-context';
+import { usePermissions } from '@/hooks/use-permissions';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
 interface Curso { id: string; nome: string; sigla: string; status: string; periodo?: string; }
 interface Professor { id: string; nome: string; especialidade?: string; email?: string; ativo?: boolean; }
-interface Turma { id: string; nome: string; curso_id?: string; professor_id?: string; turno?: string; ano?: string; max_alunos?: number; ativo?: boolean; hora_inicio?: string; hora_fim?: string; cor?: string; }
+interface Turma { id: string; nome: string; curso_id?: string; professor_id?: string; turno?: string; ano?: string; max_alunos?: number; ativo?: boolean; cor?: string; total_alunos?: number; }
 interface TurmaAlunoRecord { id: string; turma_id: string | null; aluno_id: string; status: string; created_at: string; }
 interface GradeCard { id: string; dia_semana: number; horario_inicio: string; horario_fim: string; nome_turma?: string; nome_curso?: string; nome_professor?: string; turma_id?: string; sala?: string; cor?: string; }
 interface DiarioEntry { id: string; tipo: string; titulo?: string; descricao?: string; aluno_id?: string; aluno_nome?: string; turma_id?: string; data: string; usuario_nome?: string; created_at: string; }
@@ -58,7 +59,7 @@ const HORARIOS: Array<{ label: string; value?: string; lanche?: boolean }> = [
   { label: '21:00',  value: '21:00' },
 ];
 
-const GRUPOS_EDITOR = ['ADMIN', 'PRT', 'VP', 'DRT', 'DRT ADJ'];
+// Permissão de edição controlada via usePermissions (grupo_permissoes ou role level)
 
 const CORES_CARD = [
   '#7c3aed', '#6d28d9', '#4f46e5', '#0284c7',
@@ -1392,7 +1393,7 @@ function TurmasTab({ cursos, professores, alunos }: { cursos: Curso[]; professor
           horarios[c.dia_semana] = {
             ativo: true,
             hora_inicio: (c.horario_inicio || '').substring(0, 5),
-            hora_fim:    (c.horario_fim    || '').substring(0, 5),
+            hora_fim:    (c.horario_fim || '').substring(0, 5),
           };
         }
         setHorariosDia(horarios);
@@ -1411,18 +1412,6 @@ function TurmasTab({ cursos, professores, alunos }: { cursos: Curso[]; professor
       curso_id: cursoId,
       nome: curso ? curso.nome : p.nome,
     }));
-  };
-
-  const setFormHoraInicio = (v: string) => {
-    const turno = calcularTurno(v);
-    setForm(p => ({ ...p, hora_inicio: v, turno: turno || p.turno }));
-  };
-
-  const setFormHoraFim = (v: string) => {
-    setForm(p => {
-      const turno = p.hora_inicio ? calcularTurno(p.hora_inicio) : p.turno;
-      return { ...p, hora_fim: v, turno: turno || p.turno };
-    });
   };
 
   const salvar = async (e: React.FormEvent) => {
@@ -1579,7 +1568,6 @@ function TurmasTab({ cursos, professores, alunos }: { cursos: Curso[]; professor
                 <th className="text-left px-4 py-3">Curso</th>
                 <th className="text-left px-4 py-3">Professor</th>
                 <th className="text-left px-4 py-3">Turno</th>
-                <th className="text-left px-4 py-3">Horário</th>
                 <th className="text-left px-4 py-3">Ano</th>
                 <th className="text-left px-4 py-3">Status</th>
                 <th className="text-center px-4 py-3">Ações</th>
@@ -1597,9 +1585,6 @@ function TurmasTab({ cursos, professores, alunos }: { cursos: Curso[]; professor
                   <td className="px-4 py-3 text-slate-600">{nomeCurso(t.curso_id)}</td>
                   <td className="px-4 py-3 text-slate-600">{nomeProf(t.professor_id)}</td>
                   <td className="px-4 py-3 text-slate-500">{t.turno || '–'}</td>
-                  <td className="px-4 py-3 text-slate-500">
-                    {t.hora_inicio && t.hora_fim ? `${t.hora_inicio} – ${t.hora_fim}` : t.hora_inicio || '–'}
-                  </td>
                   <td className="px-4 py-3 text-slate-500">{t.ano}</td>
                   <td className="px-4 py-3">
                     <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase ${t.ativo ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
@@ -1635,10 +1620,6 @@ function TurmasTab({ cursos, professores, alunos }: { cursos: Curso[]; professor
               <FieldSelect label="Professor" value={form.professor_id ?? ''} onChange={v => setForm(p => ({ ...p, professor_id: v }))}
                 options={professores.filter(p => p.ativo !== false).map(p => ({ value: p.id, label: p.nome }))} />
             )}
-            <div className="grid grid-cols-2 gap-3">
-              <FieldInput label="Hora Início" type="time" value={form.hora_inicio} onChange={setFormHoraInicio} />
-              <FieldInput label="Hora Fim" type="time" value={form.hora_fim} onChange={setFormHoraFim} />
-            </div>
             <div className="space-y-1">
               <label className="text-[10px] font-black uppercase text-slate-500">Turno</label>
               <div className="flex gap-2">
@@ -1725,60 +1706,177 @@ function TurmasTab({ cursos, professores, alunos }: { cursos: Curso[]; professor
       )}
 
       {showIncluir && (
-        <Modal title="Incluir Aluno em Turma" onClose={() => setShowIncluir(false)}>
-          <div className="space-y-4">
-            {alunos.length === 0 ? (
-              <p className="text-sm text-slate-400 text-center py-6">Nenhum aluno cadastrado.</p>
-            ) : (
-              <>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black uppercase text-slate-500">Buscar aluno</label>
-                  <input
-                    value={buscarAluno}
-                    onChange={e => setBuscarAluno(e.target.value)}
-                    placeholder="Digite o nome..."
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                  />
+        <div className="fixed inset-0 z-[300] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowIncluir(false)}>
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div className="px-6 pt-6 pb-4 border-b border-slate-100">
+              <div className="flex items-start justify-between">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <div className="w-8 h-8 rounded-xl bg-indigo-100 flex items-center justify-center">
+                      <UserPlus size={16} className="text-indigo-600"/>
+                    </div>
+                    <h2 className="font-black text-slate-800 text-base">Incluir Aluno em Turma</h2>
+                  </div>
+                  <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wide ml-10">Selecione o aluno e a turma de destino</p>
                 </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black uppercase text-slate-500">Aluno</label>
-                  <select value={incluirAlunoId} onChange={e => setIncluirAlunoId(e.target.value)}
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white">
-                    <option value="">Selecione o aluno...</option>
-                    {alunos
-                      .filter(a => !buscarAluno || a.nome_completo.toLowerCase().includes(buscarAluno.toLowerCase()))
-                      .map(a => (
-                        <option key={a.id} value={a.id}>
-                          {a.nome_completo}{a.numero_matricula ? ` (${a.numero_matricula})` : ''}
-                        </option>
-                      ))}
-                  </select>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black uppercase text-slate-500">Turma de destino</label>
-                  <select value={incluirTurmaId} onChange={e => setIncluirTurmaId(e.target.value)}
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white">
-                    <option value="">Selecione a turma...</option>
-                    {turmas.filter(t => t.ativo !== false).map(t => (
-                      <option key={t.id} value={t.id}>{t.nome}{t.turno ? ` (${t.turno})` : ''}</option>
-                    ))}
-                  </select>
-                </div>
-                {incluirErro && (
-                  <div className="bg-red-50 border border-red-200 text-red-700 text-[11px] font-bold rounded-xl px-4 py-2.5">⚠ {incluirErro}</div>
-                )}
-                {incluirSucesso && (
-                  <div className="bg-green-50 border border-green-200 text-green-700 text-[11px] font-bold rounded-xl px-4 py-2.5">✓ {incluirSucesso}</div>
-                )}
-                <button disabled={!incluirAlunoId || !incluirTurmaId || incluirSalvando}
-                  onClick={confirmarInclusao}
-                  className="w-full bg-indigo-600 text-white py-2.5 rounded-xl font-black text-xs uppercase disabled:opacity-40 hover:bg-indigo-700">
-                  {incluirSalvando ? 'Salvando...' : 'Confirmar'}
+                <button onClick={() => setShowIncluir(false)} className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
+                  <X size={16}/>
                 </button>
-              </>
-            )}
+              </div>
+            </div>
+
+            {/* Body */}
+            <div className="px-6 py-5 space-y-5">
+              {alunos.filter(a => a.ativo === true).length === 0 ? (
+                <div className="py-10 text-center">
+                  <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-3">
+                    <UserPlus size={20} className="text-slate-300"/>
+                  </div>
+                  <p className="text-sm font-bold text-slate-400">Nenhum aluno ativo encontrado.</p>
+                </div>
+              ) : (
+                <>
+                  {/* Busca + seleção de aluno */}
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Aluno</label>
+                    <div className="relative">
+                      <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"/>
+                      <input
+                        value={buscarAluno}
+                        onChange={e => { setBuscarAluno(e.target.value); setIncluirAlunoId(''); }}
+                        placeholder="Buscar por nome ou matrícula..."
+                        className="w-full border border-slate-200 rounded-xl pl-8 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-shadow"
+                      />
+                    </div>
+                    {/* Lista de alunos filtrada */}
+                    {buscarAluno.length > 0 && (
+                      <div className="border border-slate-100 rounded-2xl overflow-hidden shadow-sm max-h-44 overflow-y-auto">
+                        {alunos
+                          .filter(a => a.ativo === true && (
+                            a.nome_completo.toLowerCase().includes(buscarAluno.toLowerCase()) ||
+                            (a.numero_matricula || '').toLowerCase().includes(buscarAluno.toLowerCase())
+                          ))
+                          .slice(0, 10)
+                          .map(a => (
+                            <button
+                              key={a.id}
+                              type="button"
+                              onClick={() => { setIncluirAlunoId(a.id); setBuscarAluno(a.nome_completo); }}
+                              className={`w-full text-left flex items-center gap-3 px-4 py-2.5 transition-colors border-b border-slate-50 last:border-0 ${incluirAlunoId === a.id ? 'bg-indigo-50' : 'hover:bg-slate-50'}`}
+                            >
+                              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 ${incluirAlunoId === a.id ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                                {(a.nome_completo[0] || '?').toUpperCase()}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-bold text-slate-800 truncate">{a.nome_completo}</p>
+                                {a.numero_matricula && <p className="text-[9px] font-mono text-slate-400">{a.numero_matricula}</p>}
+                              </div>
+                              {incluirAlunoId === a.id && <Check size={12} className="text-indigo-600 shrink-0"/>}
+                            </button>
+                          ))}
+                        {alunos.filter(a => a.ativo === true && (
+                          a.nome_completo.toLowerCase().includes(buscarAluno.toLowerCase()) ||
+                          (a.numero_matricula || '').toLowerCase().includes(buscarAluno.toLowerCase())
+                        )).length === 0 && (
+                          <p className="text-xs text-slate-400 text-center py-4">Nenhum aluno encontrado.</p>
+                        )}
+                      </div>
+                    )}
+                    {/* Badge do aluno selecionado */}
+                    {incluirAlunoId && (
+                      <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-100 rounded-xl px-3 py-2">
+                        <div className="w-6 h-6 rounded-full bg-indigo-600 flex items-center justify-center text-[9px] font-black text-white shrink-0">
+                          {(alunos.find(a => a.id === incluirAlunoId)?.nome_completo[0] || '?').toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold text-indigo-800 truncate">{alunos.find(a => a.id === incluirAlunoId)?.nome_completo}</p>
+                          <p className="text-[9px] text-indigo-400 font-mono">{alunos.find(a => a.id === incluirAlunoId)?.numero_matricula || ''}</p>
+                        </div>
+                        <Check size={13} className="text-indigo-500 shrink-0"/>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Turma de destino */}
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Turma de Destino</label>
+                    <div className="space-y-1.5 max-h-52 overflow-y-auto pr-0.5">
+                      {turmas.filter(t => t.ativo !== false).map(t => {
+                        const selecionada = incluirTurmaId === t.id;
+                        const vagas = t.max_alunos ? t.max_alunos - (t.total_alunos ?? 0) : null;
+                        const cheio = vagas !== null && vagas <= 0;
+                        return (
+                          <button
+                            key={t.id}
+                            type="button"
+                            onClick={() => !cheio && setIncluirTurmaId(t.id)}
+                            disabled={cheio}
+                            className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl border-2 transition-all text-left ${
+                              selecionada
+                                ? 'border-indigo-500 bg-indigo-50 shadow-sm'
+                                : cheio
+                                  ? 'border-slate-100 bg-slate-50 opacity-50 cursor-not-allowed'
+                                  : 'border-slate-100 bg-white hover:border-indigo-200 hover:bg-indigo-50/30'
+                            }`}
+                          >
+                            <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: t.cor || '#7c3aed' }}/>
+                            <div className="flex-1 min-w-0">
+                              <p className={`text-xs font-black truncate ${selecionada ? 'text-indigo-800' : 'text-slate-700'}`}>{t.nome}</p>
+                              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                {t.turno && <span className="text-[9px] font-bold text-slate-400 uppercase">{t.turno}</span>}
+                              </div>
+                            </div>
+                            <div className="shrink-0 text-right">
+                              <div className={`flex items-center gap-1 text-[10px] font-black ${cheio ? 'text-red-400' : selecionada ? 'text-indigo-600' : 'text-slate-500'}`}>
+                                <Users size={10}/>
+                                <span>{t.total_alunos ?? 0}{t.max_alunos ? `/${t.max_alunos}` : ''}</span>
+                              </div>
+                              {cheio && <p className="text-[8px] text-red-400 font-bold uppercase">Turma cheia</p>}
+                              {vagas !== null && !cheio && <p className="text-[8px] text-slate-400 uppercase">{vagas} vaga{vagas !== 1 ? 's' : ''}</p>}
+                            </div>
+                            {selecionada && <div className="w-4 h-4 rounded-full bg-indigo-600 flex items-center justify-center shrink-0"><Check size={9} className="text-white"/></div>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {incluirErro && (
+                    <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 text-[11px] font-bold rounded-xl px-4 py-3">
+                      <AlertCircle size={14} className="shrink-0"/>
+                      {incluirErro}
+                    </div>
+                  )}
+                  {incluirSucesso && (
+                    <div className="flex items-center gap-2 bg-green-50 border border-green-200 text-green-700 text-[11px] font-bold rounded-xl px-4 py-3">
+                      <Check size={14} className="shrink-0"/>
+                      {incluirSucesso}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 pb-6 pt-1 flex gap-3">
+              <button onClick={() => setShowIncluir(false)}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 font-black text-xs uppercase text-slate-500 hover:bg-slate-50 transition-colors">
+                Cancelar
+              </button>
+              <button
+                disabled={!incluirAlunoId || !incluirTurmaId || incluirSalvando}
+                onClick={confirmarInclusao}
+                className="flex-2 flex-[2] flex items-center justify-center gap-2 bg-indigo-600 text-white py-2.5 rounded-xl font-black text-xs uppercase disabled:opacity-40 hover:bg-indigo-700 transition-colors shadow-sm shadow-indigo-200">
+                {incluirSalvando ? (
+                  <><RefreshCw size={13} className="animate-spin"/> Incluindo...</>
+                ) : (
+                  <><UserPlus size={13}/> Confirmar Inclusão</>
+                )}
+              </button>
+            </div>
           </div>
-        </Modal>
+        </div>
       )}
 
       {/* ── Modal: Atribuir Professor ──────────── */}
@@ -2389,8 +2487,7 @@ export default function AcademicoPage() {
   const [isMounted, setIsMounted] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const { user } = useAuth();
-
-  const podeEditar = GRUPOS_EDITOR.map(g => g.toLowerCase()).includes((user?.role ?? '').toLowerCase());
+  const { canWrite: podeEditar } = usePermissions(user);
 
   const loadBase = useCallback(async () => {
     setRefreshing(true);

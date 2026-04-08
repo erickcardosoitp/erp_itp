@@ -14,6 +14,7 @@ import { useTheme } from 'next-themes';
 import api from '@/services/api';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
+import { usePermissions } from '@/hooks/use-permissions';
 
 // --- HELPERS ---
 const getInitials = (name = '') => {
@@ -648,8 +649,7 @@ export default function ConfiguracoesPage() {
 
   useEffect(() => { setIsMounted(true); }, []);
 
-  const rolesComAcesso = ['ADMIN', 'DIRETOR', 'VICE_PRESIDENTE', 'VP', 'PRESIDENTE', 'DRT'];
-  const temAcessoGestao = user && rolesComAcesso.includes((user.role ?? '').toUpperCase());
+  const { canWrite: temAcessoGestao } = usePermissions(user);
 
   if (!isMounted || loading) {
     return (

@@ -129,9 +129,14 @@ export class AcademicoService {
 
   // ── TURMAS ────────────────────────────────────────────────────────────────
 
-  listarTurmas() {
+  async listarTurmas() {
     this.logger.log('Listando turmas');
-    return this.turmaRepo.find({ order: { nome: 'ASC' } });
+    const turmas = await this.turmaRepo.find({ order: { nome: 'ASC' } });
+    const counts: { turma_id: string; total: string }[] = await this.dataSource.query(
+      `SELECT turma_id, COUNT(*) AS total FROM turma_alunos WHERE status = 'ativo' AND turma_id IS NOT NULL GROUP BY turma_id`
+    );
+    const countMap = Object.fromEntries(counts.map(c => [c.turma_id, parseInt(c.total, 10)]));
+    return turmas.map(t => ({ ...t, total_alunos: countMap[t.id] ?? 0 }));
   }
 
   async criarTurma(dto: Partial<Turma>) {
@@ -175,7 +180,7 @@ export class AcademicoService {
       SELECT g.*, COALESCE(t.nome, g.nome_turma) AS nome_turma
       FROM grade_horaria g
       LEFT JOIN turmas t ON t.id = g.turma_id::uuid
-      ORDER BY g.dia_semana ASC, g.horario_inicio ASC
+      ORDER BY g.dia_semana ASC, g.horario_inicio ASC NULLS LAST
     `);
   }
 

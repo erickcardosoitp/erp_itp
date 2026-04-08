@@ -9,10 +9,9 @@ interface PermissionGateProps {
 }
 
 export function PermissionGate({ children }: PermissionGateProps) {
-  const { user } = useAuth(); // Pega a role globalmente do contexto
-  const { canWrite } = usePermissions(user?.role);
+  const { user } = useAuth();
+  const { canWrite } = usePermissions(user);
 
-  // Hierarquia em Árvore: Só renderiza se for Nível 8 (DRT) ou superior
   if (!canWrite) return null;
 
   return <>{children}</>;

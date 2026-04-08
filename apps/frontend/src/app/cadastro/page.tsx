@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import api from '@/services/api';
 import { useAuth } from '@/context/auth-context';
+import { usePermissions } from '@/hooks/use-permissions';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -99,10 +100,6 @@ const STATUS_INSUMO = ['ok', 'alerta', 'zerado'];
 const CATEGORIAS_INSUMO = ['Alimentação', 'Higiene', 'Material Escolar', 'Uniforme', 'Limpeza', 'Tecnologia', 'Outros'];
 const TIPOS_CONTA = ['Corrente', 'Poupança', 'Pagamento', 'Investimento'];
 
-// Grupos que podem excluir registros do Cadastro Básico
-const ROLES_PODEM_DELETAR = ['admin', 'prt', 'vp', 'drt', 'adjunto'];
-// Grupos que podem criar um usuário a partir de um funcionário
-const ROLES_CRIAR_USUARIO = ['admin', 'prt', 'vp', 'drt'];
 
 // Módulos do sistema para configuração de permissões de grupo
 const MODULOS_SISTEMA = [
@@ -414,7 +411,7 @@ function FuncionariosTab({ onCount }: { onCount: (n: number) => void }) {
     catch (e: any) { alert(e.response?.data?.message || 'Erro ao excluir.'); }
   };
 
-  const podeCriarUsuario = ROLES_CRIAR_USUARIO.includes(user?.role ?? '');
+  const { canWrite: podeCriarUsuario } = usePermissions(user);
   // Conjunto de e-mails que já possuem usuário cadastrado
   const emailsComUsuario = new Set(usuarios.map(u => (u.email ?? '').toLowerCase()));
   // Matrícula do usuário vinculado pelo e-mail (fallback quando funcionário não tem matrícula própria)
@@ -1927,7 +1924,7 @@ function StatusBadge({ ativo, labelAtivo = 'Ativo', labelInativo = 'Inativo' }: 
 
 function AcoesBotoes({ onEdit, onDelete, cor = 'purple' }: { onEdit: () => void; onDelete: () => void; cor?: string }) {
   const { user } = useAuth();
-  const podeExcluir = ROLES_PODEM_DELETAR.includes(user?.role ?? '');
+  const { canDelete: podeExcluir } = usePermissions(user);
   const c = CORES[cor] ?? CORES.purple;
   return (
     <div className="flex items-center gap-1">
@@ -2064,6 +2061,7 @@ function PesquisasTab({ onCount }: { onCount: (n: number) => void }) {
   const [showForm, setShowForm] = useState(false);
   const [expandida, setExpandida] = useState<string | null>(null);
   const [resultados, setResultados] = useState<Record<string, { stats: PqStat[]; total_respostas: number; respostas: PqRespostaItem[] }>>({});
+  const [modalResposta, setModalResposta] = useState<{ pesquisaId: string; resposta: PqRespostaItem; perguntas: PqPergunta[]; idx: number } | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [titulo, setTitulo] = useState('');
@@ -2319,27 +2317,27 @@ function PesquisasTab({ onCount }: { onCount: (n: number) => void }) {
 
                       {/* Respostas individuais com expurgação */}
                       <div className="space-y-1.5">
-                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Respostas individuais · Expurgação do NPS</p>
+                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Respostas individuais ({resultados[p.id].respostas.length}) · Expurgação do NPS</p>
                         <div className="max-h-56 overflow-y-auto space-y-1">
                           {resultados[p.id].respostas.map((r, idx) => (
                             <div key={r.id} className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-[10px] transition-all ${r.expurgado ? 'bg-red-50 border-red-100 opacity-60' : 'bg-white border-slate-100'}`}>
                               <span className="text-slate-400 shrink-0 font-mono w-5">#{idx + 1}</span>
                               <span className="text-slate-400 shrink-0">{new Date(r.created_at).toLocaleDateString('pt-BR')}</span>
-                              <div className="flex-1 flex gap-2 flex-wrap min-w-0">
-                                {r.respostas.map(rp => {
+                              <div className="flex-1 flex gap-1.5 flex-wrap min-w-0">
+                                {r.respostas.slice(0, 3).map(rp => {
                                   if (rp.nota != null) return <span key={rp.pergunta_id} className="text-amber-600 font-black shrink-0">{rp.nota}★</span>;
-                                  if (rp.texto) return <span key={rp.pergunta_id} className="text-slate-500 truncate max-w-[100px]">&quot;{rp.texto}&quot;</span>;
-                                  if (rp.opcoes_selecionadas?.length) return <span key={rp.pergunta_id} className="text-purple-600 truncate max-w-[100px]">{rp.opcoes_selecionadas.join(', ')}</span>;
+                                  if (rp.texto) return <span key={rp.pergunta_id} className="text-slate-400 truncate max-w-[70px] italic">{rp.texto}</span>;
+                                  if (rp.opcoes_selecionadas?.length) return <span key={rp.pergunta_id} className="text-purple-500 truncate max-w-[70px]">{rp.opcoes_selecionadas[0]}{rp.opcoes_selecionadas.length > 1 ? '…' : ''}</span>;
                                   return null;
                                 })}
+                                {r.respostas.length > 3 && <span className="text-slate-300 text-[9px]">+{r.respostas.length - 3}</span>}
                               </div>
-                              {r.expurgado && (
-                                <span className="shrink-0 flex items-center gap-0.5 text-[8px] font-black uppercase text-red-500">
-                                  <AlertTriangle size={9}/> Expurgado
-                                </span>
-                              )}
-                              <button
-                                onClick={() => toggleExpurgar(p.id, r.id, !r.expurgado)}
+                              {r.expurgado && <span className="shrink-0 flex items-center gap-0.5 text-[8px] font-black text-red-400"><AlertTriangle size={8}/> Expurgado</span>}
+                              <button onClick={() => setModalResposta({ pesquisaId: p.id, resposta: r, perguntas: p.perguntas || [], idx })}
+                                className="shrink-0 p-1 rounded-lg bg-slate-100 text-slate-500 hover:bg-purple-100 hover:text-purple-600 transition-colors" title="Ver detalhes">
+                                <Eye size={11}/>
+                              </button>
+                              <button onClick={() => toggleExpurgar(p.id, r.id, !r.expurgado)}
                                 className={`shrink-0 text-[8px] font-black uppercase px-2 py-0.5 rounded-lg transition-colors ${r.expurgado ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-red-100 text-red-600 hover:bg-red-200'}`}>
                                 {r.expurgado ? 'Incluir' : 'Expurgar'}
                               </button>
@@ -2353,6 +2351,63 @@ function PesquisasTab({ onCount }: { onCount: (n: number) => void }) {
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Modal de detalhe de resposta */}
+      {modalResposta && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setModalResposta(null)}>
+          <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-700 shrink-0">
+              <div>
+                <p className="font-black text-sm text-slate-800 dark:text-slate-100">Resposta #{modalResposta.idx + 1}</p>
+                <p className="text-[10px] text-slate-400 mt-0.5">
+                  {new Date(modalResposta.resposta.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  {modalResposta.resposta.expurgado && <span className="ml-2 text-red-500 font-black">· EXPURGADA</span>}
+                </p>
+              </div>
+              <button onClick={() => setModalResposta(null)} className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"><X size={16}/></button>
+            </div>
+            <div className="overflow-y-auto flex-1 px-6 py-4 space-y-4">
+              {modalResposta.perguntas.map((perg, i) => {
+                const rp = modalResposta.resposta.respostas.find(r => r.pergunta_id === perg.id);
+                return (
+                  <div key={perg.id} className="space-y-2">
+                    <p className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500 tracking-wide">
+                      <span className="text-purple-500 mr-1">{i + 1}.</span>{perg.texto}
+                    </p>
+                    {!rp || (rp.nota == null && !rp.texto && !rp.opcoes_selecionadas?.length) ? (
+                      <p className="text-xs text-slate-300 italic pl-3">Sem resposta</p>
+                    ) : perg.tipo === 'nota' && rp.nota != null ? (
+                      <div className="flex items-center gap-2 pl-3">
+                        <div className="flex gap-1">{[1,2,3,4,5].map(n => <Star key={n} size={20} className={n <= rp.nota! ? 'text-amber-400 fill-amber-400' : 'text-slate-200'}/>)}</div>
+                        <span className="text-sm font-black text-slate-700 dark:text-slate-200">{rp.nota} / 5</span>
+                      </div>
+                    ) : perg.tipo === 'texto' && rp.texto ? (
+                      <p className="text-sm text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-700/40 rounded-xl px-4 py-3 leading-relaxed ml-3">{rp.texto}</p>
+                    ) : (perg.tipo === 'multipla_escolha' || perg.tipo === 'checkbox') && rp.opcoes_selecionadas?.length ? (
+                      <div className="pl-3 flex flex-wrap gap-1.5">
+                        {rp.opcoes_selecionadas.map(opc => (
+                          <span key={opc} className="px-3 py-1 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-xs font-bold">{opc}</span>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+            <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between shrink-0">
+              <button
+                onClick={() => {
+                  toggleExpurgar(modalResposta.pesquisaId, modalResposta.resposta.id, !modalResposta.resposta.expurgado);
+                  setModalResposta(prev => prev ? { ...prev, resposta: { ...prev.resposta, expurgado: !prev.resposta.expurgado } } : null);
+                }}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl font-black text-xs uppercase transition-colors ${modalResposta.resposta.expurgado ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-red-100 text-red-600 hover:bg-red-200'}`}>
+                {modalResposta.resposta.expurgado ? '✓ Incluir no NPS' : <><AlertTriangle size={12}/> Expurgar do NPS</>}
+              </button>
+              <button onClick={() => setModalResposta(null)} className="px-4 py-2 rounded-xl font-black text-xs uppercase text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">Fechar</button>
+            </div>
+          </div>
         </div>
       )}
     </div>

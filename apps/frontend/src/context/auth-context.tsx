@@ -3,12 +3,12 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import Cookies from 'js-cookie';
 
-interface GrupoPermissoes {
+export interface GrupoPermissoes {
   modulos_visiveis?: Record<string, boolean>;
   permissoes?: Record<string, { visualizar?: boolean; incluir?: boolean; editar?: boolean; excluir?: boolean }>;
 }
 
-interface UserPayload {
+export interface UserPayload {
   email: string;
   role: string; // Ex: 'admin', 'drt', 'vp'
   sub: number;

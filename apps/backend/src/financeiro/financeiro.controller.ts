@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Req } from '@nestjs/common';
 import { FinanceiroService } from './financeiro.service';
 
 @Controller('financeiro')
@@ -98,7 +98,10 @@ export class FinanceiroController {
   listarDoacoes() { return this.svc.listarDoacoes(); }
 
   @Post('movimentacoes')
-  criarMovimentacao(@Body() dto: any) { return this.svc.criarMovimentacao(dto); }
+  criarMovimentacao(@Body() dto: any, @Req() req: any) {
+    const usuarioNome = req.user?.nome || req.user?.email || 'Sistema';
+    return this.svc.criarMovimentacao({ ...dto, usuario_nome: usuarioNome });
+  }
 
   @Patch('movimentacoes/:id')
   editarMovimentacao(@Param('id') id: string, @Body() dto: any) { return this.svc.editarMovimentacao(id, dto); }

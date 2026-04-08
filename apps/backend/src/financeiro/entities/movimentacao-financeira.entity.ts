@@ -41,6 +41,9 @@ export class MovimentacaoFinanceira {
   @Column({ type: 'varchar', nullable: true })
   recorrencia: string;
 
+  @Column({ name: 'usuario_nome', type: 'varchar', nullable: true })
+  usuario_nome: string;
+
   @CreateDateColumn()
   created_at: Date;
 

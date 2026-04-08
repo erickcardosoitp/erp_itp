@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import api from '@/services/api';
 import { useAuth } from '@/context/auth-context';
+import { usePermissions } from '@/hooks/use-permissions';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -73,8 +74,8 @@ export default function DoacoesPage() {
     (m.plano_contas ?? '').toLowerCase().includes(busca.toLowerCase()),
   );
 
-  const ROLES_PODEM_DELETAR = ['admin', 'prt', 'vp', 'drt', 'adjunto'];
-  const podeExcluir = ROLES_PODEM_DELETAR.includes(user?.role ?? '');
+  const { canDelete } = usePermissions(user);
+  const podeExcluir = canDelete;
 
   const handleDeletar = async (id: string) => {
     if (!confirm('Confirmar exclusão desta doação?')) return;

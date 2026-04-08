@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import api from '@/services/api';
 import { useAuth } from '@/context/auth-context';
+import { usePermissions } from '@/hooks/use-permissions';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -24,6 +25,7 @@ interface Movimentacao {
   tipo_pessoa?: string;
   forma_pagamento?: string;
   recorrencia?: string;
+  usuario_nome?: string;
 }
 
 interface LookupItem { id: string; nome: string; ativo?: boolean; }
@@ -149,8 +151,10 @@ export default function FinanceiroPage() {
     (m.plano_contas ?? '').toLowerCase().includes(busca.toLowerCase()),
   );
 
-  const ROLES_PODEM_DELETAR = ['admin', 'prt', 'vp', 'drt', 'adjunto'];
-  const podeExcluir = ROLES_PODEM_DELETAR.includes(user?.role ?? '');
+  const { canDelete, canAccess } = usePermissions(user);
+  const podeEscrever = canAccess('financeiro', 'incluir');
+  const podeEditar   = canAccess('financeiro', 'editar');
+  const podeExcluir  = canDelete && canAccess('financeiro', 'excluir');
 
   const statusCor = (s?: string) => {
     if (s === 'Pago' || s === 'Confirmado') return 'bg-emerald-50 text-emerald-600 border-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800';
@@ -187,10 +191,12 @@ export default function FinanceiroPage() {
               <RefreshCw size={13} />
               Atualizar
             </button>
-            <button onClick={abrirCriar}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2 rounded-xl font-black text-[10px] uppercase flex items-center gap-2 transition-colors shadow-sm">
-              <Plus size={14} strokeWidth={3} /> Nova Movimentação
-            </button>
+            {podeEscrever && (
+              <button onClick={abrirCriar}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2 rounded-xl font-black text-[10px] uppercase flex items-center gap-2 transition-colors shadow-sm">
+                <Plus size={14} strokeWidth={3} /> Nova Movimentação
+              </button>
+            )}
           </div>
         </header>
 
@@ -263,6 +269,7 @@ export default function FinanceiroPage() {
                     <th className="text-right px-4 py-4">Valor</th>
                     <th className="text-left px-4 py-4">Forma Pgto</th>
                     <th className="text-left px-4 py-4">Recorrência</th>
+                    <th className="text-left px-4 py-4">Lançado por</th>
                     <th className="text-right px-4 py-4">Ações</th>
                   </tr>
                 </thead>
@@ -291,9 +298,12 @@ export default function FinanceiroPage() {
                       </td>
                       <td className="px-4 py-3 text-xs text-slate-500">{m.forma_pagamento || '–'}</td>
                       <td className="px-4 py-3 text-xs text-slate-500">{m.recorrencia || '–'}</td>
+                      <td className="px-4 py-3 text-xs text-slate-400 max-w-[120px] truncate">{m.usuario_nome || '–'}</td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-1">
-                          <button onClick={() => abrirEditar(m)} className="p-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition-colors"><Edit3 size={11} /></button>
+                          {podeEditar && (
+                            <button onClick={() => abrirEditar(m)} className="p-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition-colors"><Edit3 size={11} /></button>
+                          )}
                           {podeExcluir && (
                             <button onClick={() => handleDeletar(m.id)} className="p-1.5 rounded-lg bg-red-500 hover:bg-red-600 text-white transition-colors"><Trash2 size={11} /></button>
                           )}

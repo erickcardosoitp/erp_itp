@@ -18,7 +18,7 @@ export class FuncionariosController {
   constructor(private readonly svc: FuncionariosService) {}
 
   @Get()
-  @Roles(Role.CZNH)
+  @Roles(Role.USER)
   listar() {
     return this.svc.listar();
   }
