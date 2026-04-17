@@ -72,7 +72,7 @@ function FL({ label, children }: { label: string; children: React.ReactNode }) {
 function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { reload: number; colaboradores: any[]; carregarColaboradores: () => void }) {
   const [busca, setBusca] = useState('');
   const [loading, setLoading] = useState(false);
-  const [modal, setModal] = useState<'vincular' | 'novo' | 'codigos' | null>(null);
+  const [modal, setModal] = useState<'vincular' | 'novo' | 'codigos' | 'editar-cadastro' | null>(null);
   const [editando, setEditando] = useState<any | null>(null);
   const [detalhe, setDetalhe] = useState<string | null>(null);
   const [funcionariosDisp, setFuncionariosDisp] = useState<any[]>([]);
@@ -82,6 +82,7 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
   const [salvando, setSalvando] = useState(false);
   const fotoRef = useRef<HTMLInputElement>(null);
   const [uploadandoFoto, setUploadandoFoto] = useState<string | null>(null);
+  const [valoresCustom, setValoresCustom] = useState<Record<string, number>>({});
 
   const [form, setForm] = useState<any>({
     tipo: 'voluntario', dias_trabalho: ['seg', 'ter', 'qua', 'qui', 'sex'],
@@ -104,14 +105,29 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
   const abrirCodigosColaborador = async (col: any) => {
     setColSelecionado(col);
     const r = await fetch(`${API}/gente/colaboradores/${col.id}/codigos`, { credentials: 'include' });
-    setCodigosCol(Array.isArray(await r.json()) ? await r.clone().json() : []);
-    const r2 = await fetch(`${API}/gente/colaboradores/${col.id}/codigos`, { credentials: 'include' });
-    setCodigosCol(await r2.json());
+    setCodigosCol(await r.json());
+    setValoresCustom({});
     setModal('codigos');
   };
 
-  const atribuirCodigo = async (codigo_id: string, valor?: number) => {
+  const salvarEdicaoCadastro = async () => {
+    if (!colSelecionado?.funcionario?.id) return;
+    setSalvando(true);
+    try {
+      const r = await fetch(`${API}/funcionarios/${colSelecionado.funcionario.id}`, {
+        method: 'PATCH', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formFunc),
+      });
+      if (!r.ok) { const e = await r.json(); throw new Error(e.message); }
+      toast.success('Cadastro atualizado!'); setModal(null); carregarColaboradores();
+    } catch (e: any) { toast.error(e.message); }
+    setSalvando(false);
+  };
+
+  const atribuirCodigo = async (codigo_id: string) => {
     if (!colSelecionado) return;
+    const valor = valoresCustom[codigo_id];
     const r = await fetch(`${API}/gente/colaboradores/${colSelecionado.id}/codigos`, {
       method: 'POST', credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -274,7 +290,8 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
                     <Badge label={c.tipo === 'voluntario' ? 'Voluntário' : 'Funcionário'} color={c.tipo === 'voluntario' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' : 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300'} />
                     {c.horario_entrada && <span className="text-xs text-slate-400 hidden sm:block">{c.horario_entrada}→{c.horario_saida}</span>}
                     <button onClick={() => abrirCodigosColaborador(c)} className="p-1.5 text-slate-400 hover:text-emerald-600 transition" title="Códigos VR"><Tag size={14} /></button>
-                    <button onClick={() => { setEditando(c); setForm({ ...c }); carregarDisp(); setModal('vincular'); }} className="p-1.5 text-slate-400 hover:text-purple-600 transition"><Edit2 size={14} /></button>
+                    <button onClick={() => { setColSelecionado(c); setFormFunc({ ...c.funcionario }); setModal('editar-cadastro'); }} className="p-1.5 text-slate-400 hover:text-blue-500 transition" title="Editar Cadastro"><User size={14} /></button>
+                    <button onClick={() => { setEditando(c); setForm({ ...c }); carregarDisp(); setModal('vincular'); }} className="p-1.5 text-slate-400 hover:text-purple-600 transition" title="Editar Ponto/Horário"><Edit2 size={14} /></button>
                     <button onClick={() => setDetalhe(detalhe === c.id ? null : c.id)} className="p-1.5 text-slate-400 hover:text-blue-500 transition">
                       {detalhe === c.id ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                     </button>
@@ -388,18 +405,72 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
             ) : <p className="text-slate-400 text-sm text-center py-4">Nenhum código atribuído.</p>}
             <div className="border-t dark:border-slate-700 pt-3">
               <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Adicionar código</p>
-              {codigos.filter(c => c.ativo && !codigosCol.some((cc: any) => cc.codigo_id === c.id)).map(c => (
-                <div key={c.id} className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-800 last:border-0">
-                  <div>
+              {codigos.filter(c => c.ativo && !codigosCol.some((cc: any) => cc.codigo_id === c.id)).length === 0
+                ? <p className="text-slate-400 text-sm text-center py-3">Todos os códigos já foram atribuídos.</p>
+                : codigos.filter(c => c.ativo && !codigosCol.some((cc: any) => cc.codigo_id === c.id)).map(c => (
+                <div key={c.id} className="flex items-center gap-2 py-2 border-b border-slate-100 dark:border-slate-800 last:border-0">
+                  <div className="flex-1 min-w-0">
                     <span className="font-mono text-xs font-bold text-slate-500">{c.codigo}</span>
                     <span className="text-sm text-slate-700 dark:text-slate-300 ml-2">{c.descricao}</span>
-                    <span className="text-xs text-slate-400 ml-2">{fmt.moeda(c.valor_base)}</span>
+                    <span className="text-xs text-slate-400 ml-1">(base: {fmt.moeda(c.valor_base)})</span>
                   </div>
-                  <button onClick={() => atribuirCodigo(c.id, c.valor_base)} className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition">
-                    <Plus size={12} className="inline" /> Adicionar
-                  </button>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <span className="text-xs text-slate-500">R$</span>
+                    <input
+                      type="number" step="0.01" min="0"
+                      value={valoresCustom[c.id] ?? c.valor_base ?? 0}
+                      onChange={e => setValoresCustom(v => ({ ...v, [c.id]: Number(e.target.value) }))}
+                      className="w-24 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-400"
+                    />
+                    <button onClick={() => atribuirCodigo(c.id)} className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition">
+                      <Plus size={12} className="inline" /> Adicionar
+                    </button>
+                  </div>
                 </div>
               ))}
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Modal: Editar Cadastro do Funcionário */}
+      {modal === 'editar-cadastro' && colSelecionado && (
+        <Modal title={`Editar Cadastro — ${colSelecionado.funcionario?.nome ?? ''}`} onClose={() => setModal(null)} wide>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2"><FL label="Nome Completo *"><input type="text" value={formFunc.nome || ''} onChange={e => setFormFunc((f: any) => ({ ...f, nome: e.target.value }))} className={ic} /></FL></div>
+              <FL label="Cargo / Função"><input type="text" value={formFunc.cargo || ''} onChange={e => setFormFunc((f: any) => ({ ...f, cargo: e.target.value }))} className={ic} /></FL>
+              <FL label="CPF"><input type="text" value={formFunc.cpf || ''} onChange={e => setFormFunc((f: any) => ({ ...f, cpf: e.target.value }))} className={ic} /></FL>
+              <FL label="RG"><input type="text" value={formFunc.rg || ''} onChange={e => setFormFunc((f: any) => ({ ...f, rg: e.target.value }))} className={ic} /></FL>
+              <FL label="Órgão Emissor RG"><input type="text" value={formFunc.orgao_emissor_rg || ''} onChange={e => setFormFunc((f: any) => ({ ...f, orgao_emissor_rg: e.target.value }))} className={ic} /></FL>
+              <FL label="Estado Civil">
+                <select value={formFunc.estado_civil || ''} onChange={e => setFormFunc((f: any) => ({ ...f, estado_civil: e.target.value }))} className={ic}>
+                  <option value="">Selecione...</option>
+                  {['Solteiro(a)', 'Casado(a)', 'Divorciado(a)', 'Viúvo(a)', 'União Estável'].map(v => <option key={v}>{v}</option>)}
+                </select>
+              </FL>
+              <FL label="Celular"><input type="text" value={formFunc.celular || ''} onChange={e => setFormFunc((f: any) => ({ ...f, celular: e.target.value }))} className={ic} /></FL>
+              <FL label="Email"><input type="email" value={formFunc.email || ''} onChange={e => setFormFunc((f: any) => ({ ...f, email: e.target.value }))} className={ic} /></FL>
+              <FL label="Data de Nascimento"><input type="date" value={formFunc.data_nascimento || ''} onChange={e => setFormFunc((f: any) => ({ ...f, data_nascimento: e.target.value }))} className={ic} /></FL>
+              <FL label="CEP"><input type="text" value={formFunc.cep || ''} onChange={async e => {
+                const cep = e.target.value.replace(/\D/g, '');
+                setFormFunc((f: any) => ({ ...f, cep: e.target.value }));
+                if (cep.length === 8) {
+                  const r = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+                  const d = await r.json();
+                  if (!d.erro) setFormFunc((f: any) => ({ ...f, logradouro: d.logradouro, bairro: d.bairro, cidade: d.localidade, estado: d.uf }));
+                }
+              }} className={ic} /></FL>
+              <FL label="Logradouro"><input type="text" value={formFunc.logradouro || ''} onChange={e => setFormFunc((f: any) => ({ ...f, logradouro: e.target.value }))} className={ic} /></FL>
+              <FL label="Número"><input type="text" value={formFunc.numero_residencia || ''} onChange={e => setFormFunc((f: any) => ({ ...f, numero_residencia: e.target.value }))} className={ic} /></FL>
+              <FL label="Complemento"><input type="text" value={formFunc.complemento || ''} onChange={e => setFormFunc((f: any) => ({ ...f, complemento: e.target.value }))} className={ic} /></FL>
+              <FL label="Bairro"><input type="text" value={formFunc.bairro || ''} onChange={e => setFormFunc((f: any) => ({ ...f, bairro: e.target.value }))} className={ic} /></FL>
+              <FL label="Cidade"><input type="text" value={formFunc.cidade || ''} onChange={e => setFormFunc((f: any) => ({ ...f, cidade: e.target.value }))} className={ic} /></FL>
+              <FL label="País"><input type="text" value={formFunc.pais || 'Brasil'} onChange={e => setFormFunc((f: any) => ({ ...f, pais: e.target.value }))} className={ic} /></FL>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button onClick={() => setModal(null)} className={bs}>Cancelar</button>
+              <button onClick={salvarEdicaoCadastro} disabled={salvando} className={bp}>{salvando ? 'Salvando...' : 'Salvar'}</button>
             </div>
           </div>
         </Modal>
