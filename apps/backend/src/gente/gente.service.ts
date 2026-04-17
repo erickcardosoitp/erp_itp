@@ -122,7 +122,11 @@ export class GenteService {
   }
 
   async editarColaborador(id: string, dto: any) {
-    await this.colaboradorRepo.update(id, dto);
+    const colunas = ['tipo','horario_entrada','horario_saida','dias_trabalho',
+      'latitude_permitida','longitude_permitida','raio_metros','salario_base','ativo'];
+    const payload: any = {};
+    colunas.forEach(k => { if (dto[k] !== undefined) payload[k] = dto[k]; });
+    if (Object.keys(payload).length) await this.colaboradorRepo.update(id, payload);
     return this.buscarColaborador(id);
   }
 
