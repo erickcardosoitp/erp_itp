@@ -1060,8 +1060,8 @@ function PontoTab({ reload, colaboradores }: { reload: number; colaboradores: an
   const solicitarGeo = useCallback((formSetter: React.Dispatch<React.SetStateAction<any>>) => {
     if (!navigator.geolocation) { setGeoStatus('negado'); return; }
     setGeoStatus('buscando');
-    navigator.permissions?.query({ name: 'geolocation' as PermissionName }).then(perm => {
-      if (perm.state === 'denied') { setGeoStatus('bloqueado'); return; }
+
+    const pedirLocalizacao = () => {
       navigator.geolocation.getCurrentPosition(
         pos => {
           formSetter((f: any) => ({ ...f, latitude: pos.coords.latitude, longitude: pos.coords.longitude }));
@@ -1070,16 +1070,16 @@ function PontoTab({ reload, colaboradores }: { reload: number; colaboradores: an
         () => setGeoStatus('negado'),
         { enableHighAccuracy: true, timeout: 10000 },
       );
-    }).catch(() => {
-      navigator.geolocation.getCurrentPosition(
-        pos => {
-          formSetter((f: any) => ({ ...f, latitude: pos.coords.latitude, longitude: pos.coords.longitude }));
-          setGeoStatus('ok');
-        },
-        () => setGeoStatus('negado'),
-        { enableHighAccuracy: true, timeout: 10000 },
-      );
-    });
+    };
+
+    // Safari não suporta navigator.permissions — fallback direto para getCurrentPosition
+    if (navigator.permissions?.query) {
+      navigator.permissions.query({ name: 'geolocation' as PermissionName })
+        .then(perm => { if (perm.state === 'denied') setGeoStatus('bloqueado'); else pedirLocalizacao(); })
+        .catch(pedirLocalizacao);
+    } else {
+      pedirLocalizacao();
+    }
   }, []);
   const PONTO_URL = typeof window !== 'undefined' ? `${window.location.origin}/ponto?token=itp-ponto-2026` : '';
 
