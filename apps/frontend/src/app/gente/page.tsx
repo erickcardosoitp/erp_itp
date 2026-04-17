@@ -111,10 +111,10 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
   };
 
   const salvarEdicaoCadastro = async () => {
-    if (!colSelecionado?.funcionario?.id) return;
+    if (!colSelecionado?.id) return;
     setSalvando(true);
     try {
-      const r = await fetch(`${API}/funcionarios/${colSelecionado.funcionario.id}`, {
+      const r = await fetch(`${API}/gente/colaboradores/${colSelecionado.id}/funcionario`, {
         method: 'PATCH', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formFunc),
@@ -217,6 +217,12 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
           <option value="funcionario">Funcionário</option>
         </select>
       </FL>
+      <FL label="Salário / Reembolso Base (R$)">
+        <input type="number" step="0.01" min="0" placeholder="0,00"
+          value={form.salario_base ?? ''}
+          onChange={e => setForm((f: any) => ({ ...f, salario_base: e.target.value === '' ? null : Number(e.target.value) }))}
+          className={ic} />
+      </FL>
       <div className="grid grid-cols-2 gap-3">
         <FL label="Entrada"><input type="time" value={form.horario_entrada || ''} onChange={e => setForm((f: any) => ({ ...f, horario_entrada: e.target.value }))} className={ic} /></FL>
         <FL label="Saída"><input type="time" value={form.horario_saida || ''} onChange={e => setForm((f: any) => ({ ...f, horario_saida: e.target.value }))} className={ic} /></FL>
@@ -304,6 +310,7 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
                     <div><span className="text-slate-400 block">Estado Civil</span><span className="font-semibold">{c.funcionario?.estado_civil || '—'}</span></div>
                     <div><span className="text-slate-400 block">RG</span><span className="font-semibold">{c.funcionario?.rg || '—'}</span></div>
                     <div><span className="text-slate-400 block">Celular</span><span className="font-semibold">{c.funcionario?.celular || '—'}</span></div>
+                    <div><span className="text-slate-400 block">Salário Base</span><span className="font-semibold">{c.salario_base ? fmt.moeda(c.salario_base) : '—'}</span></div>
                     <div><span className="text-slate-400 block">Horário</span><span className="font-semibold">{c.horario_entrada || '—'} → {c.horario_saida || '—'}</span></div>
                     <div><span className="text-slate-400 block">Dias</span><span className="font-semibold">{(c.dias_trabalho || []).join(', ') || '—'}</span></div>
                     <div><span className="text-slate-400 block">Geofence</span><span className="font-semibold">{c.latitude_permitida ? `${Number(c.latitude_permitida).toFixed(4)},${Number(c.longitude_permitida).toFixed(4)}` : '—'}</span></div>
@@ -562,7 +569,7 @@ function CodigosTab({ reload }: { reload: number }) {
           <div className="space-y-4">
             {!editando && <p className="text-xs text-slate-500 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-xl px-3 py-2">O código será gerado automaticamente (VR001, VR002...).</p>}
             <FL label="Descrição"><input type="text" value={form.descricao || ''} onChange={e => setForm((f: any) => ({ ...f, descricao: e.target.value }))} className={ic} placeholder="Ex: REEMBOLSO TRANSPORTE" /></FL>
-            <FL label="Valor Base (R$)"><input type="number" step="0.01" value={form.valor_base || ''} onChange={e => setForm((f: any) => ({ ...f, valor_base: e.target.value }))} className={ic} /></FL>
+            <FL label="Valor Base (R$)"><input type="number" step="0.01" min="0" placeholder="0,00" value={form.valor_base ?? ''} onChange={e => setForm((f: any) => ({ ...f, valor_base: e.target.value === '' ? 0 : Number(e.target.value) }))} className={ic} /></FL>
             <div className="flex items-center gap-2">
               <input type="checkbox" id="ativo_cod" checked={!!form.ativo} onChange={e => setForm((f: any) => ({ ...f, ativo: e.target.checked }))} className="w-4 h-4" />
               <label htmlFor="ativo_cod" className="text-sm text-slate-700 dark:text-slate-300">Ativo</label>

@@ -66,6 +66,10 @@ export class GenteController {
   @ModuloPerm('gente', 'editar')
   editar(@Param('id') id: string, @Body() dto: any) { return this.svc.editarColaborador(id, dto); }
 
+  @Patch('colaboradores/:id/funcionario')
+  @ModuloPerm('gente', 'editar')
+  editarFuncionario(@Param('id') id: string, @Body() dto: any) { return this.svc.editarFuncionarioViaGente(id, dto); }
+
   @Patch('colaboradores/:id/foto')
   @ModuloPerm('gente', 'editar')
   @UseInterceptors(FileInterceptor('foto', { storage: memoryStorage(), limits: { fileSize: 4 * 1024 * 1024 } }))

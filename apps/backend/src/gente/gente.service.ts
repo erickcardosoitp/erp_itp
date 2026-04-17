@@ -126,6 +126,22 @@ export class GenteService {
     return this.buscarColaborador(id);
   }
 
+  async editarFuncionarioViaGente(colaboradorId: string, dto: any) {
+    const col = await this.colaboradorRepo.findOne({ where: { id: colaboradorId } });
+    if (!col) throw new NotFoundException('Colaborador não encontrado.');
+    const campos = ['nome','cargo','email','cpf','celular','rg','orgao_emissor_rg','data_emissao_rg',
+      'estado_civil','pais','data_nascimento','cep','logradouro','numero_residencia',
+      'complemento','bairro','cidade','estado','telefone_emergencia_1','telefone_emergencia_2'];
+    const sets = campos.filter(c => dto[c] !== undefined).map((c, i) => `${c} = $${i + 2}`);
+    if (!sets.length) return;
+    const vals = campos.filter(c => dto[c] !== undefined).map(c => dto[c]);
+    await this.dataSource.query(
+      `UPDATE funcionarios SET ${sets.join(', ')} WHERE id = $1`,
+      [col.funcionario_id, ...vals],
+    );
+    return this.buscarColaborador(colaboradorId);
+  }
+
   async removerColaborador(id: string) {
     await this.colaboradorRepo.update(id, { ativo: false });
     return { ok: true };
@@ -216,12 +232,17 @@ export class GenteService {
       );
       if (!func) continue;
 
-      // Proventos: códigos atribuídos
+      // Proventos: salário base + códigos atribuídos
+      const mesRef = mes_referencia.slice(2).replace('-', '/').toUpperCase();
+      const proventos: any[] = [];
+      if (col.salario_base && Number(col.salario_base) > 0) {
+        proventos.push({ codigo: 'SAL', descricao: 'SALÁRIO BASE', referencia: mesRef, valor: Number(col.salario_base) });
+      }
       const codigosCol = await this.listarCodigosColaborador(col.id);
-      const proventos = codigosCol.map(cc => ({
+      codigosCol.forEach(cc => proventos.push({
         codigo: cc.codigo?.codigo ?? '',
         descricao: cc.codigo?.descricao ?? '',
-        referencia: mes_referencia.replace('-', '/').slice(2).toUpperCase().replace('/', '/'),
+        referencia: mesRef,
         valor: Number(cc.valor_efetivo),
       }));
       const totalProventos = proventos.reduce((s, p) => s + p.valor, 0);

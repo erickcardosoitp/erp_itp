@@ -594,6 +594,10 @@ export class AppModule implements OnModuleInit {
           ADD COLUMN IF NOT EXISTS orgao_emissor_rg TEXT,
           ADD COLUMN IF NOT EXISTS data_emissao_rg DATE
       `);
+      await this.dataSource.query(`
+        ALTER TABLE IF EXISTS gente_colaboradores
+          ADD COLUMN IF NOT EXISTS salario_base NUMERIC(12,2)
+      `);
       this.logger.log('✅ Tabelas do módulo Gente criadas (IF NOT EXISTS)');
 
     } catch (err: any) {
