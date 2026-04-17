@@ -1,8 +1,10 @@
 import {
   Controller, Get, Post, Patch, Delete,
   Param, Body, Headers, UseGuards, Logger,
-  UnauthorizedException,
+  UnauthorizedException, UseInterceptors, UploadedFile, BadRequestException,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ModuloPermGuard } from '../auth/guards/modulo-perm.guard';
 import { ModuloPerm } from '../auth/decorators/modulo-perm.decorator';
@@ -38,6 +40,17 @@ export class FuncionariosController {
   @ModuloPerm('cadastro_basico', 'excluir')
   deletar(@Param('id') id: string) {
     return this.svc.deletar(id);
+  }
+
+  @Patch(':id/foto')
+  @ModuloPerm('cadastro_basico', 'editar')
+  @UseInterceptors(FileInterceptor('foto', { storage: memoryStorage(), limits: { fileSize: 4 * 1024 * 1024 } }))
+  async uploadFoto(@Param('id') id: string, @UploadedFile() file: Express.Multer.File) {
+    if (!file) throw new BadRequestException('Nenhum arquivo enviado.');
+    const allowed = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!allowed.includes(file.mimetype)) throw new BadRequestException('Formato inválido. Use JPEG, PNG ou WebP.');
+    const fotoBase64 = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
+    return this.svc.editar(id, { foto: fotoBase64 } as any);
   }
 
   // ── WEBHOOK: Google Forms → Cadastro de Funcionário (rota pública) ────────

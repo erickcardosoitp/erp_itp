@@ -1,6 +1,6 @@
-import { Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { Injectable, NotFoundException, UnauthorizedException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 import { GenteColaborador } from './entities/gente-colaborador.entity';
 import { GentePonto } from './entities/gente-ponto.entity';
 import { GenteRecibo } from './entities/gente-recibo.entity';
@@ -8,7 +8,8 @@ import { GenteVale } from './entities/gente-vale.entity';
 import { GenteAdvertencia } from './entities/gente-advertencia.entity';
 import { GenteSuspensao } from './entities/gente-suspensao.entity';
 import { GenteFalta } from './entities/gente-falta.entity';
-import { DataSource } from 'typeorm';
+import { GenteCodigoAjuda } from './entities/gente-codigo-ajuda.entity';
+import { GenteColaboradorCodigo } from './entities/gente-colaborador-codigo.entity';
 
 const PONTO_TOKEN = 'itp-ponto-2026';
 
@@ -17,11 +18,8 @@ function calcDistancia(lat1: number, lon1: number, lat2: number, lon2: number): 
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
   const dLon = ((lon2 - lon1) * Math.PI) / 180;
   const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
@@ -35,41 +33,92 @@ export class GenteService {
     @InjectRepository(GenteAdvertencia) private advertenciaRepo: Repository<GenteAdvertencia>,
     @InjectRepository(GenteSuspensao) private suspensaoRepo: Repository<GenteSuspensao>,
     @InjectRepository(GenteFalta) private faltaRepo: Repository<GenteFalta>,
+    @InjectRepository(GenteCodigoAjuda) private codigoRepo: Repository<GenteCodigoAjuda>,
+    @InjectRepository(GenteColaboradorCodigo) private colCodigoRepo: Repository<GenteColaboradorCodigo>,
     private dataSource: DataSource,
   ) {}
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
+  private async enrichColaborador(col: GenteColaborador) {
+    const [func] = await this.dataSource.query(
+      `SELECT id, nome, cargo, email, cpf, celular, matricula, ativo, foto, estado_civil, rg FROM funcionarios WHERE id = $1`,
+      [col.funcionario_id],
+    );
+    return { ...col, funcionario: func ?? null };
+  }
 
   // ── Colaboradores ──────────────────────────────────────────────────────────
 
   async listarColaboradores() {
     const colaboradores = await this.colaboradorRepo.find({ order: { createdAt: 'DESC' } });
     if (!colaboradores.length) return [];
-
     const ids = colaboradores.map(c => c.funcionario_id);
     const funcionarios: any[] = await this.dataSource.query(
-      `SELECT id, nome, cargo, email, cpf, celular, matricula, ativo FROM funcionarios WHERE id = ANY($1::uuid[])`,
+      `SELECT id, nome, cargo, email, cpf, celular, matricula, ativo, foto, estado_civil, rg FROM funcionarios WHERE id = ANY($1::uuid[])`,
       [ids],
     );
     const funcMap: Record<string, any> = {};
     funcionarios.forEach(f => (funcMap[f.id] = f));
-
     return colaboradores.map(c => ({ ...c, funcionario: funcMap[c.funcionario_id] ?? null }));
   }
 
   async buscarColaborador(id: string) {
     const col = await this.colaboradorRepo.findOne({ where: { id } });
     if (!col) throw new NotFoundException('Colaborador não encontrado.');
-    const [func] = await this.dataSource.query(
-      `SELECT id, nome, cargo, email, cpf, celular, matricula, sexo, data_nascimento, ativo FROM funcionarios WHERE id = $1`,
-      [col.funcionario_id],
-    );
-    return { ...col, funcionario: func ?? null };
+    return this.enrichColaborador(col);
   }
 
   async criarColaborador(dto: any) {
     const existe = await this.colaboradorRepo.findOne({ where: { funcionario_id: dto.funcionario_id } });
-    if (existe) throw new Error('Este funcionário já está cadastrado no módulo Gente.');
+    if (existe) throw new BadRequestException('Este funcionário já está cadastrado no módulo Gente.');
     const col = this.colaboradorRepo.create(dto);
     return this.colaboradorRepo.save(col);
+  }
+
+  /** Cria funcionário + colaborador em um único passo (sem precisar ir ao Cadastro Básico) */
+  async criarFuncionarioEColaborador(funcDto: any, colDto: any, criadoPorId: string) {
+    // 1. Gera matrícula
+    const now = new Date();
+    const yyyymm = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const rows: any[] = await this.dataSource.query(
+      `SELECT COUNT(*) as total FROM funcionarios WHERE matricula LIKE $1`,
+      [`ITP-FUNC-${yyyymm}-%`],
+    );
+    const seq = String(Number(rows[0]?.total ?? 0) + 1).padStart(3, '0');
+    const matricula = `ITP-FUNC-${yyyymm}-${seq}`;
+
+    // 2. Insere funcionário
+    const [func] = await this.dataSource.query(
+      `INSERT INTO funcionarios (nome, cargo, email, cpf, celular, data_nascimento, sexo, raca_cor, escolaridade,
+        cep, logradouro, numero_residencia, complemento, bairro, cidade, estado, pais, estado_civil, rg,
+        telefone_emergencia_1, matricula, ativo)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,true)
+       RETURNING id, nome, cargo, matricula`,
+      [
+        funcDto.nome, funcDto.cargo ?? null, funcDto.email ?? null, funcDto.cpf ?? null,
+        funcDto.celular ?? null, funcDto.data_nascimento ?? null, funcDto.sexo ?? null,
+        funcDto.raca_cor ?? null, funcDto.escolaridade ?? null,
+        funcDto.cep ?? null, funcDto.logradouro ?? null, funcDto.numero_residencia ?? null,
+        funcDto.complemento ?? null, funcDto.bairro ?? null, funcDto.cidade ?? null,
+        funcDto.estado ?? null, funcDto.pais ?? 'Brasil', funcDto.estado_civil ?? null,
+        funcDto.rg ?? null, funcDto.telefone_emergencia_1 ?? null, matricula,
+      ],
+    );
+
+    // 3. Cria colaborador vinculado
+    const col = this.colaboradorRepo.create({
+      funcionario_id: func.id,
+      tipo: colDto.tipo ?? 'voluntario',
+      horario_entrada: colDto.horario_entrada ?? '08:00',
+      horario_saida: colDto.horario_saida ?? '17:00',
+      dias_trabalho: colDto.dias_trabalho ?? ['seg', 'ter', 'qua', 'qui', 'sex'],
+      raio_metros: 100,
+      latitude_permitida: -22.8597901,
+      longitude_permitida: -43.3308139,
+    });
+    const saved = await this.colaboradorRepo.save(col);
+    return { ...saved, funcionario: func };
   }
 
   async editarColaborador(id: string, dto: any) {
@@ -94,6 +143,185 @@ export class GenteService {
     );
   }
 
+  // ── Códigos de Ajuda de Custo (VRX) ──────────────────────────────────────
+
+  async listarCodigos() {
+    return this.codigoRepo.find({ order: { codigo: 'ASC' } });
+  }
+
+  async criarCodigo(dto: any) {
+    // Auto-gera código VRxxx
+    const ultimo: any[] = await this.dataSource.query(
+      `SELECT codigo FROM gente_codigos_ajuda ORDER BY codigo DESC LIMIT 1`,
+    );
+    let proximo = 1;
+    if (ultimo.length && ultimo[0].codigo?.match(/^VR(\d+)$/)) {
+      proximo = parseInt(ultimo[0].codigo.replace('VR', ''), 10) + 1;
+    }
+    const codigo = `VR${String(proximo).padStart(3, '0')}`;
+    return this.codigoRepo.save(this.codigoRepo.create({ ...dto, codigo }));
+  }
+
+  async editarCodigo(id: string, dto: any) {
+    await this.codigoRepo.update(id, dto);
+    return this.codigoRepo.findOneBy({ id });
+  }
+
+  async deletarCodigo(id: string) {
+    await this.codigoRepo.delete(id);
+    return { ok: true };
+  }
+
+  // ── Códigos por colaborador ───────────────────────────────────────────────
+
+  async listarCodigosColaborador(colaborador_id: string) {
+    const links = await this.colCodigoRepo.find({ where: { colaborador_id, ativo: true } });
+    if (!links.length) return [];
+    const codigoIds = links.map(l => l.codigo_id);
+    const codigos = await this.codigoRepo.find({ where: codigoIds.map(id => ({ id })) as any });
+    const codigoMap: Record<string, any> = {};
+    codigos.forEach(c => (codigoMap[c.id] = c));
+    return links.map(l => ({
+      ...l,
+      codigo: codigoMap[l.codigo_id] ?? null,
+      valor_efetivo: l.valor_personalizado ?? codigoMap[l.codigo_id]?.valor_base ?? 0,
+    }));
+  }
+
+  async atribuirCodigoColaborador(colaborador_id: string, codigo_id: string, valor_personalizado?: number) {
+    const existente = await this.colCodigoRepo.findOne({ where: { colaborador_id, codigo_id } });
+    if (existente) {
+      await this.colCodigoRepo.update(existente.id, { ativo: true, valor_personalizado: valor_personalizado ?? undefined });
+      return this.colCodigoRepo.findOneBy({ id: existente.id });
+    }
+    return this.colCodigoRepo.save(this.colCodigoRepo.create({ colaborador_id, codigo_id, valor_personalizado: valor_personalizado ?? undefined }));
+  }
+
+  async removerCodigoColaborador(id: string) {
+    await this.colCodigoRepo.update(id, { ativo: false });
+    return { ok: true };
+  }
+
+  // ── Cálculo de Folha ──────────────────────────────────────────────────────
+
+  async calcularFolha(mes_referencia: string, criado_por_id: string, criado_por_nome: string) {
+    // mes_referencia: YYYY-MM
+    const colaboradores = await this.colaboradorRepo.find({ where: { ativo: true } });
+    const resultados: any[] = [];
+
+    for (const col of colaboradores) {
+      const [func] = await this.dataSource.query(
+        `SELECT id, nome, cargo, matricula FROM funcionarios WHERE id = $1`,
+        [col.funcionario_id],
+      );
+      if (!func) continue;
+
+      // Proventos: códigos atribuídos
+      const codigosCol = await this.listarCodigosColaborador(col.id);
+      const proventos = codigosCol.map(cc => ({
+        codigo: cc.codigo?.codigo ?? '',
+        descricao: cc.codigo?.descricao ?? '',
+        referencia: mes_referencia.replace('-', '/').slice(2).toUpperCase().replace('/', '/'),
+        valor: Number(cc.valor_efetivo),
+      }));
+      const totalProventos = proventos.reduce((s, p) => s + p.valor, 0);
+
+      // Descontos: vales não descontados do mês + advertências graves
+      const mesInicio = `${mes_referencia}-01`;
+      const mesFim = new Date(Number(mes_referencia.split('-')[0]), Number(mes_referencia.split('-')[1]), 0)
+        .toISOString().split('T')[0];
+
+      const valesDoMes = await this.valeRepo
+        .createQueryBuilder('v')
+        .where('v.colaborador_id = :id', { id: col.id })
+        .andWhere('v.descontado = false')
+        .andWhere('v.data >= :inicio', { inicio: mesInicio })
+        .andWhere('v.data <= :fim', { fim: mesFim })
+        .getMany();
+
+      const descontos: any[] = valesDoMes.map(v => ({
+        codigo: 'DESC',
+        descricao: `Vale ${v.tipo.toUpperCase()}`,
+        referencia: mes_referencia.slice(2).replace('-', '/').toUpperCase(),
+        valor: Number(v.valor),
+        vale_id: v.id,
+      }));
+
+      const totalDescontos = descontos.reduce((s, d) => s + d.valor, 0);
+      const liquido = totalProventos - totalDescontos;
+
+      // Marca vales como descontados
+      for (const v of valesDoMes) {
+        await this.valeRepo.update(v.id, { descontado: true });
+      }
+
+      // Gera recibo
+      const reciboExistente = await this.reciboRepo.findOne({
+        where: { colaborador_id: col.id, mes_referencia },
+      });
+
+      const reciboData = {
+        colaborador_id: col.id,
+        mes_referencia,
+        valor: liquido,
+        descricao: `Folha ${mes_referencia}`,
+        status: 'pendente',
+        observacao: JSON.stringify({ proventos, descontos, totalProventos, totalDescontos }),
+        criado_por_id,
+        criado_por_nome,
+      };
+
+      let recibo: any;
+      if (reciboExistente) {
+        await this.reciboRepo.update(reciboExistente.id, reciboData);
+        recibo = { ...reciboExistente, ...reciboData };
+      } else {
+        recibo = await this.reciboRepo.save(this.reciboRepo.create(reciboData));
+      }
+
+      resultados.push({
+        colaborador_id: col.id,
+        funcionario_nome: func.nome,
+        funcionario_cargo: func.cargo,
+        matricula: func.matricula,
+        proventos,
+        descontos,
+        totalProventos,
+        totalDescontos,
+        liquido,
+        recibo_id: recibo.id,
+      });
+    }
+
+    return { mes_referencia, total_colaboradores: resultados.length, resultados };
+  }
+
+  async buscarReciboCompleto(recibo_id: string) {
+    const recibo = await this.reciboRepo.findOneBy({ id: recibo_id });
+    if (!recibo) throw new NotFoundException('Recibo não encontrado.');
+    const col = await this.colaboradorRepo.findOneBy({ id: recibo.colaborador_id });
+    const [func] = col
+      ? await this.dataSource.query(
+          `SELECT id, nome, cargo, matricula, cpf, foto FROM funcionarios WHERE id = $1`,
+          [col.funcionario_id],
+        )
+      : [null];
+
+    let detalhes: any = {};
+    try { detalhes = JSON.parse(recibo.observacao ?? '{}'); } catch {}
+
+    // Gera número de código do colaborador (baseado na sequência da matrícula)
+    const codigoNum = func?.matricula?.split('-').pop()?.padStart(5, '0') ?? '00001';
+
+    return {
+      ...recibo,
+      colaborador: col,
+      funcionario: func,
+      codigo_colaborador: codigoNum,
+      ...detalhes,
+    };
+  }
+
   // ── Ponto ─────────────────────────────────────────────────────────────────
 
   async listarPonto(colaborador_id?: string, data_inicio?: string, data_fim?: string) {
@@ -114,51 +342,34 @@ export class GenteService {
     funcionarios.forEach(f => (funcMap[f.id] = f.nome));
     const colMap: Record<string, string> = {};
     colaboradores.forEach(c => (colMap[c.id] = funcMap[c.funcionario_id] ?? ''));
-
     return registros.map(r => ({ ...r, colaborador_nome: colMap[r.colaborador_id] ?? '' }));
   }
 
   async registrarPonto(dto: any, registrado_por = 'gestor') {
     let distancia_metros: number | null = null;
     let dentro_area: boolean | null = null;
-
     if (dto.latitude && dto.longitude) {
       const col = await this.colaboradorRepo.findOne({ where: { id: dto.colaborador_id } });
       if (col?.latitude_permitida && col?.longitude_permitida) {
-        distancia_metros = Math.round(
-          calcDistancia(dto.latitude, dto.longitude, Number(col.latitude_permitida), Number(col.longitude_permitida)),
-        );
-        dentro_area = distancia_metros <= (col.raio_metros ?? 200);
+        distancia_metros = Math.round(calcDistancia(dto.latitude, dto.longitude, Number(col.latitude_permitida), Number(col.longitude_permitida)));
+        dentro_area = distancia_metros <= (col.raio_metros ?? 100);
       }
     }
-
-    const reg = this.pontoRepo.create({
-      ...dto,
-      data_hora: dto.data_hora ?? new Date(),
-      distancia_metros,
-      dentro_area,
-      registrado_por,
-    });
+    const reg = this.pontoRepo.create({ ...dto, data_hora: dto.data_hora ?? new Date(), distancia_metros, dentro_area, registrado_por });
     return this.pontoRepo.save(reg);
   }
 
   async registrarPontoExterno(token: string, cpf_ou_matricula: string, tipo: string, latitude?: number, longitude?: number, observacao?: string) {
     const tokens = new Set([PONTO_TOKEN, process.env.PONTO_TOKEN].filter(Boolean) as string[]);
     if (!token || !tokens.has(token)) throw new UnauthorizedException('Token inválido.');
-
     const [func] = await this.dataSource.query(
       `SELECT f.id as func_id, f.nome, f.cpf, f.matricula FROM funcionarios f WHERE f.cpf = $1 OR f.matricula = $1 LIMIT 1`,
       [cpf_ou_matricula],
     );
     if (!func) throw new NotFoundException('Funcionário não encontrado.');
-
     const col = await this.colaboradorRepo.findOne({ where: { funcionario_id: func.func_id } });
     if (!col) throw new NotFoundException('Funcionário não cadastrado no módulo Gente.');
-
-    return this.registrarPonto(
-      { colaborador_id: col.id, tipo, latitude, longitude, observacao },
-      'self',
-    );
+    return this.registrarPonto({ colaborador_id: col.id, tipo, latitude, longitude, observacao }, 'self');
   }
 
   async verificarColaboradorExterno(token: string, cpf_ou_matricula: string) {
@@ -171,29 +382,11 @@ export class GenteService {
     if (!func) throw new NotFoundException('Funcionário não encontrado.');
     const col = await this.colaboradorRepo.findOne({ where: { funcionario_id: func.func_id } });
     if (!col) throw new NotFoundException('Funcionário não habilitado para ponto.');
-
-    const ultimoPonto = await this.pontoRepo.findOne({
-      where: { colaborador_id: col.id },
-      order: { data_hora: 'DESC' },
-    });
-
-    return {
-      colaborador_id: col.id,
-      nome: func.nome,
-      matricula: func.matricula,
-      horario_entrada: col.horario_entrada,
-      horario_saida: col.horario_saida,
-      latitude_permitida: col.latitude_permitida,
-      longitude_permitida: col.longitude_permitida,
-      raio_metros: col.raio_metros,
-      ultimo_ponto: ultimoPonto ?? null,
-    };
+    const ultimoPonto = await this.pontoRepo.findOne({ where: { colaborador_id: col.id }, order: { data_hora: 'DESC' } });
+    return { colaborador_id: col.id, nome: func.nome, matricula: func.matricula, horario_entrada: col.horario_entrada, horario_saida: col.horario_saida, latitude_permitida: col.latitude_permitida, longitude_permitida: col.longitude_permitida, raio_metros: col.raio_metros, ultimo_ponto: ultimoPonto ?? null };
   }
 
-  async deletarPonto(id: string) {
-    await this.pontoRepo.delete(id);
-    return { ok: true };
-  }
+  async deletarPonto(id: string) { await this.pontoRepo.delete(id); return { ok: true }; }
 
   // ── Recibos ───────────────────────────────────────────────────────────────
 
@@ -203,19 +396,9 @@ export class GenteService {
     return this.reciboRepo.find({ where, order: { createdAt: 'DESC' } });
   }
 
-  async criarRecibo(dto: any) {
-    return this.reciboRepo.save(this.reciboRepo.create(dto));
-  }
-
-  async editarRecibo(id: string, dto: any) {
-    await this.reciboRepo.update(id, dto);
-    return this.reciboRepo.findOneBy({ id });
-  }
-
-  async deletarRecibo(id: string) {
-    await this.reciboRepo.delete(id);
-    return { ok: true };
-  }
+  async criarRecibo(dto: any) { return this.reciboRepo.save(this.reciboRepo.create(dto)); }
+  async editarRecibo(id: string, dto: any) { await this.reciboRepo.update(id, dto); return this.reciboRepo.findOneBy({ id }); }
+  async deletarRecibo(id: string) { await this.reciboRepo.delete(id); return { ok: true }; }
 
   // ── Vales ─────────────────────────────────────────────────────────────────
 
@@ -225,19 +408,9 @@ export class GenteService {
     return this.valeRepo.find({ where, order: { createdAt: 'DESC' } });
   }
 
-  async criarVale(dto: any) {
-    return this.valeRepo.save(this.valeRepo.create(dto));
-  }
-
-  async editarVale(id: string, dto: any) {
-    await this.valeRepo.update(id, dto);
-    return this.valeRepo.findOneBy({ id });
-  }
-
-  async deletarVale(id: string) {
-    await this.valeRepo.delete(id);
-    return { ok: true };
-  }
+  async criarVale(dto: any) { return this.valeRepo.save(this.valeRepo.create(dto)); }
+  async editarVale(id: string, dto: any) { await this.valeRepo.update(id, dto); return this.valeRepo.findOneBy({ id }); }
+  async deletarVale(id: string) { await this.valeRepo.delete(id); return { ok: true }; }
 
   // ── Advertências ──────────────────────────────────────────────────────────
 
@@ -247,19 +420,9 @@ export class GenteService {
     return this.advertenciaRepo.find({ where, order: { createdAt: 'DESC' } });
   }
 
-  async criarAdvertencia(dto: any) {
-    return this.advertenciaRepo.save(this.advertenciaRepo.create(dto));
-  }
-
-  async editarAdvertencia(id: string, dto: any) {
-    await this.advertenciaRepo.update(id, dto);
-    return this.advertenciaRepo.findOneBy({ id });
-  }
-
-  async deletarAdvertencia(id: string) {
-    await this.advertenciaRepo.delete(id);
-    return { ok: true };
-  }
+  async criarAdvertencia(dto: any) { return this.advertenciaRepo.save(this.advertenciaRepo.create(dto)); }
+  async editarAdvertencia(id: string, dto: any) { await this.advertenciaRepo.update(id, dto); return this.advertenciaRepo.findOneBy({ id }); }
+  async deletarAdvertencia(id: string) { await this.advertenciaRepo.delete(id); return { ok: true }; }
 
   // ── Suspensões ────────────────────────────────────────────────────────────
 
@@ -269,19 +432,9 @@ export class GenteService {
     return this.suspensaoRepo.find({ where, order: { createdAt: 'DESC' } });
   }
 
-  async criarSuspensao(dto: any) {
-    return this.suspensaoRepo.save(this.suspensaoRepo.create(dto));
-  }
-
-  async editarSuspensao(id: string, dto: any) {
-    await this.suspensaoRepo.update(id, dto);
-    return this.suspensaoRepo.findOneBy({ id });
-  }
-
-  async deletarSuspensao(id: string) {
-    await this.suspensaoRepo.delete(id);
-    return { ok: true };
-  }
+  async criarSuspensao(dto: any) { return this.suspensaoRepo.save(this.suspensaoRepo.create(dto)); }
+  async editarSuspensao(id: string, dto: any) { await this.suspensaoRepo.update(id, dto); return this.suspensaoRepo.findOneBy({ id }); }
+  async deletarSuspensao(id: string) { await this.suspensaoRepo.delete(id); return { ok: true }; }
 
   // ── Faltas ────────────────────────────────────────────────────────────────
 
@@ -291,19 +444,9 @@ export class GenteService {
     return this.faltaRepo.find({ where, order: { createdAt: 'DESC' } });
   }
 
-  async criarFalta(dto: any) {
-    return this.faltaRepo.save(this.faltaRepo.create(dto));
-  }
-
-  async editarFalta(id: string, dto: any) {
-    await this.faltaRepo.update(id, dto);
-    return this.faltaRepo.findOneBy({ id });
-  }
-
-  async deletarFalta(id: string) {
-    await this.faltaRepo.delete(id);
-    return { ok: true };
-  }
+  async criarFalta(dto: any) { return this.faltaRepo.save(this.faltaRepo.create(dto)); }
+  async editarFalta(id: string, dto: any) { await this.faltaRepo.update(id, dto); return this.faltaRepo.findOneBy({ id }); }
+  async deletarFalta(id: string) { await this.faltaRepo.delete(id); return { ok: true }; }
 
   // ── Resumo do colaborador ─────────────────────────────────────────────────
 

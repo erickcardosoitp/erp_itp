@@ -89,6 +89,26 @@ export class Funcionario {
   @Column({ type: 'boolean', nullable: true, default: false })
   interesse_cursos: boolean;
 
+  // Dados documentais
+  @Column({ type: 'text', nullable: true })
+  rg: string;
+
+  @Column({ type: 'text', nullable: true })
+  orgao_emissor_rg: string;
+
+  @Column({ type: 'date', nullable: true })
+  data_emissao_rg: string;
+
+  @Column({ type: 'text', nullable: true })
+  estado_civil: string;
+
+  @Column({ type: 'text', nullable: true, default: 'Brasil' })
+  pais: string;
+
+  // Foto 3x4 (base64 data URI)
+  @Column({ type: 'text', nullable: true })
+  foto: string;
+
   @Column({ type: 'boolean', nullable: true, default: true })
   ativo: boolean;
 

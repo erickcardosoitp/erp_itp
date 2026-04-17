@@ -564,6 +564,36 @@ export class AppModule implements OnModuleInit {
           created_at TIMESTAMPTZ NOT NULL DEFAULT now()
         )
       `);
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS gente_codigos_ajuda (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          codigo TEXT NOT NULL UNIQUE,
+          descricao TEXT NOT NULL,
+          valor_base NUMERIC(12,2) NOT NULL DEFAULT 0,
+          ativo BOOLEAN NOT NULL DEFAULT true,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `);
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS gente_colaborador_codigos (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          colaborador_id UUID NOT NULL,
+          codigo_id UUID NOT NULL REFERENCES gente_codigos_ajuda(id) ON DELETE CASCADE,
+          valor_personalizado NUMERIC(12,2),
+          ativo BOOLEAN NOT NULL DEFAULT true,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE IF EXISTS funcionarios
+          ADD COLUMN IF NOT EXISTS foto TEXT,
+          ADD COLUMN IF NOT EXISTS estado_civil TEXT,
+          ADD COLUMN IF NOT EXISTS pais TEXT DEFAULT 'Brasil',
+          ADD COLUMN IF NOT EXISTS rg TEXT,
+          ADD COLUMN IF NOT EXISTS orgao_emissor_rg TEXT,
+          ADD COLUMN IF NOT EXISTS data_emissao_rg DATE
+      `);
       this.logger.log('✅ Tabelas do módulo Gente criadas (IF NOT EXISTS)');
 
     } catch (err: any) {

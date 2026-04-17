@@ -9,17 +9,15 @@ import { GenteVale } from './entities/gente-vale.entity';
 import { GenteAdvertencia } from './entities/gente-advertencia.entity';
 import { GenteSuspensao } from './entities/gente-suspensao.entity';
 import { GenteFalta } from './entities/gente-falta.entity';
+import { GenteCodigoAjuda } from './entities/gente-codigo-ajuda.entity';
+import { GenteColaboradorCodigo } from './entities/gente-colaborador-codigo.entity';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([
-      GenteColaborador,
-      GentePonto,
-      GenteRecibo,
-      GenteVale,
-      GenteAdvertencia,
-      GenteSuspensao,
-      GenteFalta,
+      GenteColaborador, GentePonto, GenteRecibo, GenteVale,
+      GenteAdvertencia, GenteSuspensao, GenteFalta,
+      GenteCodigoAjuda, GenteColaboradorCodigo,
     ]),
   ],
   controllers: [GenteController],

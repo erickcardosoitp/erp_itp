@@ -48,6 +48,11 @@ interface Funcionario {
   cargo?: string;
   email?: string;
   cpf?: string;
+  rg?: string;
+  orgao_emissor_rg?: string;
+  data_emissao_rg?: string;
+  estado_civil?: string;
+  pais?: string;
   data_nascimento?: string;
   celular?: string;
   sexo?: string;
@@ -74,6 +79,7 @@ interface Funcionario {
   interesse_cursos?: boolean;
   ativo?: boolean;
   matricula?: string;
+  foto?: string;
 }
 interface UsuarioAdmin { id: string; nome: string; email: string; role: string; matricula?: string; grupo?: { id: string; nome: string }; }
 interface Grupo { id: string; nome: string; grupo_permissoes?: any; usuarios?: { id: string; nome: string }[]; }
@@ -307,6 +313,7 @@ function FuncionariosTab({ onCount }: { onCount: (n: number) => void }) {
   const [form, setForm]     = useState<Partial<Funcionario>>({ ativo: true });
   const [salvando, setSalvando] = useState(false);
   const [buscandoCep, setBuscandoCep] = useState(false);
+  const [uploadandoFoto, setUploadandoFoto] = useState(false);
   // Estado do modal "Criar Usuário" a partir do funcionário
   const [modalUsuario, setModalUsuario] = useState<{ aberto: boolean; funcionario: Funcionario | null }>({ aberto: false, funcionario: null });
   const [formUsuario, setFormUsuario] = useState<any>({ role: 'prof', senha: '' });
@@ -405,6 +412,20 @@ function FuncionariosTab({ onCount }: { onCount: (n: number) => void }) {
     setSalvando(false);
   };
 
+  const handleFotoChange = async (e: React.ChangeEvent<HTMLInputElement>, funcionarioId?: string) => {
+    const file = e.target.files?.[0];
+    if (!file || !funcionarioId) return;
+    setUploadandoFoto(true);
+    try {
+      const fd = new FormData();
+      fd.append('foto', file);
+      const res = await api.patch(`/funcionarios/${funcionarioId}/foto`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      setForm(p => ({ ...p, foto: res.data?.foto }));
+      load();
+    } catch (err: any) { alert(err.response?.data?.message || 'Erro ao enviar foto.'); }
+    setUploadandoFoto(false);
+  };
+
   const handleDeletar = async (id: string) => {
     if (!confirm('Confirmar exclusão?')) return;
     try { await api.delete(`/funcionarios/${id}`); load(); }
@@ -434,8 +455,9 @@ function FuncionariosTab({ onCount }: { onCount: (n: number) => void }) {
         <thead className="bg-slate-50 dark:bg-slate-700/50 border-b border-slate-100 dark:border-slate-600">
           <tr className="text-[9px] font-black uppercase text-slate-400 tracking-widest">
             <th className="text-left px-6 py-4">Nome</th>
-            <th className="text-left px-6 py-4">Cargo / Especialidade</th>
-            <th className="text-left px-6 py-4">E-mail</th>
+            <th className="text-left px-6 py-4">Cargo</th>
+            <th className="text-left px-6 py-4">CPF</th>
+            <th className="text-left px-6 py-4">Celular</th>
             <th className="text-left px-6 py-4">Matrícula</th>
             <th className="text-center px-6 py-4">Status</th>
             <th className="text-right px-6 py-4">Ações</th>
@@ -448,12 +470,15 @@ function FuncionariosTab({ onCount }: { onCount: (n: number) => void }) {
             <tr key={p.id} className="hover:bg-purple-50/30 dark:hover:bg-purple-900/20 transition-colors">
               <td className="px-6 py-4">
                 <div className="flex items-center gap-3">
-                  <Avatar nome={p.nome} cor="purple" />
+                  {p.foto
+                    ? <img src={p.foto} alt={p.nome} className="w-8 h-10 rounded-lg object-cover border border-slate-200" />
+                    : <Avatar nome={p.nome} cor="purple" />}
                   <span className="font-bold text-slate-800 dark:text-slate-100 text-sm">{p.nome}</span>
                 </div>
               </td>
               <td className="px-6 py-4 text-xs text-slate-500">{p.cargo || '–'}</td>
-              <td className="px-6 py-4 text-xs text-slate-500">{p.email || '–'}</td>
+              <td className="px-6 py-4 text-xs text-slate-500 font-mono">{p.cpf || '–'}</td>
+              <td className="px-6 py-4 text-xs text-slate-500">{p.celular || '–'}</td>
               <td className="px-6 py-4">
                 {matriculaExibida ? (
                   <span className="font-mono text-[10px] font-bold bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-2 py-0.5 rounded-lg border border-purple-100 dark:border-purple-800">
@@ -551,6 +576,30 @@ function FuncionariosTab({ onCount }: { onCount: (n: number) => void }) {
           <form onSubmit={handleSalvar} className="space-y-5">
             {erro && <ErroBanner msg={erro} />}
 
+            {/* ── Foto 3x4 ── */}
+            <div className="flex items-center gap-4">
+              <div className="relative flex-shrink-0">
+                {form.foto ? (
+                  <img src={form.foto} alt="Foto" className="w-24 h-32 object-cover rounded-xl border-2 border-purple-300 shadow" />
+                ) : (
+                  <div className="w-24 h-32 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 flex items-center justify-center bg-slate-50 dark:bg-slate-800">
+                    <User size={28} className="text-slate-300 dark:text-slate-600" />
+                  </div>
+                )}
+                {modal.editando && (
+                  <label className="absolute -bottom-2 -right-2 cursor-pointer bg-purple-600 hover:bg-purple-700 text-white rounded-full p-1.5 shadow transition">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={e => handleFotoChange(e, modal.editando?.id)} />
+                  </label>
+                )}
+              </div>
+              <div className="flex-1">
+                <p className="text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">Foto 3×4</p>
+                <p className="text-[10px] text-slate-400 leading-relaxed">JPEG, PNG ou WebP · máx. 4 MB<br/>Salve o cadastro primeiro, depois faça upload da foto.</p>
+                {uploadandoFoto && <p className="text-[10px] text-purple-500 mt-1 animate-pulse">Enviando...</p>}
+              </div>
+            </div>
+
             {/* ── Dados Pessoais ── */}
             <div className="flex items-center gap-2 bg-purple-50 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-800/50 rounded-xl px-4 py-2.5">
               <div className="p-1.5 bg-purple-100 dark:bg-purple-800 rounded-lg flex-shrink-0">
@@ -593,6 +642,19 @@ function FuncionariosTab({ onCount }: { onCount: (n: number) => void }) {
                 <option value="Superior Completo">Superior Completo</option>
                 <option value="Pós-graduação">Pós-graduação</option>
               </FieldSelect>
+              <FieldSelect label="Estado Civil" value={form.estado_civil ?? ''} onChange={v => setForm(p => ({ ...p, estado_civil: v }))}>
+                <option value="">Selecione...</option>
+                <option value="Solteiro(a)">Solteiro(a)</option>
+                <option value="Casado(a)">Casado(a)</option>
+                <option value="Divorciado(a)">Divorciado(a)</option>
+                <option value="Viúvo(a)">Viúvo(a)</option>
+                <option value="União Estável">União Estável</option>
+                <option value="Separado(a)">Separado(a)</option>
+              </FieldSelect>
+              <FieldInput label="RG" value={form.rg ?? ''} onChange={v => setForm(p => ({ ...p, rg: v }))} placeholder="00.000.000-0" />
+              <FieldInput label="Órgão Emissor" value={form.orgao_emissor_rg ?? ''} onChange={v => setForm(p => ({ ...p, orgao_emissor_rg: v }))} placeholder="Ex: SSP/RJ" />
+              <FieldInput label="Data de Emissão RG" type="date" value={form.data_emissao_rg ?? ''} onChange={v => setForm(p => ({ ...p, data_emissao_rg: v }))} />
+              <FieldInput label="País" value={form.pais ?? 'Brasil'} onChange={v => setForm(p => ({ ...p, pais: v }))} />
             </div>
 
             {/* ── Endereço ── */}
