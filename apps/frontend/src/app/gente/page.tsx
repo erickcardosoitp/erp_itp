@@ -218,7 +218,7 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
           <option value="funcionario">Funcionário</option>
         </select>
       </FL>
-      <FL label="Salário / Reembolso Base (R$)">
+      <FL label="Salário Base (R$)">
         <input type="number" step="0.01" min="0" placeholder="0,00"
           value={form.salario_base ?? ''}
           onChange={e => setForm((f: any) => ({ ...f, salario_base: e.target.value === '' ? null : Number(e.target.value) }))}
@@ -594,6 +594,8 @@ function ReciboImpresso({ recibo, onClose }: { recibo: any; onClose: () => void 
   const totalProv = recibo.totalProventos ?? 0;
   const totalDesc = recibo.totalDescontos ?? 0;
   const liquido = recibo.liquido ?? recibo.valor ?? 0;
+  const totalSalario = proventos.filter((p: any) => p.codigo === 'SAL').reduce((s: number, p: any) => s + Number(p.valor), 0);
+  const totalReembolso = proventos.filter((p: any) => p.codigo !== 'SAL').reduce((s: number, p: any) => s + Number(p.valor), 0);
   const LINHAS_MIN = 8;
 
   return (
@@ -709,9 +711,19 @@ function ReciboImpresso({ recibo, onClose }: { recibo: any; onClose: () => void 
 
           {/* Rodapé */}
           <div className="grid grid-cols-2 items-end p-2 gap-4">
-            <div>
-              <div className="text-[9px] text-slate-500">Reembolso Base</div>
-              <div className="font-bold">{totalProv.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+            <div className="space-y-1">
+              {totalSalario > 0 && (
+                <div>
+                  <div className="text-[9px] text-slate-500">Salário Base</div>
+                  <div className="font-bold">{totalSalario.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                </div>
+              )}
+              {totalReembolso > 0 && (
+                <div>
+                  <div className="text-[9px] text-slate-500">Reembolso / Ajuda de Custo</div>
+                  <div className="font-bold">{totalReembolso.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                </div>
+              )}
             </div>
             <div className="text-right">
               <div className="text-[9px] font-bold uppercase tracking-widest text-slate-500">2ª Via - Empregado</div>
@@ -1043,6 +1055,7 @@ function PontoTab({ reload, colaboradores }: { reload: number; colaboradores: an
   const [modalAberto, setModalAberto] = useState(false);
   const [form, setForm] = useState<any>({ tipo: 'entrada', data_hora: new Date().toISOString().slice(0, 16) });
   const [salvando, setSalvando] = useState(false);
+  const [geoStatus, setGeoStatus] = useState<'idle' | 'buscando' | 'ok' | 'negado'>('idle');
   const PONTO_URL = typeof window !== 'undefined' ? `${window.location.origin}/ponto?token=itp-ponto-2026` : '';
 
   const carregar = useCallback(async () => {
@@ -1084,7 +1097,19 @@ function PontoTab({ reload, colaboradores }: { reload: number; colaboradores: an
         <input type="date" value={filtroInicio} onChange={e => setFiltroInicio(e.target.value)} className={`${ic} w-36`} />
         <input type="date" value={filtroFim} onChange={e => setFiltroFim(e.target.value)} className={`${ic} w-36`} />
         <button onClick={carregar} className={bs}><RefreshCw size={14} /></button>
-        <button onClick={() => setModalAberto(true)} className={bp}><Plus size={14} className="inline mr-1" />Registrar</button>
+        <button onClick={() => {
+          setForm({ tipo: 'entrada', data_hora: new Date().toISOString().slice(0, 16) });
+          setGeoStatus('buscando');
+          setModalAberto(true);
+          navigator.geolocation?.getCurrentPosition(
+            pos => {
+              setForm((f: any) => ({ ...f, latitude: pos.coords.latitude, longitude: pos.coords.longitude }));
+              setGeoStatus('ok');
+            },
+            () => setGeoStatus('negado'),
+            { enableHighAccuracy: true, timeout: 10000 },
+          );
+        }} className={bp}><Plus size={14} className="inline mr-1" />Registrar</button>
         <a href={PONTO_URL} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-xl text-sm transition whitespace-nowrap"><ExternalLink size={14} />Link Externo</a>
       </div>
       {loading ? <div className="text-center py-12 text-slate-400">Carregando...</div> : registros.length === 0
@@ -1124,6 +1149,13 @@ function PontoTab({ reload, colaboradores }: { reload: number; colaboradores: an
             <div className="grid grid-cols-2 gap-3">
               <FL label="Tipo"><select value={form.tipo} onChange={e => setForm((f: any) => ({ ...f, tipo: e.target.value }))} className={ic}><option value="entrada">Entrada</option><option value="saida">Saída</option></select></FL>
               <FL label="Data/Hora"><input type="datetime-local" value={form.data_hora} onChange={e => setForm((f: any) => ({ ...f, data_hora: e.target.value }))} className={ic} /></FL>
+            </div>
+            <div className={`flex items-center gap-2 text-xs rounded-lg px-3 py-2 ${geoStatus === 'ok' ? 'bg-green-50 text-green-700' : geoStatus === 'negado' ? 'bg-red-50 text-red-600' : 'bg-slate-50 text-slate-500'}`}>
+              <MapPin size={13} />
+              {geoStatus === 'buscando' && 'Obtendo localização...'}
+              {geoStatus === 'ok' && `Localização capturada (${Number(form.latitude).toFixed(5)}, ${Number(form.longitude).toFixed(5)})`}
+              {geoStatus === 'negado' && 'Permissão de localização negada — ponto sem coordenadas'}
+              {geoStatus === 'idle' && 'Localização não solicitada'}
             </div>
             <div className="flex justify-end gap-2">
               <button onClick={() => setModalAberto(false)} className={bs}>Cancelar</button>
