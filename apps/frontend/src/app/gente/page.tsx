@@ -1055,7 +1055,32 @@ function PontoTab({ reload, colaboradores }: { reload: number; colaboradores: an
   const [modalAberto, setModalAberto] = useState(false);
   const [form, setForm] = useState<any>({ tipo: 'entrada', data_hora: new Date().toISOString().slice(0, 16) });
   const [salvando, setSalvando] = useState(false);
-  const [geoStatus, setGeoStatus] = useState<'idle' | 'buscando' | 'ok' | 'negado'>('idle');
+  const [geoStatus, setGeoStatus] = useState<'idle' | 'buscando' | 'ok' | 'negado' | 'bloqueado'>('idle');
+
+  const solicitarGeo = useCallback((formSetter: React.Dispatch<React.SetStateAction<any>>) => {
+    if (!navigator.geolocation) { setGeoStatus('negado'); return; }
+    setGeoStatus('buscando');
+    navigator.permissions?.query({ name: 'geolocation' as PermissionName }).then(perm => {
+      if (perm.state === 'denied') { setGeoStatus('bloqueado'); return; }
+      navigator.geolocation.getCurrentPosition(
+        pos => {
+          formSetter((f: any) => ({ ...f, latitude: pos.coords.latitude, longitude: pos.coords.longitude }));
+          setGeoStatus('ok');
+        },
+        () => setGeoStatus('negado'),
+        { enableHighAccuracy: true, timeout: 10000 },
+      );
+    }).catch(() => {
+      navigator.geolocation.getCurrentPosition(
+        pos => {
+          formSetter((f: any) => ({ ...f, latitude: pos.coords.latitude, longitude: pos.coords.longitude }));
+          setGeoStatus('ok');
+        },
+        () => setGeoStatus('negado'),
+        { enableHighAccuracy: true, timeout: 10000 },
+      );
+    });
+  }, []);
   const PONTO_URL = typeof window !== 'undefined' ? `${window.location.origin}/ponto?token=itp-ponto-2026` : '';
 
   const carregar = useCallback(async () => {
@@ -1098,17 +1123,10 @@ function PontoTab({ reload, colaboradores }: { reload: number; colaboradores: an
         <input type="date" value={filtroFim} onChange={e => setFiltroFim(e.target.value)} className={`${ic} w-36`} />
         <button onClick={carregar} className={bs}><RefreshCw size={14} /></button>
         <button onClick={() => {
-          setForm({ tipo: 'entrada', data_hora: new Date().toISOString().slice(0, 16) });
-          setGeoStatus('buscando');
+          const novoForm = { tipo: 'entrada', data_hora: new Date().toISOString().slice(0, 16) };
+          setForm(novoForm);
           setModalAberto(true);
-          navigator.geolocation?.getCurrentPosition(
-            pos => {
-              setForm((f: any) => ({ ...f, latitude: pos.coords.latitude, longitude: pos.coords.longitude }));
-              setGeoStatus('ok');
-            },
-            () => setGeoStatus('negado'),
-            { enableHighAccuracy: true, timeout: 10000 },
-          );
+          solicitarGeo(setForm);
         }} className={bp}><Plus size={14} className="inline mr-1" />Registrar</button>
         <a href={PONTO_URL} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-xl text-sm transition whitespace-nowrap"><ExternalLink size={14} />Link Externo</a>
       </div>
@@ -1150,12 +1168,15 @@ function PontoTab({ reload, colaboradores }: { reload: number; colaboradores: an
               <FL label="Tipo"><select value={form.tipo} onChange={e => setForm((f: any) => ({ ...f, tipo: e.target.value }))} className={ic}><option value="entrada">Entrada</option><option value="saida">Saída</option></select></FL>
               <FL label="Data/Hora"><input type="datetime-local" value={form.data_hora} onChange={e => setForm((f: any) => ({ ...f, data_hora: e.target.value }))} className={ic} /></FL>
             </div>
-            <div className={`flex items-center gap-2 text-xs rounded-lg px-3 py-2 ${geoStatus === 'ok' ? 'bg-green-50 text-green-700' : geoStatus === 'negado' ? 'bg-red-50 text-red-600' : 'bg-slate-50 text-slate-500'}`}>
-              <MapPin size={13} />
-              {geoStatus === 'buscando' && 'Obtendo localização...'}
-              {geoStatus === 'ok' && `Localização capturada (${Number(form.latitude).toFixed(5)}, ${Number(form.longitude).toFixed(5)})`}
-              {geoStatus === 'negado' && 'Permissão de localização negada — ponto sem coordenadas'}
-              {geoStatus === 'idle' && 'Localização não solicitada'}
+            <div className={`flex items-start gap-2 text-xs rounded-lg px-3 py-2 ${geoStatus === 'ok' ? 'bg-green-50 text-green-700' : geoStatus === 'bloqueado' ? 'bg-orange-50 text-orange-700' : geoStatus === 'negado' ? 'bg-red-50 text-red-600' : 'bg-slate-50 text-slate-500'}`}>
+              <MapPin size={13} className="mt-0.5 shrink-0" />
+              <div className="flex-1">
+                {geoStatus === 'buscando' && 'Aguardando permissão de localização...'}
+                {geoStatus === 'ok' && `Localização capturada (${Number(form.latitude).toFixed(5)}, ${Number(form.longitude).toFixed(5)})`}
+                {geoStatus === 'negado' && <span>Permissão negada. <button type="button" className="underline font-bold" onClick={() => solicitarGeo(setForm)}>Tentar novamente</button></span>}
+                {geoStatus === 'bloqueado' && <span>Localização bloqueada pelo navegador. Para liberar: clique no cadeado na barra de endereço → Permissões → Localização → Permitir, depois <button type="button" className="underline font-bold" onClick={() => solicitarGeo(setForm)}>tente novamente</button>.</span>}
+                {geoStatus === 'idle' && <span>Localização não solicitada. <button type="button" className="underline font-bold" onClick={() => solicitarGeo(setForm)}>Solicitar agora</button></span>}
+              </div>
             </div>
             <div className="flex justify-end gap-2">
               <button onClick={() => setModalAberto(false)} className={bs}>Cancelar</button>
