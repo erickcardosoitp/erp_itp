@@ -97,7 +97,8 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
 
   const carregarCodigos = async () => {
     const r = await fetch(`${API}/gente/codigos-ajuda`, { credentials: 'include' });
-    setCodigos(Array.isArray(await r.clone().json()) ? await r.json() : []);
+    const cd = await r.json();
+    setCodigos(Array.isArray(cd) ? cd : []);
   };
 
   useEffect(() => { carregarCodigos(); }, [reload]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -499,9 +500,8 @@ function CodigosTab({ reload }: { reload: number }) {
   const carregar = useCallback(async () => {
     setLoading(true);
     const r = await fetch(`${API}/gente/codigos-ajuda`, { credentials: 'include' });
-    setCodigos(Array.isArray(await r.json()) ? await r.clone().json() : []);
-    const r2 = await fetch(`${API}/gente/codigos-ajuda`, { credentials: 'include' });
-    setCodigos(await r2.json());
+    const codData = await r.json();
+    setCodigos(Array.isArray(codData) ? codData : []);
     setLoading(false);
   }, []);
 
@@ -743,9 +743,8 @@ function RecibosTab({ reload, colaboradores }: { reload: number; colaboradores: 
     setLoading(true);
     const params = filtroCol ? `?colaborador_id=${filtroCol}` : '';
     const r = await fetch(`${API}/gente/recibos${params}`, { credentials: 'include' });
-    setRecibos(Array.isArray(await r.json()) ? await r.clone().json() : []);
-    const r2 = await fetch(`${API}/gente/recibos${params}`, { credentials: 'include' });
-    setRecibos(await r2.json());
+    const recData = await r.json();
+    setRecibos(Array.isArray(recData) ? recData : []);
     setLoading(false);
   }, [filtroCol]);
 
@@ -858,9 +857,8 @@ function GenericTab({ endpoint, titulo, reload, colaboradores, CamposComp, rende
     setLoading(true);
     const params = filtroCol ? `?colaborador_id=${filtroCol}` : '';
     const r = await fetch(`${API}/gente/${endpoint}${params}`, { credentials: 'include' });
-    setItems(Array.isArray(await r.json()) ? await r.clone().json() : []);
-    const r2 = await fetch(`${API}/gente/${endpoint}${params}`, { credentials: 'include' });
-    setItems(await r2.json());
+    const itemData = await r.json();
+    setItems(Array.isArray(itemData) ? itemData : []);
     setLoading(false);
   }, [endpoint, filtroCol]);
 
@@ -1054,9 +1052,8 @@ function PontoTab({ reload, colaboradores }: { reload: number; colaboradores: an
     if (filtroInicio) p.set('data_inicio', filtroInicio);
     if (filtroFim) p.set('data_fim', filtroFim);
     const r = await fetch(`${API}/gente/ponto?${p}`, { credentials: 'include' });
-    setRegistros(Array.isArray(await r.json()) ? await r.clone().json() : []);
-    const r2 = await fetch(`${API}/gente/ponto?${p}`, { credentials: 'include' });
-    setRegistros(await r2.json());
+    const pontoData = await r.json();
+    setRegistros(Array.isArray(pontoData) ? pontoData : []);
     setLoading(false);
   }, [filtroCol, filtroInicio, filtroFim]);
 
