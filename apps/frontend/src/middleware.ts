@@ -10,6 +10,7 @@ const PATH_TO_MODULE: Record<string, string> = {
   '/doacoes':    'doacoes',
   '/estoque':    'estoque',
   '/relatorios': 'relatorios',
+  '/gente': 'gente',
 };
 
 // Cargos que bypassam verificação de módulo e têm acesso total ao sistema
@@ -62,6 +63,7 @@ export function middleware(request: NextRequest) {
   }
 
   // ── Rotas sempre públicas ─────────────────────────────────────────────────
+  if (pathname.startsWith('/ponto'))           return NextResponse.next();
   if (pathname.startsWith('/estoque/coletor')) return NextResponse.next();
   if (pathname.startsWith('/esqueci-senha'))   return NextResponse.next();
   if (pathname.startsWith('/reset-senha'))     return NextResponse.next();
@@ -73,7 +75,7 @@ export function middleware(request: NextRequest) {
   const privateRoutes = [
     '/dashboard', '/matriculas', '/academico', '/financeiro',
     '/cadastro',  '/config',     '/doacoes',   '/estoque', '/relatorios',
-    '/notificacoes', '/chamada',
+    '/notificacoes', '/chamada', '/gente',
   ];
   const isPrivateRoute = privateRoutes.some(r => pathname.startsWith(r));
 

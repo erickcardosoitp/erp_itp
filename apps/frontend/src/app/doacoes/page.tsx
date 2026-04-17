@@ -49,6 +49,7 @@ export default function DoacoesPage() {
   const [erro, setErro] = useState('');
   const [busca, setBusca] = useState('');
   const [isMounted, setIsMounted] = useState(false);
+  const { canDelete } = usePermissions(user);
 
   const loadDoacoes = useCallback(async () => {
     setLoading(true);
@@ -74,7 +75,6 @@ export default function DoacoesPage() {
     (m.plano_contas ?? '').toLowerCase().includes(busca.toLowerCase()),
   );
 
-  const { canDelete } = usePermissions(user);
   const podeExcluir = canDelete;
 
   const handleDeletar = async (id: string) => {

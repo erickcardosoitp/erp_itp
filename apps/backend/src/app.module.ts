@@ -46,6 +46,7 @@ import { EstoqueModule } from './estoque/estoque.module';
 import { NotificacoesModule } from './notificacoes/notificacoes.module';
 import { RelatoriosModule } from './relatorios/relatorios.module';
 import { PesquisasModule } from './pesquisas/pesquisas.module';
+import { GenteModule } from './gente/gente.module';
 
 @Module({
   imports: [
@@ -110,6 +111,7 @@ import { PesquisasModule } from './pesquisas/pesquisas.module';
     NotificacoesModule,
     RelatoriosModule,
     PesquisasModule,
+    GenteModule,
     MatriculasModule,
     EmailModule,
   ],
@@ -459,6 +461,110 @@ export class AppModule implements OnModuleInit {
           ADD COLUMN IF NOT EXISTS expurgado BOOLEAN NOT NULL DEFAULT false
       `);
       this.logger.log('✅ Coluna pesquisas_respostas.expurgado aplicada (IF NOT EXISTS)');
+
+      // ── Módulo Gente ──────────────────────────────────────────────────────
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS gente_colaboradores (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          funcionario_id UUID NOT NULL UNIQUE,
+          tipo TEXT NOT NULL DEFAULT 'funcionario',
+          horario_entrada TEXT,
+          horario_saida TEXT,
+          dias_trabalho JSONB,
+          latitude_permitida NUMERIC(10,7),
+          longitude_permitida NUMERIC(10,7),
+          raio_metros INT DEFAULT 200,
+          ativo BOOLEAN NOT NULL DEFAULT true,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `);
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS gente_ponto (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          colaborador_id UUID NOT NULL,
+          tipo TEXT NOT NULL,
+          data_hora TIMESTAMPTZ NOT NULL DEFAULT now(),
+          latitude NUMERIC(10,7),
+          longitude NUMERIC(10,7),
+          distancia_metros NUMERIC,
+          dentro_area BOOLEAN,
+          observacao TEXT,
+          registrado_por TEXT DEFAULT 'system',
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `);
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS gente_recibos (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          colaborador_id UUID NOT NULL,
+          mes_referencia TEXT NOT NULL,
+          valor NUMERIC(12,2) NOT NULL DEFAULT 0,
+          descricao TEXT,
+          data_pagamento DATE,
+          status TEXT NOT NULL DEFAULT 'pendente',
+          observacao TEXT,
+          criado_por_id TEXT,
+          criado_por_nome TEXT,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `);
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS gente_vales (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          colaborador_id UUID NOT NULL,
+          tipo TEXT NOT NULL DEFAULT 'outro',
+          valor NUMERIC(12,2) NOT NULL,
+          data DATE NOT NULL,
+          descricao TEXT,
+          descontado BOOLEAN NOT NULL DEFAULT false,
+          criado_por_id TEXT,
+          criado_por_nome TEXT,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `);
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS gente_advertencias (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          colaborador_id UUID NOT NULL,
+          data DATE NOT NULL,
+          motivo TEXT NOT NULL,
+          descricao TEXT,
+          nivel TEXT NOT NULL DEFAULT 'escrita',
+          criado_por_id TEXT,
+          criado_por_nome TEXT,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `);
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS gente_suspensoes (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          colaborador_id UUID NOT NULL,
+          data_inicio DATE NOT NULL,
+          data_fim DATE NOT NULL,
+          motivo TEXT NOT NULL,
+          com_desconto BOOLEAN NOT NULL DEFAULT true,
+          criado_por_id TEXT,
+          criado_por_nome TEXT,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `);
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS gente_faltas (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          colaborador_id UUID NOT NULL,
+          data DATE NOT NULL,
+          justificada BOOLEAN NOT NULL DEFAULT false,
+          motivo TEXT,
+          com_desconto BOOLEAN NOT NULL DEFAULT true,
+          observacao TEXT,
+          criado_por_id TEXT,
+          criado_por_nome TEXT,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `);
+      this.logger.log('✅ Tabelas do módulo Gente criadas (IF NOT EXISTS)');
 
     } catch (err: any) {
       this.logger.error(`❌ Erro nas migrations automáticas: ${err.message}`);

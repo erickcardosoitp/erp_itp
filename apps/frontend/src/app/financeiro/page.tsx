@@ -69,6 +69,7 @@ export default function FinanceiroPage() {
   const [recorrencias, setRecorrencias] = useState<LookupItem[]>([]);
 
   const [isMounted, setIsMounted] = useState(false);
+  const { canDelete, canAccess } = usePermissions(user);
 
   const loadLookups = useCallback(async () => {
     const endpoints = [
@@ -151,7 +152,6 @@ export default function FinanceiroPage() {
     (m.plano_contas ?? '').toLowerCase().includes(busca.toLowerCase()),
   );
 
-  const { canDelete, canAccess } = usePermissions(user);
   const podeEscrever = canAccess('financeiro', 'incluir');
   const podeEditar   = canAccess('financeiro', 'editar');
   const podeExcluir  = canDelete && canAccess('financeiro', 'excluir');

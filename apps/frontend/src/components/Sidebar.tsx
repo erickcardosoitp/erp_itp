@@ -5,10 +5,10 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import Cookies from 'js-cookie';
-import { 
-  LayoutDashboard, UserPlus, ClipboardList, 
+import {
+  LayoutDashboard, UserPlus, ClipboardList,
   LogOut, Settings, PanelLeftClose, PanelLeftOpen,
-  GraduationCap, DollarSign, Heart, Package, Loader2, BarChart2, X
+  GraduationCap, DollarSign, Heart, Package, Loader2, BarChart2, X, Users2
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -28,6 +28,7 @@ const PATH_TO_MODULE: Record<string, string> = {
   '/doacoes': 'doacoes',
   '/estoque': 'estoque',
   '/relatorios': 'relatorios',
+  '/gente': 'gente',
 };
 
 export default function Sidebar({ isCollapsed, setIsCollapsed, mobileOpen, setMobileOpen }: SidebarProps) {
@@ -46,6 +47,7 @@ export default function Sidebar({ isCollapsed, setIsCollapsed, mobileOpen, setMo
     { name: 'Doações', path: '/doacoes', icon: Heart },
     { name: 'Estoque', path: '/estoque', icon: Package },
     { name: 'Relatórios', path: '/relatorios', icon: BarChart2 },
+    { name: 'Gente', path: '/gente', icon: Users2 },
   ];
 
   // Filtra módulos com base nas permissões do grupo
