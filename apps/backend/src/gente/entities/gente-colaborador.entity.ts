@@ -29,7 +29,7 @@ export class GenteColaborador {
   @Column({ type: 'numeric', nullable: true, precision: 10, scale: 7 })
   longitude_permitida: number;
 
-  @Column({ type: 'int', nullable: true, default: 200 })
+  @Column({ type: 'int', nullable: true, default: 100 })
   raio_metros: number;
 
   @Column({ type: 'boolean', default: true })

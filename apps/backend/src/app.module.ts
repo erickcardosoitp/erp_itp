@@ -473,7 +473,7 @@ export class AppModule implements OnModuleInit {
           dias_trabalho JSONB,
           latitude_permitida NUMERIC(10,7),
           longitude_permitida NUMERIC(10,7),
-          raio_metros INT DEFAULT 200,
+          raio_metros INT DEFAULT 100,
           ativo BOOLEAN NOT NULL DEFAULT true,
           created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
           updated_at TIMESTAMPTZ NOT NULL DEFAULT now()

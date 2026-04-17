@@ -71,6 +71,21 @@ const btnPrimary = 'bg-purple-600 hover:bg-purple-700 text-white font-bold px-4 
 const btnSecondary = 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-white font-bold px-4 py-2 rounded-xl text-sm transition';
 const btnDanger = 'bg-red-50 hover:bg-red-100 text-red-600 font-bold px-3 py-1.5 rounded-lg text-xs transition';
 
+// Localização padrão do ITP — Rua Ramiro Monteiro, 130, Vaz Lobo
+const DEFAULT_LAT = -22.8597901;
+const DEFAULT_LON = -43.3308139;
+const DEFAULT_RAIO = 100;
+
+const DEFAULT_FORM = {
+  tipo: 'funcionario',
+  dias_trabalho: ['seg', 'ter', 'qua', 'qui', 'sex'],
+  horario_entrada: '08:00',
+  horario_saida: '17:00',
+  raio_metros: DEFAULT_RAIO,
+  latitude_permitida: DEFAULT_LAT,
+  longitude_permitida: DEFAULT_LON,
+};
+
 // ── Colaboradores Tab ─────────────────────────────────────────────────────
 
 function ColaboradoresTab({ reload }: { reload: number }) {
@@ -81,10 +96,7 @@ function ColaboradoresTab({ reload }: { reload: number }) {
   const [editando, setEditando] = useState<any | null>(null);
   const [detalhe, setDetalhe] = useState<any | null>(null);
   const [funcionariosDisp, setFuncionariosDisp] = useState<any[]>([]);
-  const [form, setForm] = useState<any>({
-    tipo: 'funcionario', dias_trabalho: ['seg', 'ter', 'qua', 'qui', 'sex'],
-    horario_entrada: '08:00', horario_saida: '17:00', raio_metros: 200,
-  });
+  const [form, setForm] = useState<any>(DEFAULT_FORM);
   const [salvando, setSalvando] = useState(false);
 
   const carregar = useCallback(async () => {
@@ -109,7 +121,7 @@ function ColaboradoresTab({ reload }: { reload: number }) {
       setForm({ ...col, dias_trabalho: col.dias_trabalho || ['seg', 'ter', 'qua', 'qui', 'sex'] });
     } else {
       setEditando(null);
-      setForm({ tipo: 'funcionario', dias_trabalho: ['seg', 'ter', 'qua', 'qui', 'sex'], horario_entrada: '08:00', horario_saida: '17:00', raio_metros: 200 });
+      setForm(DEFAULT_FORM);
     }
     setModalAberto(true);
   };
