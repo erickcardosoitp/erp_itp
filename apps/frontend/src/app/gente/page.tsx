@@ -1056,26 +1056,33 @@ function PontoTab({ reload, colaboradores }: { reload: number; colaboradores: an
   const [form, setForm] = useState<any>({ tipo: 'entrada', data_hora: new Date().toISOString().slice(0, 16) });
   const [salvando, setSalvando] = useState(false);
   const [geoStatus, setGeoStatus] = useState<'idle' | 'buscando' | 'ok' | 'negado' | 'bloqueado'>('idle');
+  const [geoErro, setGeoErro] = useState('');
 
   const solicitarGeo = useCallback((formSetter: React.Dispatch<React.SetStateAction<any>>) => {
-    if (!navigator.geolocation) { setGeoStatus('negado'); return; }
+    if (!navigator.geolocation) { setGeoStatus('negado'); setGeoErro('Geolocalização não suportada neste navegador.'); return; }
     setGeoStatus('buscando');
+    setGeoErro('');
+
+    const onSucesso = (pos: GeolocationPosition) => {
+      formSetter((f: any) => ({ ...f, latitude: pos.coords.latitude, longitude: pos.coords.longitude }));
+      setGeoStatus('ok');
+    };
+
+    const onErro = (err: GeolocationPositionError) => {
+      if (err.code === 1) { setGeoStatus('bloqueado'); setGeoErro('Permissão negada.'); }
+      else if (err.code === 2) { setGeoStatus('negado'); setGeoErro('Posição indisponível — tente ao ar livre ou via Wi-Fi.'); }
+      else { setGeoStatus('negado'); setGeoErro(`Tempo esgotado (código ${err.code}). Tente novamente.`); }
+    };
 
     const pedirLocalizacao = () => {
-      navigator.geolocation.getCurrentPosition(
-        pos => {
-          formSetter((f: any) => ({ ...f, latitude: pos.coords.latitude, longitude: pos.coords.longitude }));
-          setGeoStatus('ok');
-        },
-        () => setGeoStatus('negado'),
-        { enableHighAccuracy: true, timeout: 10000 },
-      );
+      // enableHighAccuracy: false é mais rápido e confiável no Safari/iOS em ambientes fechados
+      navigator.geolocation.getCurrentPosition(onSucesso, onErro, { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 });
     };
 
     // Safari não suporta navigator.permissions — fallback direto para getCurrentPosition
     if (navigator.permissions?.query) {
       navigator.permissions.query({ name: 'geolocation' as PermissionName })
-        .then(perm => { if (perm.state === 'denied') setGeoStatus('bloqueado'); else pedirLocalizacao(); })
+        .then(perm => { if (perm.state === 'denied') { setGeoStatus('bloqueado'); setGeoErro('Permissão negada nas configurações do navegador.'); } else pedirLocalizacao(); })
         .catch(pedirLocalizacao);
     } else {
       pedirLocalizacao();
@@ -1173,8 +1180,8 @@ function PontoTab({ reload, colaboradores }: { reload: number; colaboradores: an
               <div className="flex-1">
                 {geoStatus === 'buscando' && 'Aguardando permissão de localização...'}
                 {geoStatus === 'ok' && `Localização capturada (${Number(form.latitude).toFixed(5)}, ${Number(form.longitude).toFixed(5)})`}
-                {geoStatus === 'negado' && <span>Permissão negada. <button type="button" className="underline font-bold" onClick={() => solicitarGeo(setForm)}>Tentar novamente</button></span>}
-                {geoStatus === 'bloqueado' && <span>Localização bloqueada pelo navegador. Para liberar: clique no cadeado na barra de endereço → Permissões → Localização → Permitir, depois <button type="button" className="underline font-bold" onClick={() => solicitarGeo(setForm)}>tente novamente</button>.</span>}
+                {geoStatus === 'negado' && <span>{geoErro || 'Erro ao obter localização.'} <button type="button" className="underline font-bold" onClick={() => solicitarGeo(setForm)}>Tentar novamente</button></span>}
+                {geoStatus === 'bloqueado' && <span>Localização bloqueada. No Safari: Configurações → Safari → Localização → Permitir; no Chrome: cadeado na barra → Permissões → Localização. Depois <button type="button" className="underline font-bold" onClick={() => solicitarGeo(setForm)}>tente novamente</button>.</span>}
                 {geoStatus === 'idle' && <span>Localização não solicitada. <button type="button" className="underline font-bold" onClick={() => solicitarGeo(setForm)}>Solicitar agora</button></span>}
               </div>
             </div>
