@@ -108,6 +108,15 @@ export class GenteController {
   @ModuloPerm('gente', 'excluir')
   deletarCodigo(@Param('id') id: string) { return this.svc.deletarCodigo(id); }
 
+  // ── Financeiro ────────────────────────────────────────────────────────────
+
+  @Get('financeiro/resumo')
+  @ModuloPerm('gente', 'visualizar')
+  resumoFinanceiro(@Query('mes') mes?: string) {
+    const m = mes || new Date().toISOString().slice(0, 7);
+    return this.svc.resumoFinanceiro(m);
+  }
+
   // ── Folha / Recibos ────────────────────────────────────────────────────────
 
   @Post('folha/calcular')

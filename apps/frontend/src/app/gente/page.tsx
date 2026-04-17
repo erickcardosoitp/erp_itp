@@ -7,7 +7,7 @@ import {
   PauseCircle, Calendar, Plus, Search, X, Edit2,
   Trash2, ExternalLink, ChevronDown, ChevronUp,
   RefreshCw, MapPin, Tag, Calculator, Printer,
-  Check, Upload, User,
+  Check, Upload, User, DollarSign,
 } from 'lucide-react';
 
 const API = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001/api';
@@ -15,7 +15,7 @@ const CNPJ = '11.759.851/0001-39';
 const EMPRESA = 'Instituto Tia Pretinha';
 const ENDERECO = 'Rua Ramiro Monteiro, 130 — Vaz Lobo';
 
-type Tab = 'colaboradores' | 'ponto' | 'codigos' | 'recibos' | 'vales' | 'advertencias' | 'suspensoes' | 'faltas';
+type Tab = 'colaboradores' | 'ponto' | 'codigos' | 'recibos' | 'vales' | 'advertencias' | 'suspensoes' | 'faltas' | 'financeiro';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -1139,10 +1139,110 @@ function PontoTab({ reload, colaboradores }: { reload: number; colaboradores: an
   );
 }
 
+// ── Tab: Financeiro ───────────────────────────────────────────────────────────
+
+function FinanceiroTab({ reload }: { reload: number }) {
+  const mesAtual = new Date().toISOString().slice(0, 7);
+  const [mes, setMes] = useState(mesAtual);
+  const [dados, setDados] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  const carregar = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await fetch(`${API}/gente/financeiro/resumo?mes=${mes}`, { credentials: 'include' });
+      setDados(await r.json());
+    } catch { toast.error('Erro ao carregar resumo financeiro.'); }
+    setLoading(false);
+  }, [mes]);
+
+  useEffect(() => { carregar(); }, [carregar, reload]);
+
+  const cols: any[] = dados?.colaboradores ?? [];
+  const totais = dados?.totais ?? { total_folha: 0, total_vales: 0, total_liquido: 0 };
+
+  return (
+    <div>
+      {/* Seletor de mês */}
+      <div className="flex items-center gap-3 mb-6">
+        <input type="month" value={mes} onChange={e => setMes(e.target.value)}
+          className={`${ic} w-40`} />
+        <button onClick={carregar} className={bs}><RefreshCw size={14} /></button>
+        <span className="text-sm text-slate-500">Visão financeira de {fmt.mes(mes)}</span>
+      </div>
+
+      {/* Cards de totais */}
+      <div className="grid grid-cols-3 gap-4 mb-6">
+        {[
+          { label: 'Total Folha', val: totais.total_folha, color: 'text-purple-600', bg: 'bg-purple-50 dark:bg-purple-900/20' },
+          { label: 'Vales Pendentes', val: totais.total_vales, color: 'text-red-600', bg: 'bg-red-50 dark:bg-red-900/20' },
+          { label: 'Líquido a Pagar', val: totais.total_liquido, color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-900/20' },
+        ].map(c => (
+          <div key={c.label} className={`${c.bg} rounded-2xl p-4`}>
+            <div className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">{c.label}</div>
+            <div className={`text-xl font-black ${c.color}`}>{fmt.moeda(c.val)}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Tabela por colaborador */}
+      {loading
+        ? <div className="text-center py-12 text-slate-400">Carregando...</div>
+        : cols.length === 0
+          ? <div className="text-center py-12 text-slate-400">Nenhum colaborador ativo.</div>
+          : (
+            <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 dark:bg-slate-800">
+                  <tr>
+                    {['Colaborador', 'Salário Base', 'VR / Benefícios', 'Total Proventos', 'Vales Pendentes', 'Líquido', 'Recibo'].map(h => (
+                      <th key={h} className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {cols.map((c: any) => (
+                    <tr key={c.colaborador_id} className="border-t border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          {c.foto
+                            ? <img src={c.foto} alt="" className="w-7 h-9 rounded object-cover border border-slate-200" />
+                            : <div className="w-7 h-9 rounded bg-purple-100 dark:bg-purple-900 flex items-center justify-center text-purple-700 font-black text-xs">{c.nome?.charAt(0)}</div>}
+                          <div>
+                            <div className="font-semibold text-slate-800 dark:text-white">{c.nome}</div>
+                            <div className="text-xs text-slate-400">{c.cargo}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{fmt.moeda(c.salario_base)}</td>
+                      <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{fmt.moeda(c.total_vr)}</td>
+                      <td className="px-4 py-3 font-bold text-purple-700 dark:text-purple-300">{fmt.moeda(c.total_proventos)}</td>
+                      <td className="px-4 py-3">
+                        {c.qtd_vales_pendentes > 0
+                          ? <span className="text-red-600 font-semibold">{fmt.moeda(c.vales_pendentes)} <span className="text-xs text-red-400">({c.qtd_vales_pendentes})</span></span>
+                          : <span className="text-slate-400">—</span>}
+                      </td>
+                      <td className="px-4 py-3 font-black text-emerald-600 dark:text-emerald-400">{fmt.moeda(c.liquido)}</td>
+                      <td className="px-4 py-3">
+                        {c.recibo_status
+                          ? <Badge label={c.recibo_status === 'pago' ? '✓ Pago' : 'Pendente'} color={c.recibo_status === 'pago' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'} />
+                          : <span className="text-xs text-slate-400">Sem recibo</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+    </div>
+  );
+}
+
 // ── Página Principal ──────────────────────────────────────────────────────────
 
 const TABS: { key: Tab; label: string; icon: React.ComponentType<any> }[] = [
   { key: 'colaboradores', label: 'Colaboradores', icon: Users },
+  { key: 'financeiro', label: 'Financeiro', icon: DollarSign },
   { key: 'ponto', label: 'Ponto', icon: Clock },
   { key: 'codigos', label: 'Códigos VR', icon: Tag },
   { key: 'recibos', label: 'Recibos / Folha', icon: FileText },
@@ -1193,6 +1293,7 @@ export default function GentePage() {
 
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 p-4 sm:p-6 shadow-sm">
         {tab === 'colaboradores' && <ColaboradoresTab reload={reload} colaboradores={colaboradores} carregarColaboradores={carregarColaboradores} />}
+        {tab === 'financeiro' && <FinanceiroTab reload={reload} />}
         {tab === 'ponto' && <PontoTab reload={reload} colaboradores={colaboradores} />}
         {tab === 'codigos' && <CodigosTab reload={reload} />}
         {tab === 'recibos' && <RecibosTab reload={reload} colaboradores={colaboradores} />}

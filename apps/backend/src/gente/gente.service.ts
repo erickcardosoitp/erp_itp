@@ -42,7 +42,10 @@ export class GenteService {
 
   private async enrichColaborador(col: GenteColaborador) {
     const [func] = await this.dataSource.query(
-      `SELECT id, nome, cargo, email, cpf, celular, matricula, ativo, foto, estado_civil, rg FROM funcionarios WHERE id = $1`,
+      `SELECT id, nome, cargo, email, cpf, celular, rg, orgao_emissor_rg, data_emissao_rg,
+              estado_civil, pais, data_nascimento, cep, logradouro, numero_residencia,
+              complemento, bairro, cidade, estado, telefone_emergencia_1, telefone_emergencia_2,
+              matricula, ativo, foto FROM funcionarios WHERE id = $1`,
       [col.funcionario_id],
     );
     return { ...col, funcionario: func ?? null };
@@ -55,7 +58,10 @@ export class GenteService {
     if (!colaboradores.length) return [];
     const ids = colaboradores.map(c => c.funcionario_id);
     const funcionarios: any[] = await this.dataSource.query(
-      `SELECT id, nome, cargo, email, cpf, celular, matricula, ativo, foto, estado_civil, rg FROM funcionarios WHERE id = ANY($1::uuid[])`,
+      `SELECT id, nome, cargo, email, cpf, celular, rg, orgao_emissor_rg, data_emissao_rg,
+              estado_civil, pais, data_nascimento, cep, logradouro, numero_residencia,
+              complemento, bairro, cidade, estado, telefone_emergencia_1, telefone_emergencia_2,
+              matricula, ativo, foto FROM funcionarios WHERE id = ANY($1::uuid[])`,
       [ids],
     );
     const funcMap: Record<string, any> = {};
@@ -136,14 +142,82 @@ export class GenteService {
     const campos = ['nome','cargo','email','cpf','celular','rg','orgao_emissor_rg','data_emissao_rg',
       'estado_civil','pais','data_nascimento','cep','logradouro','numero_residencia',
       'complemento','bairro','cidade','estado','telefone_emergencia_1','telefone_emergencia_2'];
-    const sets = campos.filter(c => dto[c] !== undefined).map((c, i) => `${c} = $${i + 2}`);
-    if (!sets.length) return;
-    const vals = campos.filter(c => dto[c] !== undefined).map(c => dto[c]);
+    // Sanitiza: string vazia → null (evita erro em colunas DATE/NUMERIC)
+    const sanitizado: any = {};
+    campos.forEach(c => {
+      if (dto[c] !== undefined) sanitizado[c] = (dto[c] === '' ? null : dto[c]);
+    });
+    const keys = Object.keys(sanitizado);
+    if (!keys.length) return this.buscarColaborador(colaboradorId);
+    const sets = keys.map((c, i) => `${c} = $${i + 2}`);
+    const vals = keys.map(c => sanitizado[c]);
     await this.dataSource.query(
       `UPDATE funcionarios SET ${sets.join(', ')} WHERE id = $1`,
       [col.funcionario_id, ...vals],
     );
     return this.buscarColaborador(colaboradorId);
+  }
+
+  // ── Resumo Financeiro ─────────────────────────────────────────────────────
+
+  async resumoFinanceiro(mes: string) {
+    const colaboradores = await this.colaboradorRepo.find({ where: { ativo: true } });
+    const mesInicio = `${mes}-01`;
+    const mesFim = new Date(Number(mes.split('-')[0]), Number(mes.split('-')[1]), 0).toISOString().split('T')[0];
+
+    const rows = await Promise.all(colaboradores.map(async col => {
+      const [func] = await this.dataSource.query(
+        `SELECT id, nome, cargo, foto FROM funcionarios WHERE id = $1`, [col.funcionario_id]);
+      if (!func) return null;
+
+      // Proventos: salário base + VR codes
+      const salBase = Number(col.salario_base ?? 0);
+      const codigosCol = await this.listarCodigosColaborador(col.id);
+      const totalVR = codigosCol.reduce((s, cc) => s + Number(cc.valor_efetivo ?? 0), 0);
+      const totalProventos = salBase + totalVR;
+
+      // Vales pendentes (não descontados, do mês corrente ou acumulados)
+      const valesPendentes: any[] = await this.dataSource.query(
+        `SELECT COALESCE(SUM(valor),0) AS total, COUNT(*) AS qtd FROM gente_vales
+         WHERE colaborador_id = $1 AND descontado = false AND data <= $2`,
+        [col.id, mesFim],
+      );
+      const totalVales = Number(valesPendentes[0]?.total ?? 0);
+      const qtdVales = Number(valesPendentes[0]?.qtd ?? 0);
+
+      // Recibo do mês
+      const recibo: any[] = await this.dataSource.query(
+        `SELECT id, status, valor FROM gente_recibos WHERE colaborador_id = $1 AND mes_referencia = $2 LIMIT 1`,
+        [col.id, mes],
+      );
+
+      return {
+        colaborador_id: col.id,
+        nome: func.nome,
+        cargo: func.cargo,
+        foto: func.foto,
+        salario_base: salBase,
+        total_vr: totalVR,
+        total_proventos: totalProventos,
+        vales_pendentes: totalVales,
+        qtd_vales_pendentes: qtdVales,
+        total_descontos: totalVales,
+        liquido: totalProventos - totalVales,
+        recibo_id: recibo[0]?.id ?? null,
+        recibo_status: recibo[0]?.status ?? null,
+      };
+    }));
+
+    const lista = rows.filter(Boolean);
+    return {
+      mes,
+      colaboradores: lista,
+      totais: {
+        total_folha: lista.reduce((s, r) => s + r!.total_proventos, 0),
+        total_vales: lista.reduce((s, r) => s + r!.vales_pendentes, 0),
+        total_liquido: lista.reduce((s, r) => s + r!.liquido, 0),
+      },
+    };
   }
 
   async removerColaborador(id: string) {
