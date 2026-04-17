@@ -209,7 +209,7 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
 
   const PONTO_URL = typeof window !== 'undefined' ? `${window.location.origin}/ponto?token=itp-ponto-2026` : '';
 
-  const FormHorario = () => (
+  const formHorarioJSX = (
     <div className="space-y-3">
       <FL label="Tipo">
         <select value={form.tipo} onChange={e => setForm((f: any) => ({ ...f, tipo: e.target.value }))} className={ic}>
@@ -334,7 +334,7 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
                 </select>
               </FL>
             )}
-            <FormHorario />
+            {formHorarioJSX}
             <div className="flex justify-end gap-2 pt-2">
               <button onClick={() => setModal(null)} className={bs}>Cancelar</button>
               <button onClick={salvarVincular} disabled={salvando} className={bp}>{salvando ? 'Salvando...' : 'Salvar'}</button>
@@ -379,7 +379,7 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
             </div>
             <div className="border-t dark:border-slate-700 pt-3">
               <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Configuração de Ponto</p>
-              <FormHorario />
+              {formHorarioJSX}
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <button onClick={() => setModal(null)} className={bs}>Cancelar</button>
