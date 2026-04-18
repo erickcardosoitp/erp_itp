@@ -15,7 +15,7 @@ const CNPJ = '11.759.851/0001-39';
 const EMPRESA = 'Instituto Tia Pretinha';
 const ENDERECO = 'Rua Ramiro Monteiro, 130 — Vaz Lobo';
 
-type Tab = 'colaboradores' | 'ponto' | 'codigos' | 'recibos' | 'vales' | 'advertencias' | 'suspensoes' | 'faltas' | 'financeiro';
+type Tab = 'colaboradores' | 'ponto' | 'codigos' | 'recibos' | 'vales' | 'advertencias' | 'suspensoes' | 'faltas' | 'financeiro' | 'folgas' | 'trabalho-externo';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -83,6 +83,9 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
   const fotoRef = useRef<HTMLInputElement>(null);
   const [uploadandoFoto, setUploadandoFoto] = useState<string | null>(null);
   const [valoresCustom, setValoresCustom] = useState<Record<string, number>>({});
+  const [locais, setLocais] = useState<any[]>([]);
+  const [formLocal, setFormLocal] = useState<any>({ nome: '', latitude: '', longitude: '', raio_metros: 100 });
+  const [editandoLocal, setEditandoLocal] = useState<string | null>(null);
 
   const [form, setForm] = useState<any>({
     tipo: 'voluntario', dias_trabalho: ['seg', 'ter', 'qua', 'qui', 'sex'],
@@ -205,6 +208,35 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
     }, () => toast.error('Não foi possível obter localização.'), { enableHighAccuracy: true });
   };
 
+  const usarGeoLocal = () => {
+    navigator.geolocation?.getCurrentPosition(pos => {
+      setFormLocal((f: any) => ({ ...f, latitude: pos.coords.latitude, longitude: pos.coords.longitude }));
+      toast.success('Localização capturada!');
+    }, () => toast.error('Não foi possível obter localização.'), { enableHighAccuracy: true });
+  };
+
+  const carregarLocais = async (colaboradorId: string) => {
+    try {
+      const r = await fetch(`${API}/gente/colaboradores/${colaboradorId}/locais`, { credentials: 'include' });
+      if (r.ok) setLocais(await r.json());
+    } catch { setLocais([]); }
+  };
+
+  const salvarLocal = async (colaboradorId: string) => {
+    if (!formLocal.nome || !formLocal.latitude || !formLocal.longitude) return toast.error('Preencha nome e coordenadas.');
+    const url = editandoLocal ? `${API}/gente/locais/${editandoLocal}` : `${API}/gente/colaboradores/${colaboradorId}/locais`;
+    const method = editandoLocal ? 'PATCH' : 'POST';
+    const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(formLocal) });
+    if (r.ok) { await carregarLocais(colaboradorId); setFormLocal({ nome: '', latitude: '', longitude: '', raio_metros: 100 }); setEditandoLocal(null); }
+    else toast.error('Erro ao salvar local.');
+  };
+
+  const deletarLocal = async (localId: string, colaboradorId: string) => {
+    const r = await fetch(`${API}/gente/locais/${localId}`, { method: 'DELETE', credentials: 'include' });
+    if (r.ok) carregarLocais(colaboradorId);
+    else toast.error('Erro ao remover local.');
+  };
+
   const filtrados = colaboradores.filter(c =>
     !busca || c.funcionario?.nome?.toLowerCase().includes(busca.toLowerCase()) || c.funcionario?.cargo?.toLowerCase().includes(busca.toLowerCase()));
 
@@ -224,10 +256,18 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
           onChange={e => setForm((f: any) => ({ ...f, salario_base: e.target.value === '' ? null : Number(e.target.value) }))}
           className={ic} />
       </FL>
-      <div className="grid grid-cols-2 gap-3">
-        <FL label="Entrada"><input type="time" value={form.horario_entrada || ''} onChange={e => setForm((f: any) => ({ ...f, horario_entrada: e.target.value }))} className={ic} /></FL>
-        <FL label="Saída"><input type="time" value={form.horario_saida || ''} onChange={e => setForm((f: any) => ({ ...f, horario_saida: e.target.value }))} className={ic} /></FL>
+      <div className="flex items-center gap-2 mb-1">
+        <input type="checkbox" id="jornada_flexivel" checked={!!form.jornada_flexivel}
+          onChange={e => setForm((f: any) => ({ ...f, jornada_flexivel: e.target.checked, horario_entrada: e.target.checked ? null : (f.horario_entrada || '08:00'), horario_saida: e.target.checked ? null : (f.horario_saida || '17:00') }))}
+          className="rounded border-slate-300 text-purple-600 focus:ring-purple-500" />
+        <label htmlFor="jornada_flexivel" className="text-sm text-slate-700 dark:text-slate-300 cursor-pointer">Jornada flexível (sem horário fixo)</label>
       </div>
+      {!form.jornada_flexivel && (
+        <div className="grid grid-cols-2 gap-3">
+          <FL label="Entrada"><input type="time" value={form.horario_entrada || ''} onChange={e => setForm((f: any) => ({ ...f, horario_entrada: e.target.value }))} className={ic} /></FL>
+          <FL label="Saída"><input type="time" value={form.horario_saida || ''} onChange={e => setForm((f: any) => ({ ...f, horario_saida: e.target.value }))} className={ic} /></FL>
+        </div>
+      )}
       <FL label="Dias de trabalho">
         <div className="flex gap-2 flex-wrap">
           {DIAS_OPT.map(d => (
@@ -236,19 +276,55 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
           ))}
         </div>
       </FL>
-      <FL label="Geolocalização permitida">
-        <div className="flex gap-2 items-center mb-2">
-          <button type="button" onClick={usarGeo} className="text-xs text-purple-600 flex items-center gap-1 hover:underline"><MapPin size={12} />Usar localização atual</button>
+      {/* Locais permitidos (múltiplos) */}
+      {editando && (
+        <div className="space-y-2">
+          <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Locais permitidos p/ ponto</label>
+          {locais.map((l: any) => (
+            <div key={l.id} className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 rounded-lg px-3 py-2 text-sm">
+              <MapPin size={13} className="text-purple-500 shrink-0" />
+              <span className="font-semibold flex-1">{l.nome}</span>
+              <span className="text-slate-400 text-xs">{Number(l.latitude).toFixed(5)}, {Number(l.longitude).toFixed(5)} · {l.raio_metros}m</span>
+              <button type="button" onClick={() => { setEditandoLocal(l.id); setFormLocal({ nome: l.nome, latitude: l.latitude, longitude: l.longitude, raio_metros: l.raio_metros }); }} className="p-1 text-slate-400 hover:text-purple-600 transition"><Edit2 size={12} /></button>
+              <button type="button" onClick={() => deletarLocal(l.id, editando.id)} className="p-1 text-slate-400 hover:text-red-500 transition"><Trash2 size={12} /></button>
+            </div>
+          ))}
+          <div className="border border-dashed border-slate-300 dark:border-slate-600 rounded-lg p-3 space-y-2">
+            <input placeholder="Nome do local (ex: Assoc. Rua Macunaíma)" value={formLocal.nome} onChange={e => setFormLocal((f: any) => ({ ...f, nome: e.target.value }))} className={`${ic} text-sm`} />
+            <div className="grid grid-cols-2 gap-2">
+              <input type="number" step="any" placeholder="Latitude" value={formLocal.latitude} onChange={e => setFormLocal((f: any) => ({ ...f, latitude: e.target.value }))} className={`${ic} text-sm`} />
+              <input type="number" step="any" placeholder="Longitude" value={formLocal.longitude} onChange={e => setFormLocal((f: any) => ({ ...f, longitude: e.target.value }))} className={`${ic} text-sm`} />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-500">Raio (m):</span>
+              <input type="number" value={formLocal.raio_metros} onChange={e => setFormLocal((f: any) => ({ ...f, raio_metros: Number(e.target.value) }))} className={`${ic} w-20 text-sm`} />
+              <button type="button" onClick={usarGeoLocal} className="text-xs text-purple-600 flex items-center gap-1 hover:underline ml-auto"><MapPin size={11} />GPS atual</button>
+            </div>
+            <button type="button" onClick={() => salvarLocal(editando.id)} className="w-full py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition">
+              {editandoLocal ? 'Atualizar local' : '+ Adicionar local'}
+            </button>
+            {editandoLocal && (
+              <button type="button" onClick={() => { setEditandoLocal(null); setFormLocal({ nome: '', latitude: '', longitude: '', raio_metros: 100 }); }} className="w-full py-1 text-xs text-slate-400 hover:text-slate-600">Cancelar edição</button>
+            )}
+          </div>
+          <p className="text-xs text-slate-400">O ponto é liberado se o colaborador estiver dentro do raio de qualquer um dos locais acima.</p>
         </div>
-        <div className="grid grid-cols-2 gap-2">
-          <input type="number" step="any" placeholder="Latitude" value={form.latitude_permitida || ''} onChange={e => setForm((f: any) => ({ ...f, latitude_permitida: e.target.value }))} className={ic} />
-          <input type="number" step="any" placeholder="Longitude" value={form.longitude_permitida || ''} onChange={e => setForm((f: any) => ({ ...f, longitude_permitida: e.target.value }))} className={ic} />
-        </div>
-        <div className="flex items-center gap-2 mt-2">
-          <span className="text-xs text-slate-500">Raio (m):</span>
-          <input type="number" value={form.raio_metros || 100} onChange={e => setForm((f: any) => ({ ...f, raio_metros: Number(e.target.value) }))} className={`${ic} w-24`} />
-        </div>
-      </FL>
+      )}
+      {!editando && (
+        <FL label="Geolocalização padrão">
+          <div className="flex gap-2 items-center mb-2">
+            <button type="button" onClick={usarGeo} className="text-xs text-purple-600 flex items-center gap-1 hover:underline"><MapPin size={12} />Usar localização atual</button>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <input type="number" step="any" placeholder="Latitude" value={form.latitude_permitida || ''} onChange={e => setForm((f: any) => ({ ...f, latitude_permitida: e.target.value }))} className={ic} />
+            <input type="number" step="any" placeholder="Longitude" value={form.longitude_permitida || ''} onChange={e => setForm((f: any) => ({ ...f, longitude_permitida: e.target.value }))} className={ic} />
+          </div>
+          <div className="flex items-center gap-2 mt-2">
+            <span className="text-xs text-slate-500">Raio (m):</span>
+            <input type="number" value={form.raio_metros || 100} onChange={e => setForm((f: any) => ({ ...f, raio_metros: Number(e.target.value) }))} className={`${ic} w-24`} />
+          </div>
+        </FL>
+      )}
     </div>
   );
 
@@ -295,10 +371,10 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
                   </div>
                   <div className="flex items-center gap-2 flex-wrap justify-end">
                     <Badge label={c.tipo === 'voluntario' ? 'Voluntário' : 'Funcionário'} color={c.tipo === 'voluntario' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' : 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300'} />
-                    {c.horario_entrada && <span className="text-xs text-slate-400 hidden sm:block">{c.horario_entrada}→{c.horario_saida}</span>}
+                    {c.jornada_flexivel ? <span className="text-xs text-slate-400 hidden sm:block">Jornada flexível</span> : c.horario_entrada && <span className="text-xs text-slate-400 hidden sm:block">{c.horario_entrada}→{c.horario_saida}</span>}
                     <button onClick={() => abrirCodigosColaborador(c)} className="p-1.5 text-slate-400 hover:text-emerald-600 transition" title="Códigos VR"><Tag size={14} /></button>
                     <button onClick={() => { setColSelecionado(c); setFormFunc({ ...c.funcionario }); setModal('editar-cadastro'); }} className="p-1.5 text-slate-400 hover:text-blue-500 transition" title="Editar Cadastro"><User size={14} /></button>
-                    <button onClick={() => { setEditando(c); setForm({ ...c }); carregarDisp(); setModal('vincular'); }} className="p-1.5 text-slate-400 hover:text-purple-600 transition" title="Editar Ponto/Horário"><Edit2 size={14} /></button>
+                    <button onClick={() => { setEditando(c); setForm({ ...c }); setLocais([]); setFormLocal({ nome: '', latitude: '', longitude: '', raio_metros: 100 }); setEditandoLocal(null); carregarLocais(c.id); carregarDisp(); setModal('vincular'); }} className="p-1.5 text-slate-400 hover:text-purple-600 transition" title="Editar Ponto/Horário"><Edit2 size={14} /></button>
                     <button onClick={() => setDetalhe(detalhe === c.id ? null : c.id)} className="p-1.5 text-slate-400 hover:text-blue-500 transition">
                       {detalhe === c.id ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                     </button>
@@ -312,7 +388,7 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
                     <div><span className="text-slate-400 block">RG</span><span className="font-semibold">{c.funcionario?.rg || '—'}</span></div>
                     <div><span className="text-slate-400 block">Celular</span><span className="font-semibold">{c.funcionario?.celular || '—'}</span></div>
                     <div><span className="text-slate-400 block">Salário Base</span><span className="font-semibold">{c.salario_base ? fmt.moeda(c.salario_base) : '—'}</span></div>
-                    <div><span className="text-slate-400 block">Horário</span><span className="font-semibold">{c.horario_entrada || '—'} → {c.horario_saida || '—'}</span></div>
+                    <div><span className="text-slate-400 block">Horário</span><span className="font-semibold">{c.jornada_flexivel ? 'Flexível' : `${c.horario_entrada || '—'} → ${c.horario_saida || '—'}`}</span></div>
                     <div><span className="text-slate-400 block">Dias</span><span className="font-semibold">{(c.dias_trabalho || []).join(', ') || '—'}</span></div>
                     <div><span className="text-slate-400 block">Geofence</span><span className="font-semibold">{c.latitude_permitida ? `${Number(c.latitude_permitida).toFixed(4)},${Number(c.longitude_permitida).toFixed(4)}` : '—'}</span></div>
                     <div><span className="text-slate-400 block">Raio</span><span className="font-semibold">{c.raio_metros ?? 100}m</span></div>
@@ -1295,6 +1371,148 @@ function FinanceiroTab({ reload }: { reload: number }) {
   );
 }
 
+// ── Tab: Folgas ───────────────────────────────────────────────────────────────
+
+function FolgasTab({ reload }: { reload: number }) {
+  const [folgas, setFolgas] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filtro, setFiltro] = useState<'todas' | 'pendente' | 'aprovada' | 'negada'>('pendente');
+
+  const carregar = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await fetch(`${API}/gente/folgas`, { credentials: 'include' });
+      if (r.ok) setFolgas(await r.json());
+    } finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { carregar(); }, [carregar, reload]);
+
+  const responder = async (id: string, status: 'aprovada' | 'negada') => {
+    const r = await fetch(`${API}/gente/folgas/${id}/responder`, {
+      method: 'PATCH', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    });
+    if (r.ok) { toast.success(`Folga ${status}!`); carregar(); }
+    else toast.error('Erro ao responder folga.');
+  };
+
+  const bp = 'flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition';
+  const filtradas = folgas.filter(f => filtro === 'todas' || f.status === filtro);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-2 flex-wrap">
+        {(['todas', 'pendente', 'aprovada', 'negada'] as const).map(s => (
+          <button key={s} onClick={() => setFiltro(s)}
+            className={`${bp} ${filtro === s ? 'bg-purple-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}>
+            {s.charAt(0).toUpperCase() + s.slice(1)}
+            <span className="ml-1 bg-white/20 rounded px-1">{folgas.filter(f => s === 'todas' || f.status === s).length}</span>
+          </button>
+        ))}
+        <button onClick={carregar} className={`${bp} ml-auto text-slate-400 hover:text-purple-600`}><RefreshCw size={12} /></button>
+      </div>
+      {loading ? <p className="text-slate-400 text-center text-sm">Carregando...</p> : filtradas.length === 0 ? (
+        <p className="text-slate-400 text-center text-sm">Nenhuma folga encontrada.</p>
+      ) : (
+        <div className="space-y-2">
+          {filtradas.map(f => (
+            <div key={f.id} className="flex items-center gap-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3">
+              <Calendar size={16} className="text-purple-500 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold text-slate-800 dark:text-white text-sm">{f.funcionario_nome ?? '—'}</div>
+                <div className="text-xs text-slate-400">{new Date(f.data + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })} · Solicitado: {new Date(f.created_at).toLocaleDateString('pt-BR')}</div>
+              </div>
+              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${f.status === 'pendente' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300' : f.status === 'aprovada' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'}`}>
+                {f.status.toUpperCase()}
+              </span>
+              {f.status === 'pendente' && (
+                <div className="flex gap-1 shrink-0">
+                  <button onClick={() => responder(f.id, 'aprovada')} className="p-1.5 rounded-lg bg-green-100 dark:bg-green-900/30 text-green-600 hover:bg-green-200 transition" title="Aprovar"><Check size={14} /></button>
+                  <button onClick={() => responder(f.id, 'negada')} className="p-1.5 rounded-lg bg-red-100 dark:bg-red-900/30 text-red-500 hover:bg-red-200 transition" title="Negar"><X size={14} /></button>
+                </div>
+              )}
+              {f.respondido_por && <span className="text-xs text-slate-400 hidden sm:block">por {f.respondido_por}</span>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Tab: Trabalho Externo ─────────────────────────────────────────────────────
+
+function TrabalhoExternoTab({ reload, colaboradores }: { reload: number; colaboradores: any[] }) {
+  const [autorizacoes, setAutorizacoes] = useState<any[]>([]);
+  const [form, setForm] = useState({ colaborador_id: '', data: new Date().toISOString().split('T')[0] });
+  const [salvando, setSalvando] = useState(false);
+
+  const ic = 'w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500';
+
+  const carregar = useCallback(async () => {
+    const r = await fetch(`${API}/gente/trabalho-externo`, { credentials: 'include' });
+    if (r.ok) setAutorizacoes(await r.json());
+  }, []);
+
+  useEffect(() => { carregar(); }, [carregar, reload]);
+
+  const autorizar = async () => {
+    if (!form.colaborador_id || !form.data) return toast.error('Selecione colaborador e data.');
+    setSalvando(true);
+    const r = await fetch(`${API}/gente/trabalho-externo`, {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(form),
+    });
+    setSalvando(false);
+    if (r.ok) { toast.success('Trabalho externo autorizado!'); setForm(f => ({ ...f, colaborador_id: '' })); carregar(); }
+    else toast.error('Erro ao autorizar.');
+  };
+
+  const revogar = async (id: string) => {
+    const r = await fetch(`${API}/gente/trabalho-externo/${id}`, { method: 'DELETE', credentials: 'include' });
+    if (r.ok) { toast.success('Revogado.'); carregar(); }
+  };
+
+  const nomeCol = (id: string) => colaboradores.find(c => c.id === id)?.funcionario?.nome ?? id;
+
+  return (
+    <div className="space-y-5">
+      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 text-xs text-blue-700 dark:text-blue-300">
+        <strong>Trabalho Externo:</strong> autoriza um colaborador a registrar ponto de qualquer localização no dia selecionado, sem restrição de geofence.
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <select value={form.colaborador_id} onChange={e => setForm(f => ({ ...f, colaborador_id: e.target.value }))} className={ic}>
+          <option value="">Selecione colaborador...</option>
+          {colaboradores.map(c => <option key={c.id} value={c.id}>{c.funcionario?.nome ?? c.id}</option>)}
+        </select>
+        <input type="date" value={form.data} onChange={e => setForm(f => ({ ...f, data: e.target.value }))} className={ic} />
+        <button onClick={autorizar} disabled={salvando} className="flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl px-4 py-2 text-sm transition disabled:opacity-50">
+          <Plus size={14} />{salvando ? 'Salvando...' : 'Autorizar'}
+        </button>
+      </div>
+      <div className="space-y-2">
+        {autorizacoes.length === 0 ? (
+          <p className="text-slate-400 text-center text-sm">Nenhuma autorização ativa.</p>
+        ) : autorizacoes.map(a => (
+          <div key={a.id} className="flex items-center gap-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3">
+            <MapPin size={16} className="text-purple-500 shrink-0" />
+            <div className="flex-1">
+              <div className="font-semibold text-sm text-slate-800 dark:text-white">{nomeCol(a.colaborador_id)}</div>
+              <div className="text-xs text-slate-400">
+                {new Date(a.data + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' })} · por {a.autorizado_por}
+              </div>
+            </div>
+            <button onClick={() => revogar(a.id)} className="p-1.5 text-slate-400 hover:text-red-500 transition"><Trash2 size={14} /></button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── Página Principal ──────────────────────────────────────────────────────────
 
 const TABS: { key: Tab; label: string; icon: React.ComponentType<any> }[] = [
@@ -1307,6 +1525,8 @@ const TABS: { key: Tab; label: string; icon: React.ComponentType<any> }[] = [
   { key: 'advertencias', label: 'Advertências', icon: AlertTriangle },
   { key: 'suspensoes', label: 'Suspensões', icon: PauseCircle },
   { key: 'faltas', label: 'Faltas', icon: Calendar },
+  { key: 'folgas', label: 'Folgas', icon: Check },
+  { key: 'trabalho-externo', label: 'Trabalho Externo', icon: MapPin },
 ];
 
 export default function GentePage() {
@@ -1358,6 +1578,8 @@ export default function GentePage() {
         {tab === 'advertencias' && <GenericTab endpoint="advertencias" titulo="Advertência" reload={reload} colaboradores={colaboradores} CamposComp={CamposAdvertencia} renderLinha={(i, e, d) => <LinhaAdvertencia key={i.id} item={i} onEdit={e} onDel={d} colaboradores={colaboradores} />} />}
         {tab === 'suspensoes' && <GenericTab endpoint="suspensoes" titulo="Suspensão" reload={reload} colaboradores={colaboradores} CamposComp={CamposSuspensao} renderLinha={(i, e, d) => <LinhaSuspensao key={i.id} item={i} onEdit={e} onDel={d} colaboradores={colaboradores} />} />}
         {tab === 'faltas' && <GenericTab endpoint="faltas" titulo="Falta" reload={reload} colaboradores={colaboradores} CamposComp={CamposFalta} renderLinha={(i, e, d) => <LinhaFalta key={i.id} item={i} onEdit={e} onDel={d} colaboradores={colaboradores} />} />}
+        {tab === 'folgas' && <FolgasTab reload={reload} />}
+        {tab === 'trabalho-externo' && <TrabalhoExternoTab reload={reload} colaboradores={colaboradores} />}
       </div>
     </div>
   );

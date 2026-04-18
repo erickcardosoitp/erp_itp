@@ -32,6 +32,9 @@ export class GenteColaborador {
   @Column({ type: 'int', nullable: true, default: 100 })
   raio_metros: number;
 
+  @Column({ type: 'boolean', default: false })
+  jornada_flexivel: boolean;
+
   @Column({ type: 'numeric', nullable: true, precision: 10, scale: 2 })
   salario_base: number;
 

@@ -10,6 +10,9 @@ import { GenteSuspensao } from './entities/gente-suspensao.entity';
 import { GenteFalta } from './entities/gente-falta.entity';
 import { GenteCodigoAjuda } from './entities/gente-codigo-ajuda.entity';
 import { GenteColaboradorCodigo } from './entities/gente-colaborador-codigo.entity';
+import { GenteColaboradorLocal } from './entities/gente-colaborador-local.entity';
+import { GenteFolgaSolicitacao } from './entities/gente-folga-solicitacao.entity';
+import { GenteTrabalhoExterno } from './entities/gente-trabalho-externo.entity';
 
 const PONTO_TOKEN = 'itp-ponto-2026';
 
@@ -35,6 +38,9 @@ export class GenteService {
     @InjectRepository(GenteFalta) private faltaRepo: Repository<GenteFalta>,
     @InjectRepository(GenteCodigoAjuda) private codigoRepo: Repository<GenteCodigoAjuda>,
     @InjectRepository(GenteColaboradorCodigo) private colCodigoRepo: Repository<GenteColaboradorCodigo>,
+    @InjectRepository(GenteColaboradorLocal) private localRepo: Repository<GenteColaboradorLocal>,
+    @InjectRepository(GenteFolgaSolicitacao) private folgaRepo: Repository<GenteFolgaSolicitacao>,
+    @InjectRepository(GenteTrabalhoExterno) private trabalhoExternoRepo: Repository<GenteTrabalhoExterno>,
     private dataSource: DataSource,
   ) {}
 
@@ -129,7 +135,7 @@ export class GenteService {
 
   async editarColaborador(id: string, dto: any) {
     const colunas = ['tipo','horario_entrada','horario_saida','dias_trabalho',
-      'latitude_permitida','longitude_permitida','raio_metros','salario_base','ativo'];
+      'latitude_permitida','longitude_permitida','raio_metros','salario_base','ativo','jornada_flexivel'];
     const payload: any = {};
     colunas.forEach(k => { if (dto[k] !== undefined) payload[k] = dto[k]; });
     if (Object.keys(payload).length) await this.colaboradorRepo.update(id, payload);
@@ -449,16 +455,38 @@ export class GenteService {
     let dentro_area: boolean | null = null;
     if (dto.latitude && dto.longitude) {
       const col = await this.colaboradorRepo.findOne({ where: { id: dto.colaborador_id } });
-      if (col?.latitude_permitida && col?.longitude_permitida) {
-        distancia_metros = Math.round(calcDistancia(dto.latitude, dto.longitude, Number(col.latitude_permitida), Number(col.longitude_permitida)));
-        dentro_area = distancia_metros <= (col.raio_metros ?? 100);
+      if (col) {
+        // Trabalho externo autorizado para hoje → ignora geofence
+        const hoje = new Date().toISOString().split('T')[0];
+        const externo = await this.trabalhoExternoRepo.findOne({
+          where: { colaborador_id: col.id, data: hoje, ativo: true },
+        });
+        if (externo) {
+          dentro_area = true;
+          distancia_metros = 0;
+        } else {
+          const locais = await this.localRepo.find({ where: { colaborador_id: col.id } });
+          if (locais.length > 0) {
+            let menorDist = Infinity;
+            for (const local of locais) {
+              const dist = Math.round(calcDistancia(dto.latitude, dto.longitude, Number(local.latitude), Number(local.longitude)));
+              if (dist < menorDist) menorDist = dist;
+              if (dist <= (local.raio_metros ?? 100)) { dentro_area = true; break; }
+            }
+            distancia_metros = menorDist === Infinity ? null : menorDist;
+            if (dentro_area === null) dentro_area = false;
+          } else if (col.latitude_permitida && col.longitude_permitida) {
+            distancia_metros = Math.round(calcDistancia(dto.latitude, dto.longitude, Number(col.latitude_permitida), Number(col.longitude_permitida)));
+            dentro_area = distancia_metros <= (col.raio_metros ?? 100);
+          }
+        }
       }
     }
     const reg = this.pontoRepo.create({ ...dto, data_hora: dto.data_hora ?? new Date(), distancia_metros, dentro_area, registrado_por });
     return this.pontoRepo.save(reg);
   }
 
-  async registrarPontoExterno(token: string, cpf_ou_matricula: string, tipo: string, latitude?: number, longitude?: number, observacao?: string) {
+  async registrarPontoExterno(token: string, cpf_ou_matricula: string, tipo: string, latitude?: number, longitude?: number, observacao?: string, assinatura?: string) {
     const tokens = new Set([PONTO_TOKEN, process.env.PONTO_TOKEN].filter(Boolean) as string[]);
     if (!token || !tokens.has(token)) throw new UnauthorizedException('Token inválido.');
     const [func] = await this.dataSource.query(
@@ -468,7 +496,36 @@ export class GenteService {
     if (!func) throw new NotFoundException('Funcionário não encontrado.');
     const col = await this.colaboradorRepo.findOne({ where: { funcionario_id: func.func_id } });
     if (!col) throw new NotFoundException('Funcionário não cadastrado no módulo Gente.');
-    return this.registrarPonto({ colaborador_id: col.id, tipo, latitude, longitude, observacao }, 'self');
+
+    // ── Validação de geofence obrigatória para registros externos ─────────────
+    const hoje = new Date().toISOString().split('T')[0];
+    const externo = await this.trabalhoExternoRepo.findOne({ where: { colaborador_id: col.id, data: hoje, ativo: true } });
+
+    if (!externo) {
+      const locais = await this.localRepo.find({ where: { colaborador_id: col.id } });
+      const temGeofence = locais.length > 0 || (col.latitude_permitida && col.longitude_permitida);
+
+      if (temGeofence) {
+        if (!latitude || !longitude) {
+          throw new BadRequestException('Localização GPS é obrigatória para registrar o ponto. Verifique as permissões de localização no seu dispositivo.');
+        }
+        let dentroDaArea = false;
+        if (locais.length > 0) {
+          for (const local of locais) {
+            const dist = calcDistancia(latitude, longitude, Number(local.latitude), Number(local.longitude));
+            if (dist <= (local.raio_metros ?? 100)) { dentroDaArea = true; break; }
+          }
+        } else {
+          const dist = calcDistancia(latitude, longitude, Number(col.latitude_permitida), Number(col.longitude_permitida));
+          dentroDaArea = dist <= (col.raio_metros ?? 100);
+        }
+        if (!dentroDaArea) {
+          throw new BadRequestException('Você está fora da área permitida para registrar o ponto. Verifique sua localização.');
+        }
+      }
+    }
+
+    return this.registrarPonto({ colaborador_id: col.id, tipo, latitude, longitude, observacao, assinatura }, 'self');
   }
 
   async verificarColaboradorExterno(token: string, cpf_ou_matricula: string) {
@@ -482,10 +539,28 @@ export class GenteService {
     const col = await this.colaboradorRepo.findOne({ where: { funcionario_id: func.func_id } });
     if (!col) throw new NotFoundException('Funcionário não habilitado para ponto.');
     const ultimoPonto = await this.pontoRepo.findOne({ where: { colaborador_id: col.id }, order: { data_hora: 'DESC' } });
-    return { colaborador_id: col.id, nome: func.nome, matricula: func.matricula, horario_entrada: col.horario_entrada, horario_saida: col.horario_saida, latitude_permitida: col.latitude_permitida, longitude_permitida: col.longitude_permitida, raio_metros: col.raio_metros, ultimo_ponto: ultimoPonto ?? null };
+    const locais = await this.localRepo.find({ where: { colaborador_id: col.id }, order: { createdAt: 'ASC' } });
+    return { colaborador_id: col.id, nome: func.nome, matricula: func.matricula, horario_entrada: col.horario_entrada, horario_saida: col.horario_saida, jornada_flexivel: col.jornada_flexivel ?? false, latitude_permitida: col.latitude_permitida, longitude_permitida: col.longitude_permitida, raio_metros: col.raio_metros, locais, ultimo_ponto: ultimoPonto ?? null };
   }
 
   async deletarPonto(id: string) { await this.pontoRepo.delete(id); return { ok: true }; }
+
+  // ── Locais permitidos ─────────────────────────────────────────────────────
+
+  async listarLocais(colaborador_id: string) {
+    return this.localRepo.find({ where: { colaborador_id }, order: { createdAt: 'ASC' } });
+  }
+
+  async criarLocal(dto: { colaborador_id: string; nome: string; latitude: number; longitude: number; raio_metros?: number }) {
+    return this.localRepo.save(this.localRepo.create(dto));
+  }
+
+  async editarLocal(id: string, dto: Partial<{ nome: string; latitude: number; longitude: number; raio_metros: number }>) {
+    await this.localRepo.update(id, dto);
+    return this.localRepo.findOneBy({ id });
+  }
+
+  async deletarLocal(id: string) { await this.localRepo.delete(id); return { ok: true }; }
 
   // ── Recibos ───────────────────────────────────────────────────────────────
 
@@ -559,5 +634,204 @@ export class GenteService {
       this.pontoRepo.find({ where: { colaborador_id: id }, order: { data_hora: 'DESC' }, take: 30 }),
     ]);
     return { recibos, vales, advertencias, suspensoes, faltas, ponto };
+  }
+
+  // ── Banco de horas ────────────────────────────────────────────────────────
+
+  private calcularMinutosPorDia(col: GenteColaborador): number {
+    if (!col.horario_entrada || !col.horario_saida) return 0;
+    const [eh, em] = col.horario_entrada.split(':').map(Number);
+    const [sh, sm] = col.horario_saida.split(':').map(Number);
+    return (sh * 60 + sm) - (eh * 60 + em);
+  }
+
+  private calcularDiasEsperados(col: GenteColaborador, inicio: Date, fim: Date): number {
+    const diasMap: Record<string, number> = { dom: 0, seg: 1, ter: 2, qua: 3, qui: 4, sex: 5, sab: 6 };
+    const diasNums = (col.dias_trabalho ?? []).map(d => diasMap[d]).filter(n => n !== undefined);
+    let count = 0;
+    const cur = new Date(inicio);
+    cur.setHours(0, 0, 0, 0);
+    const end = new Date(fim);
+    end.setHours(23, 59, 59, 999);
+    while (cur <= end) {
+      if (diasNums.includes(cur.getDay())) count++;
+      cur.setDate(cur.getDate() + 1);
+    }
+    return count;
+  }
+
+  private calcularMinutosTrabalhados(pontos: any[]): number {
+    const byDate: Record<string, any[]> = {};
+    for (const p of pontos) {
+      const d = new Date(p.data_hora).toISOString().split('T')[0];
+      if (!byDate[d]) byDate[d] = [];
+      byDate[d].push(p);
+    }
+    let total = 0;
+    for (const records of Object.values(byDate)) {
+      const sorted = [...records].sort((a, b) => new Date(a.data_hora).getTime() - new Date(b.data_hora).getTime());
+      let entrada: Date | null = null;
+      for (const r of sorted) {
+        if (r.tipo === 'entrada') { entrada = new Date(r.data_hora); }
+        else if (r.tipo === 'saida' && entrada) {
+          total += (new Date(r.data_hora).getTime() - entrada.getTime()) / 60000;
+          entrada = null;
+        }
+      }
+    }
+    return total;
+  }
+
+  async bancoHoras(colaborador_id: string, mes?: string) {
+    const col = await this.colaboradorRepo.findOneBy({ id: colaborador_id });
+    if (!col) throw new NotFoundException('Colaborador não encontrado.');
+    const refMes = mes ?? new Date().toISOString().slice(0, 7);
+    const [year, month] = refMes.split('-').map(Number);
+    const inicio = new Date(year, month - 1, 1);
+    const fim = new Date(year, month, 0); // último dia do mês
+    const pontos = await this.pontoRepo.find({
+      where: { colaborador_id },
+      order: { data_hora: 'ASC' },
+    });
+    const pontosMes = pontos.filter(p => {
+      const d = new Date(p.data_hora);
+      return d >= inicio && d <= new Date(year, month - 1, fim.getDate(), 23, 59, 59);
+    });
+    const minTrabalhados = this.calcularMinutosTrabalhados(pontosMes);
+    const minPorDia = this.calcularMinutosPorDia(col);
+    const diasEsperados = this.calcularDiasEsperados(col, inicio, fim);
+    const minEsperados = minPorDia * diasEsperados;
+    const saldoMin = minTrabalhados - minEsperados;
+    const fmt = (m: number) => `${m < 0 ? '-' : '+'}${String(Math.floor(Math.abs(m) / 60)).padStart(2, '0')}:${String(Math.round(Math.abs(m) % 60)).padStart(2, '0')}`;
+    return {
+      mes: refMes,
+      trabalhado: fmt(minTrabalhados),
+      esperado: fmt(minEsperados < 0 ? -minEsperados : minEsperados).replace('+', ''),
+      saldo: fmt(saldoMin),
+      saldo_minutos: Math.round(saldoMin),
+      dias_esperados: diasEsperados,
+    };
+  }
+
+  async historicoExterno(colaborador_id: string, limite = 50) {
+    const pontos = await this.pontoRepo.find({
+      where: { colaborador_id },
+      order: { data_hora: 'DESC' },
+      take: limite,
+    });
+    return pontos.map(p => ({
+      id: p.id,
+      tipo: p.tipo,
+      data_hora: p.data_hora,
+      dentro_area: p.dentro_area,
+      distancia_metros: p.distancia_metros,
+    }));
+  }
+
+  // ── Folgas ────────────────────────────────────────────────────────────────
+
+  private async verificarDebitoMesAnterior(colaborador_id: string): Promise<boolean> {
+    const hoje = new Date();
+    const mesAnterior = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
+    const banco = await this.bancoHoras(colaborador_id, mesAnterior.toISOString().slice(0, 7));
+    if (banco.saldo_minutos >= 0) return false;
+    // Bloqueado por 1 mês a partir do último dia do mês anterior
+    const fimMesAnterior = new Date(hoje.getFullYear(), hoje.getMonth(), 0);
+    const bloqueadoAte = new Date(fimMesAnterior);
+    bloqueadoAte.setMonth(bloqueadoAte.getMonth() + 1);
+    return hoje <= bloqueadoAte;
+  }
+
+  async solicitarFolga(colaborador_id: string, data: string) {
+    const DIAS_FOLGA_PERMITIDOS = ['seg', 'qui', 'sex']; // regra global
+    const DIAS_NUM: Record<string, number> = { dom: 0, seg: 1, ter: 2, qua: 3, qui: 4, sex: 5, sab: 6 };
+
+    const col = await this.colaboradorRepo.findOneBy({ id: colaborador_id });
+    if (!col) throw new NotFoundException('Colaborador não encontrado.');
+
+    const dataFolga = new Date(data + 'T12:00:00');
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+
+    // Mínimo 10 dias de antecedência
+    const diasAntec = Math.floor((dataFolga.getTime() - hoje.getTime()) / 86400000);
+    if (diasAntec < 10) throw new BadRequestException(`A folga deve ser solicitada com pelo menos 10 dias de antecedência. Faltam ${diasAntec} dia(s).`);
+
+    // Dia deve ser um dia de trabalho do colaborador
+    const diaStr = Object.entries(DIAS_NUM).find(([, n]) => n === dataFolga.getDay())?.[0] ?? '';
+    if (!(col.dias_trabalho ?? []).includes(diaStr)) throw new BadRequestException('A folga só pode ser marcada em dias de trabalho do colaborador.');
+
+    // Dia deve ser seg, qui ou sex
+    if (!DIAS_FOLGA_PERMITIDOS.includes(diaStr)) throw new BadRequestException('Folgas só podem ser solicitadas para segunda, quinta ou sexta-feira.');
+
+    // Calcular início e fim da semana ISO da data solicitada
+    const diaDaSemana = dataFolga.getDay();
+    const diffLun = (diaDaSemana === 0 ? -6 : 1 - diaDaSemana);
+    const segDaSemana = new Date(dataFolga);
+    segDaSemana.setDate(dataFolga.getDate() + diffLun);
+    segDaSemana.setHours(0, 0, 0, 0);
+    const domDaSemana = new Date(segDaSemana);
+    domDaSemana.setDate(segDaSemana.getDate() + 6);
+    domDaSemana.setHours(23, 59, 59, 999);
+
+    // Máximo 1 folga por funcionário na semana
+    const folgasNaSemana = await this.dataSource.query(
+      `SELECT id FROM gente_folga_solicitacoes WHERE colaborador_id = $1 AND data >= $2 AND data <= $3 AND status != 'negada'`,
+      [colaborador_id, segDaSemana.toISOString().split('T')[0], domDaSemana.toISOString().split('T')[0]],
+    );
+    if (folgasNaSemana.length > 0) throw new BadRequestException('Você já possui uma folga solicitada nesta semana.');
+
+    // Máximo 2 folgas por semana no total (todos os funcionários)
+    const totalNaSemana = await this.dataSource.query(
+      `SELECT id FROM gente_folga_solicitacoes WHERE data >= $1 AND data <= $2 AND status != 'negada'`,
+      [segDaSemana.toISOString().split('T')[0], domDaSemana.toISOString().split('T')[0]],
+    );
+    if (totalNaSemana.length >= 2) throw new BadRequestException('Já existem 2 folgas aprovadas/pendentes nesta semana. Limite semanal atingido.');
+
+    // Verificar débito do mês anterior
+    const comDebito = await this.verificarDebitoMesAnterior(colaborador_id);
+    if (comDebito) throw new BadRequestException('Você terminou o mês anterior com horas em débito e está temporariamente impedido de solicitar folgas.');
+
+    const folga = this.folgaRepo.create({ colaborador_id, data, status: 'pendente' });
+    return this.folgaRepo.save(folga);
+  }
+
+  async listarFolgas(colaborador_id?: string) {
+    const rows = await this.dataSource.query(
+      `SELECT f.*, gc.funcionario_id,
+              fn.nome as funcionario_nome, fn.matricula
+       FROM gente_folga_solicitacoes f
+       JOIN gente_colaboradores gc ON gc.id = f.colaborador_id
+       JOIN funcionarios fn ON fn.id = gc.funcionario_id
+       ${colaborador_id ? 'WHERE f.colaborador_id = $1' : ''}
+       ORDER BY f.data ASC`,
+      colaborador_id ? [colaborador_id] : [],
+    );
+    return rows;
+  }
+
+  async responderFolga(id: string, status: 'aprovada' | 'negada', respondido_por: string) {
+    await this.folgaRepo.update(id, { status, respondido_por, respondido_em: new Date() });
+    return this.folgaRepo.findOneBy({ id });
+  }
+
+  // ── Trabalho externo ──────────────────────────────────────────────────────
+
+  async habilitarTrabalhoExterno(colaborador_id: string, data: string, autorizado_por: string, autorizado_por_id?: string) {
+    // Revogar qualquer autorização anterior para essa data
+    await this.trabalhoExternoRepo.update({ colaborador_id, data }, { ativo: false });
+    const reg = this.trabalhoExternoRepo.create({ colaborador_id, data, autorizado_por, autorizado_por_id, ativo: true });
+    return this.trabalhoExternoRepo.save(reg);
+  }
+
+  async listarTrabalhoExterno(colaborador_id?: string) {
+    const where: any = { ativo: true };
+    if (colaborador_id) where.colaborador_id = colaborador_id;
+    return this.trabalhoExternoRepo.find({ where, order: { createdAt: 'DESC' } });
+  }
+
+  async revogarTrabalhoExterno(id: string) {
+    await this.trabalhoExternoRepo.update(id, { ativo: false });
+    return { ok: true };
   }
 }

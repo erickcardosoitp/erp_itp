@@ -90,6 +90,26 @@ export class GenteController {
   @ModuloPerm('gente', 'excluir')
   remover(@Param('id') id: string) { return this.svc.removerColaborador(id); }
 
+  // ── Locais permitidos por colaborador ─────────────────────────────────────
+
+  @Get('colaboradores/:id/locais')
+  @ModuloPerm('gente', 'visualizar')
+  listarLocais(@Param('id') id: string) { return this.svc.listarLocais(id); }
+
+  @Post('colaboradores/:id/locais')
+  @ModuloPerm('gente', 'editar')
+  criarLocal(@Param('id') id: string, @Body() dto: any) {
+    return this.svc.criarLocal({ ...dto, colaborador_id: id });
+  }
+
+  @Patch('locais/:id')
+  @ModuloPerm('gente', 'editar')
+  editarLocal(@Param('id') id: string, @Body() dto: any) { return this.svc.editarLocal(id, dto); }
+
+  @Delete('locais/:id')
+  @ModuloPerm('gente', 'excluir')
+  deletarLocal(@Param('id') id: string) { return this.svc.deletarLocal(id); }
+
   // ── Códigos de Ajuda de Custo (VRX) ──────────────────────────────────────
 
   @Get('codigos-ajuda')
@@ -172,8 +192,54 @@ export class GenteController {
   @Public()
   @Post('ponto/externo')
   pontoExterno(@Body() body: any) {
-    return this.svc.registrarPontoExterno(body.token, body.identificador, body.tipo, body.latitude, body.longitude, body.observacao);
+    return this.svc.registrarPontoExterno(body.token, body.identificador, body.tipo, body.latitude, body.longitude, body.observacao, body.assinatura);
   }
+
+  @Public()
+  @Get('ponto/externo/historico')
+  historicoExterno(@Query('token') token: string, @Query('colaborador_id') colaborador_id: string) {
+    return this.svc.historicoExterno(colaborador_id, 60);
+  }
+
+  @Public()
+  @Get('ponto/externo/banco-horas')
+  bancoHorasExterno(@Query('colaborador_id') colaborador_id: string, @Query('mes') mes?: string) {
+    return this.svc.bancoHoras(colaborador_id, mes);
+  }
+
+  // ── Folgas ────────────────────────────────────────────────────────────────
+
+  @Get('folgas')
+  @ModuloPerm('gente', 'visualizar')
+  listarFolgas(@Query('colaborador_id') c?: string) { return this.svc.listarFolgas(c); }
+
+  @Public()
+  @Post('folgas/solicitar')
+  solicitarFolga(@Body() body: any) {
+    return this.svc.solicitarFolga(body.colaborador_id, body.data);
+  }
+
+  @Patch('folgas/:id/responder')
+  @ModuloPerm('gente', 'editar')
+  responderFolga(@Param('id') id: string, @Body() body: any, @Request() req: any) {
+    return this.svc.responderFolga(id, body.status, req.user?.nome ?? 'admin');
+  }
+
+  // ── Trabalho externo ──────────────────────────────────────────────────────
+
+  @Get('trabalho-externo')
+  @ModuloPerm('gente', 'visualizar')
+  listarTrabalhoExterno(@Query('colaborador_id') c?: string) { return this.svc.listarTrabalhoExterno(c); }
+
+  @Post('trabalho-externo')
+  @ModuloPerm('gente', 'editar')
+  habilitarTrabalhoExterno(@Body() body: any, @Request() req: any) {
+    return this.svc.habilitarTrabalhoExterno(body.colaborador_id, body.data, req.user?.nome ?? 'admin', req.user?.userId);
+  }
+
+  @Delete('trabalho-externo/:id')
+  @ModuloPerm('gente', 'editar')
+  revogarTrabalhoExterno(@Param('id') id: string) { return this.svc.revogarTrabalhoExterno(id); }
 
   // ── Vales ─────────────────────────────────────────────────────────────────
 

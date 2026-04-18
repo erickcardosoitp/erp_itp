@@ -34,6 +34,9 @@ export class GentePonto {
   @Column({ type: 'text', nullable: true, default: 'system' })
   registrado_por: string; // 'self' | 'gestor' | 'system'
 
+  @Column({ type: 'text', nullable: true })
+  assinatura: string; // base64 PNG da assinatura
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 }

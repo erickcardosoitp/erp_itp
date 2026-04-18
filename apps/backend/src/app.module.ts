@@ -598,6 +598,45 @@ export class AppModule implements OnModuleInit {
         ALTER TABLE IF EXISTS gente_colaboradores
           ADD COLUMN IF NOT EXISTS salario_base NUMERIC(12,2)
       `);
+      await this.dataSource.query(`
+        ALTER TABLE IF EXISTS gente_colaboradores
+          ADD COLUMN IF NOT EXISTS jornada_flexivel BOOLEAN NOT NULL DEFAULT false
+      `);
+      await this.dataSource.query(`ALTER TABLE gente_ponto ADD COLUMN IF NOT EXISTS assinatura TEXT`);
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS gente_folga_solicitacoes (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          colaborador_id UUID NOT NULL REFERENCES gente_colaboradores(id) ON DELETE CASCADE,
+          data DATE NOT NULL,
+          status TEXT NOT NULL DEFAULT 'pendente',
+          motivo TEXT,
+          respondido_por TEXT,
+          respondido_em TIMESTAMPTZ,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `);
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS gente_trabalho_externo (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          colaborador_id UUID NOT NULL REFERENCES gente_colaboradores(id) ON DELETE CASCADE,
+          data DATE NOT NULL,
+          autorizado_por TEXT NOT NULL,
+          autorizado_por_id UUID,
+          ativo BOOLEAN NOT NULL DEFAULT true,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `);
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS gente_colaborador_locais (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          colaborador_id UUID NOT NULL REFERENCES gente_colaboradores(id) ON DELETE CASCADE,
+          nome TEXT NOT NULL,
+          latitude NUMERIC(10,7) NOT NULL,
+          longitude NUMERIC(10,7) NOT NULL,
+          raio_metros INT NOT NULL DEFAULT 100,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `);
       this.logger.log('✅ Tabelas do módulo Gente criadas (IF NOT EXISTS)');
 
     } catch (err: any) {

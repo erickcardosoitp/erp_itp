@@ -11,13 +11,17 @@ import { GenteSuspensao } from './entities/gente-suspensao.entity';
 import { GenteFalta } from './entities/gente-falta.entity';
 import { GenteCodigoAjuda } from './entities/gente-codigo-ajuda.entity';
 import { GenteColaboradorCodigo } from './entities/gente-colaborador-codigo.entity';
+import { GenteColaboradorLocal } from './entities/gente-colaborador-local.entity';
+import { GenteFolgaSolicitacao } from './entities/gente-folga-solicitacao.entity';
+import { GenteTrabalhoExterno } from './entities/gente-trabalho-externo.entity';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([
       GenteColaborador, GentePonto, GenteRecibo, GenteVale,
       GenteAdvertencia, GenteSuspensao, GenteFalta,
-      GenteCodigoAjuda, GenteColaboradorCodigo,
+      GenteCodigoAjuda, GenteColaboradorCodigo, GenteColaboradorLocal,
+      GenteFolgaSolicitacao, GenteTrabalhoExterno,
     ]),
   ],
   controllers: [GenteController],
