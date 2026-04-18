@@ -179,6 +179,18 @@ export class GenteController {
   @ModuloPerm('gente', 'incluir')
   registrarPonto(@Body() dto: any, @Request() req: any) { return this.svc.registrarPonto(dto, req.user?.nome ?? 'gestor'); }
 
+  @Get('ponto/alertas')
+  @ModuloPerm('gente', 'visualizar')
+  alertasAusencia() { return this.svc.alertasAusencia(); }
+
+  @Get('ponto/relatorio')
+  @ModuloPerm('gente', 'visualizar')
+  relatorioPonto(@Query('data_inicio') data_inicio: string, @Query('data_fim') data_fim: string) {
+    const inicio = data_inicio || new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0];
+    const fim = data_fim || new Date().toISOString().split('T')[0];
+    return this.svc.relatorioPonto(inicio, fim);
+  }
+
   @Delete('ponto/:id')
   @ModuloPerm('gente', 'excluir')
   deletarPonto(@Param('id') id: string) { return this.svc.deletarPonto(id); }

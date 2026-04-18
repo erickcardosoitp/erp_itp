@@ -780,6 +780,154 @@ export class GenteService {
     };
   }
 
+  // ── Alertas de Ausência ───────────────────────────────────────────────────
+
+  async alertasAusencia() {
+    const DIAS_MAP: Record<string, number> = { dom: 0, seg: 1, ter: 2, qua: 3, qui: 4, sex: 5, sab: 6 };
+    const DIAS_LABEL: Record<string, string> = { dom: 'Dom', seg: 'Seg', ter: 'Ter', qua: 'Qua', qui: 'Qui', sex: 'Sex', sab: 'Sáb' };
+
+    const colaboradores = await this.colaboradorRepo.find({ where: { ativo: true } });
+
+    // Date range: last 14 days up to yesterday UTC
+    const hojeUtc = new Date();
+    const hojeInicioMs = Date.UTC(hojeUtc.getUTCFullYear(), hojeUtc.getUTCMonth(), hojeUtc.getUTCDate());
+    const ontemMs = hojeInicioMs - 86400000;
+    const inicioMs = ontemMs - 13 * 86400000; // 14 days back from yesterday
+
+    const inicioUTC = new Date(inicioMs);
+    const fimUTC = new Date(hojeInicioMs); // exclusive upper bound (today 00:00 UTC)
+
+    // Single query to get all ponto records in BRT for the period
+    const pontosRaw: Array<{ colaborador_id: string; data_brt: string }> = await this.dataSource.query(
+      `SELECT colaborador_id, (data_hora AT TIME ZONE 'America/Sao_Paulo')::date::text as data_brt
+       FROM gente_ponto
+       WHERE data_hora >= $1 AND data_hora < $2
+       GROUP BY colaborador_id, data_brt`,
+      [inicioUTC.toISOString(), fimUTC.toISOString()],
+    );
+
+    // Build lookup: colaborador_id → Set<data_brt>
+    const pontoMap: Record<string, Set<string>> = {};
+    for (const row of pontosRaw) {
+      if (!pontoMap[row.colaborador_id]) pontoMap[row.colaborador_id] = new Set();
+      pontoMap[row.colaborador_id].add(row.data_brt);
+    }
+
+    // Collect funcionario names
+    const funcIds = colaboradores.map(c => c.funcionario_id);
+    const funcionarios: any[] = funcIds.length
+      ? await this.dataSource.query(`SELECT id, nome FROM funcionarios WHERE id = ANY($1::uuid[])`, [funcIds])
+      : [];
+    const funcMap: Record<string, string> = {};
+    funcionarios.forEach(f => (funcMap[f.id] = f.nome));
+
+    const alertas: Array<{ colaborador_id: string; nome: string; dias_ausentes: string[] }> = [];
+
+    for (const col of colaboradores) {
+      if (!col.dias_trabalho || col.dias_trabalho.length === 0) continue;
+      const diasNums = col.dias_trabalho.map((d: string) => DIAS_MAP[d]).filter((n: number | undefined) => n !== undefined) as number[];
+      const diasNomesMap: Record<number, string> = {};
+      col.dias_trabalho.forEach((d: string) => { if (DIAS_MAP[d] !== undefined) diasNomesMap[DIAS_MAP[d]] = d; });
+
+      const presentes = pontoMap[col.id] ?? new Set<string>();
+      const diasAusentes: string[] = [];
+
+      // Iterate each day in the 14-day window
+      let cur = inicioMs;
+      while (cur <= ontemMs) {
+        const date = new Date(cur);
+        const dow = date.getUTCDay();
+        if (diasNums.includes(dow)) {
+          // Format as YYYY-MM-DD (UTC date)
+          const iso = date.toISOString().split('T')[0];
+          if (!presentes.has(iso)) {
+            const diaStr = diasNomesMap[dow] ?? '';
+            const [y, m, d] = iso.split('-');
+            const label = `${d}/${m} (${DIAS_LABEL[diaStr] ?? diaStr})`;
+            diasAusentes.push(label);
+          }
+        }
+        cur += 86400000;
+      }
+
+      if (diasAusentes.length > 0) {
+        alertas.push({
+          colaborador_id: col.id,
+          nome: funcMap[col.funcionario_id] ?? col.funcionario_id,
+          dias_ausentes: diasAusentes,
+        });
+      }
+    }
+
+    return alertas;
+  }
+
+  // ── Relatório de Ponto ─────────────────────────────────────────────────────
+
+  async relatorioPonto(data_inicio: string, data_fim: string) {
+    const inicioUTC = new Date(data_inicio + 'T00:00:00.000Z');
+    const fimUTC = new Date(data_fim + 'T23:59:59.999Z');
+
+    const rows: any[] = await this.dataSource.query(
+      `SELECT p.id, p.colaborador_id, p.tipo, p.data_hora,
+              (p.data_hora AT TIME ZONE 'America/Sao_Paulo') as hora_brt,
+              f.nome as funcionario_nome
+       FROM gente_ponto p
+       JOIN gente_colaboradores gc ON gc.id = p.colaborador_id
+       JOIN funcionarios f ON f.id = gc.funcionario_id
+       WHERE p.data_hora >= $1 AND p.data_hora <= $2
+       ORDER BY f.nome, p.data_hora`,
+      [inicioUTC.toISOString(), fimUTC.toISOString()],
+    );
+
+    // Group by colaborador_id → date (BRT) → records
+    const colMap: Record<string, { colaborador_id: string; nome: string; dias: Record<string, any[]> }> = {};
+
+    for (const row of rows) {
+      if (!colMap[row.colaborador_id]) {
+        colMap[row.colaborador_id] = { colaborador_id: row.colaborador_id, nome: row.funcionario_nome, dias: {} };
+      }
+      // hora_brt is a JS Date (PostgreSQL returns it parsed)
+      const horaBrt = new Date(row.hora_brt);
+      const dataBrt = `${horaBrt.getUTCFullYear()}-${String(horaBrt.getUTCMonth() + 1).padStart(2, '0')}-${String(horaBrt.getUTCDate()).padStart(2, '0')}`;
+      const hora = `${String(horaBrt.getUTCHours()).padStart(2, '0')}:${String(horaBrt.getUTCMinutes()).padStart(2, '0')}`;
+      if (!colMap[row.colaborador_id].dias[dataBrt]) colMap[row.colaborador_id].dias[dataBrt] = [];
+      colMap[row.colaborador_id].dias[dataBrt].push({ id: row.id, tipo: row.tipo, hora });
+    }
+
+    const resultado = Object.values(colMap).map(col => {
+      let totalMinutosCol = 0;
+      const dias = Object.entries(col.dias)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([data, registros]) => {
+          // Calculate minutos trabalhados: pair entrada→saida
+          const sorted = [...registros].sort((a, b) => a.hora.localeCompare(b.hora));
+          let minutos = 0;
+          let entrada: string | null = null;
+          for (const r of sorted) {
+            if (r.tipo === 'entrada') {
+              entrada = r.hora;
+            } else if (r.tipo === 'saida' && entrada) {
+              const [eh, em] = entrada.split(':').map(Number);
+              const [sh, sm] = r.hora.split(':').map(Number);
+              const diff = (sh * 60 + sm) - (eh * 60 + em);
+              if (diff > 0 && diff < 1440) minutos += diff;
+              entrada = null;
+            }
+          }
+          totalMinutosCol += minutos;
+          const temEntrada = sorted.some(r => r.tipo === 'entrada');
+          const temSaida = sorted.some(r => r.tipo === 'saida');
+          const completo = temEntrada && temSaida;
+          return { data, registros: sorted.map(({ id, tipo, hora }) => ({ id, tipo, hora })), minutos_trabalhados: minutos, completo };
+        });
+
+      return { colaborador_id: col.colaborador_id, nome: col.nome, dias, total_minutos: totalMinutosCol };
+    });
+
+    return resultado;
+  }
+
   async historicoExterno(colaborador_id: string, limite = 50) {
     const pontos = await this.pontoRepo.find({
       where: { colaborador_id },

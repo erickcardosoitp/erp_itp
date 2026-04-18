@@ -1169,11 +1169,20 @@ const novaLinha = (data: string, hora: string, tipo: 'entrada' | 'saida'): Linha
   ({ id: ++_lId, data, hora, tipo });
 
 function PontoTab({ reload, colaboradores }: { reload: number; colaboradores: any[] }) {
-  const [registros, setRegistros] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const ic = 'w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-400';
+
+  // ── Alertas state ─────────────────────────────────────────────────────────
+  const [alertas, setAlertas] = useState<Array<{ colaborador_id: string; nome: string; dias_ausentes: string[] }>>([]);
+  const [loadingAlertas, setLoadingAlertas] = useState(true);
+
+  // ── Relatório state ───────────────────────────────────────────────────────
+  const [relatorio, setRelatorio] = useState<any[]>([]);
+  const [loadingRel, setLoadingRel] = useState(false);
   const [filtroCol, setFiltroCol] = useState('');
   const [filtroInicio, setFiltroInicio] = useState('');
   const [filtroFim, setFiltroFim] = useState('');
+
+  // ── Modal state ───────────────────────────────────────────────────────────
   const [modalAberto, setModalAberto] = useState(false);
   const [colId, setColId] = useState('');
   const [linhas, setLinhas] = useState<LinhaLancamento[]>([]);
@@ -1182,8 +1191,58 @@ function PontoTab({ reload, colaboradores }: { reload: number; colaboradores: an
 
   const hoje = new Date().toISOString().split('T')[0];
 
-  const abrirModal = () => {
-    setColId('');
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
+  const fmtMinutos = (min: number) => {
+    const h = Math.floor(min / 60);
+    const m = min % 60;
+    return `${h}h${m > 0 ? String(m).padStart(2, '0') + 'm' : ''}`;
+  };
+
+  // ── Alertas ───────────────────────────────────────────────────────────────
+
+  const carregarAlertas = useCallback(async () => {
+    setLoadingAlertas(true);
+    try {
+      const r = await fetch(`${API}/gente/ponto/alertas`, { credentials: 'include' });
+      const data = await r.json();
+      setAlertas(Array.isArray(data) ? data : []);
+    } catch { toast.error('Erro ao carregar alertas de ausência.'); }
+    setLoadingAlertas(false);
+  }, []);
+
+  useEffect(() => { carregarAlertas(); }, [carregarAlertas, reload]);
+
+  // ── Relatório ─────────────────────────────────────────────────────────────
+
+  const carregar = useCallback(async () => {
+    setLoadingRel(true);
+    const p = new URLSearchParams();
+    if (filtroCol) p.set('colaborador_id', filtroCol);
+    if (filtroInicio) p.set('data_inicio', filtroInicio);
+    if (filtroFim) p.set('data_fim', filtroFim);
+
+    // Use relatorio endpoint for grouped display
+    const rp = new URLSearchParams();
+    if (filtroInicio) rp.set('data_inicio', filtroInicio);
+    if (filtroFim) rp.set('data_fim', filtroFim);
+
+    try {
+      const r = await fetch(`${API}/gente/ponto/relatorio?${rp}`, { credentials: 'include' });
+      const data = await r.json();
+      let lista = Array.isArray(data) ? data : [];
+      if (filtroCol) lista = lista.filter((c: any) => c.colaborador_id === filtroCol);
+      setRelatorio(lista);
+    } catch { toast.error('Erro ao carregar relatório de ponto.'); }
+    setLoadingRel(false);
+  }, [filtroCol, filtroInicio, filtroFim]);
+
+  useEffect(() => { carregar(); }, [carregar, reload]);
+
+  // ── Modal helpers ─────────────────────────────────────────────────────────
+
+  const abrirModal = (preColId?: string) => {
+    setColId(preColId ?? '');
     setLinhas([novaLinha(hoje, '08:00', 'entrada'), novaLinha(hoje, '17:00', 'saida')]);
     setModalAberto(true);
   };
@@ -1201,20 +1260,6 @@ function PontoTab({ reload, colaboradores }: { reload: number; colaboradores: an
     setLinhas(l => l.map(r => r.id === id ? { ...r, [campo]: val } : r));
 
   const delLinha = (id: number) => setLinhas(l => l.filter(r => r.id !== id));
-
-  const carregar = useCallback(async () => {
-    setLoading(true);
-    const p = new URLSearchParams();
-    if (filtroCol) p.set('colaborador_id', filtroCol);
-    if (filtroInicio) p.set('data_inicio', filtroInicio);
-    if (filtroFim) p.set('data_fim', filtroFim);
-    const r = await fetch(`${API}/gente/ponto?${p}`, { credentials: 'include' });
-    const pontoData = await r.json();
-    setRegistros(Array.isArray(pontoData) ? pontoData : []);
-    setLoading(false);
-  }, [filtroCol, filtroInicio, filtroFim]);
-
-  useEffect(() => { carregar(); }, [carregar, reload]);
 
   const salvarLote = async () => {
     if (!colId) { toast.error('Selecione um colaborador.'); return; }
@@ -1238,12 +1283,13 @@ function PontoTab({ reload, colaboradores }: { reload: number; colaboradores: an
     setSalvando(false);
     setModalAberto(false);
     carregar();
+    carregarAlertas();
   };
 
-  const deletar = async (id: string) => {
+  const deletarReg = async (id: string) => {
     if (!confirm('Excluir?')) return;
     await fetch(`${API}/gente/ponto/${id}`, { method: 'DELETE', credentials: 'include' });
-    toast.success('Excluído.'); carregar();
+    toast.success('Excluído.'); carregar(); carregarAlertas();
   };
 
   const tipoClasses = (tipo: 'entrada' | 'saida', ativo: boolean) =>
@@ -1252,49 +1298,156 @@ function PontoTab({ reload, colaboradores }: { reload: number; colaboradores: an
       : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-400'}`;
 
   return (
-    <div>
-      <div className="flex flex-col sm:flex-row gap-3 mb-5 flex-wrap">
-        <select value={filtroCol} onChange={e => setFiltroCol(e.target.value)} className={`${ic} flex-1`}>
-          <option value="">Todos</option>
-          {colaboradores.map(c => <option key={c.id} value={c.id}>{c.funcionario?.nome ?? c.id}</option>)}
-        </select>
-        <input type="date" value={filtroInicio} onChange={e => setFiltroInicio(e.target.value)} className={`${ic} w-36`} />
-        <input type="date" value={filtroFim} onChange={e => setFiltroFim(e.target.value)} className={`${ic} w-36`} />
-        <button onClick={carregar} className={bs}><RefreshCw size={14} /></button>
-        <button onClick={abrirModal} className={bp}><Plus size={14} className="inline mr-1" />Lançar Ponto</button>
-        <a href={PONTO_URL} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-xl text-sm transition whitespace-nowrap"><ExternalLink size={14} />Link Externo</a>
-      </div>
+    <div className="space-y-6">
 
-      {loading ? <div className="text-center py-12 text-slate-400">Carregando...</div> : registros.length === 0
-        ? <div className="text-center py-12 text-slate-400">Nenhum registro.</div>
-        : (
-          <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 dark:bg-slate-800">
-                <tr>{['Colaborador', 'Tipo', 'Data/Hora', 'Distância', 'Por', ''].map(h => (
-                  <th key={h} className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">{h}</th>
-                ))}</tr>
-              </thead>
-              <tbody>
-                {registros.map(r => (
-                  <tr key={r.id} className="border-t border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                    <td className="px-4 py-3 font-semibold">{r.colaborador_nome || '—'}</td>
-                    <td className="px-4 py-3"><Badge label={r.tipo === 'entrada' ? '✅ Entrada' : '🔴 Saída'} color={r.tipo === 'entrada' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'} /></td>
-                    <td className="px-4 py-3 text-slate-600 dark:text-slate-300 text-xs">{fmt.data(r.data_hora)} {fmt.hora(r.data_hora)}</td>
-                    <td className="px-4 py-3 text-xs">{r.distancia_metros != null ? <span className={r.dentro_area ? 'text-green-600' : 'text-red-500'}>{r.distancia_metros}m {r.dentro_area ? '✓' : '⚠️'}</span> : '—'}</td>
-                    <td className="px-4 py-3 text-xs text-slate-400">{r.registrado_por}</td>
-                    <td className="px-4 py-3"><button onClick={() => deletar(r.id)} className={bd}><Trash2 size={12} /></button></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {/* ── Seção A: Alertas de Ausência ──────────────────────────────────── */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-black text-slate-700 dark:text-slate-200 flex items-center gap-2">
+            <AlertTriangle size={16} className="text-orange-500" />
+            Alertas de Ausência — últimos 14 dias
+          </h3>
+          <button onClick={carregarAlertas} className={bs} title="Recarregar alertas"><RefreshCw size={14} /></button>
+        </div>
+
+        {loadingAlertas ? (
+          <div className="text-center py-6 text-slate-400 text-sm">Verificando ausências...</div>
+        ) : alertas.length === 0 ? (
+          <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 text-green-700 dark:text-green-300 text-sm">
+            <Check size={16} />
+            Nenhuma ausência detectada nos últimos 14 dias.
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {alertas.map(alerta => (
+              <div key={alerta.colaborador_id}
+                className="flex flex-col sm:flex-row sm:items-start gap-3 px-4 py-3 rounded-xl bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-700">
+                <AlertTriangle size={16} className="text-orange-500 mt-0.5 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="font-bold text-orange-800 dark:text-orange-200 text-sm">{alerta.nome}</div>
+                  <div className="text-xs text-orange-600 dark:text-orange-300 mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5">
+                    {alerta.dias_ausentes.map(d => <span key={d} className="bg-orange-100 dark:bg-orange-800/40 px-1.5 py-0.5 rounded">{d}</span>)}
+                  </div>
+                </div>
+                <button
+                  onClick={() => abrirModal(alerta.colaborador_id)}
+                  className="shrink-0 flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-700 text-white transition">
+                  <Plus size={11} />Lançar ponto
+                </button>
+              </div>
+            ))}
           </div>
         )}
+      </div>
 
+      {/* ── Seção B: Relatório de Ponto ───────────────────────────────────── */}
+      <div>
+        <h3 className="font-black text-slate-700 dark:text-slate-200 flex items-center gap-2 mb-3">
+          <Clock size={16} className="text-purple-500" />
+          Relatório de Ponto
+        </h3>
+
+        {/* Filtros */}
+        <div className="flex flex-col sm:flex-row gap-3 mb-5 flex-wrap">
+          <select value={filtroCol} onChange={e => setFiltroCol(e.target.value)} className={`${ic} flex-1`}>
+            <option value="">Todos os colaboradores</option>
+            {colaboradores.map(c => <option key={c.id} value={c.id}>{c.funcionario?.nome ?? c.id}</option>)}
+          </select>
+          <input type="date" value={filtroInicio} onChange={e => setFiltroInicio(e.target.value)} className={`${ic} w-36`} />
+          <input type="date" value={filtroFim} onChange={e => setFiltroFim(e.target.value)} className={`${ic} w-36`} />
+          <button onClick={carregar} className={bs}><RefreshCw size={14} /></button>
+          <button onClick={() => abrirModal()} className={bp}><Plus size={14} className="inline mr-1" />Lançar Ponto</button>
+          <a href={PONTO_URL} target="_blank" rel="noopener noreferrer"
+            className="flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-xl text-sm transition whitespace-nowrap">
+            <ExternalLink size={14} />Link Externo
+          </a>
+        </div>
+
+        {/* Relatório agrupado */}
+        {loadingRel ? (
+          <div className="text-center py-12 text-slate-400">Carregando...</div>
+        ) : relatorio.length === 0 ? (
+          <div className="text-center py-12 text-slate-400">Nenhum registro no período.</div>
+        ) : (
+          <div className="space-y-4">
+            {relatorio.map(col => {
+              const totalH = Math.floor(col.total_minutos / 60);
+              const totalM = col.total_minutos % 60;
+              return (
+                <div key={col.colaborador_id} className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                  {/* Cabeçalho do colaborador */}
+                  <div className="bg-slate-50 dark:bg-slate-800 px-4 py-3 flex items-center justify-between">
+                    <span className="font-black text-slate-800 dark:text-white text-sm">{col.nome}</span>
+                    <span className="text-xs font-bold text-purple-600 dark:text-purple-300">
+                      Total: {totalH}h{totalM > 0 ? String(totalM).padStart(2, '0') + 'm' : ''}
+                    </span>
+                  </div>
+
+                  {/* Dias */}
+                  <div className="divide-y divide-slate-100 dark:divide-slate-700">
+                    {col.dias.map((dia: any) => {
+                      const [y, m, d] = dia.data.split('-');
+                      const dataFmt = `${d}/${m}/${y}`;
+                      const entradas = dia.registros.filter((r: any) => r.tipo === 'entrada');
+                      const saidas = dia.registros.filter((r: any) => r.tipo === 'saida');
+
+                      // Build pairs inline: E HH:MM → S HH:MM
+                      const pares: string[] = [];
+                      const maxPares = Math.max(entradas.length, saidas.length);
+                      for (let i = 0; i < maxPares; i++) {
+                        const e = entradas[i] ? `E ${entradas[i].hora}` : 'E —';
+                        const s = saidas[i] ? `S ${saidas[i].hora}` : 'S —';
+                        pares.push(`${e} → ${s}`);
+                      }
+
+                      return (
+                        <div key={dia.data} className="px-4 py-2.5 flex flex-col sm:flex-row sm:items-center gap-2">
+                          {/* Data + status */}
+                          <div className="flex items-center gap-2 w-32 shrink-0">
+                            <span className="text-xs font-bold text-slate-700 dark:text-slate-200">{dataFmt}</span>
+                            {dia.completo
+                              ? <Check size={12} className="text-green-500 shrink-0" />
+                              : <AlertTriangle size={12} className="text-orange-400 shrink-0" />}
+                          </div>
+
+                          {/* Pares entrada/saída */}
+                          <div className="flex flex-wrap gap-x-3 gap-y-1 flex-1 text-xs text-slate-600 dark:text-slate-300 font-mono">
+                            {pares.length === 0
+                              ? <span className="text-slate-400 italic">Sem registros</span>
+                              : pares.map((p, i) => <span key={i}>{p}</span>)}
+                            {dia.minutos_trabalhados > 0 && (
+                              <span className="text-purple-600 dark:text-purple-300 font-bold non-mono">
+                                = {fmtMinutos(dia.minutos_trabalhados)}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Botão deletar por registro */}
+                          <div className="flex gap-1 shrink-0">
+                            {dia.registros.map((reg: any) => (
+                              <button key={reg.id} onClick={() => deletarReg(reg.id)}
+                                title={`Excluir ${reg.tipo} ${reg.hora}`}
+                                className="flex items-center gap-0.5 text-xs text-slate-400 hover:text-red-500 border border-slate-200 dark:border-slate-600 hover:border-red-300 rounded px-1.5 py-0.5 transition">
+                                <Trash2 size={10} />
+                                <span>{reg.tipo === 'entrada' ? 'E' : 'S'} {reg.hora}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ── Modal Lançar Ponto ────────────────────────────────────────────── */}
       {modalAberto && (
         <Modal title="Lançar Ponto" onClose={() => setModalAberto(false)}>
           <div className="space-y-4">
-            {/* Colaborador */}
             <FL label="Colaborador">
               <select value={colId} onChange={e => setColId(e.target.value)} className={ic}>
                 <option value="">Selecione...</option>
@@ -1302,7 +1455,6 @@ function PontoTab({ reload, colaboradores }: { reload: number; colaboradores: an
               </select>
             </FL>
 
-            {/* Ações rápidas */}
             <div className="flex gap-2 flex-wrap">
               <button type="button" onClick={addDiaCompleto} disabled={!colId}
                 className="flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-lg bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 hover:bg-purple-200 transition disabled:opacity-40">
@@ -1314,7 +1466,6 @@ function PontoTab({ reload, colaboradores }: { reload: number; colaboradores: an
               </button>
             </div>
 
-            {/* Tabela de linhas */}
             <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
               {linhas.length === 0 && (
                 <p className="text-slate-400 text-xs text-center py-4">Adicione pelo menos uma marcação acima.</p>
