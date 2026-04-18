@@ -1414,9 +1414,9 @@ function FinanceiroTab({ reload }: { reload: number }) {
 // ── Tab: Banco de Horas (admin) ───────────────────────────────────────────────
 
 function BancoHorasAdminTab({ colaboradores }: { colaboradores: any[] }) {
-  const hoje = new Date().toISOString().slice(0, 7);
   const [colId, setColId] = useState('');
-  const [mes, setMes] = useState(hoje);
+  const [mes, setMes] = useState('');
+  useEffect(() => { setMes(new Date().toISOString().slice(0, 7)); }, []);
   const [dados, setDados] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 

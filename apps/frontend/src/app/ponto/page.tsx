@@ -145,8 +145,10 @@ function SignaturePad({ onConfirm, onCancel }: { onConfirm: (sig: string) => voi
 
 function TelaBancoHoras({ colaborador, onVoltar }: { colaborador: ColaboradorInfo; onVoltar: () => void }) {
   const [banco, setBanco] = useState<any>(null);
-  const [mes, setMes] = useState(new Date().toISOString().slice(0, 7));
+  const [mes, setMes] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => { if (!mes) setMes(new Date().toISOString().slice(0, 7)); }, [mes]);
 
   const carregar = useCallback(async () => {
     setLoading(true);
@@ -384,9 +386,10 @@ function TelaMarcarPonto({
   const [tipoSelecionado, setTipoSelecionado] = useState<'entrada' | 'saida' | null>(null);
   const [registrando, setRegistrando] = useState(false);
   const tipoProximo = colaborador.ultimo_ponto?.tipo === 'entrada' ? 'saida' : 'entrada';
-  const [agora, setAgora] = useState(new Date());
+  const [agora, setAgora] = useState<Date | null>(null);
 
   useEffect(() => {
+    setAgora(new Date());
     const id = setInterval(() => setAgora(new Date()), 1000);
     return () => clearInterval(id);
   }, []);
@@ -428,10 +431,10 @@ function TelaMarcarPonto({
 
       <div className="bg-purple-900/40 border border-purple-700/50 rounded-2xl p-4 text-center">
         <div className="text-3xl font-black text-white tabular-nums">
-          {agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+          {agora?.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
         </div>
         <div className="text-purple-300 text-xs mt-1">
-          {agora.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })}
+          {agora?.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })}
         </div>
       </div>
 
@@ -515,7 +518,13 @@ export default function PontoExternoPage() {
   const [geo, setGeo] = useState<{ lat: number; lon: number } | null>(null);
   const [geoErro, setGeoErro] = useState('');
   const [tela, setTela] = useState<Tela>('login');
-  const [agora, setAgora] = useState(new Date());
+  const [agora, setAgora] = useState<Date | null>(null);
+
+  useEffect(() => {
+    setAgora(new Date());
+    const id = setInterval(() => setAgora(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -572,10 +581,10 @@ export default function PontoExternoPage() {
         {(tela === 'login' || tela === 'menu') && (
           <div className="bg-purple-900/40 border border-purple-700/50 rounded-2xl p-4 text-center mb-5">
             <div className="text-4xl font-black text-white tabular-nums">
-              {agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              {agora?.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
             </div>
             <div className="text-purple-300 text-sm mt-1">
-              {agora.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
+              {agora?.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
             </div>
           </div>
         )}
