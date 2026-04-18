@@ -15,7 +15,7 @@ const CNPJ = '11.759.851/0001-39';
 const EMPRESA = 'Instituto Tia Pretinha';
 const ENDERECO = 'Rua Ramiro Monteiro, 130 — Vaz Lobo';
 
-type Tab = 'colaboradores' | 'ponto' | 'codigos' | 'recibos' | 'vales' | 'advertencias' | 'suspensoes' | 'faltas' | 'financeiro' | 'folgas' | 'trabalho-externo';
+type Tab = 'colaboradores' | 'ponto' | 'codigos' | 'recibos' | 'vales' | 'advertencias' | 'suspensoes' | 'faltas' | 'financeiro' | 'folgas' | 'banco-horas' | 'trabalho-externo';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -1411,20 +1411,86 @@ function FinanceiroTab({ reload }: { reload: number }) {
   );
 }
 
+// ── Tab: Banco de Horas (admin) ───────────────────────────────────────────────
+
+function BancoHorasAdminTab({ colaboradores }: { colaboradores: any[] }) {
+  const hoje = new Date().toISOString().slice(0, 7);
+  const [colId, setColId] = useState('');
+  const [mes, setMes] = useState(hoje);
+  const [dados, setDados] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+
+  const consultar = async () => {
+    if (!colId) return toast.error('Selecione um colaborador.');
+    setLoading(true);
+    try {
+      const r = await fetch(`${API}/gente/ponto/externo/banco-horas?colaborador_id=${colId}&mes=${mes}`);
+      if (r.ok) setDados(await r.json());
+      else toast.error('Erro ao consultar banco de horas.');
+    } finally { setLoading(false); }
+  };
+
+  const ic = 'w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500';
+  const saldo = dados?.saldo_minutos ?? 0;
+  const cor = saldo >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400';
+
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <select value={colId} onChange={e => { setColId(e.target.value); setDados(null); }} className={ic}>
+          <option value="">Selecione colaborador...</option>
+          {colaboradores.map(c => <option key={c.id} value={c.id}>{c.funcionario?.nome ?? c.id}</option>)}
+        </select>
+        <input type="month" value={mes} onChange={e => { setMes(e.target.value); setDados(null); }} className={ic} />
+        <button onClick={consultar} disabled={loading} className="flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl px-4 py-2 text-sm transition disabled:opacity-50">
+          <Calculator size={14} />{loading ? 'Consultando...' : 'Consultar'}
+        </button>
+      </div>
+
+      {dados && (
+        <div className="bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6 space-y-4">
+          <div className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
+            {colaboradores.find(c => c.id === colId)?.funcionario?.nome} · {dados.mes}
+          </div>
+          <div className="grid grid-cols-3 gap-4 text-center">
+            <div className="bg-white dark:bg-slate-900 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
+              <div className="text-xs text-slate-400 uppercase font-bold mb-1">Trabalhado</div>
+              <div className="text-2xl font-black text-slate-800 dark:text-white font-mono">{dados.trabalhado}</div>
+            </div>
+            <div className="bg-white dark:bg-slate-900 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
+              <div className="text-xs text-slate-400 uppercase font-bold mb-1">Esperado</div>
+              <div className="text-2xl font-black text-slate-800 dark:text-white font-mono">{dados.esperado}</div>
+              <div className="text-xs text-slate-400 mt-1">{dados.dias_esperados} dias úteis</div>
+            </div>
+            <div className="bg-white dark:bg-slate-900 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
+              <div className="text-xs text-slate-400 uppercase font-bold mb-1">Saldo</div>
+              <div className={`text-2xl font-black font-mono ${cor}`}>{dados.saldo}</div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Tab: Folgas ───────────────────────────────────────────────────────────────
 
-function FolgasTab({ reload }: { reload: number }) {
+function FolgasTab({ reload, colaboradores }: { reload: number; colaboradores: any[] }) {
   const [folgas, setFolgas] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filtro, setFiltro] = useState<'todas' | 'pendente' | 'aprovada' | 'negada'>('pendente');
+  const [colFiltro, setColFiltro] = useState('');
+
+  const ic = 'border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-1.5 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500';
 
   const carregar = useCallback(async () => {
     setLoading(true);
     try {
-      const r = await fetch(`${API}/gente/folgas`, { credentials: 'include' });
+      const url = colFiltro ? `${API}/gente/folgas?colaborador_id=${colFiltro}` : `${API}/gente/folgas`;
+      const r = await fetch(url, { credentials: 'include' });
       if (r.ok) setFolgas(await r.json());
     } finally { setLoading(false); }
-  }, []);
+  }, [colFiltro]);
 
   useEffect(() => { carregar(); }, [carregar, reload]);
 
@@ -1443,7 +1509,11 @@ function FolgasTab({ reload }: { reload: number }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex gap-2 flex-wrap">
+      <div className="flex gap-2 flex-wrap items-center">
+        <select value={colFiltro} onChange={e => setColFiltro(e.target.value)} className={ic}>
+          <option value="">Todos os colaboradores</option>
+          {colaboradores.map(c => <option key={c.id} value={c.id}>{c.funcionario?.nome ?? c.id}</option>)}
+        </select>
         {(['todas', 'pendente', 'aprovada', 'negada'] as const).map(s => (
           <button key={s} onClick={() => setFiltro(s)}
             className={`${bp} ${filtro === s ? 'bg-purple-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}>
@@ -1566,6 +1636,7 @@ const TABS: { key: Tab; label: string; icon: React.ComponentType<any> }[] = [
   { key: 'suspensoes', label: 'Suspensões', icon: PauseCircle },
   { key: 'faltas', label: 'Faltas', icon: Calendar },
   { key: 'folgas', label: 'Folgas', icon: Check },
+  { key: 'banco-horas', label: 'Banco de Horas', icon: Calculator },
   { key: 'trabalho-externo', label: 'Trabalho Externo', icon: MapPin },
 ];
 
@@ -1618,7 +1689,8 @@ export default function GentePage() {
         {tab === 'advertencias' && <GenericTab endpoint="advertencias" titulo="Advertência" reload={reload} colaboradores={colaboradores} CamposComp={CamposAdvertencia} renderLinha={(i, e, d) => <LinhaAdvertencia key={i.id} item={i} onEdit={e} onDel={d} colaboradores={colaboradores} />} />}
         {tab === 'suspensoes' && <GenericTab endpoint="suspensoes" titulo="Suspensão" reload={reload} colaboradores={colaboradores} CamposComp={CamposSuspensao} renderLinha={(i, e, d) => <LinhaSuspensao key={i.id} item={i} onEdit={e} onDel={d} colaboradores={colaboradores} />} />}
         {tab === 'faltas' && <GenericTab endpoint="faltas" titulo="Falta" reload={reload} colaboradores={colaboradores} CamposComp={CamposFalta} renderLinha={(i, e, d) => <LinhaFalta key={i.id} item={i} onEdit={e} onDel={d} colaboradores={colaboradores} />} />}
-        {tab === 'folgas' && <FolgasTab reload={reload} />}
+        {tab === 'folgas' && <FolgasTab reload={reload} colaboradores={colaboradores} />}
+        {tab === 'banco-horas' && <BancoHorasAdminTab colaboradores={colaboradores} />}
         {tab === 'trabalho-externo' && <TrabalhoExternoTab reload={reload} colaboradores={colaboradores} />}
       </div>
     </div>

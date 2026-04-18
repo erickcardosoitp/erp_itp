@@ -661,22 +661,18 @@ export class GenteService {
   }
 
   private calcularMinutosTrabalhados(pontos: any[]): number {
-    const byDate: Record<string, any[]> = {};
-    for (const p of pontos) {
-      const d = new Date(p.data_hora).toISOString().split('T')[0];
-      if (!byDate[d]) byDate[d] = [];
-      byDate[d].push(p);
-    }
+    // Sort globally and pair entrada→saída sequentially.
+    // Grouping by UTC date breaks cross-midnight sessions (BRT is UTC-3).
+    const sorted = [...pontos].sort((a, b) => new Date(a.data_hora).getTime() - new Date(b.data_hora).getTime());
     let total = 0;
-    for (const records of Object.values(byDate)) {
-      const sorted = [...records].sort((a, b) => new Date(a.data_hora).getTime() - new Date(b.data_hora).getTime());
-      let entrada: Date | null = null;
-      for (const r of sorted) {
-        if (r.tipo === 'entrada') { entrada = new Date(r.data_hora); }
-        else if (r.tipo === 'saida' && entrada) {
-          total += (new Date(r.data_hora).getTime() - entrada.getTime()) / 60000;
-          entrada = null;
-        }
+    let entrada: Date | null = null;
+    for (const r of sorted) {
+      if (r.tipo === 'entrada') {
+        entrada = new Date(r.data_hora);
+      } else if (r.tipo === 'saida' && entrada) {
+        const diff = (new Date(r.data_hora).getTime() - entrada.getTime()) / 60000;
+        if (diff > 0 && diff < 1440) total += diff; // ignora pares inválidos (>24h)
+        entrada = null;
       }
     }
     return total;
@@ -703,7 +699,9 @@ export class GenteService {
     });
     const pontosMes = pontos.filter(p => {
       const d = new Date(p.data_hora);
-      return d >= inicio && d <= new Date(fim.getFullYear(), fim.getMonth(), fim.getDate(), 23, 59, 59);
+      // Add 3h buffer at end to cover BRT (UTC-3) sessions that cross midnight UTC
+      const fimCom3h = new Date(fim.getFullYear(), fim.getMonth(), fim.getDate(), 26, 59, 59);
+      return d >= inicio && d <= fimCom3h;
     });
     const minTrabalhados = this.calcularMinutosTrabalhados(pontosMes);
     const minPorDia = this.calcularMinutosPorDia(col);
