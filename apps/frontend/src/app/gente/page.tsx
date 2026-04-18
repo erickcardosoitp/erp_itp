@@ -1467,6 +1467,13 @@ function BancoHorasAdminTab({ colaboradores }: { colaboradores: any[] }) {
               <div className={`text-2xl font-black font-mono ${cor}`}>{dados.saldo}</div>
             </div>
           </div>
+          {dados.marcacoes_incompletas?.length > 0 && (
+            <div className="mt-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-700 rounded-xl p-4 text-sm text-yellow-800 dark:text-yellow-300 space-y-1">
+              <div className="font-bold">⚠️ Marcações com problema detectadas:</div>
+              {dados.marcacoes_incompletas.map((m: string, i: number) => <div key={i} className="text-xs">• {m}</div>)}
+              <div className="text-xs text-yellow-600 dark:text-yellow-400 pt-1">Corrija via aba Ponto → selecione o colaborador.</div>
+            </div>
+          )}
         </div>
       )}
     </div>

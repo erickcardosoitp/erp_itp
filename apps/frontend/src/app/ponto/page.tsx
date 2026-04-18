@@ -188,6 +188,12 @@ function TelaBancoHoras({ colaborador, onVoltar }: { colaborador: ColaboradorInf
             </div>
           </div>
           <div className="text-xs text-purple-400 text-center">{banco.dias_esperados} dia(s) de trabalho esperado(s)</div>
+          {banco.marcacoes_incompletas?.length > 0 && (
+            <div className="bg-yellow-500/20 border border-yellow-500/40 rounded-xl p-3 text-xs text-yellow-300 space-y-1">
+              <div className="font-bold text-yellow-200">⚠️ Marcações com problema — avise o administrador:</div>
+              {banco.marcacoes_incompletas.map((m: string, i: number) => <div key={i}>• {m}</div>)}
+            </div>
+          )}
         </div>
       ) : null}
     </div>

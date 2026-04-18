@@ -645,17 +645,16 @@ export class GenteService {
     return (sh * 60 + sm) - (eh * 60 + em);
   }
 
-  private calcularDiasEsperados(col: GenteColaborador, inicio: Date, fim: Date): number {
+  private calcularDiasEsperados(col: GenteColaborador, inicioMs: number, fimMs: number): number {
     const diasMap: Record<string, number> = { dom: 0, seg: 1, ter: 2, qua: 3, qui: 4, sex: 5, sab: 6 };
     const diasNums = (col.dias_trabalho ?? []).map(d => diasMap[d]).filter(n => n !== undefined);
     let count = 0;
-    const cur = new Date(inicio);
-    cur.setHours(0, 0, 0, 0);
-    const end = new Date(fim);
-    end.setHours(23, 59, 59, 999);
-    while (cur <= end) {
-      if (diasNums.includes(cur.getDay())) count++;
-      cur.setDate(cur.getDate() + 1);
+    // Use pure UTC day iteration (ms steps of 86400000) to avoid timezone shifts
+    let cur = inicioMs;
+    while (cur <= fimMs) {
+      const diaSemana = new Date(cur).getUTCDay();
+      if (diasNums.includes(diaSemana)) count++;
+      cur += 86400000;
     }
     return count;
   }
@@ -678,36 +677,73 @@ export class GenteService {
     return total;
   }
 
+  private detectarMarcacoesIncompletas(pontos: any[]): string[] {
+    const sorted = [...pontos].sort((a, b) => new Date(a.data_hora).getTime() - new Date(b.data_hora).getTime());
+    const problemas: string[] = [];
+    let entrada: any = null;
+    for (const r of sorted) {
+      const hora = new Date(r.data_hora).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' });
+      if (r.tipo === 'entrada') {
+        if (entrada) {
+          problemas.push(`Entrada sem saída em ${new Date(entrada.data_hora).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' })}`);
+        }
+        entrada = r;
+      } else if (r.tipo === 'saida') {
+        if (!entrada) {
+          problemas.push(`Saída sem entrada em ${hora}`);
+        } else {
+          const diff = (new Date(r.data_hora).getTime() - new Date(entrada.data_hora).getTime()) / 60000;
+          if (diff <= 0) problemas.push(`Par inválido em ${hora} (duração zero ou negativa)`);
+          entrada = null;
+        }
+      }
+    }
+    if (entrada) {
+      problemas.push(`Entrada sem saída em ${new Date(entrada.data_hora).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' })}`);
+    }
+    return problemas;
+  }
+
   async bancoHoras(colaborador_id: string, mes?: string) {
     const col = await this.colaboradorRepo.findOneBy({ id: colaborador_id });
     if (!col) throw new NotFoundException('Colaborador não encontrado.');
     const refMes = mes ?? new Date().toISOString().slice(0, 7);
     const [year, month] = refMes.split('-').map(Number);
-    const inicio = new Date(year, month - 1, 1);
-    const fimDoMes = new Date(year, month, 0); // último dia do mês
-    // Para o mês corrente, conta apenas até ontem — dias futuros não existem ainda
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
-    const ontem = new Date(hoje);
-    ontem.setDate(hoje.getDate() - 1);
+
+    // All date arithmetic in pure UTC to avoid server timezone ambiguity
+    const inicioMs = Date.UTC(year, month - 1, 1); // April 1 00:00 UTC
+    const fimDoMesMs = Date.UTC(year, month, 0, 23, 59, 59, 999); // last day of month 23:59:59 UTC
+
+    // For current month, cap at yesterday UTC (future days don't exist yet)
+    const hojeUtc = new Date();
+    const hojeInicioMs = Date.UTC(hojeUtc.getUTCFullYear(), hojeUtc.getUTCMonth(), hojeUtc.getUTCDate());
+    const ontemMs = hojeInicioMs - 86400000; // yesterday 00:00 UTC
+    const ontemFimMs = hojeInicioMs - 1;     // yesterday 23:59:59.999 UTC
+
     const mesAtual = new Date().toISOString().slice(0, 7) === refMes;
-    const fim = mesAtual ? (ontem >= inicio ? ontem : inicio) : fimDoMes;
+    const fimMs = mesAtual ? (ontemMs >= inicioMs ? ontemFimMs : inicioMs) : fimDoMesMs;
 
     const pontos = await this.pontoRepo.find({
       where: { colaborador_id },
       order: { data_hora: 'ASC' },
     });
+
+    // Filter pontos for this month with 3h BRT buffer on end boundary
+    const BRT_OFFSET_MS = 3 * 3600 * 1000;
     const pontosMes = pontos.filter(p => {
-      const d = new Date(p.data_hora);
-      // Add 3h buffer at end to cover BRT (UTC-3) sessions that cross midnight UTC
-      const fimCom3h = new Date(fim.getFullYear(), fim.getMonth(), fim.getDate(), 26, 59, 59);
-      return d >= inicio && d <= fimCom3h;
+      const t = new Date(p.data_hora).getTime();
+      return t >= inicioMs && t <= fimMs + BRT_OFFSET_MS;
     });
+
     const minTrabalhados = this.calcularMinutosTrabalhados(pontosMes);
     const minPorDia = this.calcularMinutosPorDia(col);
-    const diasEsperados = this.calcularDiasEsperados(col, inicio, fim);
+    const diasEsperados = this.calcularDiasEsperados(col, inicioMs, fimMs);
     const minEsperados = minPorDia * diasEsperados;
     const saldoMin = minTrabalhados - minEsperados;
+
+    // Detect incomplete pairs (entrada sem saída ou saída sem entrada)
+    const marcacoesIncompletas = this.detectarMarcacoesIncompletas(pontosMes);
+
     const fmt = (m: number) => `${m < 0 ? '-' : '+'}${String(Math.floor(Math.abs(m) / 60)).padStart(2, '0')}:${String(Math.round(Math.abs(m) % 60)).padStart(2, '0')}`;
     return {
       mes: refMes,
@@ -716,6 +752,7 @@ export class GenteService {
       saldo: fmt(saldoMin),
       saldo_minutos: Math.round(saldoMin),
       dias_esperados: diasEsperados,
+      marcacoes_incompletas: marcacoesIncompletas,
     };
   }
 
