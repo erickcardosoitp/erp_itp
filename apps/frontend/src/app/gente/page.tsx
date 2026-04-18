@@ -1122,6 +1122,12 @@ const LinhaFalta = ({ item, onEdit, onDel, colaboradores }: any) => {
 
 // ── Tab Ponto ────────────────────────────────────────────────────────────────
 
+type LinhaLancamento = { id: number; data: string; hora: string; tipo: 'entrada' | 'saida' };
+
+let _lId = 0;
+const novaLinha = (data: string, hora: string, tipo: 'entrada' | 'saida'): LinhaLancamento =>
+  ({ id: ++_lId, data, hora, tipo });
+
 function PontoTab({ reload, colaboradores }: { reload: number; colaboradores: any[] }) {
   const [registros, setRegistros] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1129,42 +1135,32 @@ function PontoTab({ reload, colaboradores }: { reload: number; colaboradores: an
   const [filtroInicio, setFiltroInicio] = useState('');
   const [filtroFim, setFiltroFim] = useState('');
   const [modalAberto, setModalAberto] = useState(false);
-  const [form, setForm] = useState<any>({ tipo: 'entrada', data_hora: new Date().toISOString().slice(0, 16) });
+  const [colId, setColId] = useState('');
+  const [linhas, setLinhas] = useState<LinhaLancamento[]>([]);
   const [salvando, setSalvando] = useState(false);
-  const [geoStatus, setGeoStatus] = useState<'idle' | 'buscando' | 'ok' | 'negado' | 'bloqueado'>('idle');
-  const [geoErro, setGeoErro] = useState('');
-
-  const solicitarGeo = useCallback((formSetter: React.Dispatch<React.SetStateAction<any>>) => {
-    if (!navigator.geolocation) { setGeoStatus('negado'); setGeoErro('Geolocalização não suportada neste navegador.'); return; }
-    setGeoStatus('buscando');
-    setGeoErro('');
-
-    const onSucesso = (pos: GeolocationPosition) => {
-      formSetter((f: any) => ({ ...f, latitude: pos.coords.latitude, longitude: pos.coords.longitude }));
-      setGeoStatus('ok');
-    };
-
-    const onErro = (err: GeolocationPositionError) => {
-      if (err.code === 1) { setGeoStatus('bloqueado'); setGeoErro('Permissão negada.'); }
-      else if (err.code === 2) { setGeoStatus('negado'); setGeoErro('Posição indisponível — tente ao ar livre ou via Wi-Fi.'); }
-      else { setGeoStatus('negado'); setGeoErro(`Tempo esgotado (código ${err.code}). Tente novamente.`); }
-    };
-
-    const pedirLocalizacao = () => {
-      // enableHighAccuracy: false é mais rápido e confiável no Safari/iOS em ambientes fechados
-      navigator.geolocation.getCurrentPosition(onSucesso, onErro, { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 });
-    };
-
-    // Safari não suporta navigator.permissions — fallback direto para getCurrentPosition
-    if (navigator.permissions?.query) {
-      navigator.permissions.query({ name: 'geolocation' as PermissionName })
-        .then(perm => { if (perm.state === 'denied') { setGeoStatus('bloqueado'); setGeoErro('Permissão negada nas configurações do navegador.'); } else pedirLocalizacao(); })
-        .catch(pedirLocalizacao);
-    } else {
-      pedirLocalizacao();
-    }
-  }, []);
   const PONTO_URL = typeof window !== 'undefined' ? `${window.location.origin}/ponto?token=itp-ponto-2026` : '';
+
+  const hoje = new Date().toISOString().split('T')[0];
+
+  const abrirModal = () => {
+    setColId('');
+    setLinhas([novaLinha(hoje, '08:00', 'entrada'), novaLinha(hoje, '17:00', 'saida')]);
+    setModalAberto(true);
+  };
+
+  const addLinha = () => setLinhas(l => [...l, novaLinha(hoje, '08:00', 'entrada')]);
+
+  const addDiaCompleto = () => {
+    const col = colaboradores.find(c => c.id === colId);
+    const entrada = col?.horario_entrada ?? '08:00';
+    const saida = col?.horario_saida ?? '17:00';
+    setLinhas(l => [...l, novaLinha(hoje, entrada, 'entrada'), novaLinha(hoje, saida, 'saida')]);
+  };
+
+  const updLinha = (id: number, campo: keyof LinhaLancamento, val: string) =>
+    setLinhas(l => l.map(r => r.id === id ? { ...r, [campo]: val } : r));
+
+  const delLinha = (id: number) => setLinhas(l => l.filter(r => r.id !== id));
 
   const carregar = useCallback(async () => {
     setLoading(true);
@@ -1180,13 +1176,28 @@ function PontoTab({ reload, colaboradores }: { reload: number; colaboradores: an
 
   useEffect(() => { carregar(); }, [carregar, reload]);
 
-  const salvar = async () => {
-    if (!form.colaborador_id) { toast.error('Selecione um colaborador.'); return; }
+  const salvarLote = async () => {
+    if (!colId) { toast.error('Selecione um colaborador.'); return; }
+    if (linhas.length === 0) { toast.error('Adicione pelo menos uma marcação.'); return; }
+    const invalidas = linhas.filter(l => !l.data || !l.hora);
+    if (invalidas.length) { toast.error('Preencha data e hora em todas as linhas.'); return; }
     setSalvando(true);
-    const r = await fetch(`${API}/gente/ponto`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, data_hora: new Date(form.data_hora).toISOString() }) });
-    if (r.ok) { toast.success('Ponto registrado!'); setModalAberto(false); carregar(); }
-    else { const e = await r.json(); toast.error(e.message); }
+    const results = await Promise.allSettled(
+      linhas.map(l =>
+        fetch(`${API}/gente/ponto`, {
+          method: 'POST', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ colaborador_id: colId, tipo: l.tipo, data_hora: new Date(`${l.data}T${l.hora}:00`).toISOString() }),
+        })
+      )
+    );
+    const ok = results.filter(r => r.status === 'fulfilled').length;
+    const falhas = results.length - ok;
+    if (ok) toast.success(`${ok} marcação(ões) registrada(s)${falhas ? ` · ${falhas} falha(s)` : ''}.`);
+    else toast.error('Nenhuma marcação foi registrada.');
     setSalvando(false);
+    setModalAberto(false);
+    carregar();
   };
 
   const deletar = async (id: string) => {
@@ -1194,6 +1205,11 @@ function PontoTab({ reload, colaboradores }: { reload: number; colaboradores: an
     await fetch(`${API}/gente/ponto/${id}`, { method: 'DELETE', credentials: 'include' });
     toast.success('Excluído.'); carregar();
   };
+
+  const tipoClasses = (tipo: 'entrada' | 'saida', ativo: boolean) =>
+    `px-2 py-1 rounded-lg text-xs font-bold border transition ${ativo
+      ? tipo === 'entrada' ? 'bg-green-500 text-white border-green-500' : 'bg-red-500 text-white border-red-500'
+      : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-400'}`;
 
   return (
     <div>
@@ -1205,14 +1221,10 @@ function PontoTab({ reload, colaboradores }: { reload: number; colaboradores: an
         <input type="date" value={filtroInicio} onChange={e => setFiltroInicio(e.target.value)} className={`${ic} w-36`} />
         <input type="date" value={filtroFim} onChange={e => setFiltroFim(e.target.value)} className={`${ic} w-36`} />
         <button onClick={carregar} className={bs}><RefreshCw size={14} /></button>
-        <button onClick={() => {
-          const novoForm = { tipo: 'entrada', data_hora: new Date().toISOString().slice(0, 16) };
-          setForm(novoForm);
-          setModalAberto(true);
-          solicitarGeo(setForm);
-        }} className={bp}><Plus size={14} className="inline mr-1" />Registrar</button>
+        <button onClick={abrirModal} className={bp}><Plus size={14} className="inline mr-1" />Lançar Ponto</button>
         <a href={PONTO_URL} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-xl text-sm transition whitespace-nowrap"><ExternalLink size={14} />Link Externo</a>
       </div>
+
       {loading ? <div className="text-center py-12 text-slate-400">Carregando...</div> : registros.length === 0
         ? <div className="text-center py-12 text-slate-400">Nenhum registro.</div>
         : (
@@ -1238,32 +1250,60 @@ function PontoTab({ reload, colaboradores }: { reload: number; colaboradores: an
             </table>
           </div>
         )}
+
       {modalAberto && (
-        <Modal title="Registrar Ponto" onClose={() => setModalAberto(false)}>
+        <Modal title="Lançar Ponto" onClose={() => setModalAberto(false)}>
           <div className="space-y-4">
+            {/* Colaborador */}
             <FL label="Colaborador">
-              <select value={form.colaborador_id || ''} onChange={e => setForm((f: any) => ({ ...f, colaborador_id: e.target.value }))} className={ic}>
+              <select value={colId} onChange={e => setColId(e.target.value)} className={ic}>
                 <option value="">Selecione...</option>
                 {colaboradores.map(c => <option key={c.id} value={c.id}>{c.funcionario?.nome ?? c.id}</option>)}
               </select>
             </FL>
-            <div className="grid grid-cols-2 gap-3">
-              <FL label="Tipo"><select value={form.tipo} onChange={e => setForm((f: any) => ({ ...f, tipo: e.target.value }))} className={ic}><option value="entrada">Entrada</option><option value="saida">Saída</option></select></FL>
-              <FL label="Data/Hora"><input type="datetime-local" value={form.data_hora} onChange={e => setForm((f: any) => ({ ...f, data_hora: e.target.value }))} className={ic} /></FL>
+
+            {/* Ações rápidas */}
+            <div className="flex gap-2 flex-wrap">
+              <button type="button" onClick={addDiaCompleto} disabled={!colId}
+                className="flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-lg bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 hover:bg-purple-200 transition disabled:opacity-40">
+                <Plus size={11} />Dia completo
+              </button>
+              <button type="button" onClick={addLinha}
+                className="flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 transition">
+                <Plus size={11} />Linha avulsa
+              </button>
             </div>
-            <div className={`flex items-start gap-2 text-xs rounded-lg px-3 py-2 ${geoStatus === 'ok' ? 'bg-green-50 text-green-700' : geoStatus === 'bloqueado' ? 'bg-orange-50 text-orange-700' : geoStatus === 'negado' ? 'bg-red-50 text-red-600' : 'bg-slate-50 text-slate-500'}`}>
-              <MapPin size={13} className="mt-0.5 shrink-0" />
-              <div className="flex-1">
-                {geoStatus === 'buscando' && 'Aguardando permissão de localização...'}
-                {geoStatus === 'ok' && `Localização capturada (${Number(form.latitude).toFixed(5)}, ${Number(form.longitude).toFixed(5)})`}
-                {geoStatus === 'negado' && <span>{geoErro || 'Erro ao obter localização.'} <button type="button" className="underline font-bold" onClick={() => solicitarGeo(setForm)}>Tentar novamente</button></span>}
-                {geoStatus === 'bloqueado' && <span>Localização bloqueada. No Safari: Configurações → Safari → Localização → Permitir; no Chrome: cadeado na barra → Permissões → Localização. Depois <button type="button" className="underline font-bold" onClick={() => solicitarGeo(setForm)}>tente novamente</button>.</span>}
-                {geoStatus === 'idle' && <span>Localização não solicitada. <button type="button" className="underline font-bold" onClick={() => solicitarGeo(setForm)}>Solicitar agora</button></span>}
+
+            {/* Tabela de linhas */}
+            <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+              {linhas.length === 0 && (
+                <p className="text-slate-400 text-xs text-center py-4">Adicione pelo menos uma marcação acima.</p>
+              )}
+              {linhas.map((l, i) => (
+                <div key={l.id} className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 rounded-xl px-3 py-2">
+                  <span className="text-xs text-slate-400 w-5 text-center font-bold">{i + 1}</span>
+                  <input type="date" value={l.data} onChange={e => updLinha(l.id, 'data', e.target.value)}
+                    className="border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-xs bg-white dark:bg-slate-900 text-slate-800 dark:text-white w-32" />
+                  <input type="time" value={l.hora} onChange={e => updLinha(l.id, 'hora', e.target.value)}
+                    className="border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-xs bg-white dark:bg-slate-900 text-slate-800 dark:text-white w-24" />
+                  <div className="flex gap-1">
+                    <button type="button" onClick={() => updLinha(l.id, 'tipo', 'entrada')} className={tipoClasses('entrada', l.tipo === 'entrada')}>E</button>
+                    <button type="button" onClick={() => updLinha(l.id, 'tipo', 'saida')} className={tipoClasses('saida', l.tipo === 'saida')}>S</button>
+                  </div>
+                  <span className={`text-xs flex-1 ${l.tipo === 'entrada' ? 'text-green-600' : 'text-red-500'}`}>{l.tipo === 'entrada' ? 'Entrada' : 'Saída'}</span>
+                  <button type="button" onClick={() => delLinha(l.id)} className="text-slate-300 hover:text-red-500 transition"><Trash2 size={12} /></button>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex justify-between items-center pt-2 border-t border-slate-100 dark:border-slate-700">
+              <span className="text-xs text-slate-400">{linhas.length} marcação(ões)</span>
+              <div className="flex gap-2">
+                <button onClick={() => setModalAberto(false)} className={bs}>Cancelar</button>
+                <button onClick={salvarLote} disabled={salvando || !colId || linhas.length === 0} className={bp}>
+                  {salvando ? 'Registrando...' : `Registrar ${linhas.length > 1 ? `${linhas.length} marcações` : 'marcação'}`}
+                </button>
               </div>
-            </div>
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setModalAberto(false)} className={bs}>Cancelar</button>
-              <button onClick={salvar} disabled={salvando} className={bp}>{salvando ? 'Salvando...' : 'Registrar'}</button>
             </div>
           </div>
         </Modal>
