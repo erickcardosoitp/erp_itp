@@ -603,6 +603,8 @@ export class AppModule implements OnModuleInit {
           ADD COLUMN IF NOT EXISTS jornada_flexivel BOOLEAN NOT NULL DEFAULT false
       `);
       await this.dataSource.query(`ALTER TABLE gente_ponto ADD COLUMN IF NOT EXISTS assinatura TEXT`);
+      await this.dataSource.query(`ALTER TABLE gente_colaboradores ADD COLUMN IF NOT EXISTS horas_dia_flex INT`);
+      await this.dataSource.query(`ALTER TABLE gente_colaboradores ADD COLUMN IF NOT EXISTS horario_flexivel_semana JSONB`);
       await this.dataSource.query(`
         CREATE TABLE IF NOT EXISTS gente_folga_solicitacoes (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

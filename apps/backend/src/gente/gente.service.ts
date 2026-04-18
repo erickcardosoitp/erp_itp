@@ -135,7 +135,8 @@ export class GenteService {
 
   async editarColaborador(id: string, dto: any) {
     const colunas = ['tipo','horario_entrada','horario_saida','dias_trabalho',
-      'latitude_permitida','longitude_permitida','raio_metros','salario_base','ativo','jornada_flexivel'];
+      'latitude_permitida','longitude_permitida','raio_metros','salario_base','ativo',
+      'jornada_flexivel','horas_dia_flex','horario_flexivel_semana'];
     const payload: any = {};
     colunas.forEach(k => { if (dto[k] !== undefined) payload[k] = dto[k]; });
     if (Object.keys(payload).length) await this.colaboradorRepo.update(id, payload);
@@ -639,6 +640,7 @@ export class GenteService {
   // ── Banco de horas ────────────────────────────────────────────────────────
 
   private calcularMinutosPorDia(col: GenteColaborador): number {
+    if (col.jornada_flexivel) return col.horas_dia_flex ?? 420; // default 7h
     if (!col.horario_entrada || !col.horario_saida) return 0;
     const [eh, em] = col.horario_entrada.split(':').map(Number);
     const [sh, sm] = col.horario_saida.split(':').map(Number);

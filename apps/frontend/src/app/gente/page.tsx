@@ -262,10 +262,47 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
           className="rounded border-slate-300 text-purple-600 focus:ring-purple-500" />
         <label htmlFor="jornada_flexivel" className="text-sm text-slate-700 dark:text-slate-300 cursor-pointer">Jornada flexível (sem horário fixo)</label>
       </div>
-      {!form.jornada_flexivel && (
+      {!form.jornada_flexivel ? (
         <div className="grid grid-cols-2 gap-3">
           <FL label="Entrada"><input type="time" value={form.horario_entrada || ''} onChange={e => setForm((f: any) => ({ ...f, horario_entrada: e.target.value }))} className={ic} /></FL>
           <FL label="Saída"><input type="time" value={form.horario_saida || ''} onChange={e => setForm((f: any) => ({ ...f, horario_saida: e.target.value }))} className={ic} /></FL>
+        </div>
+      ) : (
+        <div className="space-y-3 bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 rounded-xl p-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-purple-700 dark:text-purple-300 uppercase tracking-widest">Jornada Flexível</span>
+            <span className="text-xs text-purple-500">Cobrança: 7h/dia útil</span>
+          </div>
+          <FL label="Horas esperadas por dia (minutos, padrão = 420)">
+            <input type="number" min={60} max={720} step={30}
+              value={form.horas_dia_flex ?? 420}
+              onChange={e => setForm((f: any) => ({ ...f, horas_dia_flex: Number(e.target.value) }))}
+              className={ic} />
+          </FL>
+          <div>
+            <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-2">Janela de horário por dia da semana</label>
+            <div className="space-y-2">
+              {(['seg','ter','qua','qui','sex','sab','dom'] as const).map(dia => {
+                const diaLabel: Record<string, string> = { seg:'Seg',ter:'Ter',qua:'Qua',qui:'Qui',sex:'Sex',sab:'Sáb',dom:'Dom' };
+                const semana = form.horario_flexivel_semana ?? {};
+                const val = semana[dia] ?? { inicio: '08:00', fim: '20:00' };
+                const ativo = (form.dias_trabalho || []).includes(dia);
+                if (!ativo) return null;
+                return (
+                  <div key={dia} className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-slate-600 dark:text-slate-400 w-8">{diaLabel[dia]}</span>
+                    <input type="time" value={val.inicio}
+                      onChange={e => setForm((f: any) => ({ ...f, horario_flexivel_semana: { ...(f.horario_flexivel_semana ?? {}), [dia]: { ...val, inicio: e.target.value } } }))}
+                      className={`${ic} flex-1`} />
+                    <span className="text-slate-400 text-xs">até</span>
+                    <input type="time" value={val.fim}
+                      onChange={e => setForm((f: any) => ({ ...f, horario_flexivel_semana: { ...(f.horario_flexivel_semana ?? {}), [dia]: { ...val, fim: e.target.value } } }))}
+                      className={`${ic} flex-1`} />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
       )}
       <FL label="Dias de trabalho">
@@ -388,7 +425,7 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
                     <div><span className="text-slate-400 block">RG</span><span className="font-semibold">{c.funcionario?.rg || '—'}</span></div>
                     <div><span className="text-slate-400 block">Celular</span><span className="font-semibold">{c.funcionario?.celular || '—'}</span></div>
                     <div><span className="text-slate-400 block">Salário Base</span><span className="font-semibold">{c.salario_base ? fmt.moeda(c.salario_base) : '—'}</span></div>
-                    <div><span className="text-slate-400 block">Horário</span><span className="font-semibold">{c.jornada_flexivel ? 'Flexível' : `${c.horario_entrada || '—'} → ${c.horario_saida || '—'}`}</span></div>
+                    <div><span className="text-slate-400 block">Horário</span><span className="font-semibold">{c.jornada_flexivel ? `Flexível · ${Math.floor((c.horas_dia_flex ?? 420) / 60)}h/dia` : `${c.horario_entrada || '—'} → ${c.horario_saida || '—'}`}</span></div>
                     <div><span className="text-slate-400 block">Dias</span><span className="font-semibold">{(c.dias_trabalho || []).join(', ') || '—'}</span></div>
                     <div><span className="text-slate-400 block">Geofence</span><span className="font-semibold">{c.latitude_permitida ? `${Number(c.latitude_permitida).toFixed(4)},${Number(c.longitude_permitida).toFixed(4)}` : '—'}</span></div>
                     <div><span className="text-slate-400 block">Raio</span><span className="font-semibold">{c.raio_metros ?? 100}m</span></div>

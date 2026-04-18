@@ -35,6 +35,14 @@ export class GenteColaborador {
   @Column({ type: 'boolean', default: false })
   jornada_flexivel: boolean;
 
+  // Minutos esperados por dia para jornada flexível (default = 420 = 7h)
+  @Column({ type: 'int', nullable: true })
+  horas_dia_flex: number;
+
+  // Janela de horário permitida por dia da semana: { seg: { inicio: '08:00', fim: '20:00' }, ... }
+  @Column({ type: 'jsonb', nullable: true })
+  horario_flexivel_semana: Record<string, { inicio: string; fim: string }>;
+
   @Column({ type: 'numeric', nullable: true, precision: 10, scale: 2 })
   salario_base: number;
 
