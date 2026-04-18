@@ -741,8 +741,13 @@ export class GenteService {
     const minEsperados = minPorDia * diasEsperados;
     const saldoMin = minTrabalhados - minEsperados;
 
-    // Detect incomplete pairs (entrada sem saída ou saída sem entrada)
-    const marcacoesIncompletas = this.detectarMarcacoesIncompletas(pontosMes);
+    // Detect incomplete pairs — extend backward 24h to catch cross-midnight entradas
+    const DAY_MS = 86400000;
+    const pontosMesAlargado = pontos.filter(p => {
+      const t = new Date(p.data_hora).getTime();
+      return t >= inicioMs - DAY_MS && t <= fimMs + BRT_OFFSET_MS;
+    });
+    const marcacoesIncompletas = this.detectarMarcacoesIncompletas(pontosMesAlargado);
 
     const fmt = (m: number) => `${m < 0 ? '-' : '+'}${String(Math.floor(Math.abs(m) / 60)).padStart(2, '0')}:${String(Math.round(Math.abs(m) % 60)).padStart(2, '0')}`;
     return {
