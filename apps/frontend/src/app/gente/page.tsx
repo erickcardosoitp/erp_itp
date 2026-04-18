@@ -271,13 +271,16 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
         <div className="space-y-3 bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 rounded-xl p-3">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-purple-700 dark:text-purple-300 uppercase tracking-widest">Jornada Flexível</span>
-            <span className="text-xs text-purple-500">Cobrança: 7h/dia útil</span>
+            <span className="text-xs text-purple-500">Padrão: 7h/dia útil</span>
           </div>
-          <FL label="Horas esperadas por dia (minutos, padrão = 420)">
-            <input type="number" min={60} max={720} step={30}
-              value={form.horas_dia_flex ?? 420}
-              onChange={e => setForm((f: any) => ({ ...f, horas_dia_flex: Number(e.target.value) }))}
-              className={ic} />
+          <FL label="Horas esperadas por dia">
+            <div className="flex items-center gap-2">
+              <input type="number" min={0.5} max={12} step={0.5}
+                value={Number(((form.horas_dia_flex ?? 420) / 60).toFixed(1))}
+                onChange={e => setForm((f: any) => ({ ...f, horas_dia_flex: Math.round(Number(e.target.value) * 60) }))}
+                className={`${ic} flex-1`} />
+              <span className="text-sm text-slate-500 dark:text-slate-400 shrink-0">horas/dia</span>
+            </div>
           </FL>
           <div>
             <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-2">Janela de horário por dia da semana</label>
