@@ -639,26 +639,45 @@ export class GenteService {
 
   // ── Banco de horas ────────────────────────────────────────────────────────
 
+  private static readonly DIAS_MAP: Record<string, number> = { dom: 0, seg: 1, ter: 2, qua: 3, qui: 4, sex: 5, sab: 6 };
+  private static readonly DIAS_MAP_INV: Record<number, string> = { 0:'dom',1:'seg',2:'ter',3:'qua',4:'qui',5:'sex',6:'sab' };
+
   private calcularMinutosPorDia(col: GenteColaborador): number {
-    if (col.jornada_flexivel) return col.horas_dia_flex ?? 420; // default 7h
+    if (col.jornada_flexivel) return col.horas_dia_flex ?? 420;
     if (!col.horario_entrada || !col.horario_saida) return 0;
     const [eh, em] = col.horario_entrada.split(':').map(Number);
     const [sh, sm] = col.horario_saida.split(':').map(Number);
     return (sh * 60 + sm) - (eh * 60 + em);
   }
 
-  private calcularDiasEsperados(col: GenteColaborador, inicioMs: number, fimMs: number): number {
-    const diasMap: Record<string, number> = { dom: 0, seg: 1, ter: 2, qua: 3, qui: 4, sex: 5, sab: 6 };
-    const diasNums = (col.dias_trabalho ?? []).map(d => diasMap[d]).filter(n => n !== undefined);
-    let count = 0;
-    // Use pure UTC day iteration (ms steps of 86400000) to avoid timezone shifts
+  /** Soma minutos esperados no período, respeitando janela por dia para jornada flexível. */
+  private calcularMinutosEsperados(col: GenteColaborador, inicioMs: number, fimMs: number): { minutos: number; dias: number } {
+    const diasNums = (col.dias_trabalho ?? []).map(d => GenteService.DIAS_MAP[d]).filter(n => n !== undefined);
+    let minutos = 0;
+    let dias = 0;
     let cur = inicioMs;
     while (cur <= fimMs) {
-      const diaSemana = new Date(cur).getUTCDay();
-      if (diasNums.includes(diaSemana)) count++;
+      const dow = new Date(cur).getUTCDay();
+      if (diasNums.includes(dow)) {
+        dias++;
+        if (col.jornada_flexivel) {
+          const diaKey = GenteService.DIAS_MAP_INV[dow];
+          const janela = col.horario_flexivel_semana?.[diaKey];
+          if (janela?.inicio && janela?.fim) {
+            const [ih, im] = janela.inicio.split(':').map(Number);
+            const [fh, fm] = janela.fim.split(':').map(Number);
+            const dur = (fh * 60 + fm) - (ih * 60 + im);
+            minutos += dur > 0 ? dur : 0;
+          } else {
+            minutos += col.horas_dia_flex ?? 420;
+          }
+        } else {
+          minutos += this.calcularMinutosPorDia(col);
+        }
+      }
       cur += 86400000;
     }
-    return count;
+    return { minutos, dias };
   }
 
   private calcularMinutosTrabalhados(pontos: any[]): number {
@@ -738,9 +757,7 @@ export class GenteService {
     });
 
     const minTrabalhados = this.calcularMinutosTrabalhados(pontosMes);
-    const minPorDia = this.calcularMinutosPorDia(col);
-    const diasEsperados = this.calcularDiasEsperados(col, inicioMs, fimMs);
-    const minEsperados = minPorDia * diasEsperados;
+    const { minutos: minEsperados, dias: diasEsperados } = this.calcularMinutosEsperados(col, inicioMs, fimMs);
     const saldoMin = minTrabalhados - minEsperados;
 
     // Detect incomplete pairs — extend backward 24h to catch cross-midnight entradas
