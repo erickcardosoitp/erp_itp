@@ -688,14 +688,22 @@ export class GenteService {
     const refMes = mes ?? new Date().toISOString().slice(0, 7);
     const [year, month] = refMes.split('-').map(Number);
     const inicio = new Date(year, month - 1, 1);
-    const fim = new Date(year, month, 0); // último dia do mês
+    const fimDoMes = new Date(year, month, 0); // último dia do mês
+    // Para o mês corrente, conta apenas até ontem — dias futuros não existem ainda
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    const ontem = new Date(hoje);
+    ontem.setDate(hoje.getDate() - 1);
+    const mesAtual = new Date().toISOString().slice(0, 7) === refMes;
+    const fim = mesAtual ? (ontem >= inicio ? ontem : inicio) : fimDoMes;
+
     const pontos = await this.pontoRepo.find({
       where: { colaborador_id },
       order: { data_hora: 'ASC' },
     });
     const pontosMes = pontos.filter(p => {
       const d = new Date(p.data_hora);
-      return d >= inicio && d <= new Date(year, month - 1, fim.getDate(), 23, 59, 59);
+      return d >= inicio && d <= new Date(fim.getFullYear(), fim.getMonth(), fim.getDate(), 23, 59, 59);
     });
     const minTrabalhados = this.calcularMinutosTrabalhados(pontosMes);
     const minPorDia = this.calcularMinutosPorDia(col);
