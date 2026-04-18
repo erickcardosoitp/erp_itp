@@ -214,6 +214,12 @@ export class GenteController {
   listarFolgas(@Query('colaborador_id') c?: string) { return this.svc.listarFolgas(c); }
 
   @Public()
+  @Get('folgas/disponibilidade')
+  consultarDisponibilidade(@Query('colaborador_id') colaborador_id: string) {
+    return this.svc.consultarDisponibilidadeFolgas(colaborador_id);
+  }
+
+  @Public()
   @Post('folgas/solicitar')
   solicitarFolga(@Body() body: any) {
     return this.svc.solicitarFolga(body.colaborador_id, body.data);

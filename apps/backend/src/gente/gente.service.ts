@@ -758,12 +758,19 @@ export class GenteService {
     if (!col) throw new NotFoundException('Colaborador não encontrado.');
 
     const dataFolga = new Date(data + 'T12:00:00');
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
-
-    // Mínimo 10 dias de antecedência
-    const diasAntec = Math.floor((dataFolga.getTime() - hoje.getTime()) / 86400000);
-    if (diasAntec < 10) throw new BadRequestException(`A folga deve ser solicitada com pelo menos 10 dias de antecedência. Faltam ${diasAntec} dia(s).`);
+    const agora = new Date();
+    const horaAtual = agora.getHours();
+    // Após 22h: amanhã está disponível. Antes das 22h: mínimo é depois de amanhã.
+    const dataMin = new Date(agora);
+    dataMin.setHours(0, 0, 0, 0);
+    dataMin.setDate(dataMin.getDate() + (horaAtual >= 22 ? 1 : 2));
+    dataFolga.setHours(0, 0, 0, 0);
+    if (dataFolga < dataMin) {
+      const msg = horaAtual >= 22
+        ? 'A data mínima para folga é amanhã. A janela de hoje já está aberta (após 22h).'
+        : 'A disponibilidade para amanhã só abre após as 22h de hoje. Tente selecionar outra data.';
+      throw new BadRequestException(msg);
+    }
 
     // Dia deve ser um dia de trabalho do colaborador
     const diaStr = Object.entries(DIAS_NUM).find(([, n]) => n === dataFolga.getDay())?.[0] ?? '';
@@ -802,6 +809,56 @@ export class GenteService {
 
     const folga = this.folgaRepo.create({ colaborador_id, data, status: 'pendente' });
     return this.folgaRepo.save(folga);
+  }
+
+  async consultarDisponibilidadeFolgas(colaborador_id: string) {
+    const DIAS_FOLGA = ['seg', 'qui', 'sex'];
+    const DIAS_NUM: Record<string, number> = { dom: 0, seg: 1, ter: 2, qua: 3, qui: 4, sex: 5, sab: 6 };
+    const DIAS_LABEL: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Quarta', qui: 'Quinta', sex: 'Sexta', sab: 'Sábado', dom: 'Domingo' };
+
+    const col = await this.colaboradorRepo.findOneBy({ id: colaborador_id });
+    if (!col) throw new NotFoundException('Colaborador não encontrado.');
+
+    const agora = new Date();
+    const dataMin = new Date(agora);
+    dataMin.setHours(0, 0, 0, 0);
+    dataMin.setDate(dataMin.getDate() + (agora.getHours() >= 22 ? 1 : 2));
+
+    const datas: any[] = [];
+    const cur = new Date(dataMin);
+
+    for (let i = 0; i < 35; i++) {
+      const diaStr = Object.entries(DIAS_NUM).find(([, n]) => n === cur.getDay())?.[0] ?? '';
+      if (DIAS_FOLGA.includes(diaStr) && (col.dias_trabalho ?? []).includes(diaStr)) {
+        const dataISO = cur.toISOString().split('T')[0];
+        const diffLun = cur.getDay() === 0 ? -6 : 1 - cur.getDay();
+        const seg = new Date(cur); seg.setDate(cur.getDate() + diffLun); seg.setHours(0, 0, 0, 0);
+        const dom = new Date(seg); dom.setDate(seg.getDate() + 6);
+        const segISO = seg.toISOString().split('T')[0];
+        const domISO = dom.toISOString().split('T')[0];
+
+        const [total, funcSemana] = await Promise.all([
+          this.dataSource.query(`SELECT id FROM gente_folga_solicitacoes WHERE data >= $1 AND data <= $2 AND status != 'negada'`, [segISO, domISO]),
+          this.dataSource.query(`SELECT id FROM gente_folga_solicitacoes WHERE colaborador_id = $1 AND data >= $2 AND data <= $3 AND status != 'negada'`, [colaborador_id, segISO, domISO]),
+        ]);
+
+        const semanaCheia = total.length >= 2;
+        const jaTemNaSemana = funcSemana.length > 0;
+        datas.push({
+          data: dataISO,
+          dia: DIAS_LABEL[diaStr] ?? diaStr,
+          disponivel: !semanaCheia && !jaTemNaSemana,
+          motivo: jaTemNaSemana ? 'Você já tem folga nesta semana' : semanaCheia ? `${total.length}/2 vagas ocupadas` : null,
+          vagas_semana: Math.max(0, 2 - total.length),
+        });
+      }
+      cur.setDate(cur.getDate() + 1);
+    }
+
+    return {
+      disponivel_apos_22h: agora.getHours() >= 22,
+      datas,
+    };
   }
 
   async listarFolgas(colaborador_id?: string) {
