@@ -22,6 +22,14 @@ export class GenteFalta {
   @Column({ type: 'boolean', default: true })
   com_desconto: boolean;
 
+  // 'falta' | 'atestado' | 'afastamento'
+  @Column({ type: 'text', default: 'falta' })
+  tipo: string;
+
+  // Para atestados/afastamentos com período: data de fim (inclusive)
+  @Column({ type: 'date', nullable: true })
+  data_fim: string;
+
   @Column({ type: 'text', nullable: true })
   observacao: string;
 

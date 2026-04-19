@@ -1088,16 +1088,30 @@ const CamposSuspensao = ({ form, setForm }: any) => (
   </>
 );
 
-const CamposFalta = ({ form, setForm }: any) => (
-  <>
-    <FL label="Data"><input type="date" value={form.data || hoje()} onChange={e => setForm((f: any) => ({ ...f, data: e.target.value }))} className={ic} /></FL>
-    <FL label="Motivo"><input type="text" value={form.motivo || ''} onChange={e => setForm((f: any) => ({ ...f, motivo: e.target.value }))} className={ic} /></FL>
-    <div className="flex gap-4">
-      <div className="flex items-center gap-2"><input type="checkbox" id="just" checked={!!form.justificada} onChange={e => setForm((f: any) => ({ ...f, justificada: e.target.checked }))} className="w-4 h-4" /><label htmlFor="just" className="text-sm">Justificada</label></div>
-      <div className="flex items-center gap-2"><input type="checkbox" id="fdesc" checked={form.com_desconto !== false} onChange={e => setForm((f: any) => ({ ...f, com_desconto: e.target.checked }))} className="w-4 h-4" /><label htmlFor="fdesc" className="text-sm">Com desconto</label></div>
-    </div>
-  </>
-);
+const CamposFalta = ({ form, setForm }: any) => {
+  const tipo = form.tipo || 'falta';
+  return (
+    <>
+      <FL label="Tipo">
+        <select value={tipo} onChange={e => setForm((f: any) => ({ ...f, tipo: e.target.value, com_desconto: e.target.value !== 'falta' ? false : f.com_desconto }))} className={ic}>
+          <option value="falta">Falta</option>
+          <option value="atestado">Atestado médico</option>
+          <option value="afastamento">Afastamento</option>
+        </select>
+      </FL>
+      <FL label={tipo === 'falta' ? 'Data' : 'Data início'}><input type="date" value={form.data || hoje()} onChange={e => setForm((f: any) => ({ ...f, data: e.target.value }))} className={ic} /></FL>
+      {tipo !== 'falta' && (
+        <FL label="Data fim (inclusive)"><input type="date" value={form.data_fim || ''} onChange={e => setForm((f: any) => ({ ...f, data_fim: e.target.value }))} className={ic} /></FL>
+      )}
+      <FL label="Motivo"><input type="text" value={form.motivo || ''} onChange={e => setForm((f: any) => ({ ...f, motivo: e.target.value }))} className={ic} /></FL>
+      <div className="flex gap-4">
+        <div className="flex items-center gap-2"><input type="checkbox" id="just" checked={!!form.justificada} onChange={e => setForm((f: any) => ({ ...f, justificada: e.target.checked }))} className="w-4 h-4" /><label htmlFor="just" className="text-sm">Justificada</label></div>
+        {tipo === 'falta' && <div className="flex items-center gap-2"><input type="checkbox" id="fdesc" checked={form.com_desconto !== false} onChange={e => setForm((f: any) => ({ ...f, com_desconto: e.target.checked }))} className="w-4 h-4" /><label htmlFor="fdesc" className="text-sm">Com desconto</label></div>}
+      </div>
+      {tipo !== 'falta' && <p className="text-xs text-purple-600 dark:text-purple-400">Atestados e afastamentos não impactam o banco de horas.</p>}
+    </>
+  );
+};
 
 // ── Linhas ────────────────────────────────────────────────────────────────────
 
@@ -1148,12 +1162,17 @@ const LinhaSuspensao = ({ item, onEdit, onDel, colaboradores }: any) => {
 
 const LinhaFalta = ({ item, onEdit, onDel, colaboradores }: any) => {
   const nome = colaboradores.find((c: any) => c.id === item.colaborador_id)?.funcionario?.nome ?? '—';
+  const tipo = item.tipo || 'falta';
+  const tipoLabel: Record<string, string> = { falta: 'Falta', atestado: 'Atestado', afastamento: 'Afastamento' };
+  const tipoColor: Record<string, string> = { falta: 'bg-orange-100 text-orange-700', atestado: 'bg-blue-100 text-blue-700', afastamento: 'bg-purple-100 text-purple-700' };
+  const periodo = item.data_fim && item.data_fim !== item.data ? `${fmt.data(item.data)} → ${fmt.data(item.data_fim)}` : fmt.data(item.data);
   return (
     <div className="border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
-      <div className="min-w-0"><div className="font-semibold truncate">{nome}</div><div className="text-xs text-slate-500">{fmt.data(item.data)} · {item.motivo || 'Sem motivo'}</div></div>
+      <div className="min-w-0"><div className="font-semibold truncate">{nome}</div><div className="text-xs text-slate-500">{periodo} · {item.motivo || 'Sem motivo'}</div></div>
       <div className="flex items-center gap-2 shrink-0">
-        <Badge label={item.justificada ? 'Justificada' : 'Injustificada'} color={item.justificada ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'} />
-        {item.com_desconto && <Badge label="Desconto" color="bg-red-100 text-red-600" />}
+        <Badge label={tipoLabel[tipo]} color={tipoColor[tipo]} />
+        <Badge label={item.justificada ? 'Justificada' : 'Injustificada'} color={item.justificada ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'} />
+        {tipo === 'falta' && item.com_desconto && <Badge label="Desconto" color="bg-red-100 text-red-600" />}
         <button onClick={onEdit} className="p-1.5 text-slate-400 hover:text-purple-600"><Edit2 size={13} /></button>
         <button onClick={onDel} className={bd}><Trash2 size={12} /></button>
       </div>

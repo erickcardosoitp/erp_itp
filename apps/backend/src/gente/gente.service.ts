@@ -650,15 +650,18 @@ export class GenteService {
     return (sh * 60 + sm) - (eh * 60 + em);
   }
 
-  /** Soma minutos esperados no período, respeitando janela por dia para jornada flexível. */
-  private calcularMinutosEsperados(col: GenteColaborador, inicioMs: number, fimMs: number): { minutos: number; dias: number } {
+  /** Soma minutos esperados no período, respeitando janela por dia para jornada flexível.
+   *  Datas em datasExcluidas (YYYY-MM-DD UTC) são tratadas como dias sem obrigação de comparecimento. */
+  private calcularMinutosEsperados(col: GenteColaborador, inicioMs: number, fimMs: number, datasExcluidas: Set<string> = new Set()): { minutos: number; dias: number } {
     const diasNums = (col.dias_trabalho ?? []).map(d => GenteService.DIAS_MAP[d]).filter(n => n !== undefined);
     let minutos = 0;
     let dias = 0;
     let cur = inicioMs;
     while (cur <= fimMs) {
-      const dow = new Date(cur).getUTCDay();
-      if (diasNums.includes(dow)) {
+      const date = new Date(cur);
+      const dow = date.getUTCDay();
+      const iso = date.toISOString().split('T')[0];
+      if (diasNums.includes(dow) && !datasExcluidas.has(iso)) {
         dias++;
         if (col.jornada_flexivel) {
           const diaKey = GenteService.DIAS_MAP_INV[dow];
@@ -756,8 +759,27 @@ export class GenteService {
       return t >= inicioMs && t <= fimMs + BRT_OFFSET_MS;
     });
 
+    // Build exclusion set: approved folgas + atestados/afastamentos (banco de horas não desconta esses dias)
+    const [folgasAprovadas, faltasExcluidas] = await Promise.all([
+      this.dataSource.query(
+        `SELECT data FROM gente_folga_solicitacoes WHERE colaborador_id = $1 AND status = 'aprovada'`,
+        [colaborador_id],
+      ),
+      this.dataSource.query(
+        `SELECT data, data_fim FROM gente_faltas WHERE colaborador_id = $1 AND tipo IN ('atestado', 'afastamento')`,
+        [colaborador_id],
+      ),
+    ]);
+    const datasExcluidas = new Set<string>();
+    for (const f of folgasAprovadas) datasExcluidas.add(f.data);
+    for (const f of faltasExcluidas) {
+      const start = new Date(f.data + 'T12:00:00Z').getTime();
+      const end = f.data_fim ? new Date(f.data_fim + 'T12:00:00Z').getTime() : start;
+      for (let d = start; d <= end; d += 86400000) datasExcluidas.add(new Date(d).toISOString().split('T')[0]);
+    }
+
     const minTrabalhados = this.calcularMinutosTrabalhados(pontosMes);
-    const { minutos: minEsperados, dias: diasEsperados } = this.calcularMinutosEsperados(col, inicioMs, fimMs);
+    const { minutos: minEsperados, dias: diasEsperados } = this.calcularMinutosEsperados(col, inicioMs, fimMs, datasExcluidas);
     const saldoMin = minTrabalhados - minEsperados;
 
     // Detect incomplete pairs — extend backward 24h to catch cross-midnight entradas
@@ -813,6 +835,34 @@ export class GenteService {
       pontoMap[row.colaborador_id].add(row.data_brt);
     }
 
+    // Build exclusion maps: folgas aprovadas + atestados/afastamentos
+    const inicioISO = new Date(inicioMs).toISOString().split('T')[0];
+    const ontemISO = new Date(ontemMs).toISOString().split('T')[0];
+    const [folgasRows, atestadosRows] = await Promise.all([
+      this.dataSource.query(
+        `SELECT colaborador_id, data FROM gente_folga_solicitacoes WHERE status = 'aprovada' AND data >= $1 AND data <= $2`,
+        [inicioISO, ontemISO],
+      ),
+      this.dataSource.query(
+        `SELECT colaborador_id, data, data_fim FROM gente_faltas WHERE tipo IN ('atestado', 'afastamento') AND data <= $1`,
+        [ontemISO],
+      ),
+    ]);
+    const exclusaoMap: Record<string, Set<string>> = {};
+    for (const f of folgasRows) {
+      if (!exclusaoMap[f.colaborador_id]) exclusaoMap[f.colaborador_id] = new Set();
+      exclusaoMap[f.colaborador_id].add(f.data);
+    }
+    for (const f of atestadosRows) {
+      if (!exclusaoMap[f.colaborador_id]) exclusaoMap[f.colaborador_id] = new Set();
+      const start = new Date(f.data + 'T12:00:00Z').getTime();
+      const end = f.data_fim ? new Date(f.data_fim + 'T12:00:00Z').getTime() : start;
+      for (let d = start; d <= end; d += 86400000) {
+        const iso = new Date(d).toISOString().split('T')[0];
+        if (iso >= inicioISO && iso <= ontemISO) exclusaoMap[f.colaborador_id].add(iso);
+      }
+    }
+
     // Collect funcionario names
     const funcIds = colaboradores.map(c => c.funcionario_id);
     const funcionarios: any[] = funcIds.length
@@ -830,6 +880,7 @@ export class GenteService {
       col.dias_trabalho.forEach((d: string) => { if (DIAS_MAP[d] !== undefined) diasNomesMap[DIAS_MAP[d]] = d; });
 
       const presentes = pontoMap[col.id] ?? new Set<string>();
+      const excluidos = exclusaoMap[col.id] ?? new Set<string>();
       const diasAusentes: string[] = [];
 
       // Iterate each day in the 14-day window
@@ -840,7 +891,7 @@ export class GenteService {
         if (diasNums.includes(dow)) {
           // Format as YYYY-MM-DD (UTC date)
           const iso = date.toISOString().split('T')[0];
-          if (!presentes.has(iso)) {
+          if (!presentes.has(iso) && !excluidos.has(iso)) {
             const diaStr = diasNomesMap[dow] ?? '';
             const [y, m, d] = iso.split('-');
             const label = `${d}/${m} (${DIAS_LABEL[diaStr] ?? diaStr})`;
