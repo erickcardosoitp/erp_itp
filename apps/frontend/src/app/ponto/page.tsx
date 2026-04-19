@@ -306,7 +306,7 @@ function TelaFolga({ colaborador, onVoltar }: { colaborador: ColaboradorInfo; on
         <p className="font-bold text-white mb-1">📋 Regras</p>
         <p>· Dias: Segunda, Quinta e Sexta</p>
         <p>· Máx. 1 folga/semana por colaborador · 2 no total</p>
-        <p>· Disponibilidade liberada todo dia às <span className="text-yellow-400 font-bold">22h</span> para o dia seguinte</p>
+        <p>· Mínimo <span className="text-yellow-400 font-bold">10 dias</span> de antecedência</p>
         <p>· Débito de horas no mês anterior bloqueia por 1 mês</p>
       </div>
 
@@ -321,12 +321,6 @@ function TelaFolga({ colaborador, onVoltar }: { colaborador: ColaboradorInfo; on
             <p className="text-xs text-purple-300 font-semibold uppercase tracking-widest">Próximas datas</p>
             <button onClick={consultarDisp} className="text-xs text-purple-400 hover:text-yellow-400 transition">↻ Atualizar</button>
           </div>
-
-          {disponibilidade.disponivel_apos_22h && (
-            <div className="bg-yellow-400/10 border border-yellow-400/40 rounded-xl px-3 py-2 text-xs text-yellow-300">
-              ✅ Janela de amanhã está aberta (após 22h de hoje)
-            </div>
-          )}
 
           <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
             {disponibilidade.datas.length === 0 ? (

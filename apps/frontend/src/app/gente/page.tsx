@@ -1698,6 +1698,9 @@ function FolgasTab({ reload, colaboradores }: { reload: number; colaboradores: a
   const [loading, setLoading] = useState(true);
   const [filtro, setFiltro] = useState<'todas' | 'pendente' | 'aprovada' | 'negada'>('pendente');
   const [colFiltro, setColFiltro] = useState('');
+  const [showAdmin, setShowAdmin] = useState(false);
+  const [adminForm, setAdminForm] = useState({ colaborador_id: '', data: '' });
+  const [salvando, setSalvando] = useState(false);
 
   const ic = 'border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-1.5 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500';
 
@@ -1722,6 +1725,24 @@ function FolgasTab({ reload, colaboradores }: { reload: number; colaboradores: a
     else toast.error('Erro ao responder folga.');
   };
 
+  const criarFolgaAdmin = async () => {
+    if (!adminForm.colaborador_id || !adminForm.data) return toast.error('Selecione colaborador e data.');
+    setSalvando(true);
+    try {
+      const r = await fetch(`${API}/gente/folgas/admin`, {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(adminForm),
+      });
+      if (!r.ok) { const e = await r.json(); throw new Error(e.message || 'Erro'); }
+      toast.success('Folga lançada e aprovada!');
+      setAdminForm({ colaborador_id: '', data: '' });
+      setShowAdmin(false);
+      carregar();
+    } catch (e: any) { toast.error(e.message); }
+    finally { setSalvando(false); }
+  };
+
   const bp = 'flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition';
   const filtradas = folgas.filter(f => filtro === 'todas' || f.status === filtro);
 
@@ -1740,7 +1761,25 @@ function FolgasTab({ reload, colaboradores }: { reload: number; colaboradores: a
           </button>
         ))}
         <button onClick={carregar} className={`${bp} ml-auto text-slate-400 hover:text-purple-600`}><RefreshCw size={12} /></button>
+        <button onClick={() => setShowAdmin(v => !v)} className={`${bp} bg-purple-600 text-white hover:bg-purple-700`}><Plus size={12} /> Lançar (admin)</button>
       </div>
+
+      {showAdmin && (
+        <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 rounded-xl p-4 space-y-3">
+          <p className="text-xs font-bold text-purple-700 dark:text-purple-300 uppercase tracking-widest">Lançamento manual de folga (bypass de regras)</p>
+          <div className="flex gap-3 flex-wrap">
+            <select value={adminForm.colaborador_id} onChange={e => setAdminForm(f => ({ ...f, colaborador_id: e.target.value }))} className={ic + ' flex-1'}>
+              <option value="">Selecione o colaborador</option>
+              {colaboradores.map(c => <option key={c.id} value={c.id}>{c.funcionario?.nome ?? c.id}</option>)}
+            </select>
+            <input type="date" value={adminForm.data} onChange={e => setAdminForm(f => ({ ...f, data: e.target.value }))} className={ic} />
+          </div>
+          <div className="flex gap-2">
+            <button onClick={criarFolgaAdmin} disabled={salvando} className="px-4 py-1.5 bg-purple-600 text-white rounded-lg text-sm font-bold hover:bg-purple-700 transition disabled:opacity-50">{salvando ? 'Salvando...' : 'Confirmar'}</button>
+            <button onClick={() => setShowAdmin(false)} className="px-4 py-1.5 text-slate-500 rounded-lg text-sm border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition">Cancelar</button>
+          </div>
+        </div>
+      )}
       {loading ? <p className="text-slate-400 text-center text-sm">Carregando...</p> : filtradas.length === 0 ? (
         <p className="text-slate-400 text-center text-sm">Nenhuma folga encontrada.</p>
       ) : (

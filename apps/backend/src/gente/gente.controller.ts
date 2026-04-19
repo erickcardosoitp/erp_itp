@@ -237,6 +237,12 @@ export class GenteController {
     return this.svc.solicitarFolga(body.colaborador_id, body.data);
   }
 
+  @Post('folgas/admin')
+  @ModuloPerm('gente', 'editar')
+  criarFolgaAdmin(@Body() body: any, @Request() req: any) {
+    return this.svc.criarFolgaAdmin(body.colaborador_id, body.data, req.user?.nome ?? 'admin');
+  }
+
   @Patch('folgas/:id/responder')
   @ModuloPerm('gente', 'editar')
   responderFolga(@Param('id') id: string, @Body() body: any, @Request() req: any) {

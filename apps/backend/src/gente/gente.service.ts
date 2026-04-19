@@ -1017,17 +1017,12 @@ export class GenteService {
 
     const dataFolga = new Date(data + 'T12:00:00');
     const agora = new Date();
-    const horaAtual = agora.getHours();
-    // Após 22h: amanhã está disponível. Antes das 22h: mínimo é depois de amanhã.
     const dataMin = new Date(agora);
     dataMin.setHours(0, 0, 0, 0);
-    dataMin.setDate(dataMin.getDate() + (horaAtual >= 22 ? 1 : 2));
+    dataMin.setDate(dataMin.getDate() + 10);
     dataFolga.setHours(0, 0, 0, 0);
     if (dataFolga < dataMin) {
-      const msg = horaAtual >= 22
-        ? 'A data mínima para folga é amanhã. A janela de hoje já está aberta (após 22h).'
-        : 'A disponibilidade para amanhã só abre após as 22h de hoje. Tente selecionar outra data.';
-      throw new BadRequestException(msg);
+      throw new BadRequestException('A folga deve ser solicitada com no mínimo 10 dias de antecedência.');
     }
 
     // Dia deve ser um dia de trabalho do colaborador
@@ -1069,6 +1064,13 @@ export class GenteService {
     return this.folgaRepo.save(folga);
   }
 
+  async criarFolgaAdmin(colaborador_id: string, data: string, respondido_por: string) {
+    const col = await this.colaboradorRepo.findOneBy({ id: colaborador_id });
+    if (!col) throw new NotFoundException('Colaborador não encontrado.');
+    const folga = this.folgaRepo.create({ colaborador_id, data, status: 'aprovada', respondido_por, respondido_em: new Date() });
+    return this.folgaRepo.save(folga);
+  }
+
   async consultarDisponibilidadeFolgas(colaborador_id: string) {
     const DIAS_FOLGA = ['seg', 'qui', 'sex'];
     const DIAS_NUM: Record<string, number> = { dom: 0, seg: 1, ter: 2, qua: 3, qui: 4, sex: 5, sab: 6 };
@@ -1080,7 +1082,7 @@ export class GenteService {
     const agora = new Date();
     const dataMin = new Date(agora);
     dataMin.setHours(0, 0, 0, 0);
-    dataMin.setDate(dataMin.getDate() + (agora.getHours() >= 22 ? 1 : 2));
+    dataMin.setDate(dataMin.getDate() + 10);
 
     const datas: any[] = [];
     const cur = new Date(dataMin);
@@ -1113,10 +1115,7 @@ export class GenteService {
       cur.setDate(cur.getDate() + 1);
     }
 
-    return {
-      disponivel_apos_22h: agora.getHours() >= 22,
-      datas,
-    };
+    return { datas };
   }
 
   async listarFolgas(colaborador_id?: string) {
