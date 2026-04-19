@@ -645,6 +645,11 @@ export class AppModule implements OnModuleInit {
           ADD COLUMN IF NOT EXISTS data_fim DATE
       `);
       this.logger.log('✅ Colunas gente_faltas (tipo, data_fim) aplicadas (IF NOT EXISTS)');
+      await this.dataSource.query(`
+        ALTER TABLE IF EXISTS gente_folga_solicitacoes
+          ADD COLUMN IF NOT EXISTS realizada BOOLEAN
+      `);
+      this.logger.log('✅ Coluna gente_folga_solicitacoes.realizada aplicada (IF NOT EXISTS)');
       this.logger.log('✅ Tabelas do módulo Gente criadas (IF NOT EXISTS)');
 
     } catch (err: any) {

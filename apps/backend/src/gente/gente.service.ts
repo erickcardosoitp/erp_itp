@@ -541,7 +541,7 @@ export class GenteService {
     if (!col) throw new NotFoundException('Funcionário não habilitado para ponto.');
     const ultimoPonto = await this.pontoRepo.findOne({ where: { colaborador_id: col.id }, order: { data_hora: 'DESC' } });
     const locais = await this.localRepo.find({ where: { colaborador_id: col.id }, order: { createdAt: 'ASC' } });
-    return { colaborador_id: col.id, nome: func.nome, matricula: func.matricula, horario_entrada: col.horario_entrada, horario_saida: col.horario_saida, jornada_flexivel: col.jornada_flexivel ?? false, latitude_permitida: col.latitude_permitida, longitude_permitida: col.longitude_permitida, raio_metros: col.raio_metros, locais, ultimo_ponto: ultimoPonto ?? null };
+    return { colaborador_id: col.id, nome: func.nome, matricula: func.matricula, horario_entrada: col.horario_entrada, horario_saida: col.horario_saida, jornada_flexivel: col.jornada_flexivel ?? false, horas_dia_flex: col.horas_dia_flex ?? null, latitude_permitida: col.latitude_permitida, longitude_permitida: col.longitude_permitida, raio_metros: col.raio_metros, locais, ultimo_ponto: ultimoPonto ?? null };
   }
 
   async deletarPonto(id: string) { await this.pontoRepo.delete(id); return { ok: true }; }
@@ -759,22 +759,30 @@ export class GenteService {
       return t >= inicioMs && t <= fimMs + BRT_OFFSET_MS;
     });
 
-    // Build exclusion set: approved folgas + atestados/afastamentos (banco de horas não desconta esses dias)
-    const [folgasAprovadas, faltasExcluidas] = await Promise.all([
-      this.dataSource.query(
-        `SELECT data FROM gente_folga_solicitacoes WHERE colaborador_id = $1 AND status = 'aprovada'`,
-        [colaborador_id],
-      ),
-      this.dataSource.query(
-        `SELECT data, data_fim FROM gente_faltas WHERE colaborador_id = $1 AND tipo IN ('atestado', 'afastamento')`,
-        [colaborador_id],
-      ),
-    ]);
+    // Build exclusion set: folgas não confirmadas + atestados/afastamentos não impactam esperado
+    // Folgas com realizada=true: mantidas no esperado → ausência gera débito (desconta banco)
+    let folgasAprovadas: any[] = [], faltasExcluidas: any[] = [];
+    try {
+      [folgasAprovadas, faltasExcluidas] = await Promise.all([
+        this.dataSource.query(
+          `SELECT data, realizada FROM gente_folga_solicitacoes WHERE colaborador_id = $1 AND status = 'aprovada'`,
+          [colaborador_id],
+        ),
+        this.dataSource.query(
+          `SELECT data, data_fim FROM gente_faltas WHERE colaborador_id = $1 AND tipo IN ('atestado', 'afastamento')`,
+          [colaborador_id],
+        ),
+      ]);
+    } catch { /* sem exclusões se queries falharem */ }
     const datasExcluidas = new Set<string>();
-    for (const f of folgasAprovadas) datasExcluidas.add(f.data);
+    for (const f of folgasAprovadas) {
+      if (f.realizada !== true) datasExcluidas.add(String(f.data).slice(0, 10));
+    }
     for (const f of faltasExcluidas) {
-      const start = new Date(f.data + 'T12:00:00Z').getTime();
-      const end = f.data_fim ? new Date(f.data_fim + 'T12:00:00Z').getTime() : start;
+      const isoStart = String(f.data).slice(0, 10);
+      const isoEnd = f.data_fim ? String(f.data_fim).slice(0, 10) : isoStart;
+      const start = new Date(isoStart + 'T12:00:00Z').getTime();
+      const end = new Date(isoEnd + 'T12:00:00Z').getTime();
       for (let d = start; d <= end; d += 86400000) datasExcluidas.add(new Date(d).toISOString().split('T')[0]);
     }
 
@@ -851,12 +859,14 @@ export class GenteService {
     const exclusaoMap: Record<string, Set<string>> = {};
     for (const f of folgasRows) {
       if (!exclusaoMap[f.colaborador_id]) exclusaoMap[f.colaborador_id] = new Set();
-      exclusaoMap[f.colaborador_id].add(f.data);
+      exclusaoMap[f.colaborador_id].add(String(f.data).slice(0, 10));
     }
     for (const f of atestadosRows) {
       if (!exclusaoMap[f.colaborador_id]) exclusaoMap[f.colaborador_id] = new Set();
-      const start = new Date(f.data + 'T12:00:00Z').getTime();
-      const end = f.data_fim ? new Date(f.data_fim + 'T12:00:00Z').getTime() : start;
+      const isoStart = String(f.data).slice(0, 10);
+      const isoEnd = f.data_fim ? String(f.data_fim).slice(0, 10) : isoStart;
+      const start = new Date(isoStart + 'T12:00:00Z').getTime();
+      const end = new Date(isoEnd + 'T12:00:00Z').getTime();
       for (let d = start; d <= end; d += 86400000) {
         const iso = new Date(d).toISOString().split('T')[0];
         if (iso >= inicioISO && iso <= ontemISO) exclusaoMap[f.colaborador_id].add(iso);
@@ -1057,6 +1067,16 @@ export class GenteService {
     );
     if (totalNaSemana.length >= 2) throw new BadRequestException('Já existem 2 folgas aprovadas/pendentes nesta semana. Limite semanal atingido.');
 
+    // Máximo 2 folgas por colaborador por mês
+    const [yy, mm] = data.slice(0, 7).split('-').map(Number);
+    const mesInicio = `${data.slice(0, 7)}-01`;
+    const mesFim = new Date(yy, mm, 0).toISOString().split('T')[0];
+    const folgasMes = await this.dataSource.query(
+      `SELECT id FROM gente_folga_solicitacoes WHERE colaborador_id = $1 AND data >= $2 AND data <= $3 AND status != 'negada'`,
+      [colaborador_id, mesInicio, mesFim],
+    );
+    if (folgasMes.length >= 2) throw new BadRequestException('Você já atingiu o limite de 2 folgas neste mês.');
+
     // Verificar débito do mês anterior
     const comDebito = await this.verificarDebitoMesAnterior(colaborador_id);
     if (comDebito) throw new BadRequestException('Você terminou o mês anterior com horas em débito e está temporariamente impedido de solicitar folgas. Procure a direção para mais informações.');
@@ -1116,7 +1136,32 @@ export class GenteService {
       cur.setDate(cur.getDate() + 1);
     }
 
-    return { datas };
+    // Folgas já marcadas no mês atual
+    const mesAtualISO = agora.toISOString().slice(0, 7);
+    const [yy, mm] = mesAtualISO.split('-').map(Number);
+    const mesInicioISO = `${mesAtualISO}-01`;
+    const mesFimISO = new Date(yy, mm, 0).toISOString().split('T')[0];
+    const folgasMesAtual = await this.dataSource.query(
+      `SELECT id FROM gente_folga_solicitacoes WHERE colaborador_id = $1 AND data >= $2 AND data <= $3 AND status != 'negada'`,
+      [colaborador_id, mesInicioISO, mesFimISO],
+    );
+
+    return { datas, folgas_mes_atual: folgasMesAtual.length, limite_mes: 2 };
+  }
+
+  async confirmarRealizacaoFolga(id: string, realizada: boolean) {
+    await this.folgaRepo.update(id, { realizada });
+    return this.folgaRepo.findOneBy({ id });
+  }
+
+  async folgasPendentesConfirmacao(colaborador_id: string) {
+    const ontem = new Date();
+    ontem.setDate(ontem.getDate() - 1);
+    const ontemISO = ontem.toISOString().split('T')[0];
+    return this.dataSource.query(
+      `SELECT * FROM gente_folga_solicitacoes WHERE colaborador_id = $1 AND status = 'aprovada' AND data <= $2 AND realizada IS NULL ORDER BY data ASC`,
+      [colaborador_id, ontemISO],
+    );
   }
 
   async listarFolgas(colaborador_id?: string) {

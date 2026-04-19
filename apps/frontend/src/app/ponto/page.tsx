@@ -33,7 +33,7 @@ function calcStatusGeofence(geo: { lat: number; lon: number } | null, colaborado
   return { dentro: null, distancia: null, local: null };
 }
 
-type Tela = 'login' | 'menu' | 'ponto' | 'banco' | 'historico' | 'folga';
+type Tela = 'login' | 'menu' | 'ponto' | 'banco' | 'historico' | 'folga' | 'confirmar';
 
 interface LocalPermitido { id: string; nome: string; latitude: number; longitude: number; raio_metros: number; }
 
@@ -44,6 +44,7 @@ interface ColaboradorInfo {
   horario_entrada: string | null;
   horario_saida: string | null;
   jornada_flexivel: boolean;
+  horas_dia_flex: number | null;
   latitude_permitida: number | null;
   longitude_permitida: number | null;
   raio_metros: number;
@@ -252,13 +253,83 @@ function TelaHistorico({ colaborador, onVoltar }: { colaborador: ColaboradorInfo
   );
 }
 
+// ── Confirmar Realização de Folga ─────────────────────────────────────────
+
+function TelaConfirmarFolga({ colaborador, folgas, onDone }: { colaborador: ColaboradorInfo; folgas: any[]; onDone: () => void }) {
+  const [idx, setIdx] = useState(0);
+  const [confirmando, setConfirmando] = useState(false);
+  const folga = folgas[idx];
+
+  const fmtData = (iso: string) => new Date(String(iso).slice(0, 10) + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' });
+
+  const responder = async (realizada: boolean) => {
+    setConfirmando(true);
+    try {
+      await fetch(`${API}/gente/folgas/${folga.id}/confirmar`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ realizada }),
+      });
+    } catch {}
+    setConfirmando(false);
+    if (idx + 1 >= folgas.length) onDone();
+    else setIdx(i => i + 1);
+  };
+
+  return (
+    <div className="bg-white/5 border border-purple-700/40 rounded-2xl p-5 space-y-4">
+      <div className="text-center">
+        <div className="text-4xl mb-2">🏖️</div>
+        <h2 className="text-white font-black text-lg">Confirmar Folga</h2>
+        <p className="text-purple-300 text-sm mt-2">
+          Você tirou folga em <span className="text-yellow-400 font-bold">{fmtData(folga.data)}</span>?
+        </p>
+      </div>
+      <p className="text-xs text-purple-400 text-center bg-purple-900/30 rounded-xl px-3 py-2">
+        Se sim, as horas deste dia serão descontadas do seu banco de horas.
+      </p>
+      <div className="grid grid-cols-2 gap-3">
+        <button onClick={() => responder(true)} disabled={confirmando}
+          className="py-4 rounded-xl bg-green-500 text-white font-black text-sm hover:bg-green-400 transition disabled:opacity-50">
+          ✅ Sim, tirei
+        </button>
+        <button onClick={() => responder(false)} disabled={confirmando}
+          className="py-4 rounded-xl bg-slate-600 text-white font-black text-sm hover:bg-slate-500 transition disabled:opacity-50">
+          ❌ Não tirei
+        </button>
+      </div>
+      {folgas.length > 1 && <p className="text-xs text-purple-500 text-center">{idx + 1} de {folgas.length}</p>}
+    </div>
+  );
+}
+
 // ── Solicitar Folga ───────────────────────────────────────────────────────
 
 function TelaFolga({ colaborador, onVoltar }: { colaborador: ColaboradorInfo; onVoltar: () => void }) {
   const [disponibilidade, setDisponibilidade] = useState<any>(null);
+  const [banco, setBanco] = useState<any>(null);
   const [carregando, setCarregando] = useState(false);
   const [dataSelecionada, setDataSelecionada] = useState('');
   const [enviando, setEnviando] = useState(false);
+
+  useEffect(() => {
+    const mes = new Date().toISOString().slice(0, 7);
+    fetch(`${API}/gente/ponto/externo/banco-horas?colaborador_id=${colaborador.colaborador_id}&mes=${mes}`)
+      .then(r => r.json()).then(setBanco).catch(() => {});
+  }, [colaborador.colaborador_id]);
+
+  const minPorDia = colaborador.jornada_flexivel
+    ? (colaborador.horas_dia_flex ?? 420)
+    : (() => {
+        if (!colaborador.horario_entrada || !colaborador.horario_saida) return 0;
+        const [eh, em] = colaborador.horario_entrada.split(':').map(Number);
+        const [sh, sm] = colaborador.horario_saida.split(':').map(Number);
+        return (sh * 60 + sm) - (eh * 60 + em);
+      })();
+
+  const fmtMin = (m: number) => {
+    const neg = m < 0; const abs = Math.abs(m);
+    return `${neg ? '-' : '+'}${Math.floor(abs / 60)}h${abs % 60 > 0 ? `${Math.round(abs % 60)}min` : ''}`;
+  };
 
   const consultarDisp = async () => {
     setCarregando(true);
@@ -301,6 +372,39 @@ function TelaFolga({ colaborador, onVoltar }: { colaborador: ColaboradorInfo; on
         <button onClick={onVoltar} className="text-purple-400 hover:text-white transition text-xl">←</button>
         <h2 className="text-white font-black text-lg">Solicitar Folga</h2>
       </div>
+
+      {(banco || disponibilidade) && (
+        <div className="bg-white/5 border border-purple-700/40 rounded-xl p-3 space-y-1.5 text-sm">
+          {banco && (
+            <div className="flex justify-between items-center">
+              <span className="text-purple-300 text-xs">Banco de horas atual</span>
+              <span className={`font-black ${banco.saldo_minutos >= 0 ? 'text-green-400' : 'text-red-400'}`}>{banco.saldo}</span>
+            </div>
+          )}
+          {disponibilidade && (
+            <div className="flex justify-between items-center text-xs">
+              <span className="text-purple-400">Folgas este mês</span>
+              <span className={`font-bold ${disponibilidade.folgas_mes_atual >= disponibilidade.limite_mes ? 'text-red-400' : 'text-white'}`}>
+                {disponibilidade.folgas_mes_atual}/{disponibilidade.limite_mes}
+              </span>
+            </div>
+          )}
+          {banco && minPorDia > 0 && (
+            <div className="flex justify-between items-center text-xs border-t border-purple-700/30 pt-1.5">
+              <span className="text-purple-400">Desconto por folga</span>
+              <span className="text-orange-300 font-semibold">{fmtMin(-minPorDia)}</span>
+            </div>
+          )}
+          {banco && disponibilidade && minPorDia > 0 && disponibilidade.folgas_mes_atual < disponibilidade.limite_mes && (
+            <div className="flex justify-between items-center text-xs">
+              <span className="text-purple-400">Saldo se usar 1 folga</span>
+              <span className={`font-bold ${banco.saldo_minutos - minPorDia >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {fmtMin(banco.saldo_minutos - minPorDia)}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="bg-purple-900/30 border border-purple-700/40 rounded-xl p-3 text-xs text-purple-300 space-y-0.5">
         <p className="font-bold text-white mb-1">📋 Regras</p>
@@ -513,6 +617,7 @@ export default function PontoExternoPage() {
   const [geoErro, setGeoErro] = useState('');
   const [tela, setTela] = useState<Tela>('login');
   const [agora, setAgora] = useState<Date | null>(null);
+  const [pendentesConfirmacao, setPendentesConfirmacao] = useState<any[]>([]);
 
   useEffect(() => {
     setAgora(new Date());
@@ -547,7 +652,12 @@ export default function PontoExternoPage() {
     try {
       const res = await fetch(`${API}/gente/ponto/externo/verificar?token=${encodeURIComponent(token)}&identificador=${encodeURIComponent(identificador.trim())}`);
       if (!res.ok) { const e = await res.json(); throw new Error(e.message || 'Não encontrado.'); }
-      setColaborador(await res.json());
+      const colData = await res.json();
+      setColaborador(colData);
+      try {
+        const pend = await fetch(`${API}/gente/folgas/pendentes-confirmacao?colaborador_id=${colData.colaborador_id}`).then(r => r.json());
+        if (Array.isArray(pend) && pend.length > 0) { setPendentesConfirmacao(pend); setTela('confirmar'); return; }
+      } catch {}
       setTela('menu');
     } catch (e: any) {
       toast.error(e.message || 'Erro ao buscar colaborador.');
@@ -682,6 +792,15 @@ export default function PontoExternoPage() {
           <div className="bg-white/5 border border-purple-700/40 rounded-2xl p-5">
             <TelaFolga colaborador={colaborador} onVoltar={() => setTela('menu')} />
           </div>
+        )}
+
+        {/* Tela: Confirmar realização de folga */}
+        {tela === 'confirmar' && colaborador && pendentesConfirmacao.length > 0 && (
+          <TelaConfirmarFolga
+            colaborador={colaborador}
+            folgas={pendentesConfirmacao}
+            onDone={() => { setPendentesConfirmacao([]); setTela('menu'); }}
+          />
         )}
 
         <div className="mt-6 space-y-3">

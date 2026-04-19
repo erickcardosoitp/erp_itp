@@ -1725,6 +1725,16 @@ function FolgasTab({ reload, colaboradores }: { reload: number; colaboradores: a
     else toast.error('Erro ao responder folga.');
   };
 
+  const confirmarFolga = async (id: string, realizada: boolean) => {
+    const r = await fetch(`${API}/gente/folgas/${id}/confirmar`, {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ realizada }),
+    });
+    if (r.ok) { toast.success(realizada ? 'Confirmada — horas descontadas do banco.' : 'Marcada como não realizada.'); carregar(); }
+    else toast.error('Erro ao confirmar folga.');
+  };
+
   const criarFolgaAdmin = async () => {
     if (!adminForm.colaborador_id || !adminForm.data) return toast.error('Selecione colaborador e data.');
     setSalvando(true);
@@ -1785,22 +1795,34 @@ function FolgasTab({ reload, colaboradores }: { reload: number; colaboradores: a
       ) : (
         <div className="space-y-2">
           {filtradas.map(f => (
-            <div key={f.id} className="flex items-center gap-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3">
+            <div key={f.id} className="flex items-center gap-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 flex-wrap">
               <Calendar size={16} className="text-purple-500 shrink-0" />
               <div className="flex-1 min-w-0">
                 <div className="font-semibold text-slate-800 dark:text-white text-sm">{f.funcionario_nome ?? '—'}</div>
-                <div className="text-xs text-slate-400">{new Date(f.data + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })} · Solicitado: {new Date(f.created_at).toLocaleDateString('pt-BR')}</div>
-              </div>
-              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${f.status === 'pendente' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300' : f.status === 'aprovada' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'}`}>
-                {f.status.toUpperCase()}
-              </span>
-              {f.status === 'pendente' && (
-                <div className="flex gap-1 shrink-0">
-                  <button onClick={() => responder(f.id, 'aprovada')} className="p-1.5 rounded-lg bg-green-100 dark:bg-green-900/30 text-green-600 hover:bg-green-200 transition" title="Aprovar"><Check size={14} /></button>
-                  <button onClick={() => responder(f.id, 'negada')} className="p-1.5 rounded-lg bg-red-100 dark:bg-red-900/30 text-red-500 hover:bg-red-200 transition" title="Negar"><X size={14} /></button>
+                <div className="text-xs text-slate-400">
+                  {new Date(String(f.data).slice(0, 10) + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })}
+                  {' · '}Solicitado: {new Date(f.created_at).toLocaleDateString('pt-BR')}
                 </div>
-              )}
-              {f.respondido_por && <span className="text-xs text-slate-400 hidden sm:block">por {f.respondido_por}</span>}
+              </div>
+              <div className="flex items-center gap-1 shrink-0 flex-wrap">
+                <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${f.status === 'pendente' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300' : f.status === 'aprovada' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'}`}>
+                  {f.status.toUpperCase()}
+                </span>
+                {f.realizada === true && <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">REALIZADA</span>}
+                {f.realizada === false && <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400">NÃO REALIZADA</span>}
+                {f.status === 'pendente' && (
+                  <>
+                    <button onClick={() => responder(f.id, 'aprovada')} className="p-1.5 rounded-lg bg-green-100 dark:bg-green-900/30 text-green-600 hover:bg-green-200 transition" title="Aprovar"><Check size={14} /></button>
+                    <button onClick={() => responder(f.id, 'negada')} className="p-1.5 rounded-lg bg-red-100 dark:bg-red-900/30 text-red-500 hover:bg-red-200 transition" title="Negar"><X size={14} /></button>
+                  </>
+                )}
+                {f.status === 'aprovada' && f.realizada == null && new Date(String(f.data).slice(0, 10) + 'T23:59:59') < new Date() && (
+                  <>
+                    <button onClick={() => confirmarFolga(f.id, true)} className="px-2 py-1 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-600 hover:bg-blue-200 transition text-xs font-bold" title="Confirmar realização">✓ Realizada</button>
+                    <button onClick={() => confirmarFolga(f.id, false)} className="px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-600 transition text-xs" title="Não realizada">✗ Não</button>
+                  </>
+                )}
+              </div>
             </div>
           ))}
         </div>

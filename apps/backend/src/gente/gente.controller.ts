@@ -243,6 +243,18 @@ export class GenteController {
     return this.svc.criarFolgaAdmin(body.colaborador_id, body.data, req.user?.nome ?? 'admin');
   }
 
+  @Public()
+  @Get('folgas/pendentes-confirmacao')
+  folgasPendentesConfirmacao(@Query('colaborador_id') colaborador_id: string) {
+    return this.svc.folgasPendentesConfirmacao(colaborador_id);
+  }
+
+  @Public()
+  @Post('folgas/:id/confirmar')
+  confirmarRealizacaoFolga(@Param('id') id: string, @Body() body: { realizada: boolean }) {
+    return this.svc.confirmarRealizacaoFolga(id, body.realizada);
+  }
+
   @Patch('folgas/:id/responder')
   @ModuloPerm('gente', 'editar')
   responderFolga(@Param('id') id: string, @Body() body: any, @Request() req: any) {

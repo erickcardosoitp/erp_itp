@@ -23,6 +23,9 @@ export class GenteFolgaSolicitacao {
   @Column({ type: 'timestamptz', nullable: true })
   respondido_em: Date;
 
+  @Column({ type: 'boolean', nullable: true })
+  realizada: boolean | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 }
