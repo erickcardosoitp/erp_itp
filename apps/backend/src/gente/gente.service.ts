@@ -999,9 +999,10 @@ export class GenteService {
   private async verificarDebitoMesAnterior(colaborador_id: string): Promise<boolean> {
     const hoje = new Date();
     const mesAnterior = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
+    // Regra vigente a partir de Abril/2026 — meses anteriores não bloqueiam
+    if (mesAnterior < new Date(2026, 3, 1)) return false;
     const banco = await this.bancoHoras(colaborador_id, mesAnterior.toISOString().slice(0, 7));
     if (banco.saldo_minutos >= 0) return false;
-    // Bloqueado por 1 mês a partir do último dia do mês anterior
     const fimMesAnterior = new Date(hoje.getFullYear(), hoje.getMonth(), 0);
     const bloqueadoAte = new Date(fimMesAnterior);
     bloqueadoAte.setMonth(bloqueadoAte.getMonth() + 1);
@@ -1058,7 +1059,7 @@ export class GenteService {
 
     // Verificar débito do mês anterior
     const comDebito = await this.verificarDebitoMesAnterior(colaborador_id);
-    if (comDebito) throw new BadRequestException('Você terminou o mês anterior com horas em débito e está temporariamente impedido de solicitar folgas.');
+    if (comDebito) throw new BadRequestException('Você terminou o mês anterior com horas em débito e está temporariamente impedido de solicitar folgas. Procure a direção para mais informações.');
 
     const folga = this.folgaRepo.create({ colaborador_id, data, status: 'pendente' });
     return this.folgaRepo.save(folga);
