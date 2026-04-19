@@ -684,7 +684,17 @@ export default function PontoExternoPage() {
           </div>
         )}
 
-        <p className="text-center text-purple-600 text-xs mt-6">Instituto Tiapretinha · Sistema ERP</p>
+        <div className="mt-6 space-y-3">
+          <div className="bg-white/5 border border-purple-800/40 rounded-xl p-4 text-xs text-purple-400 space-y-2">
+            <p className="text-purple-200 font-bold uppercase tracking-widest text-xs mb-1">📌 Informações importantes</p>
+            <p>· Folgas podem ser <span className="text-yellow-400 font-semibold">canceladas com até 7 dias de antecedência</span> — após esse prazo o cancelamento não é garantido.</p>
+            <p>· Ao tirar uma folga, o voluntário deve <span className="text-white font-semibold">informar à direção</span> se outro voluntário irá suprir sua função naquele dia — ou se precisa que a direção faça esse alinhamento.</p>
+          </div>
+          <div className="text-center">
+            <p className="text-purple-400 text-xs font-bold">Instituto Tia Pretinha</p>
+            <p className="text-purple-600 text-xs">ERP ITP</p>
+          </div>
+        </div>
       </div>
     </div>
   );
