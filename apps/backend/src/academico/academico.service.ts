@@ -177,9 +177,13 @@ export class AcademicoService {
   listarGrade() {
     this.logger.log('Listando grade horária');
     return this.dataSource.query(`
-      SELECT g.*, COALESCE(t.nome, g.nome_turma) AS nome_turma
+      SELECT g.*,
+        COALESCE(t.nome, g.nome_turma) AS nome_turma,
+        COALESCE(p.nome, u.nome, g.nome_professor) AS nome_professor
       FROM grade_horaria g
       LEFT JOIN turmas t ON t.id = g.turma_id::uuid
+      LEFT JOIN professores p ON p.id = t.professor_id::uuid
+      LEFT JOIN usuarios u ON u.id = t.professor_id::uuid
       ORDER BY g.dia_semana ASC, g.horario_inicio ASC NULLS LAST
     `);
   }

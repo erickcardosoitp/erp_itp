@@ -56,6 +56,10 @@ export default function FinanceiroPage() {
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState('');
   const [busca, setBusca] = useState('');
+  const [filtroTipo, setFiltroTipo] = useState('');
+  const [filtroStatus, setFiltroStatus] = useState('');
+  const [filtroMes, setFiltroMes] = useState('');
+  const [marcandoPago, setMarcandoPago] = useState<string | null>(null);
   const [modal, setModal] = useState<{ aberto: boolean; editando: Movimentacao | null }>({ aberto: false, editando: null });
   const [form, setForm] = useState<FormMovimentacao>({ status: 'Pendente' });
   const [salvando, setSalvando] = useState(false);
@@ -145,12 +149,21 @@ export default function FinanceiroPage() {
   const totalSaidas = lista.filter(m => m.tipo_movimentacao === 'Saída').reduce((s, m) => s + Number(m.valor ?? 0), 0);
   const saldo = totalEntradas - totalSaidas;
 
-  const filtrados = lista.filter(m =>
-    m.nome.toLowerCase().includes(busca.toLowerCase()) ||
-    (m.descricao ?? '').toLowerCase().includes(busca.toLowerCase()) ||
-    (m.categoria ?? '').toLowerCase().includes(busca.toLowerCase()) ||
-    (m.plano_contas ?? '').toLowerCase().includes(busca.toLowerCase()),
-  );
+  const handleMarcarPago = async (id: string) => {
+    setMarcandoPago(id);
+    try { await api.patch(`/financeiro/movimentacoes/${id}`, { status: 'Pago' }); loadMovimentacoes(); }
+    catch { /* silent */ }
+    setMarcandoPago(null);
+  };
+
+  const filtrados = lista.filter(m => {
+    const texto = busca.toLowerCase();
+    if (texto && !m.nome.toLowerCase().includes(texto) && !(m.descricao ?? '').toLowerCase().includes(texto) && !(m.categoria ?? '').toLowerCase().includes(texto)) return false;
+    if (filtroTipo && m.tipo_movimentacao !== filtroTipo) return false;
+    if (filtroStatus && m.status !== filtroStatus) return false;
+    if (filtroMes && m.data && !m.data.startsWith(filtroMes)) return false;
+    return true;
+  });
 
   const podeEscrever = canAccess('financeiro', 'incluir');
   const podeEditar   = canAccess('financeiro', 'editar');
@@ -240,12 +253,35 @@ export default function FinanceiroPage() {
           </div>
         )}
 
-        <div className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-100 dark:border-slate-700 shadow-sm mb-6">
-          <div className="relative flex-1 min-w-[200px]">
+        <div className="flex flex-wrap items-center gap-3 bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-100 dark:border-slate-700 shadow-sm mb-6">
+          <div className="relative flex-1 min-w-[180px]">
             <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar por nome, descrição, categoria ou plano de contas..."
+            <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar por nome, descrição ou categoria..."
               className="w-full pl-8 pr-3 py-2 border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-emerald-400" />
           </div>
+          <select value={filtroTipo} onChange={e => setFiltroTipo(e.target.value)}
+            className="border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-400">
+            <option value="">Todos os tipos</option>
+            <option value="Entrada">Entrada</option>
+            <option value="Saída">Saída</option>
+          </select>
+          <select value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)}
+            className="border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-400">
+            <option value="">Todos os status</option>
+            <option value="Pendente">Pendente</option>
+            <option value="Pago">Pago</option>
+            <option value="Confirmado">Confirmado</option>
+            <option value="Cancelado">Cancelado</option>
+          </select>
+          <input type="month" value={filtroMes} onChange={e => setFiltroMes(e.target.value)}
+            className="border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-400" />
+          {(busca || filtroTipo || filtroStatus || filtroMes) && (
+            <button onClick={() => { setBusca(''); setFiltroTipo(''); setFiltroStatus(''); setFiltroMes(''); }}
+              className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-700 text-slate-500 hover:text-red-500 transition-colors">
+              <X size={12} />Limpar filtros
+            </button>
+          )}
+          <span className="text-[10px] text-slate-400 ml-auto">{filtrados.length} de {lista.length}</span>
         </div>
 
         {/* TABELA */}
@@ -301,6 +337,13 @@ export default function FinanceiroPage() {
                       <td className="px-4 py-3 text-xs text-slate-400 max-w-[120px] truncate">{m.usuario_nome || '–'}</td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-1">
+                          {podeEditar && m.status === 'Pendente' && (
+                            <button onClick={() => handleMarcarPago(m.id)} disabled={marcandoPago === m.id}
+                              title="Marcar como Pago"
+                              className="px-2 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 hover:bg-emerald-100 text-[10px] font-black transition-colors disabled:opacity-50">
+                              {marcandoPago === m.id ? '...' : '✓ Pago'}
+                            </button>
+                          )}
                           {podeEditar && (
                             <button onClick={() => abrirEditar(m)} className="p-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition-colors"><Edit3 size={11} /></button>
                           )}

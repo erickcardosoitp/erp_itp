@@ -54,6 +54,8 @@ export default function EstoquePage() {
   const [busca, setBusca] = useState('');
   const [filtroCategoria, setFiltroCategoria] = useState('');
   const [showInativos, setShowInativos] = useState(false);
+  const [buscaMov, setBuscaMov] = useState('');
+  const [filtroTipoMov, setFiltroTipoMov] = useState<'' | 'entrada' | 'baixa'>('');
   const [mostrarColetor, setMostrarColetor] = useState(false);
   const coletorUrl = typeof window !== 'undefined'
     ? `${window.location.origin}/estoque/coletor?token=${process.env.NEXT_PUBLIC_COLETOR_TOKEN || 'itp-coletor-2026'}`
@@ -399,8 +401,31 @@ export default function EstoquePage() {
         )}
 
         {/* ── ABA: MOVIMENTOS ──────────────────────────────────────────────── */}
-        {aba === 'movimentos' && (
+        {aba === 'movimentos' && (() => {
+          const movFiltrados = movimentos.filter(m => {
+            if (filtroTipoMov && m.tipo !== filtroTipoMov) return false;
+            if (buscaMov) {
+              const q = buscaMov.toLowerCase();
+              return (m.produto?.nome ?? '').toLowerCase().includes(q) || (m.observacao ?? '').toLowerCase().includes(q) || (m.usuario_nome ?? '').toLowerCase().includes(q);
+            }
+            return true;
+          });
+          return (
           <div className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl overflow-hidden">
+            <div className="px-5 py-3 border-b border-slate-100 dark:border-slate-700 flex flex-wrap gap-3">
+              <div className="relative flex-1 min-w-[160px]">
+                <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input value={buscaMov} onChange={e => setBuscaMov(e.target.value)} placeholder="Buscar produto, observação..."
+                  className="w-full pl-8 pr-3 py-2 border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-green-400" />
+              </div>
+              <select value={filtroTipoMov} onChange={e => setFiltroTipoMov(e.target.value as any)}
+                className="border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-green-400">
+                <option value="">Todos os tipos</option>
+                <option value="entrada">Entradas</option>
+                <option value="baixa">Baixas</option>
+              </select>
+              <span className="text-[10px] text-slate-400 self-center">{movFiltrados.length} mov.</span>
+            </div>
             {loading ? (
               <div className="py-16 text-center text-slate-400"><RefreshCw size={20} className="animate-spin mx-auto mb-2" /></div>
             ) : (
@@ -414,9 +439,9 @@ export default function EstoquePage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50 dark:divide-slate-700/50">
-                    {movimentos.length === 0 ? (
-                      <tr><td colSpan={6} className="text-center py-12 text-slate-400 text-xs font-bold">Nenhum movimento registrado.</td></tr>
-                    ) : movimentos.map(m => (
+                    {movFiltrados.length === 0 ? (
+                      <tr><td colSpan={6} className="text-center py-12 text-slate-400 text-xs font-bold">Nenhum movimento encontrado.</td></tr>
+                    ) : movFiltrados.map(m => (
                       <tr key={m.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-700/20 transition-colors">
                         <td className="px-5 py-3 font-bold text-sm text-slate-800 dark:text-slate-200">{m.produto?.nome || '—'}</td>
                         <td className="px-5 py-3">
@@ -440,7 +465,8 @@ export default function EstoquePage() {
               </div>
             )}
           </div>
-        )}
+          );
+        })()}
 
         {/* ── ABA: CATEGORIAS ──────────────────────────────────────────────── */}
         {aba === 'categorias' && (

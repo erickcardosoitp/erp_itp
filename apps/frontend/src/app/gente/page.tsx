@@ -15,7 +15,8 @@ const CNPJ = '11.759.851/0001-39';
 const EMPRESA = 'Instituto Tia Pretinha';
 const ENDERECO = 'Rua Ramiro Monteiro, 130 — Vaz Lobo';
 
-type Tab = 'colaboradores' | 'ponto' | 'codigos' | 'recibos' | 'vales' | 'advertencias' | 'suspensoes' | 'faltas' | 'financeiro' | 'folgas' | 'banco-horas' | 'trabalho-externo';
+type MainTab = 'colaboradores' | 'ponto' | 'folha' | 'disciplinar' | 'codigos';
+type Tab = MainTab; // kept for compat
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -1821,25 +1822,149 @@ function TrabalhoExternoTab({ reload, colaboradores }: { reload: number; colabor
   );
 }
 
+// ── SubTabs ───────────────────────────────────────────────────────────────────
+
+function SubTabs<T extends string>({ tabs, active, setActive }: {
+  tabs: readonly { key: T; label: string; icon?: React.ComponentType<any> }[];
+  active: T; setActive: (k: T) => void;
+}) {
+  return (
+    <div className="flex gap-1 overflow-x-auto pb-2 mb-5 border-b border-slate-200 dark:border-slate-700 scrollbar-hide">
+      {tabs.map(t => {
+        const Icon = t.icon;
+        return (
+          <button key={t.key} onClick={() => setActive(t.key)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${active === t.key ? 'bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'}`}>
+            {Icon && <Icon size={12} />}{t.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Tab: Folha de Ponto (relatório mensal imprimível) ─────────────────────────
+
+function FolhaPontoRelatorio({ colaboradores }: { colaboradores: any[] }) {
+  const [mes, setMes] = useState('');
+  useEffect(() => { setMes(new Date().toISOString().slice(0, 7)); }, []);
+  const [dados, setDados] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const fmtMin = (min: number) => {
+    if (!min && min !== 0) return '—';
+    const h = Math.floor(Math.abs(min) / 60); const m = Math.abs(min) % 60;
+    return `${min < 0 ? '-' : ''}${h}h${m > 0 ? String(m).padStart(2, '0') + 'm' : ''}`;
+  };
+
+  const carregar = useCallback(async () => {
+    if (!mes || colaboradores.length === 0) return;
+    setLoading(true);
+    const results = await Promise.all(
+      colaboradores.map(col =>
+        fetch(`${API}/gente/ponto/externo/banco-horas?colaborador_id=${col.id}&mes=${mes}`)
+          .then(r => r.ok ? r.json() : null)
+          .then(d => d ? { ...d, nome: col.funcionario?.nome ?? '—', cargo: col.funcionario?.cargo ?? '' } : null)
+          .catch(() => null)
+      )
+    );
+    setDados(results.filter(Boolean).sort((a: any, b: any) => (a.nome ?? '').localeCompare(b.nome ?? '')));
+    setLoading(false);
+  }, [mes, colaboradores]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => { carregar(); }, [carregar]);
+
+  const totalSaldo = dados.reduce((s, d) => s + (d.saldo_minutos ?? 0), 0);
+
+  return (
+    <div>
+      <div className="flex items-center gap-3 mb-5 flex-wrap">
+        <input type="month" value={mes} onChange={e => setMes(e.target.value)} className={`${ic} w-40`} />
+        <button onClick={carregar} disabled={loading} className={bs}><RefreshCw size={14} className={loading ? 'animate-spin' : ''} /></button>
+        <button onClick={() => window.print()}
+          className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 text-white font-bold px-4 py-2 rounded-xl text-sm transition">
+          <Printer size={14} />Imprimir Folha
+        </button>
+        {mes && <span className="text-sm text-slate-500">Competência: {fmt.mes(mes)}</span>}
+      </div>
+
+      {loading ? <div className="text-center py-12 text-slate-400">Calculando horas...</div>
+        : dados.length === 0 ? <div className="text-center py-12 text-slate-400">Nenhum colaborador ativo.</div>
+        : (
+          <div id="folha-ponto-print" className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 dark:bg-slate-800">
+                <tr>{['Colaborador', 'Cargo', 'Dias Esp.', 'Trabalhado', 'Esperado', 'Saldo', 'Assinatura'].map(h => (
+                  <th key={h} className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
+                ))}</tr>
+              </thead>
+              <tbody>
+                {dados.map(d => {
+                  const saldoMin = d.saldo_minutos ?? 0;
+                  return (
+                    <tr key={d.colaborador_id ?? d.nome} className="border-t border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                      <td className="px-4 py-3 font-semibold text-slate-800 dark:text-white">{d.nome}</td>
+                      <td className="px-4 py-3 text-slate-500 text-xs">{d.cargo || '—'}</td>
+                      <td className="px-4 py-3 text-slate-600 dark:text-slate-300 text-center">{d.dias_esperados ?? '—'}</td>
+                      <td className="px-4 py-3 font-mono font-bold text-slate-800 dark:text-white">{d.trabalhado ?? '—'}</td>
+                      <td className="px-4 py-3 font-mono text-slate-600 dark:text-slate-300">{d.esperado ?? '—'}</td>
+                      <td className={`px-4 py-3 font-mono font-black ${saldoMin >= 0 ? 'text-green-600' : 'text-red-500'}`}>{d.saldo ?? '—'}</td>
+                      <td className="px-4 py-3 w-40 border-l border-slate-200 dark:border-slate-700 text-slate-200 dark:text-slate-700 text-xs select-none">____________</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot className="border-t-2 border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800">
+                <tr>
+                  <td className="px-4 py-2 font-black text-slate-800 dark:text-white" colSpan={3}>Total ({dados.length} colaboradores)</td>
+                  <td colSpan={2} />
+                  <td className={`px-4 py-2 font-mono font-black text-sm ${totalSaldo >= 0 ? 'text-green-600' : 'text-red-500'}`}>{fmtMin(totalSaldo)}</td>
+                  <td />
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+      <style>{`@media print { #folha-ponto-print { font-size: 11px !important; } }`}</style>
+    </div>
+  );
+}
+
 // ── Página Principal ──────────────────────────────────────────────────────────
 
-const TABS: { key: Tab; label: string; icon: React.ComponentType<any> }[] = [
-  { key: 'colaboradores', label: 'Colaboradores', icon: Users },
-  { key: 'financeiro', label: 'Financeiro', icon: DollarSign },
-  { key: 'ponto', label: 'Ponto', icon: Clock },
-  { key: 'codigos', label: 'Códigos VR', icon: Tag },
-  { key: 'recibos', label: 'Recibos / Folha', icon: FileText },
-  { key: 'vales', label: 'Vales', icon: Wallet },
-  { key: 'advertencias', label: 'Advertências', icon: AlertTriangle },
-  { key: 'suspensoes', label: 'Suspensões', icon: PauseCircle },
-  { key: 'faltas', label: 'Faltas', icon: Calendar },
-  { key: 'folgas', label: 'Folgas', icon: Check },
-  { key: 'banco-horas', label: 'Banco de Horas', icon: Calculator },
-  { key: 'trabalho-externo', label: 'Trabalho Externo', icon: MapPin },
+const MAIN_TABS = [
+  { key: 'colaboradores' as const, label: 'Colaboradores', icon: Users },
+  { key: 'ponto' as const, label: 'Ponto & Horas', icon: Clock },
+  { key: 'folha' as const, label: 'Folha / RH', icon: FileText },
+  { key: 'disciplinar' as const, label: 'Disciplinar', icon: AlertTriangle },
+  { key: 'codigos' as const, label: 'Códigos VR', icon: Tag },
 ];
 
+const SUB_PONTO = [
+  { key: 'alertas' as const, label: 'Alertas & Ponto', icon: Clock },
+  { key: 'banco-horas' as const, label: 'Banco de Horas', icon: Calculator },
+  { key: 'relatorio-folha' as const, label: 'Folha de Ponto', icon: Printer },
+  { key: 'folgas' as const, label: 'Folgas', icon: Check },
+  { key: 'trabalho-externo' as const, label: 'Trab. Externo', icon: MapPin },
+] as const;
+
+const SUB_FOLHA = [
+  { key: 'recibos' as const, label: 'Recibos / Folha', icon: FileText },
+  { key: 'vales' as const, label: 'Vales', icon: Wallet },
+  { key: 'financeiro' as const, label: 'Financeiro', icon: DollarSign },
+] as const;
+
+const SUB_DISCIPLINAR = [
+  { key: 'advertencias' as const, label: 'Advertências', icon: AlertTriangle },
+  { key: 'suspensoes' as const, label: 'Suspensões', icon: PauseCircle },
+  { key: 'faltas' as const, label: 'Faltas', icon: Calendar },
+] as const;
+
 export default function GentePage() {
-  const [tab, setTab] = useState<Tab>('colaboradores');
+  const [tab, setTab] = useState<MainTab>('colaboradores');
+  const [subPonto, setSubPonto] = useState<typeof SUB_PONTO[number]['key']>('alertas');
+  const [subFolha, setSubFolha] = useState<typeof SUB_FOLHA[number]['key']>('recibos');
+  const [subDisc, setSubDisc] = useState<typeof SUB_DISCIPLINAR[number]['key']>('advertencias');
   const [reload, setReload] = useState(0);
   const [colaboradores, setColaboradores] = useState<any[]>([]);
 
@@ -1865,8 +1990,9 @@ export default function GentePage() {
         </div>
       </div>
 
+      {/* Tabs principais */}
       <div className="flex gap-1 overflow-x-auto pb-1 mb-6 scrollbar-hide">
-        {TABS.map(t => {
+        {MAIN_TABS.map(t => {
           const Icon = t.icon;
           return (
             <button key={t.key} onClick={() => setTab(t.key)}
@@ -1878,18 +2004,41 @@ export default function GentePage() {
       </div>
 
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 p-4 sm:p-6 shadow-sm">
-        {tab === 'colaboradores' && <ColaboradoresTab reload={reload} colaboradores={colaboradores} carregarColaboradores={carregarColaboradores} />}
-        {tab === 'financeiro' && <FinanceiroTab reload={reload} />}
-        {tab === 'ponto' && <PontoTab reload={reload} colaboradores={colaboradores} />}
+
+        {tab === 'colaboradores' && (
+          <ColaboradoresTab reload={reload} colaboradores={colaboradores} carregarColaboradores={carregarColaboradores} />
+        )}
+
+        {tab === 'ponto' && (
+          <>
+            <SubTabs tabs={SUB_PONTO} active={subPonto} setActive={setSubPonto} />
+            {subPonto === 'alertas' && <PontoTab reload={reload} colaboradores={colaboradores} />}
+            {subPonto === 'banco-horas' && <BancoHorasAdminTab colaboradores={colaboradores} />}
+            {subPonto === 'relatorio-folha' && <FolhaPontoRelatorio colaboradores={colaboradores} />}
+            {subPonto === 'folgas' && <FolgasTab reload={reload} colaboradores={colaboradores} />}
+            {subPonto === 'trabalho-externo' && <TrabalhoExternoTab reload={reload} colaboradores={colaboradores} />}
+          </>
+        )}
+
+        {tab === 'folha' && (
+          <>
+            <SubTabs tabs={SUB_FOLHA} active={subFolha} setActive={setSubFolha} />
+            {subFolha === 'recibos' && <RecibosTab reload={reload} colaboradores={colaboradores} />}
+            {subFolha === 'vales' && <GenericTab endpoint="vales" titulo="Vale" reload={reload} colaboradores={colaboradores} CamposComp={CamposVale} renderLinha={(i, e, d) => <LinhaVale key={i.id} item={i} onEdit={e} onDel={d} colaboradores={colaboradores} />} />}
+            {subFolha === 'financeiro' && <FinanceiroTab reload={reload} />}
+          </>
+        )}
+
+        {tab === 'disciplinar' && (
+          <>
+            <SubTabs tabs={SUB_DISCIPLINAR} active={subDisc} setActive={setSubDisc} />
+            {subDisc === 'advertencias' && <GenericTab endpoint="advertencias" titulo="Advertência" reload={reload} colaboradores={colaboradores} CamposComp={CamposAdvertencia} renderLinha={(i, e, d) => <LinhaAdvertencia key={i.id} item={i} onEdit={e} onDel={d} colaboradores={colaboradores} />} />}
+            {subDisc === 'suspensoes' && <GenericTab endpoint="suspensoes" titulo="Suspensão" reload={reload} colaboradores={colaboradores} CamposComp={CamposSuspensao} renderLinha={(i, e, d) => <LinhaSuspensao key={i.id} item={i} onEdit={e} onDel={d} colaboradores={colaboradores} />} />}
+            {subDisc === 'faltas' && <GenericTab endpoint="faltas" titulo="Falta" reload={reload} colaboradores={colaboradores} CamposComp={CamposFalta} renderLinha={(i, e, d) => <LinhaFalta key={i.id} item={i} onEdit={e} onDel={d} colaboradores={colaboradores} />} />}
+          </>
+        )}
+
         {tab === 'codigos' && <CodigosTab reload={reload} />}
-        {tab === 'recibos' && <RecibosTab reload={reload} colaboradores={colaboradores} />}
-        {tab === 'vales' && <GenericTab endpoint="vales" titulo="Vale" reload={reload} colaboradores={colaboradores} CamposComp={CamposVale} renderLinha={(i, e, d) => <LinhaVale key={i.id} item={i} onEdit={e} onDel={d} colaboradores={colaboradores} />} />}
-        {tab === 'advertencias' && <GenericTab endpoint="advertencias" titulo="Advertência" reload={reload} colaboradores={colaboradores} CamposComp={CamposAdvertencia} renderLinha={(i, e, d) => <LinhaAdvertencia key={i.id} item={i} onEdit={e} onDel={d} colaboradores={colaboradores} />} />}
-        {tab === 'suspensoes' && <GenericTab endpoint="suspensoes" titulo="Suspensão" reload={reload} colaboradores={colaboradores} CamposComp={CamposSuspensao} renderLinha={(i, e, d) => <LinhaSuspensao key={i.id} item={i} onEdit={e} onDel={d} colaboradores={colaboradores} />} />}
-        {tab === 'faltas' && <GenericTab endpoint="faltas" titulo="Falta" reload={reload} colaboradores={colaboradores} CamposComp={CamposFalta} renderLinha={(i, e, d) => <LinhaFalta key={i.id} item={i} onEdit={e} onDel={d} colaboradores={colaboradores} />} />}
-        {tab === 'folgas' && <FolgasTab reload={reload} colaboradores={colaboradores} />}
-        {tab === 'banco-horas' && <BancoHorasAdminTab colaboradores={colaboradores} />}
-        {tab === 'trabalho-externo' && <TrabalhoExternoTab reload={reload} colaboradores={colaboradores} />}
       </div>
     </div>
   );
