@@ -1461,8 +1461,8 @@ const LinhaFalta = ({ item, onEdit, onDel, colaboradores }: any) => {
   const dataFimStr = item.data_fim ? String(item.data_fim).slice(0, 10) : null;
   const dataStr = item.data ? String(item.data).slice(0, 10) : null;
   const periodo = tipo !== 'falta'
-    ? `${fmt.data(dataStr)} → ${fmt.data(dataFimStr ?? dataStr)} ${!dataFimStr ? '⚠️ sem data fim' : ''}`
-    : fmt.data(dataStr);
+    ? `${fmt.data(dataStr ?? '')} → ${fmt.data(dataFimStr ?? dataStr ?? '')} ${!dataFimStr ? '⚠️ sem data fim' : ''}`
+    : fmt.data(dataStr ?? '');
 
   const baixarAnexo = () => {
     if (!item.anexo) return;
