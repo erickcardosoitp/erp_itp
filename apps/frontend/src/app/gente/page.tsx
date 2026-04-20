@@ -1211,9 +1211,16 @@ const CamposFalta = ({ form, setForm }: any) => {
           <option value="afastamento">Afastamento</option>
         </select>
       </FL>
-      <FL label={tipo === 'falta' ? 'Data' : 'Data início'}><input type="date" value={form.data || hoje()} onChange={e => setForm((f: any) => ({ ...f, data: e.target.value }))} className={ic} /></FL>
-      {tipo !== 'falta' && (
-        <FL label="Data fim (inclusive)"><input type="date" value={form.data_fim || ''} onChange={e => setForm((f: any) => ({ ...f, data_fim: e.target.value }))} className={ic} /></FL>
+      {tipo === 'falta' ? (
+        <FL label="Data"><input type="date" value={form.data || hoje()} onChange={e => setForm((f: any) => ({ ...f, data: e.target.value }))} className={ic} /></FL>
+      ) : (
+        <div className="rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30 p-3">
+          <p className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-2">Período</p>
+          <div className="grid grid-cols-2 gap-3">
+            <FL label="Data início"><input type="date" value={form.data || hoje()} onChange={e => setForm((f: any) => ({ ...f, data: e.target.value }))} className={ic} /></FL>
+            <FL label="Data fim"><input type="date" value={form.data_fim || ''} onChange={e => setForm((f: any) => ({ ...f, data_fim: e.target.value }))} className={ic} /></FL>
+          </div>
+        </div>
       )}
       <FL label="Motivo"><input type="text" value={form.motivo || ''} onChange={e => setForm((f: any) => ({ ...f, motivo: e.target.value }))} className={ic} /></FL>
       <div className="flex gap-4">
