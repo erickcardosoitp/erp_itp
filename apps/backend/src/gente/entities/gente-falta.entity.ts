@@ -36,6 +36,13 @@ export class GenteFalta {
   @Column({ type: 'text', nullable: true })
   observacao: string;
 
+  // Anexo do atestado (base64 ou URL)
+  @Column({ type: 'text', nullable: true })
+  anexo: string;
+
+  @Column({ type: 'text', nullable: true })
+  anexo_nome: string;
+
   @Column({ type: 'text', nullable: true })
   criado_por_id: string;
 
