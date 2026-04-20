@@ -1494,11 +1494,11 @@ const LinhaFalta = ({ item, onEdit, onDel, colaboradores }: any) => {
 
 // ── Tab Ponto ────────────────────────────────────────────────────────────────
 
-type LinhaLancamento = { id: number; data: string; hora: string; tipo: 'entrada' | 'saida' };
+type LinhaLancamento = { id: number; data: string; entrada: string; saida: string };
 
 let _lId = 0;
-const novaLinha = (data: string, hora: string, tipo: 'entrada' | 'saida'): LinhaLancamento =>
-  ({ id: ++_lId, data, hora, tipo });
+const novaLinha = (data: string, entrada = '08:00', saida = '17:00'): LinhaLancamento =>
+  ({ id: ++_lId, data, entrada, saida });
 
 function PontoTab({ reload, colaboradores }: { reload: number; colaboradores: any[] }) {
   const ic = 'w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-400';
@@ -1575,17 +1575,14 @@ function PontoTab({ reload, colaboradores }: { reload: number; colaboradores: an
 
   const abrirModal = (preColId?: string) => {
     setColId(preColId ?? '');
-    setLinhas([novaLinha(hoje, '08:00', 'entrada'), novaLinha(hoje, '17:00', 'saida')]);
+    const col = colaboradores.find(c => c.id === preColId);
+    setLinhas([novaLinha(hoje, col?.horario_entrada ?? '08:00', col?.horario_saida ?? '17:00')]);
     setModalAberto(true);
   };
 
-  const addLinha = () => setLinhas(l => [...l, novaLinha(hoje, '08:00', 'entrada')]);
-
-  const addDiaCompleto = () => {
+  const addLinha = () => {
     const col = colaboradores.find(c => c.id === colId);
-    const entrada = col?.horario_entrada ?? '08:00';
-    const saida = col?.horario_saida ?? '17:00';
-    setLinhas(l => [...l, novaLinha(hoje, entrada, 'entrada'), novaLinha(hoje, saida, 'saida')]);
+    setLinhas(l => [...l, novaLinha(hoje, col?.horario_entrada ?? '08:00', col?.horario_saida ?? '17:00')]);
   };
 
   const updLinha = (id: number, campo: keyof LinhaLancamento, val: string) =>
@@ -1595,16 +1592,29 @@ function PontoTab({ reload, colaboradores }: { reload: number; colaboradores: an
 
   const salvarLote = async () => {
     if (!colId) { toast.error('Selecione um colaborador.'); return; }
-    if (linhas.length === 0) { toast.error('Adicione pelo menos uma marcação.'); return; }
-    const invalidas = linhas.filter(l => !l.data || !l.hora);
-    if (invalidas.length) { toast.error('Preencha data e hora em todas as linhas.'); return; }
+    if (linhas.length === 0) { toast.error('Adicione pelo menos uma linha.'); return; }
+    const invalidas = linhas.filter(l => !l.data || !l.entrada);
+    if (invalidas.length) { toast.error('Preencha data e entrada em todas as linhas.'); return; }
     setSalvando(true);
+
+    // Para cada linha: entrada na data informada; saída na mesma data ou +1 dia se hora < entrada
+    const registros: { tipo: string; data_hora: string }[] = [];
+    for (const l of linhas) {
+      registros.push({ tipo: 'entrada', data_hora: new Date(`${l.data}T${l.entrada}:00`).toISOString() });
+      if (l.saida) {
+        const saidaData = l.saida < l.entrada
+          ? new Date(new Date(`${l.data}T${l.saida}:00`).getTime() + 86400000).toISOString()
+          : new Date(`${l.data}T${l.saida}:00`).toISOString();
+        registros.push({ tipo: 'saida', data_hora: saidaData });
+      }
+    }
+
     const results = await Promise.allSettled(
-      linhas.map(l =>
+      registros.map(reg =>
         fetch(`${API}/gente/ponto`, {
           method: 'POST', credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ colaborador_id: colId, tipo: l.tipo, data_hora: new Date(`${l.data}T${l.hora}:00`).toISOString() }),
+          body: JSON.stringify({ colaborador_id: colId, ...reg }),
         })
       )
     );
@@ -1623,11 +1633,6 @@ function PontoTab({ reload, colaboradores }: { reload: number; colaboradores: an
     await fetch(`${API}/gente/ponto/${id}`, { method: 'DELETE', credentials: 'include' });
     toast.success('Excluído.'); carregar(); carregarAlertas();
   };
-
-  const tipoClasses = (tipo: 'entrada' | 'saida', ativo: boolean) =>
-    `px-2 py-1 rounded-lg text-xs font-bold border transition ${ativo
-      ? tipo === 'entrada' ? 'bg-green-500 text-white border-green-500' : 'bg-red-500 text-white border-red-500'
-      : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-400'}`;
 
   return (
     <div className="space-y-6">
@@ -1787,47 +1792,50 @@ function PontoTab({ reload, colaboradores }: { reload: number; colaboradores: an
               </select>
             </FL>
 
-            <div className="flex gap-2 flex-wrap">
-              <button type="button" onClick={addDiaCompleto} disabled={!colId}
+            <div className="flex gap-2 mb-1">
+              <button type="button" onClick={addLinha} disabled={!colId}
                 className="flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-lg bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 hover:bg-purple-200 transition disabled:opacity-40">
-                <Plus size={11} />Dia completo
+                <Plus size={11} />Adicionar dia
               </button>
-              <button type="button" onClick={addLinha}
-                className="flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 transition">
-                <Plus size={11} />Linha avulsa
-              </button>
+            </div>
+
+            {/* Header */}
+            <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-2 px-3 text-xs font-bold text-slate-400 uppercase tracking-wider">
+              <span>Data</span><span>Entrada</span><span></span><span>Saída</span><span></span>
             </div>
 
             <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
               {linhas.length === 0 && (
-                <p className="text-slate-400 text-xs text-center py-4">Adicione pelo menos uma marcação acima.</p>
+                <p className="text-slate-400 text-xs text-center py-4">Clique em "Adicionar dia" para inserir uma marcação.</p>
               )}
-              {linhas.map((l, i) => (
-                <div key={l.id} className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 rounded-xl px-3 py-2">
-                  <span className="text-xs text-slate-400 w-5 text-center font-bold">{i + 1}</span>
-                  <input type="date" value={l.data} onChange={e => updLinha(l.id, 'data', e.target.value)}
-                    className="border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-xs bg-white dark:bg-slate-900 text-slate-800 dark:text-white w-32" />
-                  <button type="button" title="Avançar 1 dia"
-                    onClick={() => { const d = new Date(l.data + 'T12:00:00'); d.setDate(d.getDate() + 1); updLinha(l.id, 'data', d.toISOString().slice(0, 10)); }}
-                    className="text-xs font-bold px-1.5 py-1 rounded border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-purple-600 hover:border-purple-400 transition">+1d</button>
-                  <input type="time" value={l.hora} onChange={e => updLinha(l.id, 'hora', e.target.value)}
-                    className="border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-xs bg-white dark:bg-slate-900 text-slate-800 dark:text-white w-24" />
-                  <div className="flex gap-1">
-                    <button type="button" onClick={() => updLinha(l.id, 'tipo', 'entrada')} className={tipoClasses('entrada', l.tipo === 'entrada')}>E</button>
-                    <button type="button" onClick={() => updLinha(l.id, 'tipo', 'saida')} className={tipoClasses('saida', l.tipo === 'saida')}>S</button>
+              {linhas.map(l => {
+                const viradaDia = l.saida && l.saida < l.entrada;
+                return (
+                  <div key={l.id} className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 rounded-xl px-3 py-2">
+                    <input type="date" value={l.data} onChange={e => updLinha(l.id, 'data', e.target.value)}
+                      className="border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-xs bg-white dark:bg-slate-900 text-slate-800 dark:text-white flex-1 min-w-0" />
+                    <input type="time" value={l.entrada} onChange={e => updLinha(l.id, 'entrada', e.target.value)}
+                      className="border border-green-200 dark:border-green-800 rounded-lg px-2 py-1 text-xs bg-white dark:bg-slate-900 text-green-700 dark:text-green-400 w-24" />
+                    <span className="text-slate-400 text-xs font-bold">→</span>
+                    <div className="relative">
+                      <input type="time" value={l.saida} onChange={e => updLinha(l.id, 'saida', e.target.value)}
+                        className="border border-red-200 dark:border-red-800 rounded-lg px-2 py-1 text-xs bg-white dark:bg-slate-900 text-red-600 dark:text-red-400 w-24" />
+                      {viradaDia && (
+                        <span className="absolute -top-2 -right-1 text-[9px] font-black text-purple-600 dark:text-purple-400 bg-purple-100 dark:bg-purple-900/40 px-1 rounded">+1d</span>
+                      )}
+                    </div>
+                    <button type="button" onClick={() => delLinha(l.id)} className="text-slate-300 hover:text-red-500 transition ml-1"><Trash2 size={12} /></button>
                   </div>
-                  <span className={`text-xs flex-1 ${l.tipo === 'entrada' ? 'text-green-600' : 'text-red-500'}`}>{l.tipo === 'entrada' ? 'Entrada' : 'Saída'}</span>
-                  <button type="button" onClick={() => delLinha(l.id)} className="text-slate-300 hover:text-red-500 transition"><Trash2 size={12} /></button>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             <div className="flex justify-between items-center pt-2 border-t border-slate-100 dark:border-slate-700">
-              <span className="text-xs text-slate-400">{linhas.length} marcação(ões)</span>
+              <span className="text-xs text-slate-400">{linhas.length} dia(s)</span>
               <div className="flex gap-2">
                 <button onClick={() => setModalAberto(false)} className={bs}>Cancelar</button>
                 <button onClick={salvarLote} disabled={salvando || !colId || linhas.length === 0} className={bp}>
-                  {salvando ? 'Registrando...' : `Registrar ${linhas.length > 1 ? `${linhas.length} marcações` : 'marcação'}`}
+                  {salvando ? 'Registrando...' : `Registrar ${linhas.length} dia(s)`}
                 </button>
               </div>
             </div>

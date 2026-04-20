@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, Logger, ConflictException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { In, Repository, DataSource } from 'typeorm';
 import { Funcionario } from '../academico/entities/funcionario.entity';
 import { Usuario } from '../usuarios/usuario.entity';
 import { EmailService } from '../email.service';
@@ -15,6 +15,7 @@ export class FuncionariosService {
     @InjectRepository(Usuario) private usuarioRepo: Repository<Usuario>,
     public readonly emailService: EmailService,
     private readonly notificacoesService: NotificacoesService,
+    private readonly dataSource: DataSource,
   ) {}
 
   listar() {
@@ -72,6 +73,26 @@ export class FuncionariosService {
       }
     } else {
       salvo = await this.criar(dto);
+    }
+
+    // Cria colaborador no módulo Gente automaticamente (se ainda não existir)
+    try {
+      const jaExiste = await this.dataSource.query(
+        `SELECT id FROM gente_colaboradores WHERE funcionario_id = $1 LIMIT 1`,
+        [salvo.id],
+      );
+      if (!jaExiste.length) {
+        await this.dataSource.query(
+          `INSERT INTO gente_colaboradores
+            (funcionario_id, tipo, horario_entrada, horario_saida, dias_trabalho,
+             latitude_permitida, longitude_permitida, raio_metros, ativo)
+           VALUES ($1, 'voluntario', '08:00', '17:00', $2, -22.8597901, -43.3308139, 100, true)`,
+          [salvo.id, JSON.stringify(['seg', 'ter', 'qua', 'qui', 'sex'])],
+        );
+        this.logger.log(`Colaborador criado automaticamente para funcionário ${salvo.id} — ${salvo.nome}`);
+      }
+    } catch (err: any) {
+      this.logger.error(`Erro ao criar colaborador automático: ${err.message}`);
     }
 
     // E-mail de confirmação ao funcionário (sem bloquear o retorno)
