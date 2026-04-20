@@ -178,26 +178,41 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
     setSalvando(false);
   };
 
+  const comprimirImagem = (file: File, maxPx = 400, quality = 0.82): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = reject;
+      img.src = url;
+    });
+
   const handleFoto = async (e: React.ChangeEvent<HTMLInputElement>, _funcId: string | undefined, colId: string) => {
     const file = e.target.files?.[0];
     if (!file || !colId) return;
     setUploadandoFoto(colId);
     try {
-      const fotoBase64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
+      const fotoBase64 = await comprimirImagem(file);
       const r = await fetch(`${API}/gente/colaboradores/${colId}/foto`, {
         method: 'PATCH', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ foto: fotoBase64 }),
       });
       if (r.ok) { toast.success('Foto atualizada!'); carregarColaboradores(); }
-      else toast.error('Erro ao enviar foto.');
+      else {
+        const msg = await r.json().catch(() => ({}));
+        toast.error(`Erro ao enviar foto: ${msg?.message ?? r.status}`);
+      }
     } catch { toast.error('Erro ao processar imagem.'); }
-    finally { setUploadandoFoto(null); }
+    finally { setUploadandoFoto(null); if (e.target) e.target.value = ''; }
   };
 
   const remover = async (id: string) => {
