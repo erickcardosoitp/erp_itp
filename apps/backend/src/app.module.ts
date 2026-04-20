@@ -651,6 +651,15 @@ export class AppModule implements OnModuleInit {
       `);
       this.logger.log('✅ Coluna gente_faltas.percentual_desconto aplicada (IF NOT EXISTS)');
       await this.dataSource.query(`
+        ALTER TABLE IF EXISTS funcionarios
+          ADD COLUMN IF NOT EXISTS genero TEXT,
+          ADD COLUMN IF NOT EXISTS pertence_comunidade_tradicional BOOLEAN DEFAULT false,
+          ADD COLUMN IF NOT EXISTS comunidade_tradicional TEXT,
+          ADD COLUMN IF NOT EXISTS possui_cad_unico BOOLEAN DEFAULT false,
+          ADD COLUMN IF NOT EXISTS baixo_idh BOOLEAN DEFAULT false
+      `);
+      this.logger.log('✅ Colunas funcionarios (genero, comunidade, cad_unico, baixo_idh) aplicadas (IF NOT EXISTS)');
+      await this.dataSource.query(`
         ALTER TABLE IF EXISTS gente_folga_solicitacoes
           ADD COLUMN IF NOT EXISTS realizada BOOLEAN
       `);

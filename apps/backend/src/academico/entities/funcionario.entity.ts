@@ -89,6 +89,22 @@ export class Funcionario {
   @Column({ type: 'boolean', nullable: true, default: false })
   interesse_cursos: boolean;
 
+  // Identidade e perfil social
+  @Column({ type: 'text', nullable: true })
+  genero: string;
+
+  @Column({ type: 'boolean', nullable: true, default: false })
+  pertence_comunidade_tradicional: boolean;
+
+  @Column({ type: 'text', nullable: true })
+  comunidade_tradicional: string;
+
+  @Column({ type: 'boolean', nullable: true, default: false })
+  possui_cad_unico: boolean;
+
+  @Column({ type: 'boolean', nullable: true, default: false })
+  baixo_idh: boolean;
+
   // Dados documentais
   @Column({ type: 'text', nullable: true })
   rg: string;

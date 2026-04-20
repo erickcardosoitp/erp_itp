@@ -249,6 +249,12 @@ function onFormSubmit(e) {
     numero_sus:             campo_(r, ['Número do SUS', 'Cartão SUS', 'Número SUS']),
     // Interesse
     interesse_cursos:       simParaBool_(campo_(r, ['Tem interesse em se matricular em algum curso do Instituto Tia Pretinha?', 'Interesse em cursos?', 'Interesse em Cursos?'])),
+    // Perfil social (novos campos)
+    genero:                 campo_(r, ['Gênero', 'Genero']),
+    pertence_comunidade_tradicional: simParaBool_(campo_(r, ['Pertence a algum grupo de comunidade tradicional?', 'Pertence a comunidade tradicional?'])),
+    comunidade_tradicional: campo_(r, ['Se sim, qual?', 'Qual comunidade tradicional?']),
+    possui_cad_unico:       simParaBool_(campo_(r, ['Possui cadastro no Cad Unico?', 'Possui CadÚnico?', 'Tem CadÚnico?'])),
+    baixo_idh:              simParaBool_(campo_(r, ['Reside em um lugar de baixo índice de desenvolvimento?', 'Área de baixo IDH?'])),
     ativo:                  true,
   };
 
@@ -322,6 +328,11 @@ function testeManual() {
       'Se sim, quais medicamentos utiliza? (Nome e dosagem, se souber)': [''],
       'Possui plano de saúde?':             ['Não'],
       'Tem interesse em se matricular em algum curso do Instituto Tia Pretinha?': ['Sim'],
+      'Gênero':                             ['Feminino cisgênero'],
+      'Pertence a algum grupo de comunidade tradicional?': ['Não'],
+      'Se sim, qual?':                      [''],
+      'Possui cadastro no Cad Unico?':      ['Não'],
+      'Reside em um lugar de baixo índice de desenvolvimento?': ['Não'],
     },
   };
   onFormSubmit(fakeEvent);

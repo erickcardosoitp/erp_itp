@@ -408,8 +408,8 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
                   <div className="flex items-center gap-3">
                     <div className="relative">
                       {c.funcionario?.foto
-                        ? <img src={c.funcionario.foto} alt="" className="w-12 h-16 rounded-xl object-cover border border-slate-200" />
-                        : <div className="w-12 h-16 rounded-xl bg-purple-100 dark:bg-purple-900 flex items-center justify-center text-purple-700 dark:text-purple-300 font-black text-lg">{c.funcionario?.nome?.charAt(0) ?? '?'}</div>}
+                        ? <img src={c.funcionario.foto} alt="" className="w-12 h-12 rounded-full object-cover border-2 border-purple-300 dark:border-purple-600" onError={e => { (e.target as HTMLImageElement).style.display='none'; }} />
+                        : <div className="w-12 h-12 rounded-full bg-purple-100 dark:bg-purple-900 flex items-center justify-center text-purple-700 dark:text-purple-300 font-black text-lg">{c.funcionario?.nome?.charAt(0) ?? '?'}</div>}
                       <label className="absolute -bottom-1 -right-1 cursor-pointer bg-purple-600 text-white rounded-full p-0.5 shadow">
                         {uploadandoFoto === c.id ? <RefreshCw size={10} className="animate-spin" /> : <Upload size={10} />}
                         <input type="file" accept="image/*" className="hidden" onChange={e => handleFoto(e, c.funcionario?.id, c.id)} />
@@ -505,6 +505,26 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
               <FL label="Número"><input type="text" value={formFunc.numero_residencia || ''} onChange={e => setFormFunc((f: any) => ({ ...f, numero_residencia: e.target.value }))} className={ic} /></FL>
               <FL label="Bairro"><input type="text" value={formFunc.bairro || ''} onChange={e => setFormFunc((f: any) => ({ ...f, bairro: e.target.value }))} className={ic} /></FL>
               <FL label="Cidade"><input type="text" value={formFunc.cidade || ''} onChange={e => setFormFunc((f: any) => ({ ...f, cidade: e.target.value }))} className={ic} /></FL>
+              <FL label="Sexo">
+                <select value={formFunc.sexo || ''} onChange={e => setFormFunc((f: any) => ({ ...f, sexo: e.target.value }))} className={ic}>
+                  <option value="">Selecione...</option>
+                  {['Masculino', 'Feminino', 'Outro', 'Prefiro não informar'].map(v => <option key={v}>{v}</option>)}
+                </select>
+              </FL>
+              <FL label="Raça / Cor">
+                <select value={formFunc.raca_cor || ''} onChange={e => setFormFunc((f: any) => ({ ...f, raca_cor: e.target.value }))} className={ic}>
+                  <option value="">Selecione...</option>
+                  {['Preta', 'Parda', 'Branca', 'Indígena', 'Amarela', 'Prefiro não informar'].map(v => <option key={v}>{v}</option>)}
+                </select>
+              </FL>
+              <FL label="Tel. Emergência 1"><input type="text" value={formFunc.telefone_emergencia_1 || ''} onChange={e => setFormFunc((f: any) => ({ ...f, telefone_emergencia_1: e.target.value }))} className={ic} /></FL>
+              <FL label="Tel. Emergência 2"><input type="text" value={formFunc.telefone_emergencia_2 || ''} onChange={e => setFormFunc((f: any) => ({ ...f, telefone_emergencia_2: e.target.value }))} className={ic} /></FL>
+            </div>
+            <div className="border-t dark:border-slate-700 pt-3 space-y-2">
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Perfil Social</p>
+              <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!formFunc.interesse_cursos} onChange={e => setFormFunc((f: any) => ({ ...f, interesse_cursos: e.target.checked }))} className="w-4 h-4" />Interesse em cursos do ITP?</label>
+              <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!formFunc.possui_cad_unico} onChange={e => setFormFunc((f: any) => ({ ...f, possui_cad_unico: e.target.checked }))} className="w-4 h-4" />Possui CadÚnico?</label>
+              <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!formFunc.baixo_idh} onChange={e => setFormFunc((f: any) => ({ ...f, baixo_idh: e.target.checked }))} className="w-4 h-4" />Área de baixo IDH?</label>
             </div>
             <div className="border-t dark:border-slate-700 pt-3">
               <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Configuração de Ponto</p>
@@ -572,39 +592,105 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
       {/* Modal: Editar Cadastro do Funcionário */}
       {modal === 'editar-cadastro' && colSelecionado && (
         <Modal title={`Editar Cadastro — ${colSelecionado.funcionario?.nome ?? ''}`} onClose={() => setModal(null)} wide>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="col-span-2"><FL label="Nome Completo *"><input type="text" value={formFunc.nome || ''} onChange={e => setFormFunc((f: any) => ({ ...f, nome: e.target.value }))} className={ic} /></FL></div>
-              <FL label="Cargo / Função"><input type="text" value={formFunc.cargo || ''} onChange={e => setFormFunc((f: any) => ({ ...f, cargo: e.target.value }))} className={ic} /></FL>
-              <FL label="CPF"><input type="text" value={formFunc.cpf || ''} onChange={e => setFormFunc((f: any) => ({ ...f, cpf: e.target.value }))} className={ic} /></FL>
-              <FL label="RG"><input type="text" value={formFunc.rg || ''} onChange={e => setFormFunc((f: any) => ({ ...f, rg: e.target.value }))} className={ic} /></FL>
-              <FL label="Órgão Emissor RG"><input type="text" value={formFunc.orgao_emissor_rg || ''} onChange={e => setFormFunc((f: any) => ({ ...f, orgao_emissor_rg: e.target.value }))} className={ic} /></FL>
-              <FL label="Estado Civil">
-                <select value={formFunc.estado_civil || ''} onChange={e => setFormFunc((f: any) => ({ ...f, estado_civil: e.target.value }))} className={ic}>
-                  <option value="">Selecione...</option>
-                  {['Solteiro(a)', 'Casado(a)', 'Divorciado(a)', 'Viúvo(a)', 'União Estável'].map(v => <option key={v}>{v}</option>)}
-                </select>
-              </FL>
-              <FL label="Celular"><input type="text" value={formFunc.celular || ''} onChange={e => setFormFunc((f: any) => ({ ...f, celular: e.target.value }))} className={ic} /></FL>
-              <FL label="Email"><input type="email" value={formFunc.email || ''} onChange={e => setFormFunc((f: any) => ({ ...f, email: e.target.value }))} className={ic} /></FL>
-              <FL label="Data de Nascimento"><input type="date" value={formFunc.data_nascimento || ''} onChange={e => setFormFunc((f: any) => ({ ...f, data_nascimento: e.target.value }))} className={ic} /></FL>
-              <FL label="CEP"><input type="text" value={formFunc.cep || ''} onChange={async e => {
-                const cep = e.target.value.replace(/\D/g, '');
-                setFormFunc((f: any) => ({ ...f, cep: e.target.value }));
-                if (cep.length === 8) {
-                  const r = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
-                  const d = await r.json();
-                  if (!d.erro) setFormFunc((f: any) => ({ ...f, logradouro: d.logradouro, bairro: d.bairro, cidade: d.localidade, estado: d.uf }));
-                }
-              }} className={ic} /></FL>
-              <FL label="Logradouro"><input type="text" value={formFunc.logradouro || ''} onChange={e => setFormFunc((f: any) => ({ ...f, logradouro: e.target.value }))} className={ic} /></FL>
-              <FL label="Número"><input type="text" value={formFunc.numero_residencia || ''} onChange={e => setFormFunc((f: any) => ({ ...f, numero_residencia: e.target.value }))} className={ic} /></FL>
-              <FL label="Complemento"><input type="text" value={formFunc.complemento || ''} onChange={e => setFormFunc((f: any) => ({ ...f, complemento: e.target.value }))} className={ic} /></FL>
-              <FL label="Bairro"><input type="text" value={formFunc.bairro || ''} onChange={e => setFormFunc((f: any) => ({ ...f, bairro: e.target.value }))} className={ic} /></FL>
-              <FL label="Cidade"><input type="text" value={formFunc.cidade || ''} onChange={e => setFormFunc((f: any) => ({ ...f, cidade: e.target.value }))} className={ic} /></FL>
-              <FL label="País"><input type="text" value={formFunc.pais || 'Brasil'} onChange={e => setFormFunc((f: any) => ({ ...f, pais: e.target.value }))} className={ic} /></FL>
+          <div className="space-y-5">
+            {/* Dados Pessoais */}
+            <div>
+              <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-3">Dados Pessoais</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2"><FL label="Nome Completo *"><input type="text" value={formFunc.nome || ''} onChange={e => setFormFunc((f: any) => ({ ...f, nome: e.target.value }))} className={ic} /></FL></div>
+                <FL label="Cargo / Função"><input type="text" value={formFunc.cargo || ''} onChange={e => setFormFunc((f: any) => ({ ...f, cargo: e.target.value }))} className={ic} /></FL>
+                <FL label="CPF"><input type="text" value={formFunc.cpf || ''} onChange={e => setFormFunc((f: any) => ({ ...f, cpf: e.target.value }))} className={ic} /></FL>
+                <FL label="RG"><input type="text" value={formFunc.rg || ''} onChange={e => setFormFunc((f: any) => ({ ...f, rg: e.target.value }))} className={ic} /></FL>
+                <FL label="Órgão Emissor RG"><input type="text" value={formFunc.orgao_emissor_rg || ''} onChange={e => setFormFunc((f: any) => ({ ...f, orgao_emissor_rg: e.target.value }))} className={ic} /></FL>
+                <FL label="Estado Civil">
+                  <select value={formFunc.estado_civil || ''} onChange={e => setFormFunc((f: any) => ({ ...f, estado_civil: e.target.value }))} className={ic}>
+                    <option value="">Selecione...</option>
+                    {['Solteiro(a)', 'Casado(a)', 'Divorciado(a)', 'Viúvo(a)', 'União Estável'].map(v => <option key={v}>{v}</option>)}
+                  </select>
+                </FL>
+                <FL label="Data de Nascimento"><input type="date" value={formFunc.data_nascimento || ''} onChange={e => setFormFunc((f: any) => ({ ...f, data_nascimento: e.target.value }))} className={ic} /></FL>
+                <FL label="Celular"><input type="text" value={formFunc.celular || ''} onChange={e => setFormFunc((f: any) => ({ ...f, celular: e.target.value }))} className={ic} /></FL>
+                <FL label="Email"><input type="email" value={formFunc.email || ''} onChange={e => setFormFunc((f: any) => ({ ...f, email: e.target.value }))} className={ic} /></FL>
+                <FL label="Sexo">
+                  <select value={formFunc.sexo || ''} onChange={e => setFormFunc((f: any) => ({ ...f, sexo: e.target.value }))} className={ic}>
+                    <option value="">Selecione...</option>
+                    {['Masculino', 'Feminino', 'Outro', 'Prefiro não informar'].map(v => <option key={v}>{v}</option>)}
+                  </select>
+                </FL>
+                <FL label="Gênero"><input type="text" placeholder="Ex: Não-binário" value={formFunc.genero || ''} onChange={e => setFormFunc((f: any) => ({ ...f, genero: e.target.value }))} className={ic} /></FL>
+                <FL label="Raça / Cor">
+                  <select value={formFunc.raca_cor || ''} onChange={e => setFormFunc((f: any) => ({ ...f, raca_cor: e.target.value }))} className={ic}>
+                    <option value="">Selecione...</option>
+                    {['Preta', 'Parda', 'Branca', 'Indígena', 'Amarela', 'Prefiro não informar'].map(v => <option key={v}>{v}</option>)}
+                  </select>
+                </FL>
+                <FL label="Escolaridade">
+                  <select value={formFunc.escolaridade || ''} onChange={e => setFormFunc((f: any) => ({ ...f, escolaridade: e.target.value }))} className={ic}>
+                    <option value="">Selecione...</option>
+                    {['Fundamental Incompleto','Fundamental Completo','Médio Incompleto','Médio Completo','Superior Incompleto','Superior Completo','Pós-graduação'].map(v => <option key={v}>{v}</option>)}
+                  </select>
+                </FL>
+              </div>
             </div>
-            <div className="flex justify-end gap-2 pt-2">
+            {/* Endereço */}
+            <div>
+              <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-3">Endereço</p>
+              <div className="grid grid-cols-2 gap-3">
+                <FL label="CEP"><input type="text" value={formFunc.cep || ''} onChange={async e => {
+                  const cep = e.target.value.replace(/\D/g, '');
+                  setFormFunc((f: any) => ({ ...f, cep: e.target.value }));
+                  if (cep.length === 8) {
+                    const r = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+                    const d = await r.json();
+                    if (!d.erro) setFormFunc((f: any) => ({ ...f, logradouro: d.logradouro, bairro: d.bairro, cidade: d.localidade, estado: d.uf }));
+                  }
+                }} className={ic} /></FL>
+                <FL label="Estado (UF)"><input type="text" maxLength={2} value={formFunc.estado || ''} onChange={e => setFormFunc((f: any) => ({ ...f, estado: e.target.value }))} className={ic} /></FL>
+                <div className="col-span-2"><FL label="Logradouro"><input type="text" value={formFunc.logradouro || ''} onChange={e => setFormFunc((f: any) => ({ ...f, logradouro: e.target.value }))} className={ic} /></FL></div>
+                <FL label="Número"><input type="text" value={formFunc.numero_residencia || ''} onChange={e => setFormFunc((f: any) => ({ ...f, numero_residencia: e.target.value }))} className={ic} /></FL>
+                <FL label="Complemento"><input type="text" value={formFunc.complemento || ''} onChange={e => setFormFunc((f: any) => ({ ...f, complemento: e.target.value }))} className={ic} /></FL>
+                <FL label="Bairro"><input type="text" value={formFunc.bairro || ''} onChange={e => setFormFunc((f: any) => ({ ...f, bairro: e.target.value }))} className={ic} /></FL>
+                <FL label="Cidade"><input type="text" value={formFunc.cidade || ''} onChange={e => setFormFunc((f: any) => ({ ...f, cidade: e.target.value }))} className={ic} /></FL>
+                <FL label="País"><input type="text" value={formFunc.pais || 'Brasil'} onChange={e => setFormFunc((f: any) => ({ ...f, pais: e.target.value }))} className={ic} /></FL>
+              </div>
+            </div>
+            {/* Contato de Emergência */}
+            <div>
+              <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-3">Contato de Emergência</p>
+              <div className="grid grid-cols-2 gap-3">
+                <FL label="Tel. Emergência 1"><input type="text" value={formFunc.telefone_emergencia_1 || ''} onChange={e => setFormFunc((f: any) => ({ ...f, telefone_emergencia_1: e.target.value }))} className={ic} /></FL>
+                <FL label="Tel. Emergência 2"><input type="text" value={formFunc.telefone_emergencia_2 || ''} onChange={e => setFormFunc((f: any) => ({ ...f, telefone_emergencia_2: e.target.value }))} className={ic} /></FL>
+              </div>
+            </div>
+            {/* Saúde */}
+            <div>
+              <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-3">Saúde</p>
+              <div className="space-y-3">
+                <div className="flex flex-col gap-2">
+                  <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!formFunc.possui_deficiencia} onChange={e => setFormFunc((f: any) => ({ ...f, possui_deficiencia: e.target.checked }))} className="w-4 h-4" />Possui algum tipo de deficiência?</label>
+                  {formFunc.possui_deficiencia && <FL label="Qual(is)?"><input type="text" value={formFunc.deficiencia_descricao || ''} onChange={e => setFormFunc((f: any) => ({ ...f, deficiencia_descricao: e.target.value }))} className={ic} /></FL>}
+                  <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!formFunc.possui_alergias} onChange={e => setFormFunc((f: any) => ({ ...f, possui_alergias: e.target.checked }))} className="w-4 h-4" />Possui alergias?</label>
+                  {formFunc.possui_alergias && <FL label="Qual(is)?"><input type="text" value={formFunc.alergias_descricao || ''} onChange={e => setFormFunc((f: any) => ({ ...f, alergias_descricao: e.target.value }))} className={ic} /></FL>}
+                  <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!formFunc.usa_medicamentos} onChange={e => setFormFunc((f: any) => ({ ...f, usa_medicamentos: e.target.checked }))} className="w-4 h-4" />Faz uso contínuo de medicamentos?</label>
+                  {formFunc.usa_medicamentos && <FL label="Quais? (nome e dosagem)"><input type="text" value={formFunc.medicamentos_descricao || ''} onChange={e => setFormFunc((f: any) => ({ ...f, medicamentos_descricao: e.target.value }))} className={ic} /></FL>}
+                  <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!formFunc.possui_plano_saude} onChange={e => setFormFunc((f: any) => ({ ...f, possui_plano_saude: e.target.checked }))} className="w-4 h-4" />Possui plano de saúde?</label>
+                  {formFunc.possui_plano_saude && <FL label="Nome do plano"><input type="text" value={formFunc.plano_saude || ''} onChange={e => setFormFunc((f: any) => ({ ...f, plano_saude: e.target.value }))} className={ic} /></FL>}
+                </div>
+                <FL label="Número SUS"><input type="text" value={formFunc.numero_sus || ''} onChange={e => setFormFunc((f: any) => ({ ...f, numero_sus: e.target.value }))} className={ic} /></FL>
+              </div>
+            </div>
+            {/* Perfil Social */}
+            <div>
+              <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-3">Perfil Social</p>
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!formFunc.interesse_cursos} onChange={e => setFormFunc((f: any) => ({ ...f, interesse_cursos: e.target.checked }))} className="w-4 h-4" />Interesse em se matricular em cursos do ITP?</label>
+                <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!formFunc.pertence_comunidade_tradicional} onChange={e => setFormFunc((f: any) => ({ ...f, pertence_comunidade_tradicional: e.target.checked }))} className="w-4 h-4" />Pertence a comunidade tradicional?</label>
+                {formFunc.pertence_comunidade_tradicional && <FL label="Qual comunidade?"><input type="text" value={formFunc.comunidade_tradicional || ''} onChange={e => setFormFunc((f: any) => ({ ...f, comunidade_tradicional: e.target.value }))} className={ic} /></FL>}
+                <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!formFunc.possui_cad_unico} onChange={e => setFormFunc((f: any) => ({ ...f, possui_cad_unico: e.target.checked }))} className="w-4 h-4" />Possui cadastro no CadÚnico?</label>
+                <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!formFunc.baixo_idh} onChange={e => setFormFunc((f: any) => ({ ...f, baixo_idh: e.target.checked }))} className="w-4 h-4" />Reside em área de baixo índice de desenvolvimento (IDH)?</label>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2 border-t dark:border-slate-700">
               <button onClick={() => setModal(null)} className={bs}>Cancelar</button>
               <button onClick={salvarEdicaoCadastro} disabled={salvando} className={bp}>{salvando ? 'Salvando...' : 'Salvar'}</button>
             </div>

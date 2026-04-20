@@ -98,8 +98,13 @@ export class FuncionariosController {
       possui_plano_saude:    p.possui_plano_saude === true || String(p.possui_plano_saude ?? '').toLowerCase() === 'sim',
       plano_saude:           p.plano_saude,
       numero_sus:            p.numero_sus,
-      interesse_cursos:      p.interesse_cursos === true || String(p.interesse_cursos ?? '').toLowerCase() === 'sim',
-      ativo:                 true,
+      interesse_cursos:           p.interesse_cursos === true || String(p.interesse_cursos ?? '').toLowerCase() === 'sim',
+      genero:                     p.genero,
+      pertence_comunidade_tradicional: p.pertence_comunidade_tradicional === true || String(p.pertence_comunidade_tradicional ?? '').toLowerCase() === 'sim',
+      comunidade_tradicional:     p.comunidade_tradicional,
+      possui_cad_unico:           p.possui_cad_unico === true || String(p.possui_cad_unico ?? '').toLowerCase() === 'sim',
+      baixo_idh:                  p.baixo_idh === true || String(p.baixo_idh ?? '').toLowerCase() === 'sim',
+      ativo:                      true,
     };
     this.logger.log(`[Webhook Google Forms] Cadastrando funcionário: ${dto.nome}`);
     return this.svc.criarViaWebhook(dto);

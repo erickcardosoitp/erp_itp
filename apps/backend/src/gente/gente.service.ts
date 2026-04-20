@@ -67,6 +67,14 @@ export class GenteService {
       `SELECT id, nome, cargo, email, cpf, celular, rg, orgao_emissor_rg, data_emissao_rg,
               estado_civil, pais, data_nascimento, cep, logradouro, numero_residencia,
               complemento, bairro, cidade, estado, telefone_emergencia_1, telefone_emergencia_2,
+              sexo, raca_cor, escolaridade,
+              possui_deficiencia, deficiencia_descricao,
+              possui_alergias, alergias_descricao,
+              usa_medicamentos, medicamentos_descricao,
+              possui_plano_saude, plano_saude, numero_sus,
+              interesse_cursos, genero,
+              pertence_comunidade_tradicional, comunidade_tradicional,
+              possui_cad_unico, baixo_idh,
               matricula, ativo, foto FROM funcionarios WHERE id = ANY($1::uuid[])`,
       [ids],
     );
@@ -148,7 +156,15 @@ export class GenteService {
     if (!col) throw new NotFoundException('Colaborador não encontrado.');
     const campos = ['nome','cargo','email','cpf','celular','rg','orgao_emissor_rg','data_emissao_rg',
       'estado_civil','pais','data_nascimento','cep','logradouro','numero_residencia',
-      'complemento','bairro','cidade','estado','telefone_emergencia_1','telefone_emergencia_2'];
+      'complemento','bairro','cidade','estado','telefone_emergencia_1','telefone_emergencia_2',
+      'sexo','raca_cor','escolaridade',
+      'possui_deficiencia','deficiencia_descricao',
+      'possui_alergias','alergias_descricao',
+      'usa_medicamentos','medicamentos_descricao',
+      'possui_plano_saude','plano_saude','numero_sus',
+      'interesse_cursos','genero',
+      'pertence_comunidade_tradicional','comunidade_tradicional',
+      'possui_cad_unico','baixo_idh'];
     // Sanitiza: string vazia → null (evita erro em colunas DATE/NUMERIC)
     const sanitizado: any = {};
     campos.forEach(c => {
@@ -491,7 +507,9 @@ export class GenteService {
     const tokens = new Set([PONTO_TOKEN, process.env.PONTO_TOKEN].filter(Boolean) as string[]);
     if (!token || !tokens.has(token)) throw new UnauthorizedException('Token inválido.');
     const [func] = await this.dataSource.query(
-      `SELECT f.id as func_id, f.nome, f.cpf, f.matricula FROM funcionarios f WHERE f.cpf = $1 OR f.matricula = $1 LIMIT 1`,
+      `SELECT f.id as func_id, f.nome, f.cpf, f.matricula FROM funcionarios f
+       WHERE REGEXP_REPLACE(f.cpf, '[^0-9]', '', 'g') = REGEXP_REPLACE($1, '[^0-9]', '', 'g')
+          OR f.matricula = $1 LIMIT 1`,
       [cpf_ou_matricula],
     );
     if (!func) throw new NotFoundException('Funcionário não encontrado.');
@@ -533,7 +551,9 @@ export class GenteService {
     const tokens = new Set([PONTO_TOKEN, process.env.PONTO_TOKEN].filter(Boolean) as string[]);
     if (!token || !tokens.has(token)) throw new UnauthorizedException('Token inválido.');
     const [func] = await this.dataSource.query(
-      `SELECT f.id as func_id, f.nome, f.matricula FROM funcionarios f WHERE f.cpf = $1 OR f.matricula = $1 LIMIT 1`,
+      `SELECT f.id as func_id, f.nome, f.matricula, f.cargo, f.foto FROM funcionarios f
+       WHERE REGEXP_REPLACE(f.cpf, '[^0-9]', '', 'g') = REGEXP_REPLACE($1, '[^0-9]', '', 'g')
+          OR f.matricula = $1 LIMIT 1`,
       [cpf_ou_matricula],
     );
     if (!func) throw new NotFoundException('Funcionário não encontrado.');
@@ -541,7 +561,7 @@ export class GenteService {
     if (!col) throw new NotFoundException('Funcionário não habilitado para ponto.');
     const ultimoPonto = await this.pontoRepo.findOne({ where: { colaborador_id: col.id }, order: { data_hora: 'DESC' } });
     const locais = await this.localRepo.find({ where: { colaborador_id: col.id }, order: { createdAt: 'ASC' } });
-    return { colaborador_id: col.id, nome: func.nome, matricula: func.matricula, horario_entrada: col.horario_entrada, horario_saida: col.horario_saida, jornada_flexivel: col.jornada_flexivel ?? false, horas_dia_flex: col.horas_dia_flex ?? null, latitude_permitida: col.latitude_permitida, longitude_permitida: col.longitude_permitida, raio_metros: col.raio_metros, locais, ultimo_ponto: ultimoPonto ?? null };
+    return { colaborador_id: col.id, nome: func.nome, matricula: func.matricula, cargo: func.cargo ?? null, foto: func.foto ?? null, horario_entrada: col.horario_entrada, horario_saida: col.horario_saida, jornada_flexivel: col.jornada_flexivel ?? false, horas_dia_flex: col.horas_dia_flex ?? null, latitude_permitida: col.latitude_permitida, longitude_permitida: col.longitude_permitida, raio_metros: col.raio_metros, locais, ultimo_ponto: ultimoPonto ?? null };
   }
 
   async deletarPonto(id: string) { await this.pontoRepo.delete(id); return { ok: true }; }

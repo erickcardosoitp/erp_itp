@@ -41,6 +41,8 @@ interface ColaboradorInfo {
   colaborador_id: string;
   nome: string;
   matricula: string;
+  cargo: string | null;
+  foto: string | null;
   horario_entrada: string | null;
   horario_saida: string | null;
   jornada_flexivel: boolean;
@@ -721,11 +723,14 @@ export default function PontoExternoPage() {
         {tela === 'menu' && colaborador && (
           <div className="space-y-3">
             <div className="bg-white/5 border border-purple-700/40 rounded-2xl p-4 flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 rounded-full bg-yellow-400 flex items-center justify-center text-purple-950 font-black">
-                {colaborador.nome.charAt(0)}
-              </div>
+              {colaborador.foto
+                ? <img src={colaborador.foto} alt={colaborador.nome} className="w-12 h-12 rounded-full object-cover border-2 border-yellow-400 shrink-0" />
+                : <div className="w-12 h-12 rounded-full bg-yellow-400 flex items-center justify-center text-purple-950 font-black text-lg shrink-0">
+                    {colaborador.nome.charAt(0)}
+                  </div>}
               <div>
                 <div className="text-white font-bold text-sm">{colaborador.nome}</div>
+                {colaborador.cargo && <div className="text-yellow-300 text-xs font-semibold">{colaborador.cargo}</div>}
                 <div className="text-purple-400 text-xs">{colaborador.matricula}</div>
               </div>
               {colaborador.ultimo_ponto && (
