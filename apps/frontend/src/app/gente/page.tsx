@@ -656,7 +656,7 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
             </div>
             {/* Contato de Emergência */}
             <div>
-              <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-3">Contato de Emergência</p>
+              <p className="text-xs font-bold text-orange-400 dark:text-orange-300 uppercase tracking-widest mb-3">Contato de Emergência</p>
               <div className="grid grid-cols-2 gap-3">
                 <FL label="Tel. Emergência 1"><input type="text" value={formFunc.telefone_emergencia_1 || ''} onChange={e => setFormFunc((f: any) => ({ ...f, telefone_emergencia_1: e.target.value }))} className={ic} /></FL>
                 <FL label="Tel. Emergência 2"><input type="text" value={formFunc.telefone_emergencia_2 || ''} onChange={e => setFormFunc((f: any) => ({ ...f, telefone_emergencia_2: e.target.value }))} className={ic} /></FL>
@@ -664,24 +664,19 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
             </div>
             {/* Saúde */}
             <div>
-              <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-3">Saúde</p>
-              <div className="space-y-3">
-                <div className="flex flex-col gap-2">
-                  <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!formFunc.possui_deficiencia} onChange={e => setFormFunc((f: any) => ({ ...f, possui_deficiencia: e.target.checked }))} className="w-4 h-4" />Possui algum tipo de deficiência?</label>
-                  {formFunc.possui_deficiencia && <FL label="Qual(is)?"><input type="text" value={formFunc.deficiencia_descricao || ''} onChange={e => setFormFunc((f: any) => ({ ...f, deficiencia_descricao: e.target.value }))} className={ic} /></FL>}
-                  <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!formFunc.possui_alergias} onChange={e => setFormFunc((f: any) => ({ ...f, possui_alergias: e.target.checked }))} className="w-4 h-4" />Possui alergias?</label>
-                  {formFunc.possui_alergias && <FL label="Qual(is)?"><input type="text" value={formFunc.alergias_descricao || ''} onChange={e => setFormFunc((f: any) => ({ ...f, alergias_descricao: e.target.value }))} className={ic} /></FL>}
-                  <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!formFunc.usa_medicamentos} onChange={e => setFormFunc((f: any) => ({ ...f, usa_medicamentos: e.target.checked }))} className="w-4 h-4" />Faz uso contínuo de medicamentos?</label>
-                  {formFunc.usa_medicamentos && <FL label="Quais? (nome e dosagem)"><input type="text" value={formFunc.medicamentos_descricao || ''} onChange={e => setFormFunc((f: any) => ({ ...f, medicamentos_descricao: e.target.value }))} className={ic} /></FL>}
-                  <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!formFunc.possui_plano_saude} onChange={e => setFormFunc((f: any) => ({ ...f, possui_plano_saude: e.target.checked }))} className="w-4 h-4" />Possui plano de saúde?</label>
-                  {formFunc.possui_plano_saude && <FL label="Nome do plano"><input type="text" value={formFunc.plano_saude || ''} onChange={e => setFormFunc((f: any) => ({ ...f, plano_saude: e.target.value }))} className={ic} /></FL>}
-                </div>
-                <FL label="Número SUS"><input type="text" value={formFunc.numero_sus || ''} onChange={e => setFormFunc((f: any) => ({ ...f, numero_sus: e.target.value }))} className={ic} /></FL>
+              <p className="text-xs font-bold text-emerald-500 dark:text-emerald-400 uppercase tracking-widest mb-3">Saúde</p>
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!formFunc.possui_deficiencia} onChange={e => setFormFunc((f: any) => ({ ...f, possui_deficiencia: e.target.checked }))} className="w-4 h-4" />Possui algum tipo de deficiência?</label>
+                {formFunc.possui_deficiencia && <FL label="Qual(is) deficiência(s)?"><input type="text" value={formFunc.deficiencia_descricao || ''} onChange={e => setFormFunc((f: any) => ({ ...f, deficiencia_descricao: e.target.value }))} className={ic} /></FL>}
+                <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!formFunc.possui_alergias} onChange={e => setFormFunc((f: any) => ({ ...f, possui_alergias: e.target.checked }))} className="w-4 h-4" />Possui alergias?</label>
+                {formFunc.possui_alergias && <FL label="Qual(is) tipo(s) de alergia?"><input type="text" value={formFunc.alergias_descricao || ''} onChange={e => setFormFunc((f: any) => ({ ...f, alergias_descricao: e.target.value }))} className={ic} /></FL>}
+                <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!formFunc.usa_medicamentos} onChange={e => setFormFunc((f: any) => ({ ...f, usa_medicamentos: e.target.checked }))} className="w-4 h-4" />Faz uso contínuo de medicamento?</label>
+                {formFunc.usa_medicamentos && <FL label="Quais medicamentos? (nome e dosagem)"><input type="text" value={formFunc.medicamentos_descricao || ''} onChange={e => setFormFunc((f: any) => ({ ...f, medicamentos_descricao: e.target.value }))} className={ic} /></FL>}
               </div>
             </div>
             {/* Perfil Social */}
             <div>
-              <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-3">Perfil Social</p>
+              <p className="text-xs font-bold text-indigo-400 dark:text-indigo-300 uppercase tracking-widest mb-3">Perfil Social</p>
               <div className="space-y-2">
                 <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!formFunc.interesse_cursos} onChange={e => setFormFunc((f: any) => ({ ...f, interesse_cursos: e.target.checked }))} className="w-4 h-4" />Interesse em se matricular em cursos do ITP?</label>
                 <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!formFunc.pertence_comunidade_tradicional} onChange={e => setFormFunc((f: any) => ({ ...f, pertence_comunidade_tradicional: e.target.checked }))} className="w-4 h-4" />Pertence a comunidade tradicional?</label>

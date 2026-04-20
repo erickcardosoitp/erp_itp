@@ -223,13 +223,10 @@ function onFormSubmit(e) {
     data_nascimento:        dataParaISO_(campo_(r, ['Data de Nascimento (Obrigatório)', 'Data de Nascimento', 'Data de nascimento'])),
     celular:                campo_(r, ['Celular (Obrigatório)', 'Celular']),
     sexo:                   campo_(r, ['Sexo (Obrigatório)', 'Sexo']),
-    // Endereço
+    // Endereço (o formulário não tem logradouro/bairro/cidade — só CEP, número, complemento, estado)
     cep:                    campo_(r, ['CEP', 'Cep']),
-    endereco:               campo_(r, ['Endereço', 'Logradouro', 'Rua', 'Rua/Logradouro']),
     numero:                 campo_(r, ['Número da Residência', 'Número', 'Numero']),
     complemento:            campo_(r, ['Complemento (Ex: Apartamento, Bloco)', 'Complemento']),
-    bairro:                 campo_(r, ['Bairro']),
-    cidade:                 campo_(r, ['Cidade']),
     estado:                 campo_(r, ['Estado (Ex: RJ, SP)', 'Estado (UF)', 'Estado', 'UF']),
     // Perfil
     raca:                   campo_(r, ['Raça/Cor', 'Raça / Cor', 'Raça', 'Raca/Cor', 'Raça/Cor (Obrigatório)', 'Etnia', 'Raça / Etnia']),
@@ -244,12 +241,8 @@ function onFormSubmit(e) {
     descricao_alergia:      campo_(r, ['Se sim, qual(is) tipo(s) de alergia possui? (Descreva)', 'Descreva as alergias', 'Qual alergia?']),
     usa_medicamento:        simParaBool_(campo_(r, ['Faz uso contínuo de algum tipo de medicamento?', 'Usa medicamentos?', 'Usa medicamento contínuo?'])),
     descricao_medicamento:  campo_(r, ['Se sim, quais medicamentos utiliza? (Nome e dosagem, se souber)', 'Quais medicamentos?', 'Qual medicamento?']),
-    possui_plano_saude:     simParaBool_(campo_(r, ['Possui plano de saúde?', 'Possui Plano de Saúde?'])),
-    plano_saude:            campo_(r, ['Qual plano de saúde?', 'Nome do plano de saúde']),
-    numero_sus:             campo_(r, ['Número do SUS', 'Cartão SUS', 'Número SUS']),
-    // Interesse
+    // Interesse e perfil social (novos campos)
     interesse_cursos:       simParaBool_(campo_(r, ['Tem interesse em se matricular em algum curso do Instituto Tia Pretinha?', 'Interesse em cursos?', 'Interesse em Cursos?'])),
-    // Perfil social (novos campos)
     genero:                 campo_(r, ['Gênero', 'Genero']),
     pertence_comunidade_tradicional: simParaBool_(campo_(r, ['Pertence a algum grupo de comunidade tradicional?', 'Pertence a comunidade tradicional?'])),
     comunidade_tradicional: campo_(r, ['Se sim, qual?', 'Qual comunidade tradicional?']),
@@ -315,8 +308,6 @@ function testeManual() {
       'CEP':                                ['20040-020'],
       'Número da Residência':               ['100'],
       'Complemento (Ex: Apartamento, Bloco)': ['Apto 2'],
-      'Bairro':                             ['Centro'],
-      'Cidade':                             ['Rio de Janeiro'],
       'Estado (Ex: RJ, SP)':                ['RJ'],
       'Telefone de Emergência 1 (Obrigatório)': ['(21) 98888-8888'],
       'Telefone de Emergência 2 (Opcional)': [''],
@@ -326,7 +317,6 @@ function testeManual() {
       'Se sim, qual(is) tipo(s) de alergia possui? (Descreva)': [''],
       'Faz uso contínuo de algum tipo de medicamento?': ['Não'],
       'Se sim, quais medicamentos utiliza? (Nome e dosagem, se souber)': [''],
-      'Possui plano de saúde?':             ['Não'],
       'Tem interesse em se matricular em algum curso do Instituto Tia Pretinha?': ['Sim'],
       'Gênero':                             ['Feminino cisgênero'],
       'Pertence a algum grupo de comunidade tradicional?': ['Não'],

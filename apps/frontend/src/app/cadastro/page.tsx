@@ -13,7 +13,7 @@ import { usePermissions } from '@/hooks/use-permissions';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
-type TabId = 'funcionarios' | 'usuarios' | 'grupos' | 'cursos' | 'alunos' | 'insumos' | 'doadores' | 'contas' | 'pesquisas'
+type TabId = 'usuarios' | 'grupos' | 'cursos' | 'alunos' | 'insumos' | 'doadores' | 'contas' | 'pesquisas'
   | 'fin_tipos_mov' | 'fin_planos' | 'fin_categorias' | 'fin_tipos_pessoa' | 'fin_formas_pag' | 'fin_recorrencias';
 
 interface Professor {
@@ -139,10 +139,10 @@ const PROTO_NUMERACAO = [
 export default function CadastroBasicoPage() {
   // hooks SEMPRE antes de qualquer return condicional
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<TabId>('funcionarios');
+  const [activeTab, setActiveTab] = useState<TabId>('usuarios');
   const [isMounted, setIsMounted] = useState(false);
   const [counts, setCounts] = useState<Record<TabId, number>>({
-    funcionarios: 0, usuarios: 0, grupos: 0, cursos: 0,
+    usuarios: 0, grupos: 0, cursos: 0,
     alunos: 0, insumos: 0, doadores: 0, contas: 0, pesquisas: 0,
     fin_tipos_mov: 0, fin_planos: 0, fin_categorias: 0,
     fin_tipos_pessoa: 0, fin_formas_pag: 0, fin_recorrencias: 0,
@@ -154,7 +154,6 @@ export default function CadastroBasicoPage() {
   const loadAllCounts = useCallback(async () => {
     setRefreshing(true);
     const endpoints: Array<[TabId, string]> = [
-      ['funcionarios', '/funcionarios'],
       ['usuarios',     '/admin/usuarios'],
       ['grupos',       '/grupos'],
       ['cursos',       '/academico/cursos'],
@@ -190,7 +189,7 @@ export default function CadastroBasicoPage() {
   const countSetters = useMemo(() => {
     const m = (tab: TabId) => (n: number) => setCounts(p => ({ ...p, [tab]: n }));
     return {
-      funcionarios: m('funcionarios'), usuarios: m('usuarios'), grupos: m('grupos'),
+      usuarios: m('usuarios'), grupos: m('grupos'),
       cursos: m('cursos'), alunos: m('alunos'), insumos: m('insumos'),
       doadores: m('doadores'), contas: m('contas'), pesquisas: m('pesquisas'),
       fin_tipos_mov: m('fin_tipos_mov'), fin_planos: m('fin_planos'),
@@ -202,7 +201,6 @@ export default function CadastroBasicoPage() {
   if (!isMounted) return <div className="min-h-screen bg-[#F8FAFC] dark:bg-[#131b2e]" />;
 
   const TABS: { id: TabId; label: string; icon: React.ElementType; cor: string }[] = [
-    { id: 'funcionarios', label: 'Funcionários',  icon: Briefcase,     cor: 'purple' },
     { id: 'usuarios',     label: 'Usuários',       icon: Users,         cor: 'blue' },
     { id: 'grupos',       label: 'Grupos/Perfis',  icon: ShieldCheck,   cor: 'emerald' },
     { id: 'cursos',       label: 'Cursos',         icon: GraduationCap, cor: 'amber' },
@@ -278,7 +276,6 @@ export default function CadastroBasicoPage() {
         </div>
 
         {/* CONTEÚDO */}
-        {activeTab === 'funcionarios' && <FuncionariosTab key={refreshKey} onCount={countSetters.funcionarios} />}
         {activeTab === 'usuarios'     && <UsuariosTab     key={refreshKey} onCount={countSetters.usuarios} />}
         {activeTab === 'grupos'       && <GruposTab       key={refreshKey} onCount={countSetters.grupos} />}
         {activeTab === 'cursos'       && <CursosTab       key={refreshKey} onCount={countSetters.cursos} />}
