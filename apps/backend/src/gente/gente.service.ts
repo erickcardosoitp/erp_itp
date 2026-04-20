@@ -936,6 +936,32 @@ export class GenteService {
       for (let d = start; d <= end; d += 86400000) datasExcluidas.add(new Date(d).toISOString().split('T')[0]);
     }
 
+    // Separate sets for display: atestados por dia e folgas por dia
+    const atestadosDatas = new Set<string>();
+    for (const f of faltasExcluidas) {
+      const isoStart = String(f.data).slice(0, 10);
+      const fimMesISO = new Date(fimMs).toISOString().split('T')[0];
+      const isoEnd = f.data_fim ? String(f.data_fim).slice(0, 10) : fimMesISO;
+      const start = new Date(isoStart + 'T12:00:00Z').getTime();
+      const end = new Date(isoEnd + 'T12:00:00Z').getTime();
+      for (let d = start; d <= end; d += 86400000) atestadosDatas.add(new Date(d).toISOString().split('T')[0]);
+    }
+    const folgasDatas = new Set<string>();
+    for (const f of folgasAprovadas) {
+      if (f.realizada !== true) folgasDatas.add(String(f.data).slice(0, 10));
+    }
+
+    // Pontos por dia BRT (UTC-3)
+    const pontosByDay: Record<string, { tipo: string; hora: string; id: string }[]> = {};
+    for (const p of pontosMes) {
+      const brtMs = new Date(p.data_hora).getTime() - 3 * 3600000;
+      const brtDate = new Date(brtMs);
+      const iso = brtDate.toISOString().split('T')[0];
+      const hora = `${String(brtDate.getUTCHours()).padStart(2, '0')}:${String(brtDate.getUTCMinutes()).padStart(2, '0')}`;
+      if (!pontosByDay[iso]) pontosByDay[iso] = [];
+      pontosByDay[iso].push({ tipo: p.tipo, hora, id: p.id });
+    }
+
     const minTrabalhados = this.calcularMinutosTrabalhados(pontosMes);
     const { minutos: minEsperados, dias: diasEsperados } = this.calcularMinutosEsperados(col, inicioMs, fimMs, datasExcluidas);
     const saldoMin = minTrabalhados - minEsperados;
@@ -948,6 +974,72 @@ export class GenteService {
     });
     const marcacoesIncompletas = this.detectarMarcacoesIncompletas(pontosMesAlargado);
 
+    // Detalhamento dia a dia
+    const DIAS_LABEL_NUM: Record<number, string> = { 0: 'Dom', 1: 'Seg', 2: 'Ter', 3: 'Qua', 4: 'Qui', 5: 'Sex', 6: 'Sáb' };
+    const diasNums = (col.dias_trabalho ?? []).map((d: string) => GenteService.DIAS_MAP[d]).filter((n: number | undefined) => n !== undefined) as number[];
+
+    const dias: any[] = [];
+    let cur = inicioMs;
+    while (cur <= fimMs) {
+      const date = new Date(cur);
+      const iso = date.toISOString().split('T')[0];
+      const dow = date.getUTCDay();
+      const isDiaTrabalho = diasNums.includes(dow);
+
+      let esperadoMin = 0;
+      if (isDiaTrabalho && !datasExcluidas.has(iso)) {
+        if (col.jornada_flexivel) {
+          const diaKey = GenteService.DIAS_MAP_INV[dow];
+          const janela = col.horario_flexivel_semana?.[diaKey];
+          if (janela?.inicio && janela?.fim) {
+            const [ih, im] = janela.inicio.split(':').map(Number);
+            const [fh, fm] = janela.fim.split(':').map(Number);
+            esperadoMin = Math.max(0, (fh * 60 + fm) - (ih * 60 + im));
+          } else {
+            esperadoMin = col.horas_dia_flex ?? 420;
+          }
+        } else {
+          esperadoMin = this.calcularMinutosPorDia(col);
+        }
+      }
+
+      const marcacoes = (pontosByDay[iso] ?? []).sort((a, b) => a.hora.localeCompare(b.hora));
+      let trabalhadoMin = 0;
+      let entradaHora: string | null = null;
+      let pairAberta = false;
+      for (const m of marcacoes) {
+        if (m.tipo === 'entrada') { entradaHora = m.hora; pairAberta = true; }
+        else if (m.tipo === 'saida' && entradaHora) {
+          const [eh, em] = entradaHora.split(':').map(Number);
+          const [sh, sm] = m.hora.split(':').map(Number);
+          const diff = (sh * 60 + sm) - (eh * 60 + em);
+          if (diff > 0 && diff < 1440) trabalhadoMin += diff;
+          entradaHora = null; pairAberta = false;
+        }
+      }
+
+      let status: string;
+      if (!isDiaTrabalho) status = 'fds';
+      else if (atestadosDatas.has(iso)) status = 'atestado';
+      else if (folgasDatas.has(iso)) status = 'folga';
+      else if (marcacoes.length > 0) status = 'presente';
+      else status = 'ausente';
+
+      dias.push({
+        data: iso,
+        dia_semana: DIAS_LABEL_NUM[dow],
+        dia_trabalho: isDiaTrabalho,
+        status,
+        esperado_min: esperadoMin,
+        trabalhado_min: Math.round(trabalhadoMin),
+        saldo_min: Math.round(trabalhadoMin - esperadoMin),
+        marcacoes,
+        incompleto: pairAberta,
+      });
+
+      cur += DAY_MS;
+    }
+
     const fmt = (m: number) => `${m < 0 ? '-' : '+'}${String(Math.floor(Math.abs(m) / 60)).padStart(2, '0')}:${String(Math.round(Math.abs(m) % 60)).padStart(2, '0')}`;
     return {
       mes: refMes,
@@ -957,6 +1049,7 @@ export class GenteService {
       saldo_minutos: Math.round(saldoMin),
       dias_esperados: diasEsperados,
       marcacoes_incompletas: marcacoesIncompletas,
+      dias,
     };
   }
 

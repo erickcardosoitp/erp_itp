@@ -1974,30 +1974,97 @@ function BancoHorasAdminTab({ colaboradores }: { colaboradores: any[] }) {
       </div>
 
       {dados && (
-        <div className="bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6 space-y-4">
-          <div className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
-            {colaboradores.find(c => c.id === colId)?.funcionario?.nome} · {dados.mes}
+        <div className="space-y-4">
+          {/* Resumo */}
+          <div className="bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 space-y-4">
+            <div className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
+              {colaboradores.find((c: any) => c.id === colId)?.funcionario?.nome} · {dados.mes}
+            </div>
+            <div className="grid grid-cols-3 gap-4 text-center">
+              <div className="bg-white dark:bg-slate-900 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
+                <div className="text-xs text-slate-400 uppercase font-bold mb-1">Trabalhado</div>
+                <div className="text-2xl font-black text-slate-800 dark:text-white font-mono">{dados.trabalhado}</div>
+              </div>
+              <div className="bg-white dark:bg-slate-900 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
+                <div className="text-xs text-slate-400 uppercase font-bold mb-1">Esperado</div>
+                <div className="text-2xl font-black text-slate-800 dark:text-white font-mono">{dados.esperado}</div>
+                <div className="text-xs text-slate-400 mt-1">{dados.dias_esperados} dias úteis</div>
+              </div>
+              <div className="bg-white dark:bg-slate-900 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
+                <div className="text-xs text-slate-400 uppercase font-bold mb-1">Saldo</div>
+                <div className={`text-2xl font-black font-mono ${cor}`}>{dados.saldo}</div>
+              </div>
+            </div>
+            {dados.marcacoes_incompletas?.length > 0 && (
+              <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-700 rounded-xl p-4 text-sm text-yellow-800 dark:text-yellow-300 space-y-1">
+                <div className="font-bold">⚠️ Marcações com problema:</div>
+                {dados.marcacoes_incompletas.map((m: string, i: number) => <div key={i} className="text-xs">• {m}</div>)}
+              </div>
+            )}
           </div>
-          <div className="grid grid-cols-3 gap-4 text-center">
-            <div className="bg-white dark:bg-slate-900 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
-              <div className="text-xs text-slate-400 uppercase font-bold mb-1">Trabalhado</div>
-              <div className="text-2xl font-black text-slate-800 dark:text-white font-mono">{dados.trabalhado}</div>
-            </div>
-            <div className="bg-white dark:bg-slate-900 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
-              <div className="text-xs text-slate-400 uppercase font-bold mb-1">Esperado</div>
-              <div className="text-2xl font-black text-slate-800 dark:text-white font-mono">{dados.esperado}</div>
-              <div className="text-xs text-slate-400 mt-1">{dados.dias_esperados} dias úteis</div>
-            </div>
-            <div className="bg-white dark:bg-slate-900 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
-              <div className="text-xs text-slate-400 uppercase font-bold mb-1">Saldo</div>
-              <div className={`text-2xl font-black font-mono ${cor}`}>{dados.saldo}</div>
-            </div>
-          </div>
-          {dados.marcacoes_incompletas?.length > 0 && (
-            <div className="mt-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-700 rounded-xl p-4 text-sm text-yellow-800 dark:text-yellow-300 space-y-1">
-              <div className="font-bold">⚠️ Marcações com problema detectadas:</div>
-              {dados.marcacoes_incompletas.map((m: string, i: number) => <div key={i} className="text-xs">• {m}</div>)}
-              <div className="text-xs text-yellow-600 dark:text-yellow-400 pt-1">Corrija via aba Ponto → selecione o colaborador.</div>
+
+          {/* Tabela dia a dia */}
+          {dados.dias?.length > 0 && (
+            <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-700">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-slate-100 dark:bg-slate-800 text-xs uppercase text-slate-500 dark:text-slate-400">
+                    <th className="px-3 py-2 text-left font-bold">Data</th>
+                    <th className="px-3 py-2 text-left font-bold">Status</th>
+                    <th className="px-3 py-2 text-center font-bold">Marcações</th>
+                    <th className="px-3 py-2 text-center font-bold">Esperado</th>
+                    <th className="px-3 py-2 text-center font-bold">Trabalhado</th>
+                    <th className="px-3 py-2 text-center font-bold">Saldo</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dados.dias.map((d: any) => {
+                    const fmtMin = (m: number) => {
+                      const abs = Math.abs(m);
+                      const h = String(Math.floor(abs / 60)).padStart(2, '0');
+                      const min = String(abs % 60).padStart(2, '0');
+                      return m === 0 ? '—' : `${m < 0 ? '-' : '+'}${h}:${min}`;
+                    };
+                    const statusCfg: Record<string, { label: string; row: string; badge: string }> = {
+                      fds:      { label: 'FDS',      row: 'bg-slate-50 dark:bg-slate-900/30',            badge: 'bg-slate-100 text-slate-400 dark:bg-slate-800' },
+                      presente: { label: 'Presente', row: 'bg-white dark:bg-slate-900',                  badge: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400' },
+                      ausente:  { label: 'Ausente',  row: 'bg-red-50 dark:bg-red-950/20',                badge: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400' },
+                      atestado: { label: 'Atestado', row: 'bg-blue-50 dark:bg-blue-950/20',              badge: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' },
+                      folga:    { label: 'Folga',    row: 'bg-purple-50 dark:bg-purple-950/20',          badge: 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300' },
+                    };
+                    const cfg = statusCfg[d.status] ?? statusCfg.ausente;
+                    const [, mm, dd] = d.data.split('-');
+                    return (
+                      <tr key={d.data} className={`border-t border-slate-100 dark:border-slate-800 ${cfg.row}`}>
+                        <td className="px-3 py-2 font-mono text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                          {dd}/{mm} <span className="text-slate-400 text-xs">{d.dia_semana}</span>
+                        </td>
+                        <td className="px-3 py-2">
+                          <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-bold ${cfg.badge}`}>
+                            {cfg.label}{d.incompleto ? ' ⚠️' : ''}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 text-center text-xs font-mono text-slate-600 dark:text-slate-300">
+                          {d.marcacoes.length === 0 ? '—' : d.marcacoes.map((m: any) => (
+                            <span key={m.hora + m.tipo} className={`inline-block mr-1 ${m.tipo === 'entrada' ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}`}>
+                              {m.hora}
+                            </span>
+                          ))}
+                        </td>
+                        <td className="px-3 py-2 text-center font-mono text-xs text-slate-500">
+                          {d.esperado_min === 0 ? '—' : `${String(Math.floor(d.esperado_min / 60)).padStart(2,'0')}:${String(d.esperado_min % 60).padStart(2,'0')}`}
+                        </td>
+                        <td className="px-3 py-2 text-center font-mono text-xs text-slate-700 dark:text-slate-300">
+                          {d.trabalhado_min === 0 ? '—' : `${String(Math.floor(d.trabalhado_min / 60)).padStart(2,'0')}:${String(d.trabalhado_min % 60).padStart(2,'0')}`}
+                        </td>
+                        <td className={`px-3 py-2 text-center font-mono text-xs font-bold ${d.saldo_min < 0 ? 'text-red-500' : d.saldo_min > 0 ? 'text-green-600 dark:text-green-400' : 'text-slate-400'}`}>
+                          {d.dia_trabalho ? fmtMin(d.saldo_min) : '—'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
