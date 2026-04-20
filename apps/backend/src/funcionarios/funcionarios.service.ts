@@ -55,7 +55,24 @@ export class FuncionariosService {
    * envia e-mail de confirmação ao funcionário e cria notificação para admins.
    */
   async criarViaWebhook(dto: Partial<Funcionario>): Promise<Funcionario> {
-    const salvo = await this.criar(dto);
+    // Se já existe um funcionário com esse CPF, atualiza em vez de criar (evita duplicata)
+    let salvo: Funcionario;
+    if (dto.cpf) {
+      const cpfNormalizado = dto.cpf.replace(/\D/g, '');
+      const existente = await this.funcionarioRepo
+        .createQueryBuilder('f')
+        .where(`REGEXP_REPLACE(f.cpf, '[^0-9]', '', 'g') = :cpf`, { cpf: cpfNormalizado })
+        .getOne();
+      if (existente) {
+        this.logger.log(`CPF ${cpfNormalizado} já existe — atualizando funcionário ${existente.id}`);
+        await this.funcionarioRepo.update(existente.id, { ...dto, cpf: existente.cpf, matricula: existente.matricula });
+        salvo = await this.funcionarioRepo.findOneByOrFail({ id: existente.id });
+      } else {
+        salvo = await this.criar(dto);
+      }
+    } else {
+      salvo = await this.criar(dto);
+    }
 
     // E-mail de confirmação ao funcionário (sem bloquear o retorno)
     if (salvo.email) {

@@ -131,6 +131,12 @@ function classificarErroFunc_(detalhe) {
       orientacao: 'A propriedade WEBHOOK_SECRET pode estar incorreta ou o endpoint não está mais público.',
     };
   }
+  if (d.indexOf('duplicate key') !== -1 || d.indexOf('unique constraint') !== -1) {
+    return {
+      titulo: 'Cadastro duplicado (CPF ou matrícula já existente)',
+      orientacao: 'Já existe um funcionário com esse CPF ou matrícula no sistema. Verifique em Gente > Colaboradores antes de relançar.',
+    };
+  }
   if (d.indexOf('nome') !== -1 && d.indexOf('400') !== -1) {
     return {
       titulo: 'Nome não encontrado no formulário',
@@ -168,34 +174,82 @@ function classificarErroFunc_(detalhe) {
 function notificarEquipeFunc_(dados, sucesso, detalhe) {
   var emailSuporte = getConf_('EMAIL_SUPORTE') || 'goncalvecardoso@gmail.com';
   var emailRH      = getConf_('EMAIL_RH')      || emailSuporte;
+  var dataHora     = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
 
-  var resumo = '👤 Nome: '   + (dados.nome              || '(não informado)') +
-               '\n📄 CPF: '  + (dados.cpf               || '(não informado)') +
-               '\n📧 Email: ' + (dados.email             || '(não informado)') +
-               '\n📱 Celular: ' + (dados.celular         || '(não informado)') +
-               '\n🎓 Escolaridade: ' + (dados.escolaridade || '(não informado)') +
-               '\n⚧ Sexo: '  + (dados.sexo              || '(não informado)');
+  var linhasDados = [
+    ['👤 Nome',        dados.nome         || '(não informado)'],
+    ['📄 CPF',         dados.cpf          || '(não informado)'],
+    ['📧 E-mail',      dados.email        || '(não informado)'],
+    ['📱 Celular',     dados.celular      || '(não informado)'],
+    ['🎓 Escolaridade',dados.escolaridade || '(não informado)'],
+    ['⚧ Sexo',        dados.sexo         || '(não informado)'],
+  ];
+
+  var tabelaHtml = '<table style="border-collapse:collapse;width:100%;font-size:14px;">';
+  for (var i = 0; i < linhasDados.length; i++) {
+    var bg = i % 2 === 0 ? '#f9f9f9' : '#ffffff';
+    tabelaHtml += '<tr style="background:' + bg + ';">' +
+      '<td style="padding:8px 12px;color:#555;font-weight:600;white-space:nowrap;border-bottom:1px solid #eee;">' + linhasDados[i][0] + '</td>' +
+      '<td style="padding:8px 12px;color:#222;border-bottom:1px solid #eee;">' + linhasDados[i][1] + '</td>' +
+      '</tr>';
+  }
+  tabelaHtml += '</table>';
+
+  var estiloBase = 'font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#fff;border-radius:8px;overflow:hidden;border:1px solid #e0e0e0;';
 
   if (sucesso) {
-    MailApp.sendEmail(
-      emailRH,
-      '✅ Novo cadastro de funcionário ITP — ' + dados.nome,
-      resumo + '\n\nStatus: ✅ Cadastro gravado com sucesso no sistema.\n' +
-      'Acesse o painel para revisar e, se necessário, criar o acesso do usuário:\n' +
-      'https://www.institutotiapretinha.org/funcionarios'
-    );
+    var htmlSucesso =
+      '<div style="' + estiloBase + '">' +
+        '<div style="background:#1a7f4b;padding:20px 24px;">' +
+          '<h2 style="margin:0;color:#fff;font-size:18px;">✅ Novo cadastro de funcionário</h2>' +
+          '<p style="margin:4px 0 0;color:#c8f5dc;font-size:13px;">' + dataHora + '</p>' +
+        '</div>' +
+        '<div style="padding:20px 24px;">' +
+          '<p style="margin:0 0 16px;color:#333;">Um novo cadastro foi gravado com sucesso no sistema:</p>' +
+          tabelaHtml +
+          '<div style="margin-top:20px;text-align:center;">' +
+            '<a href="https://itp.institutotiapretinha.org/gente" style="display:inline-block;background:#1a7f4b;color:#fff;padding:10px 24px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:14px;">Abrir Gente &rarr; Colaboradores</a>' +
+          '</div>' +
+        '</div>' +
+        '<div style="background:#f5f5f5;padding:12px 24px;font-size:11px;color:#999;text-align:center;">Instituto Tia Pretinha · Sistema ERP</div>' +
+      '</div>';
+
+    MailApp.sendEmail({
+      to: emailRH,
+      subject: '✅ Novo cadastro de funcionário ITP — ' + (dados.nome || '?'),
+      htmlBody: htmlSucesso,
+    });
   } else {
     var cls = classificarErroFunc_(detalhe);
-    MailApp.sendEmail(
-      emailSuporte,
-      '🚨 ALERTA — Falha no cadastro de funcionário: ' + (dados.nome || '?'),
-      '⚠️ Falha ao gravar cadastro de funcionário no sistema.\n\n' +
-      '🔎 Categoria: ' + cls.titulo + '\n' +
-      '💡 Orientação: ' + cls.orientacao + '\n\n' +
-      'Detalhe técnico:\n' + detalhe + '\n\n' +
-      'Dados do funcionário:\n' + resumo + '\n\n' +
-      'Data/hora: ' + new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
-    );
+    var htmlErro =
+      '<div style="' + estiloBase + '">' +
+        '<div style="background:#b91c1c;padding:20px 24px;">' +
+          '<h2 style="margin:0;color:#fff;font-size:18px;">🚨 Falha no cadastro de funcionário</h2>' +
+          '<p style="margin:4px 0 0;color:#fecaca;font-size:13px;">' + dataHora + '</p>' +
+        '</div>' +
+        '<div style="padding:20px 24px;">' +
+          '<div style="background:#fff7ed;border-left:4px solid #f97316;padding:12px 16px;border-radius:4px;margin-bottom:20px;">' +
+            '<p style="margin:0 0 4px;font-weight:700;color:#c2410c;">🔎 ' + cls.titulo + '</p>' +
+            '<p style="margin:0;color:#7c2d12;font-size:13px;">💡 ' + cls.orientacao + '</p>' +
+          '</div>' +
+          '<h3 style="margin:0 0 10px;font-size:14px;color:#333;">Dados do funcionário</h3>' +
+          tabelaHtml +
+          '<div style="margin-top:20px;background:#fef2f2;border:1px solid #fecaca;border-radius:4px;padding:12px 16px;">' +
+            '<p style="margin:0 0 4px;font-weight:700;color:#991b1b;font-size:12px;">Detalhe técnico</p>' +
+            '<pre style="margin:0;font-size:11px;color:#7f1d1d;white-space:pre-wrap;word-break:break-all;">' + detalhe + '</pre>' +
+          '</div>' +
+          '<div style="margin-top:20px;text-align:center;">' +
+            '<a href="https://itp.institutotiapretinha.org/gente" style="display:inline-block;background:#b91c1c;color:#fff;padding:10px 24px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:14px;">Ver Gente &rarr; Colaboradores</a>' +
+          '</div>' +
+        '</div>' +
+        '<div style="background:#f5f5f5;padding:12px 24px;font-size:11px;color:#999;text-align:center;">Instituto Tia Pretinha · Sistema ERP</div>' +
+      '</div>';
+
+    MailApp.sendEmail({
+      to: emailSuporte,
+      subject: '🚨 ALERTA — Falha no cadastro de funcionário: ' + (dados.nome || '?'),
+      htmlBody: htmlErro,
+    });
   }
 }
 
