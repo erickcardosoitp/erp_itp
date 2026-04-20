@@ -130,11 +130,13 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
       });
       if (!r1.ok) { const e = await r1.json(); throw new Error(e.message ?? 'Erro ao salvar dados pessoais'); }
 
-      // Salva configuração de ponto do colaborador
+      // Salva configuração de ponto do colaborador (strip campos grandes/aninhados)
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { funcionario: _f, foto: _foto2, ...payloadCol } = form as any;
       const r2 = await fetch(`${API}/gente/colaboradores/${editando.id}`, {
         method: 'PATCH', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify(payloadCol),
       });
       if (!r2.ok) { const e = await r2.json(); throw new Error(e.message ?? 'Erro ao salvar configuração de ponto'); }
 
