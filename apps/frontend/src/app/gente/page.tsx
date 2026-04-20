@@ -1844,7 +1844,7 @@ function PontoTab({ reload, colaboradores }: { reload: number; colaboradores: an
 
             <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
               {linhas.length === 0 && (
-                <p className="text-slate-400 text-xs text-center py-4">Clique em "Adicionar dia" para inserir uma marcação.</p>
+                <p className="text-slate-400 text-xs text-center py-4">Clique em &quot;Adicionar dia&quot; para inserir uma marcação.</p>
               )}
               {linhas.map(l => {
                 const viradaDia = l.saida && l.saida < l.entrada;
