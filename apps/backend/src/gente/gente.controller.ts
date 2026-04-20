@@ -359,6 +359,15 @@ export class GenteController {
   @ModuloPerm('gente', 'excluir')
   deletarFalta(@Param('id') id: string) { return this.svc.deletarFalta(id); }
 
+  // ── Admin: mesclar colaborador duplicado ──────────────────────────────────
+
+  @Post('admin/mesclar-colaborador')
+  @ModuloPerm('gente', 'excluir')
+  mesclarColaborador(@Body() body: { matricula_correta: string }) {
+    if (!body.matricula_correta) throw new BadRequestException('matricula_correta é obrigatória');
+    return this.svc.mesclarColaboradorDuplicado(body.matricula_correta);
+  }
+
   // ── Debug alertas (temporário) ────────────────────────────────────────────
 
   @Get('debug/alertas')

@@ -1536,4 +1536,83 @@ export class GenteService {
     await this.trabalhoExternoRepo.update(id, { ativo: false });
     return { ok: true };
   }
+
+  // ── Admin: mesclar colaborador duplicado ──────────────────────────────────
+
+  async mesclarColaboradorDuplicado(matriculaCorreta: string): Promise<any> {
+    const matriculaNorm = matriculaCorreta.trim().toUpperCase();
+
+    // 1. Funcionário correto (pela matrícula)
+    const [funcCorreto] = await this.dataSource.query(
+      `SELECT id, nome, matricula FROM funcionarios WHERE UPPER(matricula) LIKE $1 LIMIT 1`,
+      [`%${matriculaNorm}`],
+    );
+    if (!funcCorreto) throw new NotFoundException(`Nenhum funcionário encontrado com matrícula terminando em ${matriculaNorm}`);
+
+    // 2. Colaborador correto
+    const [colCorreto] = await this.dataSource.query(
+      `SELECT id FROM gente_colaboradores WHERE funcionario_id = $1 LIMIT 1`,
+      [funcCorreto.id],
+    );
+    if (!colCorreto) throw new NotFoundException(`Funcionário ${funcCorreto.nome} não possui colaborador vinculado`);
+
+    // 3. Colaboradores duplicados (mesmo nome, funcionário diferente)
+    const duplicatas = await this.dataSource.query(
+      `SELECT gc.id AS col_id, f.id AS func_id, f.nome, f.matricula
+       FROM gente_colaboradores gc
+       JOIN funcionarios f ON f.id = gc.funcionario_id
+       WHERE LOWER(f.nome) = LOWER($1)
+         AND gc.id != $2`,
+      [funcCorreto.nome, colCorreto.id],
+    );
+
+    if (!duplicatas.length) {
+      return { ok: true, mensagem: 'Nenhuma duplicata encontrada', correto: { colaborador_id: colCorreto.id, ...funcCorreto } };
+    }
+
+    const log: string[] = [];
+
+    for (const dup of duplicatas) {
+      // Transferir pontos
+      const [{ total_pontos }] = await this.dataSource.query(
+        `SELECT COUNT(*) AS total_pontos FROM gente_ponto WHERE colaborador_id = $1`,
+        [dup.col_id],
+      );
+      await this.dataSource.query(
+        `UPDATE gente_ponto SET colaborador_id = $1 WHERE colaborador_id = $2`,
+        [colCorreto.id, dup.col_id],
+      );
+      const pontos = total_pontos;
+
+      // Transferir faltas
+      await this.dataSource.query(`UPDATE gente_faltas SET colaborador_id = $1 WHERE colaborador_id = $2`, [colCorreto.id, dup.col_id]);
+
+      // Transferir folgas
+      await this.dataSource.query(`UPDATE gente_folgas_solicitacoes SET colaborador_id = $1 WHERE colaborador_id = $2`, [colCorreto.id, dup.col_id]).catch(() => {});
+
+      // Transferir recibos
+      await this.dataSource.query(`UPDATE gente_recibos SET colaborador_id = $1 WHERE colaborador_id = $2`, [colCorreto.id, dup.col_id]).catch(() => {});
+
+      // Transferir vales
+      await this.dataSource.query(`UPDATE gente_vales SET colaborador_id = $1 WHERE colaborador_id = $2`, [colCorreto.id, dup.col_id]).catch(() => {});
+
+      // Deletar colaborador duplicado
+      await this.dataSource.query(`DELETE FROM gente_colaboradores WHERE id = $1`, [dup.col_id]);
+
+      // Deletar funcionário duplicado se não tiver usuário vinculado
+      const [funcDup] = await this.dataSource.query(`SELECT usuario_id FROM funcionarios WHERE id = $1`, [dup.func_id]);
+      if (!funcDup?.usuario_id) {
+        await this.dataSource.query(`DELETE FROM funcionarios WHERE id = $1`, [dup.func_id]);
+        log.push(`Deletado funcionário duplicado ${dup.matricula} (${dup.nome}) e colaborador. Pontos transferidos: ${pontos ?? '?'}`);
+      } else {
+        log.push(`Colaborador duplicado ${dup.col_id} deletado, mas funcionário ${dup.matricula} mantido (tem usuário vinculado). Pontos transferidos: ${pontos ?? '?'}`);
+      }
+    }
+
+    return {
+      ok: true,
+      correto: { colaborador_id: colCorreto.id, funcionario_id: funcCorreto.id, nome: funcCorreto.nome, matricula: funcCorreto.matricula },
+      acoes: log,
+    };
+  }
 }
