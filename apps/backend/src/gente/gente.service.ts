@@ -754,12 +754,18 @@ export class GenteService {
   }
 
   async criarFalta(dto: any) {
-    // Garante que data_fim vazio não vire string inválida no DATE do Postgres
-    if (dto.data_fim === '' || dto.data_fim === null) dto.data_fim = null;
+    if (dto.data_fim === '' || dto.data_fim === null || dto.data_fim === undefined) {
+      // Atestados/afastamentos sem data_fim explícita: cobre ao menos o dia de início
+      dto.data_fim = (dto.tipo === 'atestado' || dto.tipo === 'afastamento') ? (dto.data ?? null) : null;
+    }
     return this.faltaRepo.save(this.faltaRepo.create(dto));
   }
   async editarFalta(id: string, dto: any) {
-    if (dto.data_fim === '') dto.data_fim = null;
+    if (dto.data_fim === '' || dto.data_fim === undefined) {
+      const atual = await this.faltaRepo.findOneBy({ id });
+      const tipo = dto.tipo ?? atual?.tipo;
+      dto.data_fim = (tipo === 'atestado' || tipo === 'afastamento') ? (dto.data ?? atual?.data ?? null) : null;
+    }
     await this.faltaRepo.update(id, dto);
     return this.faltaRepo.findOneBy({ id });
   }
@@ -922,7 +928,9 @@ export class GenteService {
     }
     for (const f of faltasExcluidas) {
       const isoStart = String(f.data).slice(0, 10);
-      const isoEnd = f.data_fim ? String(f.data_fim).slice(0, 10) : isoStart;
+      // Atestado sem data_fim → open-ended: cobre até o fim do mês em análise
+      const fimMesISO = new Date(fimMs).toISOString().split('T')[0];
+      const isoEnd = f.data_fim ? String(f.data_fim).slice(0, 10) : fimMesISO;
       const start = new Date(isoStart + 'T12:00:00Z').getTime();
       const end = new Date(isoEnd + 'T12:00:00Z').getTime();
       for (let d = start; d <= end; d += 86400000) datasExcluidas.add(new Date(d).toISOString().split('T')[0]);
@@ -1009,7 +1017,8 @@ export class GenteService {
     for (const f of atestadosRows) {
       if (!exclusaoMap[f.colaborador_id]) exclusaoMap[f.colaborador_id] = new Set();
       const isoStart = String(f.data).slice(0, 10);
-      const isoEnd = f.data_fim ? String(f.data_fim).slice(0, 10) : isoStart;
+      // Atestado sem data_fim → open-ended: cobre até ontem (fim da janela)
+      const isoEnd = f.data_fim ? String(f.data_fim).slice(0, 10) : ontemISO;
       const start = new Date(isoStart + 'T12:00:00Z').getTime();
       const end = new Date(isoEnd + 'T12:00:00Z').getTime();
       for (let d = start; d <= end; d += 86400000) {

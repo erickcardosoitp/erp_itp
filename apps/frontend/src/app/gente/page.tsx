@@ -1234,6 +1234,9 @@ function GenericTab({ endpoint, titulo, reload, colaboradores, CamposComp, rende
 
   const salvar = async () => {
     if (!form.colaborador_id) { toast.error('Selecione um colaborador.'); return; }
+    if (endpoint === 'faltas' && (form.tipo === 'atestado' || form.tipo === 'afastamento') && !form.data_fim) {
+      toast.error('Informe a data fim do período do atestado/afastamento.'); return;
+    }
     setSalvando(true);
     try {
       const url = editando ? `${API}/gente/${endpoint}/${editando.id}` : `${API}/gente/${endpoint}`;
@@ -1358,8 +1361,8 @@ const CamposFalta = ({ form, setForm }: any) => {
         <div className="rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30 p-3 space-y-3">
           <p className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-widest">Período de afastamento</p>
           <div className="grid grid-cols-2 gap-3">
-            <FL label="Data início *"><input type="date" value={form.data || hoje()} onChange={e => setForm((f: any) => ({ ...f, data: e.target.value }))} className={ic} /></FL>
-            <FL label="Data fim *"><input type="date" value={form.data_fim || ''} onChange={e => setForm((f: any) => ({ ...f, data_fim: e.target.value }))} className={ic} /></FL>
+            <FL label="Data início *"><input type="date" value={form.data || hoje()} onChange={e => setForm((f: any) => ({ ...f, data: e.target.value, data_fim: !f.data_fim ? e.target.value : f.data_fim }))} className={ic} /></FL>
+            <FL label="Data fim *"><input type="date" value={form.data_fim || ''} onChange={e => setForm((f: any) => ({ ...f, data_fim: e.target.value }))} className={`${ic} ${!form.data_fim ? 'border-red-400 ring-1 ring-red-300' : ''}`} /></FL>
           </div>
           {form.data && form.data_fim && form.data_fim < form.data && (
             <p className="text-xs text-red-600">⚠️ Data fim não pode ser anterior à data início.</p>
