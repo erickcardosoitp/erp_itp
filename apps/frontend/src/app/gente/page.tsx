@@ -72,6 +72,8 @@ function FL({ label, children }: { label: string; children: React.ReactNode }) {
 
 function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { reload: number; colaboradores: any[]; carregarColaboradores: () => void }) {
   const [busca, setBusca] = useState('');
+  const [filtroTipo, setFiltroTipo] = useState('');
+  const [filtroAtivo, setFiltroAtivo] = useState('ativo');
   const [loading, setLoading] = useState(false);
   const [modal, setModal] = useState<'vincular' | 'novo' | 'codigos' | 'editar-cadastro' | null>(null);
   const [editando, setEditando] = useState<any | null>(null);
@@ -264,8 +266,18 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
     else toast.error('Erro ao remover local.');
   };
 
-  const filtrados = colaboradores.filter(c =>
-    !busca || c.funcionario?.nome?.toLowerCase().includes(busca.toLowerCase()) || c.funcionario?.cargo?.toLowerCase().includes(busca.toLowerCase()));
+  const filtrados = colaboradores
+    .filter(c => {
+      if (filtroAtivo === 'ativo' && c.ativo === false) return false;
+      if (filtroAtivo === 'inativo' && c.ativo !== false) return false;
+      if (filtroTipo && c.tipo !== filtroTipo) return false;
+      if (busca) {
+        const q = busca.toLowerCase();
+        return c.funcionario?.nome?.toLowerCase().includes(q) || c.funcionario?.cargo?.toLowerCase().includes(q);
+      }
+      return true;
+    })
+    .sort((a, b) => (a.funcionario?.nome ?? '').localeCompare(b.funcionario?.nome ?? '', 'pt-BR'));
 
   const PONTO_URL = typeof window !== 'undefined' ? `${window.location.origin}/ponto?token=itp-ponto-2026` : '';
 
@@ -402,11 +414,21 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
 
   return (
     <div>
-      <div className="flex flex-col sm:flex-row gap-3 mb-5">
-        <div className="relative flex-1">
+      <div className="flex flex-col sm:flex-row gap-3 mb-5 flex-wrap">
+        <div className="relative flex-1 min-w-[160px]">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar..." className={`${ic} pl-9`} />
+          <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar por nome ou cargo..." className={`${ic} pl-9`} />
         </div>
+        <select value={filtroTipo} onChange={e => setFiltroTipo(e.target.value)} className={`${ic} w-40`}>
+          <option value="">Todos os tipos</option>
+          <option value="voluntario">Voluntário</option>
+          <option value="funcionario">Funcionário</option>
+        </select>
+        <select value={filtroAtivo} onChange={e => setFiltroAtivo(e.target.value)} className={`${ic} w-36`}>
+          <option value="">Todos</option>
+          <option value="ativo">Ativos</option>
+          <option value="inativo">Inativos</option>
+        </select>
         <button onClick={() => { carregarDisp(); setEditando(null); setForm({ tipo: 'voluntario', dias_trabalho: ['seg','ter','qua','qui','sex'], horario_entrada: '08:00', horario_saida: '17:00', latitude_permitida: -22.8597901, longitude_permitida: -43.3308139, raio_metros: 100 }); setModal('vincular'); }} className={bs}>
           <Plus size={14} className="inline mr-1" />Vincular Existente
         </button>
@@ -417,6 +439,7 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
           <ExternalLink size={14} />Link Ponto
         </a>
       </div>
+      <div className="text-xs text-slate-400 mb-3">{filtrados.length} colaborador(es)</div>
 
       {filtrados.length === 0
         ? <div className="text-center py-12 text-slate-400">Nenhum colaborador cadastrado.</div>
