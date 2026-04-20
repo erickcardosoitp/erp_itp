@@ -2045,9 +2045,13 @@ function BancoHorasAdminTab({ colaboradores }: { colaboradores: any[] }) {
                           </span>
                         </td>
                         <td className="px-3 py-2 text-center text-xs font-mono text-slate-600 dark:text-slate-300">
-                          {d.marcacoes.length === 0 ? '—' : d.marcacoes.map((m: any) => (
-                            <span key={m.hora + m.tipo} className={`inline-block mr-1 ${m.tipo === 'entrada' ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}`}>
-                              {m.hora}
+                          {(!d.sessoes || d.sessoes.length === 0) ? '—' : d.sessoes.map((s: any, si: number) => (
+                            <span key={si} className="inline-flex items-center gap-0.5 mr-2">
+                              <span className="text-green-600 dark:text-green-400">{s.entrada ?? '?'}</span>
+                              <span className="text-slate-400">→</span>
+                              <span className={`${!s.saida ? 'text-yellow-500' : 'text-red-500 dark:text-red-400'}`}>
+                                {s.saida ? (s.proximo_dia ? `${s.saida}+1` : s.saida) : '—'}
+                              </span>
                             </span>
                           ))}
                         </td>

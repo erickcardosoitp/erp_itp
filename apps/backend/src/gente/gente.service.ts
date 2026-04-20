@@ -951,16 +951,49 @@ export class GenteService {
       if (f.realizada !== true) folgasDatas.add(String(f.data).slice(0, 10));
     }
 
-    // Pontos por dia BRT (UTC-3)
-    const pontosByDay: Record<string, { tipo: string; hora: string; id: string }[]> = {};
-    for (const p of pontosMes) {
-      const brtMs = new Date(p.data_hora).getTime() - 3 * 3600000;
-      const brtDate = new Date(brtMs);
-      const iso = brtDate.toISOString().split('T')[0];
-      const hora = `${String(brtDate.getUTCHours()).padStart(2, '0')}:${String(brtDate.getUTCMinutes()).padStart(2, '0')}`;
-      if (!pontosByDay[iso]) pontosByDay[iso] = [];
-      pontosByDay[iso].push({ tipo: p.tipo, hora, id: p.id });
+    // Sessões de ponto: agrupa entrada→saída e atribui ao dia da entrada (BRT UTC-3)
+    // Garante que virada de dia (saída 00:45 do dia seguinte) fica no dia correto.
+    const sortedPontos = [...pontosMes].sort((a, b) =>
+      new Date(a.data_hora).getTime() - new Date(b.data_hora).getTime()
+    );
+    type Sessao = { entrada: string | null; saida: string | null; trabalhado_min: number; proximo_dia: boolean };
+    const sessoesByDay: Record<string, Sessao[]> = {};
+    let pendEntrada: { iso: string; hora: string; ts: number } | null = null;
+
+    const brtHora = (ts: number) => {
+      const d = new Date(ts - 3 * 3600000);
+      return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
+    };
+    const brtISO = (ts: number) => new Date(ts - 3 * 3600000).toISOString().split('T')[0];
+
+    const addSessao = (iso: string, s: Sessao) => {
+      if (!sessoesByDay[iso]) sessoesByDay[iso] = [];
+      sessoesByDay[iso].push(s);
+    };
+
+    for (const p of sortedPontos) {
+      const ts = new Date(p.data_hora).getTime();
+      const iso = brtISO(ts);
+      const hora = brtHora(ts);
+      if (p.tipo === 'entrada') {
+        if (pendEntrada) addSessao(pendEntrada.iso, { entrada: pendEntrada.hora, saida: null, trabalhado_min: 0, proximo_dia: false });
+        pendEntrada = { iso, hora, ts };
+      } else if (p.tipo === 'saida') {
+        if (pendEntrada) {
+          const diffMin = Math.round((ts - pendEntrada.ts) / 60000);
+          addSessao(pendEntrada.iso, {
+            entrada: pendEntrada.hora,
+            saida: hora,
+            trabalhado_min: diffMin > 0 && diffMin < 1440 ? diffMin : 0,
+            proximo_dia: iso !== pendEntrada.iso,
+          });
+          pendEntrada = null;
+        } else {
+          addSessao(iso, { entrada: null, saida: hora, trabalhado_min: 0, proximo_dia: false });
+        }
+      }
     }
+    if (pendEntrada) addSessao(pendEntrada.iso, { entrada: pendEntrada.hora, saida: null, trabalhado_min: 0, proximo_dia: false });
 
     const minTrabalhados = this.calcularMinutosTrabalhados(pontosMes);
     const { minutos: minEsperados, dias: diasEsperados } = this.calcularMinutosEsperados(col, inicioMs, fimMs, datasExcluidas);
@@ -1003,26 +1036,15 @@ export class GenteService {
         }
       }
 
-      const marcacoes = (pontosByDay[iso] ?? []).sort((a, b) => a.hora.localeCompare(b.hora));
-      let trabalhadoMin = 0;
-      let entradaHora: string | null = null;
-      let pairAberta = false;
-      for (const m of marcacoes) {
-        if (m.tipo === 'entrada') { entradaHora = m.hora; pairAberta = true; }
-        else if (m.tipo === 'saida' && entradaHora) {
-          const [eh, em] = entradaHora.split(':').map(Number);
-          const [sh, sm] = m.hora.split(':').map(Number);
-          const diff = (sh * 60 + sm) - (eh * 60 + em);
-          if (diff > 0 && diff < 1440) trabalhadoMin += diff;
-          entradaHora = null; pairAberta = false;
-        }
-      }
+      const sessoes = sessoesByDay[iso] ?? [];
+      const trabalhadoMin = sessoes.reduce((s, se) => s + se.trabalhado_min, 0);
+      const temEntradaAberta = sessoes.some(se => se.entrada && !se.saida);
 
       let status: string;
       if (!isDiaTrabalho) status = 'fds';
       else if (atestadosDatas.has(iso)) status = 'atestado';
       else if (folgasDatas.has(iso)) status = 'folga';
-      else if (marcacoes.length > 0) status = 'presente';
+      else if (sessoes.length > 0) status = 'presente';
       else status = 'ausente';
 
       dias.push({
@@ -1033,8 +1055,8 @@ export class GenteService {
         esperado_min: esperadoMin,
         trabalhado_min: Math.round(trabalhadoMin),
         saldo_min: Math.round(trabalhadoMin - esperadoMin),
-        marcacoes,
-        incompleto: pairAberta,
+        sessoes,
+        incompleto: temEntradaAberta,
       });
 
       cur += DAY_MS;
