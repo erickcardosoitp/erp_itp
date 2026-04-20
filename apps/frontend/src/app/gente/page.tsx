@@ -1719,13 +1719,21 @@ function PontoTab({ reload, colaboradores }: { reload: number; colaboradores: an
           method: 'POST', credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ colaborador_id: colId, ...reg }),
+        }).then(async r => {
+          if (!r.ok) {
+            const err = await r.json().catch(() => ({}));
+            throw new Error(err.message ?? `HTTP ${r.status}`);
+          }
+          return r;
         })
       )
     );
     const ok = results.filter(r => r.status === 'fulfilled').length;
-    const falhas = results.length - ok;
-    if (ok) toast.success(`${ok} marcação(ões) registrada(s)${falhas ? ` · ${falhas} falha(s)` : ''}.`);
-    else toast.error('Nenhuma marcação foi registrada.');
+    const falhas = results.filter(r => r.status === 'rejected') as PromiseRejectedResult[];
+    const errMsg = falhas.length ? falhas[0].reason?.message : '';
+    if (ok) toast.success(`${ok} marcação(ões) registrada(s)${falhas.length ? ` · ${falhas.length} falha(s)` : ''}.`);
+    if (falhas.length && !ok) toast.error(`Nenhuma marcação registrada: ${errMsg}`);
+    else if (falhas.length) toast.error(`${falhas.length} falha(s): ${errMsg}`);
     setSalvando(false);
     setModalAberto(false);
     carregar();

@@ -98,33 +98,72 @@ export class GenteService {
 
   /** Cria funcionário + colaborador em um único passo (sem precisar ir ao Cadastro Básico) */
   async criarFuncionarioEColaborador(funcDto: any, colDto: any, criadoPorId: string) {
-    // 1. Gera matrícula
-    const now = new Date();
-    const yyyymm = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
-    const rows: any[] = await this.dataSource.query(
-      `SELECT COUNT(*) as total FROM funcionarios WHERE matricula LIKE $1`,
-      [`ITP-FUNC-${yyyymm}-%`],
-    );
-    const seq = String(Number(rows[0]?.total ?? 0) + 1).padStart(3, '0');
-    const matricula = `ITP-FUNC-${yyyymm}-${seq}`;
+    let func: any;
 
-    // 2. Insere funcionário
-    const [func] = await this.dataSource.query(
-      `INSERT INTO funcionarios (nome, cargo, email, cpf, celular, data_nascimento, sexo, raca_cor, escolaridade,
-        cep, logradouro, numero_residencia, complemento, bairro, cidade, estado, pais, estado_civil, rg,
-        telefone_emergencia_1, matricula, ativo)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,true)
-       RETURNING id, nome, cargo, matricula`,
-      [
-        funcDto.nome, funcDto.cargo ?? null, funcDto.email ?? null, funcDto.cpf ?? null,
-        funcDto.celular ?? null, funcDto.data_nascimento ?? null, funcDto.sexo ?? null,
-        funcDto.raca_cor ?? null, funcDto.escolaridade ?? null,
-        funcDto.cep ?? null, funcDto.logradouro ?? null, funcDto.numero_residencia ?? null,
-        funcDto.complemento ?? null, funcDto.bairro ?? null, funcDto.cidade ?? null,
-        funcDto.estado ?? null, funcDto.pais ?? 'Brasil', funcDto.estado_civil ?? null,
-        funcDto.rg ?? null, funcDto.telefone_emergencia_1 ?? null, matricula,
-      ],
-    );
+    // 1. Se CPF fornecido, verifica se já existe para reutilizar em vez de duplicar
+    if (funcDto.cpf) {
+      const cpfNorm = String(funcDto.cpf).replace(/\D/g, '');
+      const [existente] = await this.dataSource.query(
+        `SELECT id, nome, cargo, matricula FROM funcionarios
+         WHERE REGEXP_REPLACE(cpf, '[^0-9]', '', 'g') = $1 LIMIT 1`,
+        [cpfNorm],
+      );
+      if (existente) {
+        // Verifica se já tem colaborador
+        const jaCol = await this.colaboradorRepo.findOne({ where: { funcionario_id: existente.id } });
+        if (jaCol) throw new BadRequestException(`${existente.nome} já está cadastrado no módulo Gente (CPF duplicado).`);
+        func = existente;
+      }
+    }
+
+    // 2. Cria funcionário se não encontrou pelo CPF
+    if (!func) {
+      const now = new Date();
+      const yyyymm = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
+      const rows: any[] = await this.dataSource.query(
+        `SELECT COUNT(*) as total FROM funcionarios WHERE matricula LIKE $1`,
+        [`ITP-FUNC-${yyyymm}-%`],
+      );
+      const seq = String(Number(rows[0]?.total ?? 0) + 1).padStart(3, '0');
+      const matricula = `ITP-FUNC-${yyyymm}-${seq}`;
+
+      const [inserted] = await this.dataSource.query(
+        `INSERT INTO funcionarios (
+          nome, cargo, email, cpf, celular, data_nascimento, sexo, genero, raca_cor, escolaridade,
+          cep, logradouro, numero_residencia, complemento, bairro, cidade, estado, pais,
+          estado_civil, rg, orgao_emissor_rg, data_emissao_rg,
+          telefone_emergencia_1, telefone_emergencia_2,
+          possui_deficiencia, deficiencia_descricao,
+          possui_alergias, alergias_descricao,
+          usa_medicamentos, medicamentos_descricao,
+          interesse_cursos, pertence_comunidade_tradicional, comunidade_tradicional,
+          possui_cad_unico, baixo_idh,
+          matricula, ativo
+        ) VALUES (
+          $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,
+          $19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,true
+        ) RETURNING id, nome, cargo, matricula`,
+        [
+          funcDto.nome, funcDto.cargo ?? null, funcDto.email ?? null, funcDto.cpf ?? null,
+          funcDto.celular ?? null, funcDto.data_nascimento ?? null, funcDto.sexo ?? null,
+          funcDto.genero ?? null, funcDto.raca_cor ?? null, funcDto.escolaridade ?? null,
+          funcDto.cep ?? null, funcDto.logradouro ?? null, funcDto.numero_residencia ?? null,
+          funcDto.complemento ?? null, funcDto.bairro ?? null, funcDto.cidade ?? null,
+          funcDto.estado ?? null, funcDto.pais ?? 'Brasil',
+          funcDto.estado_civil ?? null, funcDto.rg ?? null,
+          funcDto.orgao_emissor_rg ?? null, funcDto.data_emissao_rg ?? null,
+          funcDto.telefone_emergencia_1 ?? null, funcDto.telefone_emergencia_2 ?? null,
+          funcDto.possui_deficiencia ?? false, funcDto.deficiencia_descricao ?? null,
+          funcDto.possui_alergias ?? false, funcDto.alergias_descricao ?? null,
+          funcDto.usa_medicamentos ?? false, funcDto.medicamentos_descricao ?? null,
+          funcDto.interesse_cursos ?? false, funcDto.pertence_comunidade_tradicional ?? false,
+          funcDto.comunidade_tradicional ?? null,
+          funcDto.possui_cad_unico ?? false, funcDto.baixo_idh ?? false,
+          matricula,
+        ],
+      );
+      func = inserted;
+    }
 
     // 3. Cria colaborador vinculado
     const col = this.colaboradorRepo.create({
@@ -133,9 +172,10 @@ export class GenteService {
       horario_entrada: colDto.horario_entrada ?? '08:00',
       horario_saida: colDto.horario_saida ?? '17:00',
       dias_trabalho: colDto.dias_trabalho ?? ['seg', 'ter', 'qua', 'qui', 'sex'],
-      raio_metros: 100,
-      latitude_permitida: -22.8597901,
-      longitude_permitida: -43.3308139,
+      raio_metros: colDto.raio_metros ?? 100,
+      latitude_permitida: colDto.latitude_permitida ?? -22.8597901,
+      longitude_permitida: colDto.longitude_permitida ?? -43.3308139,
+      jornada_flexivel: colDto.jornada_flexivel ?? false,
     });
     const saved = await this.colaboradorRepo.save(col);
     return { ...saved, funcionario: func };
