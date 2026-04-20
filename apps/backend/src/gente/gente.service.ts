@@ -51,6 +51,14 @@ export class GenteService {
       `SELECT id, nome, cargo, email, cpf, celular, rg, orgao_emissor_rg, data_emissao_rg,
               estado_civil, pais, data_nascimento, cep, logradouro, numero_residencia,
               complemento, bairro, cidade, estado, telefone_emergencia_1, telefone_emergencia_2,
+              sexo, raca_cor, escolaridade,
+              possui_deficiencia, deficiencia_descricao,
+              possui_alergias, alergias_descricao,
+              usa_medicamentos, medicamentos_descricao,
+              possui_plano_saude, plano_saude, numero_sus,
+              interesse_cursos, genero,
+              pertence_comunidade_tradicional, comunidade_tradicional,
+              possui_cad_unico, baixo_idh,
               matricula, ativo, foto FROM funcionarios WHERE id = $1`,
       [col.funcionario_id],
     );
@@ -176,6 +184,9 @@ export class GenteService {
       latitude_permitida: colDto.latitude_permitida ?? -22.8597901,
       longitude_permitida: colDto.longitude_permitida ?? -43.3308139,
       jornada_flexivel: colDto.jornada_flexivel ?? false,
+      horas_dia_flex: colDto.horas_dia_flex ?? null,
+      horario_flexivel_semana: colDto.horario_flexivel_semana ?? null,
+      salario_base: colDto.salario_base ?? null,
     });
     const saved = await this.colaboradorRepo.save(col);
     return { ...saved, funcionario: func };
@@ -184,7 +195,7 @@ export class GenteService {
   async editarColaborador(id: string, dto: any) {
     const colunas = ['tipo','horario_entrada','horario_saida','dias_trabalho',
       'latitude_permitida','longitude_permitida','raio_metros','salario_base','ativo',
-      'jornada_flexivel','horas_dia_flex','horario_flexivel_semana'];
+      'jornada_flexivel','horas_dia_flex','horario_flexivel_semana','valor_passagem'];
     const payload: any = {};
     colunas.forEach(k => { if (dto[k] !== undefined) payload[k] = dto[k]; });
     if (Object.keys(payload).length) await this.colaboradorRepo.update(id, payload);
