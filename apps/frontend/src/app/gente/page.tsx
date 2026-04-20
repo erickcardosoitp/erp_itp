@@ -7,7 +7,7 @@ import {
   PauseCircle, Calendar, Plus, Search, X, Edit2,
   Trash2, ExternalLink, ChevronDown, ChevronUp,
   RefreshCw, MapPin, Tag, Calculator, Printer,
-  Check, Upload, User, DollarSign, Paperclip,
+  Check, Upload, User, DollarSign, Paperclip, Bus,
 } from 'lucide-react';
 
 const API = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001/api';
@@ -1960,6 +1960,99 @@ function PontoTab({ reload, colaboradores }: { reload: number; colaboradores: an
   );
 }
 
+// ── Tab: Transporte ──────────────────────────────────────────────────────────
+
+function TransporteTab({ colaboradores, reload }: { colaboradores: any[]; reload: number }) {
+  const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? '';
+  const [valores, setValores] = useState<Record<string, string>>({});
+  const [salvando, setSalvando] = useState<string | null>(null);
+  const mesAtual = new Date().toISOString().slice(0, 7);
+
+  useEffect(() => {
+    const init: Record<string, string> = {};
+    colaboradores.forEach(c => { init[c.id] = c.valor_passagem != null ? String(c.valor_passagem) : ''; });
+    setValores(init);
+  }, [colaboradores, reload]);
+
+  function diasNoMes(diasSemana: string[], mesRef: string): number {
+    const mapa: Record<string, number> = { dom: 0, seg: 1, ter: 2, qua: 3, qui: 4, sex: 5, sab: 6 };
+    const [ano, mes] = mesRef.split('-').map(Number);
+    const alvos = new Set((diasSemana ?? []).map((d: string) => mapa[d]).filter((n: number) => n !== undefined));
+    const total = new Date(ano, mes, 0).getDate();
+    let count = 0;
+    for (let d = 1; d <= total; d++) {
+      if (alvos.has(new Date(ano, mes - 1, d).getDay())) count++;
+    }
+    return count;
+  }
+
+  const salvar = async (colId: string) => {
+    setSalvando(colId);
+    try {
+      const r = await fetch(`${API}/gente/colaboradores/${colId}`, {
+        method: 'PATCH', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ valor_passagem: valores[colId] === '' ? null : Number(valores[colId]) }),
+      });
+      if (!r.ok) { const e = await r.json(); throw new Error(e.message); }
+      toast.success('Valor de passagem salvo!');
+    } catch (e: any) { toast.error(e.message); }
+    setSalvando(null);
+  };
+
+  const ativos = colaboradores.filter(c => c.ativo !== false);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-xl px-4 py-2.5">
+        <Bus size={15} className="text-blue-500 shrink-0" />
+        <span>Defina o valor da passagem de ida+volta por dia. O total mensal é calculado automaticamente na folha.</span>
+      </div>
+      <div className="space-y-2">
+        {ativos.sort((a: any, b: any) => (a.funcionario?.nome ?? '').localeCompare(b.funcionario?.nome ?? '', 'pt-BR')).map((c: any) => {
+          const vp = parseFloat(valores[c.id] ?? '') || 0;
+          const dias = diasNoMes(c.dias_trabalho ?? [], mesAtual);
+          const totalMes = vp * dias;
+          return (
+            <div key={c.id} className="flex items-center gap-3 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3">
+              <div className="w-8 h-8 rounded-full bg-purple-100 dark:bg-purple-900 flex items-center justify-center text-purple-700 dark:text-purple-300 font-black text-sm shrink-0">
+                {c.funcionario?.nome?.charAt(0) ?? '?'}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold text-slate-800 dark:text-white text-sm truncate">{c.funcionario?.nome ?? '—'}</div>
+                <div className="text-xs text-slate-400">{c.tipo === 'voluntario' ? 'Voluntário' : 'Funcionário'} · {dias} dias úteis em {mesAtual}</div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <div className="text-right text-xs text-slate-500 dark:text-slate-400 w-20 hidden sm:block">
+                  <div>Total/mês</div>
+                  <div className="font-bold text-slate-700 dark:text-slate-200">{totalMes > 0 ? totalMes.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—'}</div>
+                </div>
+                <div className="flex items-center border border-slate-300 dark:border-slate-600 rounded-lg overflow-hidden">
+                  <span className="px-2 text-xs text-slate-400 bg-slate-50 dark:bg-slate-800 border-r border-slate-300 dark:border-slate-600">R$</span>
+                  <input
+                    type="number" step="0.01" min="0" placeholder="0,00"
+                    value={valores[c.id] ?? ''}
+                    onChange={e => setValores(v => ({ ...v, [c.id]: e.target.value }))}
+                    className="w-24 px-2 py-1.5 text-sm bg-white dark:bg-slate-900 text-slate-800 dark:text-white focus:outline-none"
+                  />
+                </div>
+                <button
+                  onClick={() => salvar(c.id)}
+                  disabled={salvando === c.id}
+                  className="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition disabled:opacity-50"
+                >
+                  {salvando === c.id ? '...' : 'Salvar'}
+                </button>
+              </div>
+            </div>
+          );
+        })}
+        {ativos.length === 0 && <div className="text-center py-10 text-slate-400 text-sm">Nenhum colaborador ativo.</div>}
+      </div>
+    </div>
+  );
+}
+
 // ── Tab: Financeiro ───────────────────────────────────────────────────────────
 
 function FinanceiroTab({ reload }: { reload: number }) {
@@ -2539,6 +2632,7 @@ const SUB_PONTO = [
 const SUB_FOLHA = [
   { key: 'recibos' as const, label: 'Recibos / Folha', icon: FileText },
   { key: 'vales' as const, label: 'Vales', icon: Wallet },
+  { key: 'transporte' as const, label: 'Transporte', icon: Bus },
   { key: 'financeiro' as const, label: 'Financeiro', icon: DollarSign },
 ] as const;
 
@@ -2613,6 +2707,7 @@ export default function GentePage() {
             <SubTabs tabs={SUB_FOLHA} active={subFolha} setActive={setSubFolha} />
             {subFolha === 'recibos' && <RecibosTab reload={reload} colaboradores={colaboradores} />}
             {subFolha === 'vales' && <GenericTab endpoint="vales" titulo="Vale" reload={reload} colaboradores={colaboradores} CamposComp={CamposVale} renderLinha={(i, e, d) => <LinhaVale key={i.id} item={i} onEdit={e} onDel={d} colaboradores={colaboradores} />} />}
+            {subFolha === 'transporte' && <TransporteTab reload={reload} colaboradores={colaboradores} />}
             {subFolha === 'financeiro' && <FinanceiroTab reload={reload} />}
           </>
         )}

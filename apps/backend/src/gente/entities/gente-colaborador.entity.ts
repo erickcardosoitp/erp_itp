@@ -46,6 +46,10 @@ export class GenteColaborador {
   @Column({ type: 'numeric', nullable: true, precision: 10, scale: 2 })
   salario_base: number;
 
+  // Custo diário do transporte ida+volta (VT)
+  @Column({ type: 'numeric', nullable: true, precision: 10, scale: 2 })
+  valor_passagem: number;
+
   @Column({ type: 'boolean', default: true })
   ativo: boolean;
 

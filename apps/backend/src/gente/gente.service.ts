@@ -393,6 +393,14 @@ export class GenteService {
         referencia: mesRef,
         valor: Number(cc.valor_efetivo),
       }));
+      if (col.valor_passagem && Number(col.valor_passagem) > 0) {
+        const [ano, mes] = mes_referencia.split('-').map(Number);
+        const diasTrab = this._contarDiasTrabalho(col.dias_trabalho ?? [], ano, mes);
+        const vtMensal = Number(col.valor_passagem) * diasTrab;
+        if (vtMensal > 0) {
+          proventos.push({ codigo: 'VT', descricao: `VALE TRANSPORTE (${diasTrab}x)`, referencia: mesRef, valor: vtMensal });
+        }
+      }
       const totalProventos = proventos.reduce((s, p) => s + p.valor, 0);
 
       // Descontos: vales não descontados do mês + advertências graves
@@ -465,6 +473,17 @@ export class GenteService {
     return { mes_referencia, total_colaboradores: resultados.length, resultados };
   }
 
+  private _contarDiasTrabalho(diasSemana: string[], ano: number, mes: number): number {
+    const mapa: Record<string, number> = { dom: 0, seg: 1, ter: 2, qua: 3, qui: 4, sex: 5, sab: 6 };
+    const alvos = new Set((diasSemana ?? []).map(d => mapa[d]).filter(n => n !== undefined));
+    const totalDias = new Date(ano, mes, 0).getDate();
+    let count = 0;
+    for (let d = 1; d <= totalDias; d++) {
+      if (alvos.has(new Date(ano, mes - 1, d).getDay())) count++;
+    }
+    return count;
+  }
+
   private async _computarFolhaColaborador(col: any, mes_referencia: string) {
     const [func] = await this.dataSource.query(
       `SELECT id, nome, cargo, matricula FROM funcionarios WHERE id = $1`,
@@ -484,6 +503,14 @@ export class GenteService {
       referencia: mesRef,
       valor: Number(cc.valor_efetivo),
     }));
+    if (col.valor_passagem && Number(col.valor_passagem) > 0) {
+      const [ano, mes] = mes_referencia.split('-').map(Number);
+      const diasTrab = this._contarDiasTrabalho(col.dias_trabalho ?? [], ano, mes);
+      const vtMensal = Number(col.valor_passagem) * diasTrab;
+      if (vtMensal > 0) {
+        proventos.push({ codigo: 'VT', descricao: `VALE TRANSPORTE (${diasTrab}x)`, referencia: mesRef, valor: vtMensal });
+      }
+    }
 
     const mesInicio = `${mes_referencia}-01`;
     const mesFim = new Date(Number(mes_referencia.split('-')[0]), Number(mes_referencia.split('-')[1]), 0)

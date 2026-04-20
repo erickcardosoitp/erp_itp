@@ -670,6 +670,11 @@ export class AppModule implements OnModuleInit {
           ADD COLUMN IF NOT EXISTS realizada BOOLEAN
       `);
       this.logger.log('✅ Coluna gente_folga_solicitacoes.realizada aplicada (IF NOT EXISTS)');
+      await this.dataSource.query(`
+        ALTER TABLE IF EXISTS gente_colaboradores
+          ADD COLUMN IF NOT EXISTS valor_passagem NUMERIC(10,2)
+      `);
+      this.logger.log('✅ Coluna gente_colaboradores.valor_passagem aplicada (IF NOT EXISTS)');
       this.logger.log('✅ Tabelas do módulo Gente criadas (IF NOT EXISTS)');
 
     } catch (err: any) {
