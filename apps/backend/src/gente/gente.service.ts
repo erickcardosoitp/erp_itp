@@ -913,11 +913,11 @@ export class GenteService {
     try {
       [folgasAprovadas, faltasExcluidas] = await Promise.all([
         this.dataSource.query(
-          `SELECT data, realizada FROM gente_folga_solicitacoes WHERE colaborador_id = $1 AND status = 'aprovada'`,
+          `SELECT data::text, realizada FROM gente_folga_solicitacoes WHERE colaborador_id = $1 AND status = 'aprovada'`,
           [colaborador_id],
         ),
         this.dataSource.query(
-          `SELECT data, data_fim FROM gente_faltas WHERE colaborador_id = $1 AND tipo IN ('atestado', 'afastamento')`,
+          `SELECT data::text, data_fim::text FROM gente_faltas WHERE colaborador_id = $1 AND tipo IN ('atestado', 'afastamento')`,
           [colaborador_id],
         ),
       ]);
@@ -998,14 +998,14 @@ export class GenteService {
     const ontemISO = new Date(ontemMs).toISOString().split('T')[0];
     const [folgasRows, atestadosRows] = await Promise.all([
       this.dataSource.query(
-        `SELECT colaborador_id, data FROM gente_folga_solicitacoes WHERE status = 'aprovada' AND data >= $1 AND data <= $2`,
+        `SELECT colaborador_id, data::text FROM gente_folga_solicitacoes WHERE status = 'aprovada' AND data >= $1::date AND data <= $2::date`,
         [inicioISO, ontemISO],
       ),
       this.dataSource.query(
-        `SELECT colaborador_id, data, data_fim FROM gente_faltas
+        `SELECT colaborador_id, data::text, data_fim::text FROM gente_faltas
          WHERE tipo IN ('atestado', 'afastamento')
-           AND data <= $2
-           AND (data_fim IS NULL OR data_fim >= $1)`,
+           AND data <= $2::date
+           AND (data_fim IS NULL OR data_fim >= $1::date)`,
         [inicioISO, ontemISO],
       ),
     ]);
