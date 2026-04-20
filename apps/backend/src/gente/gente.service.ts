@@ -1077,6 +1077,31 @@ export class GenteService {
     return alertas;
   }
 
+  async debugAlertas() {
+    const hojeUtc = new Date();
+    const hojeInicioMs = Date.UTC(hojeUtc.getUTCFullYear(), hojeUtc.getUTCMonth(), hojeUtc.getUTCDate());
+    const ontemMs = hojeInicioMs - 86400000;
+    const inicioMs = ontemMs - 13 * 86400000;
+    const inicioISO = new Date(inicioMs).toISOString().split('T')[0];
+    const ontemISO = new Date(ontemMs).toISOString().split('T')[0];
+
+    const atestados = await this.dataSource.query(
+      `SELECT gf.id, gf.colaborador_id, gf.tipo, gf.data, gf.data_fim, f.nome
+       FROM gente_faltas gf
+       JOIN gente_colaboradores gc ON gc.id = gf.colaborador_id
+       JOIN funcionarios f ON f.id = gc.funcionario_id
+       WHERE gf.tipo IN ('atestado','afastamento')
+         AND gf.data <= $2
+         AND (gf.data_fim IS NULL OR gf.data_fim >= $1)
+       ORDER BY f.nome, gf.data`,
+      [inicioISO, ontemISO],
+    );
+
+    const alertas = await this.alertasAusencia();
+
+    return { janela: { inicioISO, ontemISO }, atestados_encontrados: atestados, alertas_gerados: alertas };
+  }
+
   // ── Relatório de Ponto ─────────────────────────────────────────────────────
 
   async relatorioPonto(data_inicio: string, data_fim: string) {

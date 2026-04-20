@@ -358,4 +358,10 @@ export class GenteController {
   @Delete('faltas/:id')
   @ModuloPerm('gente', 'excluir')
   deletarFalta(@Param('id') id: string) { return this.svc.deletarFalta(id); }
+
+  // ── Debug alertas (temporário) ────────────────────────────────────────────
+
+  @Get('debug/alertas')
+  @ModuloPerm('gente', 'visualizar')
+  debugAlertas() { return this.svc.debugAlertas(); }
 }
