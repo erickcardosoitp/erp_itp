@@ -119,10 +119,13 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
     if (!colSelecionado?.id) return;
     setSalvando(true);
     try {
+      // Exclui campos somente-leitura ou pesados (foto é enviada separadamente pelo upload)
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { foto, id, matricula, ativo, created_at, updated_at, usuario_id, ...payload } = formFunc;
       const r = await fetch(`${API}/gente/colaboradores/${colSelecionado.id}/funcionario`, {
         method: 'PATCH', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formFunc),
+        body: JSON.stringify(payload),
       });
       if (!r.ok) { const e = await r.json(); throw new Error(e.message); }
       toast.success('Cadastro atualizado!'); setModal(null); carregarColaboradores();
@@ -591,8 +594,24 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
 
       {/* Modal: Editar Cadastro do Funcionário */}
       {modal === 'editar-cadastro' && colSelecionado && (
-        <Modal title={`Editar Cadastro — ${colSelecionado.funcionario?.nome ?? ''}`} onClose={() => setModal(null)} wide>
+        <Modal title="Editar Cadastro" onClose={() => setModal(null)} wide>
           <div className="space-y-5">
+            {/* Cabeçalho do colaborador */}
+            <div className="flex items-center gap-4 p-3 bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 rounded-xl">
+              {colSelecionado.funcionario?.foto
+                ? <img src={colSelecionado.funcionario.foto} alt="" className="w-14 h-14 rounded-full object-cover border-2 border-purple-400 shrink-0" onError={e => { (e.target as HTMLImageElement).style.display='none'; }} />
+                : <div className="w-14 h-14 rounded-full bg-purple-200 dark:bg-purple-800 flex items-center justify-center text-purple-700 dark:text-purple-200 font-black text-xl shrink-0">{colSelecionado.funcionario?.nome?.charAt(0) ?? '?'}</div>}
+              <div className="min-w-0">
+                <div className="font-black text-slate-800 dark:text-white text-base truncate">{colSelecionado.funcionario?.nome ?? '—'}</div>
+                <div className="text-sm text-purple-600 dark:text-purple-300 font-semibold">{colSelecionado.funcionario?.cargo ?? 'Sem cargo definido'}</div>
+                <div className="text-xs text-slate-400">{colSelecionado.funcionario?.matricula ?? ''}</div>
+              </div>
+              <label className="ml-auto shrink-0 cursor-pointer flex flex-col items-center gap-1 text-xs text-purple-600 hover:text-purple-800 transition">
+                {uploadandoFoto === colSelecionado.id ? <RefreshCw size={16} className="animate-spin" /> : <Upload size={16} />}
+                <span>Trocar foto</span>
+                <input type="file" accept="image/*" className="hidden" onChange={e => handleFoto(e, colSelecionado.funcionario?.id, colSelecionado.id)} />
+              </label>
+            </div>
             {/* Dados Pessoais */}
             <div>
               <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-3">Dados Pessoais</p>
