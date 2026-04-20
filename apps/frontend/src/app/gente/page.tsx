@@ -274,15 +274,26 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
             <span className="text-xs font-bold text-purple-700 dark:text-purple-300 uppercase tracking-widest">Jornada Flexível</span>
             <span className="text-xs text-purple-500">Padrão: 7h/dia útil</span>
           </div>
-          <FL label="Horas esperadas por dia">
-            <div className="flex items-center gap-2">
-              <input type="number" min={0.5} max={12} step={0.5}
-                value={Number(((form.horas_dia_flex ?? 420) / 60).toFixed(1))}
-                onChange={e => setForm((f: any) => ({ ...f, horas_dia_flex: Math.round(Number(e.target.value) * 60) }))}
-                className={`${ic} flex-1`} />
-              <span className="text-sm text-slate-500 dark:text-slate-400 shrink-0">horas/dia</span>
-            </div>
-          </FL>
+          {(() => {
+            const semana = form.horario_flexivel_semana ?? {};
+            const dias = (form.dias_trabalho || []) as string[];
+            const totalMin = dias.reduce((acc: number, dia: string) => {
+              const w = semana[dia] ?? { inicio: '08:00', fim: '20:00' };
+              const [ih, im] = (w.inicio || '08:00').split(':').map(Number);
+              const [fh, fm] = (w.fim || '20:00').split(':').map(Number);
+              const dur = (fh * 60 + fm) - (ih * 60 + im);
+              return acc + (dur > 0 ? dur : 0);
+            }, 0);
+            const h = Math.floor(totalMin / 60);
+            const m = totalMin % 60;
+            return (
+              <div className="flex items-center gap-2 px-3 py-2 bg-purple-100 dark:bg-purple-900/40 rounded-lg">
+                <span className="text-xs font-bold text-purple-700 dark:text-purple-300">Horas esperadas na semana:</span>
+                <span className="text-sm font-black text-purple-800 dark:text-purple-200">{h}h{m > 0 ? String(m).padStart(2,'0')+'m' : ''}</span>
+                <span className="text-xs text-purple-500 ml-auto">calculado pela janela</span>
+              </div>
+            );
+          })()}
           <div>
             <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-2">Janela de horário por dia da semana</label>
             <div className="space-y-2">
@@ -1106,8 +1117,19 @@ const CamposFalta = ({ form, setForm }: any) => {
       <FL label="Motivo"><input type="text" value={form.motivo || ''} onChange={e => setForm((f: any) => ({ ...f, motivo: e.target.value }))} className={ic} /></FL>
       <div className="flex gap-4">
         <div className="flex items-center gap-2"><input type="checkbox" id="just" checked={!!form.justificada} onChange={e => setForm((f: any) => ({ ...f, justificada: e.target.checked }))} className="w-4 h-4" /><label htmlFor="just" className="text-sm">Justificada</label></div>
-        {tipo === 'falta' && <div className="flex items-center gap-2"><input type="checkbox" id="fdesc" checked={form.com_desconto !== false} onChange={e => setForm((f: any) => ({ ...f, com_desconto: e.target.checked }))} className="w-4 h-4" /><label htmlFor="fdesc" className="text-sm">Com desconto</label></div>}
+        {tipo === 'falta' && <div className="flex items-center gap-2"><input type="checkbox" id="fdesc" checked={form.com_desconto !== false} onChange={e => setForm((f: any) => ({ ...f, com_desconto: e.target.checked, percentual_desconto: e.target.checked ? (f.percentual_desconto ?? 100) : null }))} className="w-4 h-4" /><label htmlFor="fdesc" className="text-sm">Com desconto</label></div>}
       </div>
+      {tipo === 'falta' && form.com_desconto !== false && (
+        <FL label="Percentual de desconto (%)">
+          <div className="flex items-center gap-2">
+            <input type="number" min={1} max={100} step={1}
+              value={form.percentual_desconto ?? 100}
+              onChange={e => setForm((f: any) => ({ ...f, percentual_desconto: Number(e.target.value) }))}
+              className={`${ic} flex-1`} />
+            <span className="text-sm text-slate-500 dark:text-slate-400 shrink-0">%</span>
+          </div>
+        </FL>
+      )}
       {tipo !== 'falta' && <p className="text-xs text-purple-600 dark:text-purple-400">Atestados e afastamentos não impactam o banco de horas.</p>}
     </>
   );
@@ -1172,7 +1194,7 @@ const LinhaFalta = ({ item, onEdit, onDel, colaboradores }: any) => {
       <div className="flex items-center gap-2 shrink-0">
         <Badge label={tipoLabel[tipo]} color={tipoColor[tipo]} />
         <Badge label={item.justificada ? 'Justificada' : 'Injustificada'} color={item.justificada ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'} />
-        {tipo === 'falta' && item.com_desconto && <Badge label="Desconto" color="bg-red-100 text-red-600" />}
+        {tipo === 'falta' && item.com_desconto && <Badge label={item.percentual_desconto != null && item.percentual_desconto !== 100 ? `Desconto ${item.percentual_desconto}%` : 'Desconto 100%'} color="bg-red-100 text-red-600" />}
         <button onClick={onEdit} className="p-1.5 text-slate-400 hover:text-purple-600"><Edit2 size={13} /></button>
         <button onClick={onDel} className={bd}><Trash2 size={12} /></button>
       </div>
@@ -1495,6 +1517,9 @@ function PontoTab({ reload, colaboradores }: { reload: number; colaboradores: an
                   <span className="text-xs text-slate-400 w-5 text-center font-bold">{i + 1}</span>
                   <input type="date" value={l.data} onChange={e => updLinha(l.id, 'data', e.target.value)}
                     className="border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-xs bg-white dark:bg-slate-900 text-slate-800 dark:text-white w-32" />
+                  <button type="button" title="Avançar 1 dia"
+                    onClick={() => { const d = new Date(l.data + 'T12:00:00'); d.setDate(d.getDate() + 1); updLinha(l.id, 'data', d.toISOString().slice(0, 10)); }}
+                    className="text-xs font-bold px-1.5 py-1 rounded border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-purple-600 hover:border-purple-400 transition">+1d</button>
                   <input type="time" value={l.hora} onChange={e => updLinha(l.id, 'hora', e.target.value)}
                     className="border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-xs bg-white dark:bg-slate-900 text-slate-800 dark:text-white w-24" />
                   <div className="flex gap-1">

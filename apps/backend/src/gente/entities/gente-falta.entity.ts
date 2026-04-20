@@ -22,6 +22,9 @@ export class GenteFalta {
   @Column({ type: 'boolean', default: true })
   com_desconto: boolean;
 
+  @Column({ type: 'float', nullable: true })
+  percentual_desconto: number;
+
   // 'falta' | 'atestado' | 'afastamento'
   @Column({ type: 'text', default: 'falta' })
   tipo: string;
