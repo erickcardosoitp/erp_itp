@@ -178,18 +178,26 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
     setSalvando(false);
   };
 
-  const handleFoto = async (e: React.ChangeEvent<HTMLInputElement>, funcId: string, colId: string) => {
+  const handleFoto = async (e: React.ChangeEvent<HTMLInputElement>, funcId: string | undefined, colId: string) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file || !funcId) return;
     setUploadandoFoto(colId);
-    const fd = new FormData(); fd.append('foto', file);
     try {
-      const r = await fetch(`${API.replace('/api', '')}/api/funcionarios/${funcId}/foto`, {
-        method: 'PATCH', credentials: 'include', body: fd,
+      const fotoBase64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const r = await fetch(`${API}/funcionarios/${funcId}/foto`, {
+        method: 'PATCH', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ foto: fotoBase64 }),
       });
       if (r.ok) { toast.success('Foto atualizada!'); carregarColaboradores(); }
       else toast.error('Erro ao enviar foto.');
-    } finally { setUploadandoFoto(null); }
+    } catch { toast.error('Erro ao processar imagem.'); }
+    finally { setUploadandoFoto(null); }
   };
 
   const remover = async (id: string) => {
@@ -253,12 +261,6 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
           <option value="voluntario">Voluntário</option>
           <option value="funcionario">Funcionário</option>
         </select>
-      </FL>
-      <FL label="Salário Base (R$)">
-        <input type="number" step="0.01" min="0" placeholder="0,00"
-          value={form.salario_base ?? ''}
-          onChange={e => setForm((f: any) => ({ ...f, salario_base: e.target.value === '' ? null : Number(e.target.value) }))}
-          className={ic} />
       </FL>
       <div className="flex items-center gap-2 mb-1">
         <input type="checkbox" id="jornada_flexivel" checked={!!form.jornada_flexivel}
@@ -442,7 +444,6 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
                     <div><span className="text-slate-400 block">Estado Civil</span><span className="font-semibold">{c.funcionario?.estado_civil || '—'}</span></div>
                     <div><span className="text-slate-400 block">RG</span><span className="font-semibold">{c.funcionario?.rg || '—'}</span></div>
                     <div><span className="text-slate-400 block">Celular</span><span className="font-semibold">{c.funcionario?.celular || '—'}</span></div>
-                    <div><span className="text-slate-400 block">Salário Base</span><span className="font-semibold">{c.salario_base ? fmt.moeda(c.salario_base) : '—'}</span></div>
                     <div><span className="text-slate-400 block">Horário</span><span className="font-semibold">{c.jornada_flexivel ? `Flexível · ${Math.floor((c.horas_dia_flex ?? 420) / 60)}h/dia` : `${c.horario_entrada || '—'} → ${c.horario_saida || '—'}`}</span></div>
                     <div><span className="text-slate-400 block">Dias</span><span className="font-semibold">{(c.dias_trabalho || []).join(', ') || '—'}</span></div>
                     <div><span className="text-slate-400 block">Geofence</span><span className="font-semibold">{c.latitude_permitida ? `${Number(c.latitude_permitida).toFixed(4)},${Number(c.longitude_permitida).toFixed(4)}` : '—'}</span></div>
