@@ -1,10 +1,8 @@
 import {
   Controller, Get, Post, Patch, Delete,
-  Param, Body, Query, UseGuards, Request,
-  UseInterceptors, UploadedFile, BadRequestException,
+  Param, Body, Query, UseGuards, Request, BadRequestException,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
-import { memoryStorage } from 'multer';
+
 import { GenteService } from './gente.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ModuloPermGuard } from '../auth/guards/modulo-perm.guard';
@@ -72,18 +70,10 @@ export class GenteController {
 
   @Patch('colaboradores/:id/foto')
   @ModuloPerm('gente', 'editar')
-  @UseInterceptors(FileInterceptor('foto', { storage: memoryStorage(), limits: { fileSize: 4 * 1024 * 1024 } }))
-  async uploadFotoColaborador(@Param('id') id: string, @UploadedFile() file: Express.Multer.File) {
-    if (!file) throw new BadRequestException('Nenhum arquivo enviado.');
-    const allowed = ['image/jpeg', 'image/png', 'image/webp'];
-    if (!allowed.includes(file.mimetype)) throw new BadRequestException('Formato inválido.');
-    const foto = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
-    // Atualiza foto no funcionário vinculado
-    const col = await this.svc.buscarColaborador(id);
-    if (col?.funcionario?.id) {
-      await require('typeorm').getRepository ? null : null; // handled in service
-    }
-    return this.svc.editarColaborador(id, { foto_override: foto });
+  async uploadFotoColaborador(@Param('id') id: string, @Body() body: { foto: string }) {
+    if (!body?.foto) throw new BadRequestException('Nenhuma foto enviada.');
+    if (!body.foto.startsWith('data:image/')) throw new BadRequestException('Formato inválido. Envie uma imagem em base64.');
+    return this.svc.uploadFotoColaborador(id, body.foto);
   }
 
   @Delete('colaboradores/:id')
@@ -143,6 +133,18 @@ export class GenteController {
   @ModuloPerm('gente', 'incluir')
   calcularFolha(@Body() body: any, @Request() req: any) {
     return this.svc.calcularFolha(body.mes_referencia, req.user?.userId, req.user?.nome ?? 'sistema');
+  }
+
+  @Get('folha/preview')
+  @ModuloPerm('gente', 'visualizar')
+  previewFolha(@Query('colaborador_id') colaborador_id: string, @Query('mes_referencia') mes_referencia: string) {
+    return this.svc.previewFolhaColaborador(colaborador_id, mes_referencia);
+  }
+
+  @Post('folha/calcular-um')
+  @ModuloPerm('gente', 'incluir')
+  calcularFolhaUm(@Body() body: any, @Request() req: any) {
+    return this.svc.calcularFolhaColaborador(body.colaborador_id, body.mes_referencia, req.user?.userId, req.user?.nome ?? 'sistema');
   }
 
   @Get('recibos')

@@ -151,6 +151,13 @@ export class GenteService {
     return this.buscarColaborador(id);
   }
 
+  async uploadFotoColaborador(colaboradorId: string, foto: string) {
+    const col = await this.colaboradorRepo.findOne({ where: { id: colaboradorId } });
+    if (!col) throw new NotFoundException('Colaborador não encontrado.');
+    await this.dataSource.query(`UPDATE funcionarios SET foto = $1 WHERE id = $2`, [foto, col.funcionario_id]);
+    return this.buscarColaborador(colaboradorId);
+  }
+
   async editarFuncionarioViaGente(colaboradorId: string, dto: any) {
     const col = await this.colaboradorRepo.findOne({ where: { id: colaboradorId } });
     if (!col) throw new NotFoundException('Colaborador não encontrado.');
@@ -418,6 +425,113 @@ export class GenteService {
     return { mes_referencia, total_colaboradores: resultados.length, resultados };
   }
 
+  private async _computarFolhaColaborador(col: any, mes_referencia: string) {
+    const [func] = await this.dataSource.query(
+      `SELECT id, nome, cargo, matricula FROM funcionarios WHERE id = $1`,
+      [col.funcionario_id],
+    );
+    if (!func) return null;
+
+    const mesRef = mes_referencia.slice(2).replace('-', '/').toUpperCase();
+    const proventos: any[] = [];
+    if (col.salario_base && Number(col.salario_base) > 0) {
+      proventos.push({ codigo: 'SAL', descricao: 'SALÁRIO BASE', referencia: mesRef, valor: Number(col.salario_base) });
+    }
+    const codigosCol = await this.listarCodigosColaborador(col.id);
+    codigosCol.forEach(cc => proventos.push({
+      codigo: cc.codigo?.codigo ?? '',
+      descricao: cc.codigo?.descricao ?? '',
+      referencia: mesRef,
+      valor: Number(cc.valor_efetivo),
+    }));
+
+    const mesInicio = `${mes_referencia}-01`;
+    const mesFim = new Date(Number(mes_referencia.split('-')[0]), Number(mes_referencia.split('-')[1]), 0)
+      .toISOString().split('T')[0];
+
+    const valesDoMes = await this.valeRepo
+      .createQueryBuilder('v')
+      .where('v.colaborador_id = :id', { id: col.id })
+      .andWhere('v.descontado = false')
+      .andWhere('v.data >= :inicio', { inicio: mesInicio })
+      .andWhere('v.data <= :fim', { fim: mesFim })
+      .getMany();
+
+    const descontos: any[] = valesDoMes.map(v => ({
+      codigo: 'DESC',
+      descricao: `Vale ${v.tipo.toUpperCase()}`,
+      referencia: mesRef,
+      valor: Number(v.valor),
+      vale_id: v.id,
+    }));
+
+    const totalProventos = proventos.reduce((s, p) => s + p.valor, 0);
+    const totalDescontos = descontos.reduce((s, d) => s + d.valor, 0);
+    const liquido = totalProventos - totalDescontos;
+
+    return { col, func, proventos, descontos, valesDoMes, totalProventos, totalDescontos, liquido, mesRef };
+  }
+
+  async previewFolhaColaborador(colaborador_id: string, mes_referencia: string) {
+    const col = await this.colaboradorRepo.findOne({ where: { id: colaborador_id, ativo: true } });
+    if (!col) throw new NotFoundException('Colaborador não encontrado.');
+    const r = await this._computarFolhaColaborador(col, mes_referencia);
+    if (!r) throw new NotFoundException('Funcionário não encontrado.');
+    const reciboExistente = await this.reciboRepo.findOne({ where: { colaborador_id, mes_referencia } });
+    return {
+      colaborador_id,
+      mes_referencia,
+      funcionario: { nome: r.func.nome, cargo: r.func.cargo, matricula: r.func.matricula },
+      proventos: r.proventos,
+      descontos: r.descontos,
+      totalProventos: r.totalProventos,
+      totalDescontos: r.totalDescontos,
+      liquido: r.liquido,
+      recibo_existente: reciboExistente ? { id: reciboExistente.id, status: reciboExistente.status } : null,
+    };
+  }
+
+  async calcularFolhaColaborador(colaborador_id: string, mes_referencia: string, criado_por_id: string, criado_por_nome: string) {
+    const col = await this.colaboradorRepo.findOne({ where: { id: colaborador_id, ativo: true } });
+    if (!col) throw new NotFoundException('Colaborador não encontrado.');
+    const r = await this._computarFolhaColaborador(col, mes_referencia);
+    if (!r) throw new NotFoundException('Funcionário não encontrado.');
+
+    for (const v of r.valesDoMes) {
+      await this.valeRepo.update(v.id, { descontado: true });
+    }
+
+    const reciboExistente = await this.reciboRepo.findOne({ where: { colaborador_id, mes_referencia } });
+    const reciboData = {
+      colaborador_id,
+      mes_referencia,
+      valor: r.liquido,
+      descricao: `Folha ${mes_referencia}`,
+      status: 'pendente',
+      observacao: JSON.stringify({ proventos: r.proventos, descontos: r.descontos, totalProventos: r.totalProventos, totalDescontos: r.totalDescontos }),
+      criado_por_id,
+      criado_por_nome,
+    };
+
+    let recibo: any;
+    if (reciboExistente) {
+      await this.reciboRepo.update(reciboExistente.id, reciboData);
+      recibo = { ...reciboExistente, ...reciboData };
+    } else {
+      recibo = await this.reciboRepo.save(this.reciboRepo.create(reciboData));
+    }
+
+    return {
+      funcionario_nome: r.func.nome,
+      proventos: r.proventos,
+      descontos: r.descontos,
+      totalProventos: r.totalProventos,
+      totalDescontos: r.totalDescontos,
+      liquido: r.liquido,
+      recibo_id: recibo.id,
+    };
+  }
+
   async buscarReciboCompleto(recibo_id: string) {
     const recibo = await this.reciboRepo.findOneBy({ id: recibo_id });
     if (!recibo) throw new NotFoundException('Recibo não encontrado.');
@@ -639,8 +753,16 @@ export class GenteService {
     return this.faltaRepo.find({ where, order: { createdAt: 'DESC' } });
   }
 
-  async criarFalta(dto: any) { return this.faltaRepo.save(this.faltaRepo.create(dto)); }
-  async editarFalta(id: string, dto: any) { await this.faltaRepo.update(id, dto); return this.faltaRepo.findOneBy({ id }); }
+  async criarFalta(dto: any) {
+    // Garante que data_fim vazio não vire string inválida no DATE do Postgres
+    if (dto.data_fim === '' || dto.data_fim === null) dto.data_fim = null;
+    return this.faltaRepo.save(this.faltaRepo.create(dto));
+  }
+  async editarFalta(id: string, dto: any) {
+    if (dto.data_fim === '') dto.data_fim = null;
+    await this.faltaRepo.update(id, dto);
+    return this.faltaRepo.findOneBy({ id });
+  }
   async deletarFalta(id: string) { await this.faltaRepo.delete(id); return { ok: true }; }
 
   // ── Resumo do colaborador ─────────────────────────────────────────────────
@@ -872,8 +994,11 @@ export class GenteService {
         [inicioISO, ontemISO],
       ),
       this.dataSource.query(
-        `SELECT colaborador_id, data, data_fim FROM gente_faltas WHERE tipo IN ('atestado', 'afastamento') AND data <= $1`,
-        [ontemISO],
+        `SELECT colaborador_id, data, data_fim FROM gente_faltas
+         WHERE tipo IN ('atestado', 'afastamento')
+           AND data <= $2
+           AND (data_fim IS NULL OR data_fim >= $1)`,
+        [inicioISO, ontemISO],
       ),
     ]);
     const exclusaoMap: Record<string, Set<string>> = {};

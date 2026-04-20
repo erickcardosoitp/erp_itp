@@ -178,9 +178,9 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
     setSalvando(false);
   };
 
-  const handleFoto = async (e: React.ChangeEvent<HTMLInputElement>, funcId: string | undefined, colId: string) => {
+  const handleFoto = async (e: React.ChangeEvent<HTMLInputElement>, _funcId: string | undefined, colId: string) => {
     const file = e.target.files?.[0];
-    if (!file || !funcId) return;
+    if (!file || !colId) return;
     setUploadandoFoto(colId);
     try {
       const fotoBase64 = await new Promise<string>((resolve, reject) => {
@@ -189,7 +189,7 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
         reader.onerror = reject;
         reader.readAsDataURL(file);
       });
-      const r = await fetch(`${API}/funcionarios/${funcId}/foto`, {
+      const r = await fetch(`${API}/gente/colaboradores/${colId}/foto`, {
         method: 'PATCH', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ foto: fotoBase64 }),
@@ -971,6 +971,70 @@ function ReciboImpresso({ recibo, onClose }: { recibo: any; onClose: () => void 
 
 // ── Tab: Recibos com Folha ────────────────────────────────────────────────────
 
+function PreviewRecibo({ preview, onConfirmar, onClose, confirmando }: { preview: any; onConfirmar: () => void; onClose: () => void; confirmando: boolean }) {
+  const prov: any[] = preview.proventos ?? [];
+  const desc: any[] = preview.descontos ?? [];
+  return (
+    <Modal title={`Preview — ${preview.funcionario?.nome ?? '—'}`} onClose={onClose} wide>
+      <div className="space-y-4">
+        {preview.recibo_existente && (
+          <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-700 rounded-lg px-3 py-2 text-xs text-yellow-700 dark:text-yellow-300">
+            ⚠️ Já existe um recibo para este mês (status: <strong>{preview.recibo_existente.status}</strong>). Confirmar irá sobrescrevê-lo.
+          </div>
+        )}
+        <div className="text-xs text-slate-500">{fmt.mes(preview.mes_referencia)} · {preview.funcionario?.cargo ?? '—'} · {preview.funcionario?.matricula ?? '—'}</div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {/* Proventos */}
+          <div className="rounded-lg border border-green-200 dark:border-green-800 overflow-hidden">
+            <div className="bg-green-50 dark:bg-green-900/30 px-3 py-2 text-xs font-bold text-green-700 dark:text-green-300 uppercase tracking-wider">Proventos</div>
+            {prov.length === 0
+              ? <p className="px-3 py-3 text-xs text-slate-400">Nenhum provento</p>
+              : prov.map((p, i) => (
+                <div key={i} className="flex justify-between px-3 py-2 border-t border-green-100 dark:border-green-900 text-sm">
+                  <span className="text-slate-700 dark:text-slate-300">{p.descricao}</span>
+                  <span className="font-semibold text-green-700 dark:text-green-300">{fmt.moeda(p.valor)}</span>
+                </div>
+              ))}
+            <div className="flex justify-between px-3 py-2 bg-green-100 dark:bg-green-900/50 text-sm font-bold border-t border-green-200 dark:border-green-800">
+              <span>Total Proventos</span><span className="text-green-700 dark:text-green-300">{fmt.moeda(preview.totalProventos)}</span>
+            </div>
+          </div>
+
+          {/* Descontos */}
+          <div className="rounded-lg border border-red-200 dark:border-red-800 overflow-hidden">
+            <div className="bg-red-50 dark:bg-red-900/30 px-3 py-2 text-xs font-bold text-red-700 dark:text-red-300 uppercase tracking-wider">Descontos (Vales)</div>
+            {desc.length === 0
+              ? <p className="px-3 py-3 text-xs text-slate-400">Nenhum desconto</p>
+              : desc.map((d, i) => (
+                <div key={i} className="flex justify-between px-3 py-2 border-t border-red-100 dark:border-red-900 text-sm">
+                  <span className="text-slate-700 dark:text-slate-300">{d.descricao}</span>
+                  <span className="font-semibold text-red-600 dark:text-red-400">− {fmt.moeda(d.valor)}</span>
+                </div>
+              ))}
+            <div className="flex justify-between px-3 py-2 bg-red-100 dark:bg-red-900/50 text-sm font-bold border-t border-red-200 dark:border-red-800">
+              <span>Total Descontos</span><span className="text-red-600 dark:text-red-400">{fmt.moeda(preview.totalDescontos)}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Líquido */}
+        <div className="flex justify-between items-center rounded-xl bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-700 px-4 py-3">
+          <span className="font-bold text-slate-700 dark:text-white">Valor Líquido</span>
+          <span className="text-xl font-black text-purple-700 dark:text-purple-300">{fmt.moeda(preview.liquido)}</span>
+        </div>
+
+        <div className="flex justify-end gap-2 pt-1">
+          <button onClick={onClose} className={bs}>Cancelar</button>
+          <button onClick={onConfirmar} disabled={confirmando} className={bp}>
+            {confirmando ? 'Gerando...' : '✓ Confirmar e Gerar Recibo'}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 function RecibosTab({ reload, colaboradores }: { reload: number; colaboradores: any[] }) {
   const [recibos, setRecibos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -979,6 +1043,14 @@ function RecibosTab({ reload, colaboradores }: { reload: number; colaboradores: 
   const [mesCalculo, setMesCalculo] = useState(() => new Date().toISOString().slice(0, 7));
   const [reciboImpresso, setReciboImpresso] = useState<any | null>(null);
   const [carregandoRecibo, setCarregandoRecibo] = useState<string | null>(null);
+
+  // Estado para criação manual de recibo
+  const [modalNovo, setModalNovo] = useState(false);
+  const [novoColId, setNovoColId] = useState('');
+  const [novoMes, setNovoMes] = useState(() => new Date().toISOString().slice(0, 7));
+  const [preview, setPreview] = useState<any | null>(null);
+  const [carregandoPreview, setCarregandoPreview] = useState(false);
+  const [confirmando, setConfirmando] = useState(false);
 
   const carregar = useCallback(async () => {
     setLoading(true);
@@ -1008,6 +1080,32 @@ function RecibosTab({ reload, colaboradores }: { reload: number; colaboradores: 
     setCalculando(false);
   };
 
+  const buscarPreview = async () => {
+    if (!novoColId) { toast.error('Selecione um colaborador.'); return; }
+    setCarregandoPreview(true);
+    try {
+      const r = await fetch(`${API}/gente/folha/preview?colaborador_id=${novoColId}&mes_referencia=${novoMes}`, { credentials: 'include' });
+      if (!r.ok) { const e = await r.json(); throw new Error(e.message); }
+      setPreview(await r.json());
+    } catch (e: any) { toast.error(e.message || 'Erro ao buscar preview.'); }
+    setCarregandoPreview(false);
+  };
+
+  const confirmarRecibo = async () => {
+    setConfirmando(true);
+    try {
+      const r = await fetch(`${API}/gente/folha/calcular-um`, {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ colaborador_id: novoColId, mes_referencia: novoMes }),
+      });
+      if (!r.ok) { const e = await r.json(); throw new Error(e.message); }
+      toast.success('Recibo gerado com sucesso!');
+      setPreview(null); setModalNovo(false); carregar();
+    } catch (e: any) { toast.error(e.message || 'Erro ao gerar recibo.'); }
+    setConfirmando(false);
+  };
+
   const abrirRecibo = async (id: string) => {
     setCarregandoRecibo(id);
     try {
@@ -1034,22 +1132,51 @@ function RecibosTab({ reload, colaboradores }: { reload: number; colaboradores: 
   return (
     <div>
       {reciboImpresso && <ReciboImpresso recibo={reciboImpresso} onClose={() => setReciboImpresso(null)} />}
+      {preview && <PreviewRecibo preview={preview} onConfirmar={confirmarRecibo} onClose={() => setPreview(null)} confirmando={confirmando} />}
+
+      {/* Modal: Novo Recibo */}
+      {modalNovo && (
+        <Modal title="Gerar Recibo por Funcionário" onClose={() => setModalNovo(false)}>
+          <div className="space-y-4">
+            <FL label="Funcionário">
+              <select value={novoColId} onChange={e => { setNovoColId(e.target.value); setPreview(null); }} className={ic}>
+                <option value="">Selecione...</option>
+                {colaboradores.map(c => <option key={c.id} value={c.id}>{c.funcionario?.nome ?? c.id}</option>)}
+              </select>
+            </FL>
+            <FL label="Mês de referência">
+              <input type="month" value={novoMes} onChange={e => { setNovoMes(e.target.value); setPreview(null); }} className={ic} />
+            </FL>
+            <div className="flex justify-end gap-2 pt-1">
+              <button onClick={() => setModalNovo(false)} className={bs}>Cancelar</button>
+              <button onClick={buscarPreview} disabled={carregandoPreview || !novoColId} className={bp}>
+                {carregandoPreview ? 'Buscando...' : <><Search size={13} className="inline mr-1" />Ver Preview</>}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
       <div className="flex flex-col sm:flex-row gap-3 mb-5 flex-wrap">
         <select value={filtroCol} onChange={e => setFiltroCol(e.target.value)} className={`${ic} flex-1`}>
           <option value="">Todos colaboradores</option>
           {colaboradores.map(c => <option key={c.id} value={c.id}>{c.funcionario?.nome ?? c.id}</option>)}
         </select>
         <button onClick={carregar} className={bs}><RefreshCw size={14} /></button>
+        <button onClick={() => { setModalNovo(true); setNovoColId(''); setPreview(null); }} className={bp}>
+          <Plus size={14} className="inline mr-1" />Recibo Individual
+        </button>
         <div className="flex items-center gap-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl px-3 py-2">
           <Calculator size={16} className="text-amber-600" />
           <input type="month" value={mesCalculo} onChange={e => setMesCalculo(e.target.value)} className="bg-transparent text-sm font-bold text-amber-700 dark:text-amber-300 focus:outline-none" />
           <button onClick={calcularFolha} disabled={calculando} className="bg-amber-500 hover:bg-amber-600 text-white font-bold px-3 py-1.5 rounded-lg text-xs transition disabled:opacity-50">
-            {calculando ? 'Calculando...' : 'Calcular Folha'}
+            {calculando ? 'Calculando...' : 'Calcular Folha Geral'}
           </button>
         </div>
       </div>
+
       {loading ? <div className="text-center py-12 text-slate-400">Carregando...</div> : recibos.length === 0
-        ? <div className="text-center py-12 text-slate-400">Nenhum recibo. Use &quot;Calcular Folha&quot; para gerar automaticamente.</div>
+        ? <div className="text-center py-12 text-slate-400">Nenhum recibo. Use &quot;Recibo Individual&quot; ou &quot;Calcular Folha Geral&quot;.</div>
         : (
           <div className="space-y-2">
             {recibos.map(r => (
@@ -1205,7 +1332,13 @@ const CamposFalta = ({ form, setForm }: any) => {
   return (
     <>
       <FL label="Tipo">
-        <select value={tipo} onChange={e => setForm((f: any) => ({ ...f, tipo: e.target.value, com_desconto: e.target.value !== 'falta' ? false : f.com_desconto }))} className={ic}>
+        <select value={tipo} onChange={e => setForm((f: any) => ({
+          ...f,
+          tipo: e.target.value,
+          com_desconto: e.target.value !== 'falta' ? false : f.com_desconto,
+          // Pré-preenche data_fim com data de início ao mudar para atestado/afastamento
+          data_fim: e.target.value !== 'falta' ? (f.data_fim || f.data || hoje()) : f.data_fim,
+        }))} className={ic}>
           <option value="falta">Falta</option>
           <option value="atestado">Atestado médico</option>
           <option value="afastamento">Afastamento</option>
