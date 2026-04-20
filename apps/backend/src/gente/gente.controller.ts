@@ -362,6 +362,6 @@ export class GenteController {
   // ── Debug alertas (temporário) ────────────────────────────────────────────
 
   @Get('debug/alertas')
-  @ModuloPerm('gente', 'visualizar')
+  @Public()
   debugAlertas() { return this.svc.debugAlertas(); }
 }
