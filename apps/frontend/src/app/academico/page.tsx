@@ -7,6 +7,7 @@ import {
   Plus, Trash2, Search, X, ClipboardList, AlertCircle,
   Edit3, Coffee, UserPlus, RefreshCw, ClipboardCheck, CheckSquare, Square,
   ChevronDown, ChevronUp, FileText, Eye, Smartphone, Copy, Check, Save,
+  Clock, User, Calendar,
 } from 'lucide-react';
 import api from '@/services/api';
 import { useAuth } from '@/context/auth-context';
