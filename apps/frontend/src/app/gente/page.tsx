@@ -631,6 +631,13 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
                   {formFunc.possui_alergias && <FL label="Qual(is)?"><input type="text" value={formFunc.alergias_descricao || ''} onChange={e => setFormFunc((f: any) => ({ ...f, alergias_descricao: e.target.value }))} className={ic} /></FL>}
                   <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!formFunc.usa_medicamentos} onChange={e => setFormFunc((f: any) => ({ ...f, usa_medicamentos: e.target.checked }))} className="w-4 h-4" />Uso contínuo de medicamento?</label>
                   {formFunc.usa_medicamentos && <FL label="Quais? (nome e dosagem)"><input type="text" value={formFunc.medicamentos_descricao || ''} onChange={e => setFormFunc((f: any) => ({ ...f, medicamentos_descricao: e.target.value }))} className={ic} /></FL>}
+                  <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!formFunc.possui_plano_saude} onChange={e => setFormFunc((f: any) => ({ ...f, possui_plano_saude: e.target.checked }))} className="w-4 h-4" />Possui plano de saúde?</label>
+                  {formFunc.possui_plano_saude && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <FL label="Plano de Saúde"><input type="text" value={formFunc.plano_saude || ''} onChange={e => setFormFunc((f: any) => ({ ...f, plano_saude: e.target.value }))} className={ic} /></FL>
+                      <FL label="Nº SUS"><input type="text" value={formFunc.numero_sus || ''} onChange={e => setFormFunc((f: any) => ({ ...f, numero_sus: e.target.value }))} className={ic} /></FL>
+                    </div>
+                  )}
                 </div>
               </div>
               <div>
@@ -812,6 +819,13 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
                   {formFunc.possui_alergias && <FL label="Qual(is)?"><input type="text" value={formFunc.alergias_descricao || ''} onChange={e => setFormFunc((f: any) => ({ ...f, alergias_descricao: e.target.value }))} className={ic} /></FL>}
                   <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!formFunc.usa_medicamentos} onChange={e => setFormFunc((f: any) => ({ ...f, usa_medicamentos: e.target.checked }))} className="w-4 h-4" />Uso contínuo de medicamento?</label>
                   {formFunc.usa_medicamentos && <FL label="Quais? (nome e dosagem)"><input type="text" value={formFunc.medicamentos_descricao || ''} onChange={e => setFormFunc((f: any) => ({ ...f, medicamentos_descricao: e.target.value }))} className={ic} /></FL>}
+                  <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!formFunc.possui_plano_saude} onChange={e => setFormFunc((f: any) => ({ ...f, possui_plano_saude: e.target.checked }))} className="w-4 h-4" />Possui plano de saúde?</label>
+                  {formFunc.possui_plano_saude && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <FL label="Plano de Saúde"><input type="text" value={formFunc.plano_saude || ''} onChange={e => setFormFunc((f: any) => ({ ...f, plano_saude: e.target.value }))} className={ic} /></FL>
+                      <FL label="Nº SUS"><input type="text" value={formFunc.numero_sus || ''} onChange={e => setFormFunc((f: any) => ({ ...f, numero_sus: e.target.value }))} className={ic} /></FL>
+                    </div>
+                  )}
                 </div>
               </div>
               <div>
