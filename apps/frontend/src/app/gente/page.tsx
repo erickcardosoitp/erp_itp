@@ -1225,7 +1225,7 @@ function PreviewRecibo({ preview, onConfirmar, onClose, confirmando }: { preview
 
           {/* Descontos */}
           <div className="rounded-lg border border-red-200 dark:border-red-800 overflow-hidden">
-            <div className="bg-red-50 dark:bg-red-900/30 px-3 py-2 text-xs font-bold text-red-700 dark:text-red-300 uppercase tracking-wider">Descontos (Vales)</div>
+            <div className="bg-red-50 dark:bg-red-900/30 px-3 py-2 text-xs font-bold text-red-700 dark:text-red-300 uppercase tracking-wider">Descontos</div>
             {desc.length === 0
               ? <p className="px-3 py-3 text-xs text-slate-400">Nenhum desconto</p>
               : desc.map((d, i) => (
@@ -1372,7 +1372,7 @@ function RecibosTab({ reload, colaboradores }: { reload: number; colaboradores: 
             <div className="flex justify-end gap-2 pt-1">
               <button onClick={() => setModalNovo(false)} className={bs}>Cancelar</button>
               <button onClick={buscarPreview} disabled={carregandoPreview || !novoColId} className={bp}>
-                {carregandoPreview ? 'Buscando...' : <><Search size={13} className="inline mr-1" />Ver Preview</>}
+                {carregandoPreview ? 'Calculando...' : <><Calculator size={13} className="inline mr-1" />Calcular e Gerar</>}
               </button>
             </div>
           </div>
@@ -1385,7 +1385,7 @@ function RecibosTab({ reload, colaboradores }: { reload: number; colaboradores: 
           {colaboradores.map(c => <option key={c.id} value={c.id}>{c.funcionario?.nome ?? c.id}</option>)}
         </select>
         <button onClick={carregar} className={bs}><RefreshCw size={14} /></button>
-        <button onClick={() => { setModalNovo(true); setNovoColId(''); setPreview(null); }} className={bp}>
+        <button onClick={() => { setModalNovo(true); setNovoColId(filtroCol); setPreview(null); }} className={bp}>
           <Plus size={14} className="inline mr-1" />Recibo Individual
         </button>
         <div className="flex items-center gap-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl px-3 py-2">

@@ -434,21 +434,51 @@ export class GenteService {
       const mesFim = new Date(Number(mes_referencia.split('-')[0]), Number(mes_referencia.split('-')[1]), 0)
         .toISOString().split('T')[0];
 
+      // Vales pendentes até o fim do mês (inclui meses anteriores não descontados)
       const valesDoMes = await this.valeRepo
         .createQueryBuilder('v')
         .where('v.colaborador_id = :id', { id: col.id })
         .andWhere('v.descontado = false')
-        .andWhere('v.data >= :inicio', { inicio: mesInicio })
         .andWhere('v.data <= :fim', { fim: mesFim })
         .getMany();
 
       const descontos: any[] = valesDoMes.map(v => ({
-        codigo: 'DESC',
-        descricao: `Vale ${v.tipo.toUpperCase()}`,
+        codigo: 'VALE',
+        descricao: `Vale ${v.tipo.toUpperCase()}${v.descricao ? ' — ' + v.descricao : ''}`,
         referencia: mes_referencia.slice(2).replace('-', '/').toUpperCase(),
         valor: Number(v.valor),
         vale_id: v.id,
       }));
+
+      // Suspensões com desconto que incidem no mês
+      const suspensoes = await this.suspensaoRepo
+        .createQueryBuilder('s')
+        .where('s.colaborador_id = :id', { id: col.id })
+        .andWhere('s.com_desconto = true')
+        .andWhere('s.data_inicio <= :fim', { fim: mesFim })
+        .andWhere('s.data_fim >= :inicio', { inicio: mesInicio })
+        .getMany();
+
+      for (const s of suspensoes) {
+        const inicioSusp = new Date(s.data_inicio + 'T12:00:00');
+        const fimSusp = new Date(s.data_fim + 'T12:00:00');
+        const inicioMes = new Date(mesInicio + 'T12:00:00');
+        const fimMes = new Date(mesFim + 'T12:00:00');
+        const sobreInicio = inicioSusp > inicioMes ? inicioSusp : inicioMes;
+        const sobreFim = fimSusp < fimMes ? fimSusp : fimMes;
+        const dias = Math.round((sobreFim.getTime() - sobreInicio.getTime()) / 86400000) + 1;
+        if (dias > 0 && col.salario_base && Number(col.salario_base) > 0) {
+          const [ano, mes] = mes_referencia.split('-').map(Number);
+          const diasUteis = this._contarDiasTrabalho(col.dias_trabalho ?? [], ano, mes) || 22;
+          const valorDia = Number(col.salario_base) / diasUteis;
+          descontos.push({
+            codigo: 'SUSP',
+            descricao: `Suspensão (${dias}d) — ${s.motivo.substring(0, 40)}`,
+            referencia: mes_referencia.slice(2).replace('-', '/').toUpperCase(),
+            valor: Math.round(valorDia * dias * 100) / 100,
+          });
+        }
+      }
 
       const totalDescontos = descontos.reduce((s, d) => s + d.valor, 0);
       const liquido = totalProventos - totalDescontos;
@@ -542,21 +572,51 @@ export class GenteService {
     const mesFim = new Date(Number(mes_referencia.split('-')[0]), Number(mes_referencia.split('-')[1]), 0)
       .toISOString().split('T')[0];
 
+    // Vales pendentes até o fim do mês (inclui meses anteriores não descontados)
     const valesDoMes = await this.valeRepo
       .createQueryBuilder('v')
       .where('v.colaborador_id = :id', { id: col.id })
       .andWhere('v.descontado = false')
-      .andWhere('v.data >= :inicio', { inicio: mesInicio })
       .andWhere('v.data <= :fim', { fim: mesFim })
       .getMany();
 
     const descontos: any[] = valesDoMes.map(v => ({
-      codigo: 'DESC',
-      descricao: `Vale ${v.tipo.toUpperCase()}`,
+      codigo: 'VALE',
+      descricao: `Vale ${v.tipo.toUpperCase()}${v.descricao ? ' — ' + v.descricao : ''}`,
       referencia: mesRef,
       valor: Number(v.valor),
       vale_id: v.id,
     }));
+
+    // Suspensões com desconto que incidem no mês
+    const suspensoes = await this.suspensaoRepo
+      .createQueryBuilder('s')
+      .where('s.colaborador_id = :id', { id: col.id })
+      .andWhere('s.com_desconto = true')
+      .andWhere('s.data_inicio <= :fim', { fim: mesFim })
+      .andWhere('s.data_fim >= :inicio', { inicio: mesInicio })
+      .getMany();
+
+    for (const s of suspensoes) {
+      const inicioSusp = new Date(s.data_inicio + 'T12:00:00');
+      const fimSusp = new Date(s.data_fim + 'T12:00:00');
+      const inicioMes = new Date(mesInicio + 'T12:00:00');
+      const fimMes = new Date(mesFim + 'T12:00:00');
+      const sobreInicio = inicioSusp > inicioMes ? inicioSusp : inicioMes;
+      const sobreFim = fimSusp < fimMes ? fimSusp : fimMes;
+      const dias = Math.round((sobreFim.getTime() - sobreInicio.getTime()) / 86400000) + 1;
+      if (dias > 0 && col.salario_base && Number(col.salario_base) > 0) {
+        const [ano, mes] = mes_referencia.split('-').map(Number);
+        const diasUteis = this._contarDiasTrabalho(col.dias_trabalho ?? [], ano, mes) || 22;
+        const valorDia = Number(col.salario_base) / diasUteis;
+        descontos.push({
+          codigo: 'SUSP',
+          descricao: `Suspensão (${dias}d) — ${s.motivo.substring(0, 40)}`,
+          referencia: mesRef,
+          valor: Math.round(valorDia * dias * 100) / 100,
+        });
+      }
+    }
 
     const totalProventos = proventos.reduce((s, p) => s + p.valor, 0);
     const totalDescontos = descontos.reduce((s, d) => s + d.valor, 0);
