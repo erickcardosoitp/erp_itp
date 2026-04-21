@@ -149,7 +149,7 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
         throw new Error(`[${r2.status}] ${msg2}`);
       }
 
-      toast.success('Cadastro atualizado!'); setModal(null); carregarColaboradores();
+      await carregarColaboradores(); toast.success('Cadastro atualizado!'); setModal(null);
     } catch (e: any) { toast.error(e.message); }
     setSalvando(false);
   };
@@ -529,6 +529,7 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
                 </div>
                 {detalhe === c.id && (
                   <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700 space-y-3">
+                    {/* Linha 1: Identificação */}
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
                       <div><span className="text-slate-400 block">CPF</span><span className="font-semibold">{c.funcionario?.cpf || '—'}</span></div>
                       <div><span className="text-slate-400 block">Celular</span><span className="font-semibold">{c.funcionario?.celular || '—'}</span></div>
@@ -539,17 +540,43 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
                       <div><span className="text-slate-400 block">Escolaridade</span><span className="font-semibold">{c.funcionario?.escolaridade || '—'}</span></div>
                       <div><span className="text-slate-400 block">Salário Base</span><span className="font-semibold">{c.salario_base ? fmt.moeda(Number(c.salario_base)) : '—'}</span></div>
                     </div>
+                    {/* Linha 2: Endereço */}
+                    {(c.funcionario?.logradouro || c.funcionario?.cidade) && (
+                      <div className="text-xs border-t border-slate-100 dark:border-slate-700 pt-2 space-y-1">
+                        <span className="text-slate-400 font-bold uppercase tracking-widest">Endereço</span>
+                        <div className="font-semibold text-slate-700 dark:text-slate-300">
+                          {[c.funcionario?.logradouro, c.funcionario?.numero_residencia, c.funcionario?.complemento].filter(Boolean).join(', ')}
+                          {c.funcionario?.bairro && <span className="text-slate-500"> · {c.funcionario.bairro}</span>}
+                          {c.funcionario?.cidade && <span> · {c.funcionario.cidade}{c.funcionario?.estado ? `/${c.funcionario.estado}` : ''}</span>}
+                          {c.funcionario?.cep && <span className="text-slate-400"> (CEP {c.funcionario.cep})</span>}
+                        </div>
+                        {(c.funcionario?.telefone_emergencia_1 || c.funcionario?.telefone_emergencia_2) && (
+                          <div className="text-slate-500">
+                            Tel. emergência: {[c.funcionario?.telefone_emergencia_1, c.funcionario?.telefone_emergencia_2].filter(Boolean).join(' · ')}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {/* Linha 3: Saúde & Perfil Social */}
+                    {(c.funcionario?.possui_deficiencia || c.funcionario?.possui_alergias || c.funcionario?.usa_medicamentos || c.funcionario?.possui_plano_saude || c.funcionario?.interesse_cursos || c.funcionario?.pertence_comunidade_tradicional || c.funcionario?.possui_cad_unico || c.funcionario?.baixo_idh) && (
+                      <div className="text-xs border-t border-slate-100 dark:border-slate-700 pt-2 flex flex-wrap gap-2">
+                        {c.funcionario?.possui_deficiencia && <span className="bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 px-2 py-0.5 rounded-full">Deficiência</span>}
+                        {c.funcionario?.possui_alergias && <span className="bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 px-2 py-0.5 rounded-full">Alergias</span>}
+                        {c.funcionario?.usa_medicamentos && <span className="bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 px-2 py-0.5 rounded-full">Medicamentos</span>}
+                        {c.funcionario?.possui_plano_saude && <span className="bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded-full">Plano: {c.funcionario?.plano_saude || '✓'}</span>}
+                        {c.funcionario?.interesse_cursos && <span className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full">Interesse cursos</span>}
+                        {c.funcionario?.pertence_comunidade_tradicional && <span className="bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-2 py-0.5 rounded-full">Com. tradicional</span>}
+                        {c.funcionario?.possui_cad_unico && <span className="bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-full">CadÚnico</span>}
+                        {c.funcionario?.baixo_idh && <span className="bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-full">Baixo IDH</span>}
+                      </div>
+                    )}
+                    {/* Linha 4: Ponto */}
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs border-t border-slate-100 dark:border-slate-700 pt-2">
                       <div><span className="text-slate-400 block">Horário</span><span className="font-semibold">{c.jornada_flexivel ? `Flexível · ${Math.floor((c.horas_dia_flex ?? 420) / 60)}h/dia` : `${c.horario_entrada || '—'} → ${c.horario_saida || '—'}`}</span></div>
                       <div><span className="text-slate-400 block">Dias</span><span className="font-semibold">{(c.dias_trabalho || []).join(', ') || '—'}</span></div>
                       <div><span className="text-slate-400 block">Geofence</span><span className="font-semibold">{c.latitude_permitida ? `${Number(c.latitude_permitida).toFixed(4)}, ${Number(c.longitude_permitida).toFixed(4)}` : '—'}</span></div>
                       <div><span className="text-slate-400 block">Raio</span><span className="font-semibold">{c.raio_metros ?? 100}m</span></div>
                     </div>
-                    {c.funcionario?.cidade && (
-                      <div className="text-xs text-slate-400 border-t border-slate-100 dark:border-slate-700 pt-2">
-                        📍 {[c.funcionario?.logradouro, c.funcionario?.numero_residencia, c.funcionario?.bairro, c.funcionario?.cidade, c.funcionario?.estado].filter(Boolean).join(', ')}
-                      </div>
-                    )}
                   </div>
                 )}
               </div>

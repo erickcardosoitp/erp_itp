@@ -150,12 +150,13 @@ export class GenteService {
           possui_deficiencia, deficiencia_descricao,
           possui_alergias, alergias_descricao,
           usa_medicamentos, medicamentos_descricao,
+          possui_plano_saude, plano_saude, numero_sus,
           interesse_cursos, pertence_comunidade_tradicional, comunidade_tradicional,
           possui_cad_unico, baixo_idh,
           matricula, ativo
         ) VALUES (
           $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,
-          $19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,true
+          $19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,true
         ) RETURNING id, nome, cargo, matricula`,
         [
           funcDto.nome, funcDto.cargo || null, funcDto.email || null, funcDto.cpf || null,
@@ -170,6 +171,7 @@ export class GenteService {
           funcDto.possui_deficiencia ?? false, funcDto.deficiencia_descricao || null,
           funcDto.possui_alergias ?? false, funcDto.alergias_descricao || null,
           funcDto.usa_medicamentos ?? false, funcDto.medicamentos_descricao || null,
+          funcDto.possui_plano_saude ?? false, funcDto.plano_saude || null, funcDto.numero_sus || null,
           funcDto.interesse_cursos ?? false, funcDto.pertence_comunidade_tradicional ?? false,
           funcDto.comunidade_tradicional || null,
           funcDto.possui_cad_unico ?? false, funcDto.baixo_idh ?? false,
