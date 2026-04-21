@@ -2241,6 +2241,7 @@ function TransporteTab({ colaboradores, reload }: { colaboradores: any[]; reload
   const [salvando, setSalvando] = useState<string | null>(null);
   const [mes, setMes] = useState(new Date().toISOString().slice(0, 7));
   const [comprovante, setComprovante] = useState<any | null>(null);
+  const [feriadosMes, setFeriadosMes] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const initVal: Record<string, string> = {};
@@ -2253,6 +2254,18 @@ function TransporteTab({ colaboradores, reload }: { colaboradores: any[]; reload
     setDiasEdit(initDias);
   }, [colaboradores, reload]);
 
+  useEffect(() => {
+    if (!mes) return;
+    const ano = mes.split('-')[0];
+    fetch(`${API}/gente/feriados?ano=${ano}`, { credentials: 'include' })
+      .then(r => r.ok ? r.json() : [])
+      .then((rows: any[]) => {
+        const s = new Set<string>(rows.map(f => String(f.data).slice(0, 10)));
+        setFeriadosMes(s);
+      })
+      .catch(() => {});
+  }, [mes]); // eslint-disable-line react-hooks/exhaustive-deps
+
   function diasNoMes(diasSemana: string[], mesRef: string): number {
     const mapa: Record<string, number> = { dom: 0, seg: 1, ter: 2, qua: 3, qui: 4, sex: 5, sab: 6 };
     const [ano, m] = mesRef.split('-').map(Number);
@@ -2260,7 +2273,8 @@ function TransporteTab({ colaboradores, reload }: { colaboradores: any[]; reload
     const total = new Date(ano, m, 0).getDate();
     let count = 0;
     for (let d = 1; d <= total; d++) {
-      if (alvos.has(new Date(ano, m - 1, d).getDay())) count++;
+      const iso = `${ano}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      if (alvos.has(new Date(ano, m - 1, d).getDay()) && !feriadosMes.has(iso)) count++;
     }
     return count;
   }
@@ -3006,6 +3020,124 @@ function FolhaPontoRelatorio({ colaboradores }: { colaboradores: any[] }) {
   );
 }
 
+// ── Tab: Feriados ─────────────────────────────────────────────────────────────
+
+function FeriadosTab() {
+  const [feriados, setFeriados] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [ano, setAno] = useState(() => String(new Date().getFullYear()));
+  const [form, setForm] = useState({ data: '', descricao: '', tipo: 'institucional' });
+  const [salvando, setSalvando] = useState(false);
+
+  const carregar = useCallback(async () => {
+    setLoading(true);
+    const r = await fetch(`${API}/gente/feriados?ano=${ano}`, { credentials: 'include' });
+    if (r.ok) setFeriados(await r.json());
+    setLoading(false);
+  }, [ano]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => { carregar(); }, [carregar]);
+
+  const salvar = async () => {
+    if (!form.data || !form.descricao.trim()) { toast.error('Preencha data e descrição'); return; }
+    setSalvando(true);
+    const r = await fetch(`${API}/gente/feriados`, {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(form),
+    });
+    setSalvando(false);
+    if (r.ok) {
+      toast.success('Feriado registrado');
+      setForm({ data: '', descricao: '', tipo: 'institucional' });
+      carregar();
+    } else {
+      toast.error('Erro ao salvar feriado');
+    }
+  };
+
+  const deletar = async (id: string) => {
+    if (!confirm('Remover este feriado?')) return;
+    await fetch(`${API}/gente/feriados/${id}`, { method: 'DELETE', credentials: 'include' });
+    toast.success('Feriado removido');
+    carregar();
+  };
+
+  const tipoLabel: Record<string, string> = {
+    nacional: 'Nacional', municipal: 'Municipal', institucional: 'Institucional',
+  };
+  const tipoCor: Record<string, string> = {
+    nacional: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+    municipal: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+    institucional: 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300',
+  };
+
+  return (
+    <div>
+      <div className="mb-5 p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-sm text-amber-800 dark:text-amber-300">
+        Feriados cadastrados aqui são excluídos automaticamente do cálculo de ponto e vale-transporte. Colaboradores não têm obrigação de registrar presença em feriados.
+      </div>
+
+      {/* Formulário de adição */}
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-4 mb-5">
+        <h3 className="text-sm font-black text-slate-700 dark:text-white mb-3">Adicionar Feriado</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+          <FL label="Data">
+            <input type="date" value={form.data} onChange={e => setForm(f => ({ ...f, data: e.target.value }))} className={ic} />
+          </FL>
+          <FL label="Descrição">
+            <input type="text" placeholder="Ex: Tiradentes" value={form.descricao} onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))} className={`${ic} sm:col-span-2`} />
+          </FL>
+          <FL label="Tipo">
+            <select value={form.tipo} onChange={e => setForm(f => ({ ...f, tipo: e.target.value }))} className={ic}>
+              <option value="nacional">Nacional</option>
+              <option value="municipal">Municipal</option>
+              <option value="institucional">Institucional</option>
+            </select>
+          </FL>
+          <div className="flex items-end">
+            <button onClick={salvar} disabled={salvando} className={`${bp} w-full`}>
+              <Plus size={14} className="inline mr-1" />{salvando ? 'Salvando…' : 'Adicionar'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Filtro de ano + lista */}
+      <div className="flex items-center gap-3 mb-4">
+        <select value={ano} onChange={e => setAno(e.target.value)} className={`${ic} w-32`}>
+          {[2024, 2025, 2026, 2027].map(y => <option key={y} value={String(y)}>{y}</option>)}
+        </select>
+        <button onClick={carregar} className={bs}><RefreshCw size={14} /></button>
+        <span className="text-sm text-slate-500">{feriados.length} feriado(s) em {ano}</span>
+      </div>
+
+      {loading ? <div className="text-center py-10 text-slate-400">Carregando…</div>
+        : feriados.length === 0 ? <div className="text-center py-10 text-slate-400">Nenhum feriado cadastrado para {ano}.</div>
+        : (
+          <div className="space-y-2">
+            {feriados.map(f => (
+              <div key={f.id} className="flex items-center justify-between bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-700 px-4 py-3 gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className="font-mono text-sm font-bold text-slate-600 dark:text-slate-300 shrink-0">
+                    {new Date(f.data + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', weekday: 'short' })}
+                  </span>
+                  <span className="text-sm font-semibold text-slate-800 dark:text-white truncate">{f.descricao}</span>
+                  <span className={`text-xs font-bold px-2 py-0.5 rounded-full shrink-0 ${tipoCor[f.tipo] ?? tipoCor.institucional}`}>
+                    {tipoLabel[f.tipo] ?? f.tipo}
+                  </span>
+                </div>
+                <button onClick={() => deletar(f.id)} className="p-1.5 text-slate-400 hover:text-red-500 transition shrink-0">
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+    </div>
+  );
+}
+
 // ── Página Principal ──────────────────────────────────────────────────────────
 
 const MAIN_TABS = [
@@ -3022,6 +3154,7 @@ const SUB_PONTO = [
   { key: 'relatorio-folha' as const, label: 'Folha de Ponto', icon: Printer },
   { key: 'folgas' as const, label: 'Folgas', icon: Check },
   { key: 'trabalho-externo' as const, label: 'Trab. Externo', icon: MapPin },
+  { key: 'feriados' as const, label: 'Feriados', icon: Calendar },
 ] as const;
 
 const SUB_FOLHA = [
@@ -3094,6 +3227,7 @@ export default function GentePage() {
             {subPonto === 'relatorio-folha' && <FolhaPontoRelatorio colaboradores={colaboradores} />}
             {subPonto === 'folgas' && <FolgasTab reload={reload} colaboradores={colaboradores} />}
             {subPonto === 'trabalho-externo' && <TrabalhoExternoTab reload={reload} colaboradores={colaboradores} />}
+            {subPonto === 'feriados' && <FeriadosTab />}
           </>
         )}
 

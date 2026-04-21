@@ -388,6 +388,22 @@ export class GenteController {
     return this.svc.mesclarColaboradorDuplicado(body.matricula_correta);
   }
 
+  // ── Feriados ──────────────────────────────────────────────────────────────
+
+  @Get('feriados')
+  @ModuloPerm('gente', 'visualizar')
+  listarFeriados(@Query('ano') ano?: string) {
+    return this.svc.listarFeriados(ano ? Number(ano) : undefined);
+  }
+
+  @Post('feriados')
+  @ModuloPerm('gente', 'editar')
+  criarFeriado(@Body() dto: any) { return this.svc.criarFeriado(dto); }
+
+  @Delete('feriados/:id')
+  @ModuloPerm('gente', 'excluir')
+  deletarFeriado(@Param('id') id: string) { return this.svc.deletarFeriado(id); }
+
   // ── Debug alertas (temporário) ────────────────────────────────────────────
 
   @Get('debug/alertas')

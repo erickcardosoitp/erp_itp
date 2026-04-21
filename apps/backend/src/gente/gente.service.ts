@@ -14,6 +14,7 @@ import { GenteColaboradorLocal } from './entities/gente-colaborador-local.entity
 import { GenteFolgaSolicitacao } from './entities/gente-folga-solicitacao.entity';
 import { GenteTrabalhoExterno } from './entities/gente-trabalho-externo.entity';
 import { GenteColaboradorDocumento } from './entities/gente-colaborador-documento.entity';
+import { GenteFeriado } from './entities/gente-feriado.entity';
 import { MovimentacaoFinanceira } from '../financeiro/entities/movimentacao-financeira.entity';
 
 const PONTO_TOKEN = 'itp-ponto-2026';
@@ -44,6 +45,7 @@ export class GenteService {
     @InjectRepository(GenteFolgaSolicitacao) private folgaRepo: Repository<GenteFolgaSolicitacao>,
     @InjectRepository(GenteTrabalhoExterno) private trabalhoExternoRepo: Repository<GenteTrabalhoExterno>,
     @InjectRepository(GenteColaboradorDocumento) private documentoRepo: Repository<GenteColaboradorDocumento>,
+    @InjectRepository(GenteFeriado) private feriadoRepo: Repository<GenteFeriado>,
     @InjectRepository(MovimentacaoFinanceira) private movimentacaoRepo: Repository<MovimentacaoFinanceira>,
     private dataSource: DataSource,
   ) {}
@@ -61,7 +63,42 @@ export class GenteService {
         criado_por_nome TEXT,
         created_at TIMESTAMPTZ DEFAULT NOW()
       );
+      CREATE TABLE IF NOT EXISTS gente_feriados (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        data DATE NOT NULL UNIQUE,
+        descricao TEXT NOT NULL,
+        tipo TEXT NOT NULL DEFAULT 'institucional',
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
     `);
+  }
+
+  // ── Feriados ──────────────────────────────────────────────────────────────
+
+  async listarFeriados(ano?: number) {
+    const rows = await this.feriadoRepo.find({ order: { data: 'ASC' } });
+    if (!ano) return rows;
+    return rows.filter(f => f.data.startsWith(String(ano)));
+  }
+
+  async criarFeriado(dto: { data: string; descricao: string; tipo?: string }) {
+    const existing = await this.feriadoRepo.findOneBy({ data: dto.data });
+    if (existing) {
+      await this.feriadoRepo.update(existing.id, { descricao: dto.descricao, tipo: dto.tipo ?? 'institucional' });
+      return this.feriadoRepo.findOneBy({ id: existing.id });
+    }
+    return this.feriadoRepo.save(this.feriadoRepo.create({ ...dto, tipo: dto.tipo ?? 'institucional' }));
+  }
+
+  async deletarFeriado(id: string) { await this.feriadoRepo.delete(id); return { ok: true }; }
+
+  /** Retorna Set de datas (YYYY-MM-DD) de feriados no intervalo [inicioISO, fimISO] */
+  private async _feriadosNoIntervalo(inicioISO: string, fimISO: string): Promise<Set<string>> {
+    const rows: Array<{ data: string }> = await this.dataSource.query(
+      `SELECT data::text FROM gente_feriados WHERE data >= $1::date AND data <= $2::date`,
+      [inicioISO, fimISO],
+    );
+    return new Set(rows.map(r => String(r.data).slice(0, 10)));
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
@@ -279,6 +316,7 @@ export class GenteService {
     const colaboradores = await this.colaboradorRepo.find({ where: { ativo: true } });
     const mesInicio = `${mes}-01`;
     const mesFim = new Date(Number(mes.split('-')[0]), Number(mes.split('-')[1]), 0).toISOString().split('T')[0];
+    const feriadosMes = await this._feriadosNoIntervalo(mesInicio, mesFim);
 
     const rows = await Promise.all(colaboradores.map(async col => {
       const [func] = await this.dataSource.query(
@@ -473,7 +511,10 @@ export class GenteService {
       }));
       if (col.valor_passagem && Number(col.valor_passagem) > 0) {
         const [ano, mes] = mes_referencia.split('-').map(Number);
-        const diasTrab = this._contarDiasTrabalho(col.dias_trabalho ?? [], ano, mes);
+        const mesInicioVT = `${mes_referencia}-01`;
+        const mesFimVT = new Date(ano, mes, 0).toISOString().split('T')[0];
+        const feriadosMesVT = await this._feriadosNoIntervalo(mesInicioVT, mesFimVT);
+        const diasTrab = this._contarDiasTrabalho(col.dias_trabalho ?? [], ano, mes, feriadosMesVT);
         const vtMensal = Number(col.valor_passagem) * diasTrab;
         if (vtMensal > 0) {
           proventos.push({ codigo: 'VT', descricao: `VALE TRANSPORTE (${diasTrab}x)`, referencia: mesRef, valor: vtMensal });
@@ -600,13 +641,15 @@ export class GenteService {
     return { mes_referencia, total_colaboradores: resultados.length, resultados };
   }
 
-  private _contarDiasTrabalho(diasSemana: string[], ano: number, mes: number): number {
+  private _contarDiasTrabalho(diasSemana: string[], ano: number, mes: number, feriados: Set<string> = new Set()): number {
     const mapa: Record<string, number> = { dom: 0, seg: 1, ter: 2, qua: 3, qui: 4, sex: 5, sab: 6 };
     const alvos = new Set((diasSemana ?? []).map(d => mapa[d]).filter(n => n !== undefined));
     const totalDias = new Date(ano, mes, 0).getDate();
     let count = 0;
     for (let d = 1; d <= totalDias; d++) {
-      if (alvos.has(new Date(ano, mes - 1, d).getDay())) count++;
+      const date = new Date(ano, mes - 1, d);
+      const iso = `${ano}-${String(mes).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      if (alvos.has(date.getDay()) && !feriados.has(iso)) count++;
     }
     return count;
   }
@@ -1260,6 +1303,12 @@ export class GenteService {
       for (let d = start; d <= end; d += 86400000) datasExcluidas.add(new Date(d).toISOString().split('T')[0]);
     }
 
+    // Feriados no período também excluem obrigatoriedade
+    const inicioRelISO = new Date(inicioMs).toISOString().split('T')[0];
+    const fimRelISO = new Date(fimMs).toISOString().split('T')[0];
+    const feriadosRel = await this._feriadosNoIntervalo(inicioRelISO, fimRelISO);
+    feriadosRel.forEach(d => datasExcluidas.add(d));
+
     // Separate sets for display: atestados por dia e folgas por dia
     const atestadosDatas = new Set<string>();
     for (const f of faltasExcluidas) {
@@ -1466,6 +1515,9 @@ export class GenteService {
       }
     }
 
+    // Feriados no período (excluem todo o efetivo)
+    const feriadosSet = await this._feriadosNoIntervalo(inicioISO, ontemISO);
+
     // Collect funcionario names
     const funcIds = colaboradores.map(c => c.funcionario_id);
     const funcionarios: any[] = funcIds.length
@@ -1494,7 +1546,7 @@ export class GenteService {
         if (diasNums.includes(dow)) {
           // Format as YYYY-MM-DD (UTC date)
           const iso = date.toISOString().split('T')[0];
-          if (!presentes.has(iso) && !excluidos.has(iso)) {
+          if (!presentes.has(iso) && !excluidos.has(iso) && !feriadosSet.has(iso)) {
             const diaStr = diasNomesMap[dow] ?? '';
             const [y, m, d] = iso.split('-');
             const label = `${d}/${m} (${DIAS_LABEL[diaStr] ?? diaStr})`;
