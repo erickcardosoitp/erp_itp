@@ -1038,155 +1038,170 @@ function CodigosTab({ reload }: { reload: number }) {
 
 // ── Recibo PDF ────────────────────────────────────────────────────────────────
 
+const S = {
+  bk: '1px solid black',
+  gr: '1px solid #eee',
+};
+
+function ViaRecibo({ recibo, mesRef, proventos, descontos, totalProv, totalDesc, liquido, codigo, via }: any) {
+  const LINHAS_MIN = 8;
+  const isEmpregado = via.includes('EMPREGADO');
+  const nomeLabel = isEmpregado ? 'NOME DO VOLUNTÁRIO' : 'NOME DO FUNCIONÁRIO';
+  const n = (v: number) => Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+  return (
+    <div style={{ display: 'flex', border: S.bk, fontFamily: 'Arial, sans-serif', fontSize: '10px', pageBreakInside: 'avoid' }}>
+      {/* Conteúdo principal */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        {/* Cabeçalho */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderBottom: S.bk }}>
+          <div style={{ padding: '5px 7px', borderRight: S.bk }}>
+            <div style={{ fontSize: '9px', fontWeight: 900 }}>EMPREGADOR &nbsp;<strong>{EMPRESA.toUpperCase()}</strong></div>
+            <div style={{ fontSize: '8px', marginTop: '3px' }}>
+              <div><span style={{ color: '#777' }}>Nome &nbsp;</span><strong>{EMPRESA}</strong></div>
+              <div><span style={{ color: '#777' }}>Endereço &nbsp;</span>{ENDERECO}</div>
+              <div><span style={{ color: '#777' }}>CNPJ &nbsp;</span><span style={{ fontFamily: 'monospace' }}>{CNPJ}</span></div>
+            </div>
+          </div>
+          <div style={{ padding: '5px 7px', textAlign: 'right' }}>
+            <div style={{ fontSize: '13px', fontWeight: 900, textTransform: 'uppercase', lineHeight: 1.1 }}>Recibo de Reembolso de Despesas</div>
+            <div style={{ fontSize: '7px', color: '#888', marginTop: '5px' }}>Referente ao Mês / Ano</div>
+            <div style={{ fontSize: '22px', fontWeight: 900, marginTop: '1px' }}>{mesRef}</div>
+          </div>
+        </div>
+
+        {/* Identificação */}
+        <div style={{ display: 'grid', gridTemplateColumns: '70px 1fr 1fr', borderBottom: S.bk }}>
+          <div style={{ padding: '3px 7px', borderRight: S.bk }}>
+            <div style={{ fontSize: '7px', color: '#777', textTransform: 'uppercase' }}>Código</div>
+            <div style={{ fontWeight: 'bold', fontSize: '12px' }}>{codigo}</div>
+          </div>
+          <div style={{ padding: '3px 7px', borderRight: S.bk }}>
+            <div style={{ fontSize: '7px', color: '#777', textTransform: 'uppercase' }}>{nomeLabel}</div>
+            <div style={{ fontWeight: 'bold' }}>{recibo.funcionario?.nome ?? '—'}</div>
+          </div>
+          <div style={{ padding: '3px 7px' }}>
+            <div style={{ fontSize: '7px', color: '#777', textTransform: 'uppercase' }}>Função</div>
+            <div style={{ fontWeight: 'bold', textTransform: 'uppercase' }}>{recibo.funcionario?.cargo ?? '—'}</div>
+          </div>
+        </div>
+
+        {/* Tabela */}
+        <table style={{ width: '100%', borderCollapse: 'collapse', borderBottom: S.bk }}>
+          <thead>
+            <tr style={{ borderBottom: S.bk, background: '#f5f5f5' }}>
+              {(['Código', 'Descrição', 'Referência', 'Proventos', 'Descontos'] as const).map((h, i) => (
+                <th key={h} style={{ borderRight: i < 4 ? S.bk : undefined, padding: '2px 6px', textAlign: i >= 2 ? 'right' : 'left', fontSize: '8px', fontWeight: 'bold', textTransform: 'uppercase', width: i === 0 ? 60 : i === 2 ? 68 : i >= 3 ? 80 : undefined }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {proventos.map((p: any, i: number) => (
+              <tr key={i} style={{ borderBottom: S.gr }}>
+                <td style={{ borderRight: S.bk, padding: '2px 6px', fontFamily: 'monospace', fontWeight: 'bold' }}>{p.codigo}</td>
+                <td style={{ borderRight: S.bk, padding: '2px 6px' }}>{p.descricao}</td>
+                <td style={{ borderRight: S.bk, padding: '2px 6px', textAlign: 'right' }}>{p.referencia || mesRef}</td>
+                <td style={{ borderRight: S.bk, padding: '2px 6px', textAlign: 'right' }}>{n(p.valor)}</td>
+                <td style={{ padding: '2px 6px' }}></td>
+              </tr>
+            ))}
+            {descontos.map((d: any, i: number) => (
+              <tr key={`d${i}`} style={{ borderBottom: S.gr }}>
+                <td style={{ borderRight: S.bk, padding: '2px 6px', fontFamily: 'monospace', fontWeight: 'bold' }}>{d.codigo}</td>
+                <td style={{ borderRight: S.bk, padding: '2px 6px' }}>{d.descricao}</td>
+                <td style={{ borderRight: S.bk, padding: '2px 6px', textAlign: 'right' }}>{d.referencia || mesRef}</td>
+                <td style={{ borderRight: S.bk, padding: '2px 6px' }}></td>
+                <td style={{ padding: '2px 6px', textAlign: 'right' }}>{n(d.valor)}</td>
+              </tr>
+            ))}
+            {Array.from({ length: Math.max(0, LINHAS_MIN - proventos.length - descontos.length) }).map((_, i) => (
+              <tr key={`e${i}`} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                {[0, 1, 2, 3, 4].map(c => <td key={c} style={{ borderRight: c < 4 ? S.bk : undefined, padding: '7px 6px' }}></td>)}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        {/* Mensagens + Totais */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', borderBottom: S.bk }}>
+          <div style={{ padding: '4px 7px', borderRight: S.bk }}>
+            <div style={{ fontSize: '8px', color: '#777', fontWeight: 'bold', textTransform: 'uppercase' }}>Mensagens</div>
+          </div>
+          <div style={{ padding: '4px 8px', minWidth: '190px' }}>
+            {[['Total dos Vencimentos', n(totalProv)], ['Total dos Descontos', n(totalDesc)]].map(([label, val]) => (
+              <div key={label} style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '2px', marginBottom: '2px', borderBottom: S.gr }}>
+                <span style={{ fontSize: '8px', color: '#777' }}>{label}</span>
+                <span style={{ fontWeight: 'bold', fontSize: '9px', marginLeft: '8px' }}>{val}</span>
+              </div>
+            ))}
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: '8px', fontWeight: 'bold' }}>Líquido a Receber {'→'}</span>
+              <span style={{ fontWeight: 900, fontSize: '12px', marginLeft: '8px' }}>{n(liquido)}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Rodapé */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', padding: '4px 7px' }}>
+          <div>
+            <div style={{ fontSize: '8px', color: '#777' }}>Reembolso Base</div>
+            <div style={{ fontWeight: 'bold', fontSize: '11px' }}>{n(liquido)}</div>
+          </div>
+          <div style={{ fontSize: '8px', fontWeight: 'bold', textTransform: 'uppercase', color: '#555' }}>{via}</div>
+        </div>
+      </div>
+
+      {/* Sidebar: declaração rotacionada */}
+      <div style={{ width: '30px', borderLeft: S.bk, display: 'flex', flexDirection: 'column' }}>
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', padding: '4px 0' }}>
+          <span style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', fontSize: '6.5px', whiteSpace: 'nowrap', letterSpacing: '0.4px' }}>
+            DECLARO TER RECEBIDO A IMPORTÂNCIA LÍQUIDA DISCRIMINADA NESTE RECIBO.
+          </span>
+        </div>
+        <div style={{ borderTop: S.bk, padding: '3px 2px', textAlign: 'center' }}>
+          <span style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', fontSize: '7px', fontWeight: 'bold' }}>DATA</span>
+          <div style={{ borderTop: S.bk, marginTop: '3px', height: 0 }}></div>
+        </div>
+      </div>
+
+      {/* Sidebar: assinatura */}
+      <div style={{ width: '22px', borderLeft: S.bk, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <span style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', fontSize: '6.5px', fontWeight: 'bold', whiteSpace: 'nowrap' }}>
+          ASSINATURA DO VOLUNTÁRIO
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function ReciboImpresso({ recibo, onClose }: { recibo: any; onClose: () => void }) {
   const mesRef = fmt.mes(recibo.mes_referencia ?? '');
   const proventos: any[] = recibo.proventos ?? [];
   const descontos: any[] = recibo.descontos ?? [];
-  const totalProv = recibo.totalProventos ?? 0;
-  const totalDesc = recibo.totalDescontos ?? 0;
-  const liquido = recibo.liquido ?? recibo.valor ?? 0;
-  const totalSalario = proventos.filter((p: any) => p.codigo === 'SAL').reduce((s: number, p: any) => s + Number(p.valor), 0);
-  const totalReembolso = proventos.filter((p: any) => p.codigo !== 'SAL').reduce((s: number, p: any) => s + Number(p.valor), 0);
-  const LINHAS_MIN = 8;
+  const totalProv = Number(recibo.totalProventos ?? 0);
+  const totalDesc = Number(recibo.totalDescontos ?? 0);
+  const liquido = Number(recibo.liquido ?? recibo.valor ?? 0);
+  const codigo = recibo.codigo_colaborador ?? '00001';
+  const viaProps = { recibo, mesRef, proventos, descontos, totalProv, totalDesc, liquido, codigo };
 
   return (
     <div className="fixed inset-0 z-[60] bg-white flex flex-col">
       <div className="flex items-center justify-between px-6 py-3 border-b border-slate-200 bg-white print:hidden">
-        <h2 className="font-bold text-slate-700">Recibo de Reembolso de Despesas</h2>
+        <h2 className="font-bold text-slate-700">Recibo de Reembolso de Despesas — {recibo.funcionario?.nome ?? ''}</h2>
         <div className="flex gap-2">
           <button onClick={() => window.print()} className={bp}><Printer size={14} className="inline mr-1" />Imprimir</button>
           <button onClick={onClose} className={bs}>Fechar</button>
         </div>
       </div>
       <div className="flex-1 overflow-y-auto p-6 print:p-0">
-        {/* Recibo – segue layout do modelo */}
-        <div id="recibo-print" className="max-w-[800px] mx-auto border border-black text-[11px] font-sans" style={{ fontFamily: 'Arial, sans-serif' }}>
-          {/* Cabeçalho */}
-          <div className="grid grid-cols-2 border-b border-black">
-            <div className="p-2 border-r border-black space-y-0.5">
-              <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Empregador</div>
-              <div className="flex gap-4">
-                <div><div className="text-[9px] text-slate-500">Nome</div><div className="font-bold">{EMPRESA}</div></div>
-              </div>
-              <div className="flex gap-4">
-                <div><div className="text-[9px] text-slate-500">Endereço</div><div>{ENDERECO}</div></div>
-              </div>
-              <div><div className="text-[9px] text-slate-500">CNPJ</div><div className="font-mono">{CNPJ}</div></div>
-            </div>
-            <div className="p-2 text-right">
-              <div className="text-base font-black uppercase">Recibo de Reembolso de Despesas</div>
-              <div className="text-[9px] text-slate-500 mt-1">Referente ao Mês / Ano</div>
-              <div className="text-xl font-black mt-1">{mesRef}</div>
-            </div>
+        <div id="recibo-print" className="max-w-[820px] mx-auto" style={{ fontFamily: 'Arial, sans-serif' }}>
+          <ViaRecibo {...viaProps} via="1ª VIA - EMPREGADOR" />
+          <div style={{ textAlign: 'center', padding: '4px 0', fontSize: '9px', color: '#aaa', letterSpacing: '2px' }}>
+            ................................................................................................................................................
           </div>
-
-          {/* Identificação do colaborador */}
-          <div className="grid grid-cols-3 border-b border-black">
-            <div className="p-2 border-r border-black">
-              <div className="text-[9px] text-slate-500 uppercase">Código</div>
-              <div className="font-bold">{recibo.codigo_colaborador ?? '00001'}</div>
-            </div>
-            <div className="p-2 border-r border-black">
-              <div className="text-[9px] text-slate-500 uppercase">Nome do Voluntário</div>
-              <div className="font-bold">{recibo.funcionario?.nome ?? '—'}</div>
-            </div>
-            <div className="p-2">
-              <div className="text-[9px] text-slate-500 uppercase">Função</div>
-              <div className="font-bold uppercase">{recibo.funcionario?.cargo ?? '—'}</div>
-            </div>
-          </div>
-
-          {/* Tabela de proventos e descontos */}
-          <table className="w-full border-b border-black">
-            <thead>
-              <tr className="border-b border-black bg-slate-50">
-                <th className="border-r border-black px-2 py-1 text-left text-[9px] uppercase w-16">Código</th>
-                <th className="border-r border-black px-2 py-1 text-left text-[9px] uppercase">Descrição</th>
-                <th className="border-r border-black px-2 py-1 text-center text-[9px] uppercase w-20">Referência</th>
-                <th className="border-r border-black px-2 py-1 text-right text-[9px] uppercase w-24">Proventos</th>
-                <th className="px-2 py-1 text-right text-[9px] uppercase w-24">Descontos</th>
-              </tr>
-            </thead>
-            <tbody>
-              {proventos.map((p: any, i: number) => (
-                <tr key={i} className="border-b border-slate-200">
-                  <td className="border-r border-black px-2 py-1 font-mono font-bold text-blue-700">{p.codigo}</td>
-                  <td className="border-r border-black px-2 py-1 font-semibold">{p.descricao}</td>
-                  <td className="border-r border-black px-2 py-1 text-center text-blue-700 font-bold">{p.referencia || mesRef}</td>
-                  <td className="border-r border-black px-2 py-1 text-right">{Number(p.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                  <td className="px-2 py-1 text-right"></td>
-                </tr>
-              ))}
-              {descontos.map((d: any, i: number) => (
-                <tr key={`d${i}`} className="border-b border-slate-200">
-                  <td className="border-r border-black px-2 py-1 font-mono font-bold text-red-700">{d.codigo}</td>
-                  <td className="border-r border-black px-2 py-1">{d.descricao}</td>
-                  <td className="border-r border-black px-2 py-1 text-center">{d.referencia || mesRef}</td>
-                  <td className="border-r border-black px-2 py-1 text-right"></td>
-                  <td className="px-2 py-1 text-right">{Number(d.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                </tr>
-              ))}
-              {/* Linhas vazias */}
-              {Array.from({ length: Math.max(0, LINHAS_MIN - proventos.length - descontos.length) }).map((_, i) => (
-                <tr key={`e${i}`} className="border-b border-slate-100">
-                  <td className="border-r border-black px-2 py-2"></td>
-                  <td className="border-r border-black px-2 py-2"></td>
-                  <td className="border-r border-black px-2 py-2"></td>
-                  <td className="border-r border-black px-2 py-2"></td>
-                  <td className="px-2 py-2"></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          {/* Totais */}
-          <div className="grid grid-cols-3 border-b border-black">
-            <div className="p-2 col-span-2 border-r border-black">
-              <div className="text-[9px] text-slate-500 uppercase font-bold">Mensagens</div>
-            </div>
-            <div className="p-2 space-y-1">
-              <div className="flex justify-between border-b border-slate-200 pb-1">
-                <span className="text-[9px] text-right text-slate-500">Total dos Vencimentos</span>
-                <span className="font-bold text-[10px] ml-4">{totalProv.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-              </div>
-              <div className="flex justify-between border-b border-slate-200 pb-1">
-                <span className="text-[9px] text-right text-slate-500">Total dos Descontos</span>
-                <span className="font-bold text-[10px] ml-4">{totalDesc.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-[9px] font-bold text-right">Líquido a Receber -&gt;</span>
-                <span className="font-black text-[12px] ml-4">{liquido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Rodapé */}
-          <div className="grid grid-cols-2 items-end p-2 gap-4">
-            <div className="space-y-1">
-              {totalSalario > 0 && (
-                <div>
-                  <div className="text-[9px] text-slate-500">Salário Base</div>
-                  <div className="font-bold">{totalSalario.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-                </div>
-              )}
-              {totalReembolso > 0 && (
-                <div>
-                  <div className="text-[9px] text-slate-500">Reembolso / Ajuda de Custo</div>
-                  <div className="font-bold">{totalReembolso.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-                </div>
-              )}
-            </div>
-            <div className="text-right">
-              <div className="text-[9px] font-bold uppercase tracking-widest text-slate-500">2ª Via - Empregado</div>
-              <div className="mt-6 border-t border-black pt-1 text-[9px] text-slate-500">Assinatura</div>
-            </div>
-          </div>
-          <div className="border-t border-black px-2 py-1 text-[9px] text-slate-400 text-center">
-            ......................... &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; .....
-          </div>
+          <ViaRecibo {...viaProps} via="2ª VIA - EMPREGADO" />
         </div>
       </div>
-      <style>{`@media print { .print\\:hidden { display: none !important; } body { margin: 0; } #recibo-print { max-width: 100% !important; border: none !important; } }`}</style>
+      <style>{`@media print { .print\\:hidden { display: none !important; } body { margin: 0; } #recibo-print { max-width: 100% !important; } }`}</style>
     </div>
   );
 }
