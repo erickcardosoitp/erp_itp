@@ -194,7 +194,7 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
         body: JSON.stringify({ funcionario: formFunc, colaborador: form }),
       });
       if (!r.ok) { const e = await r.json(); throw new Error(e.message); }
-      toast.success('Funcionário e colaborador criados!'); setModal(null); carregarColaboradores();
+      await carregarColaboradores(); toast.success('Funcionário e colaborador criados!'); setModal(null);
     } catch (e: any) { toast.error(e.message); }
     setSalvando(false);
   };
@@ -629,31 +629,31 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
                 <FL label="Estado Civil">
                   <select value={formFunc.estado_civil || ''} onChange={e => setFormFunc((f: any) => ({ ...f, estado_civil: e.target.value }))} className={ic}>
                     <option value="">Selecione...</option>
-                    {['Solteiro(a)', 'Casado(a)', 'Divorciado(a)', 'Viúvo(a)', 'União Estável'].map(v => <option key={v}>{v}</option>)}
+                    {['Solteiro(a)', 'Casado(a)', 'Divorciado(a)', 'Separado(a)', 'Viúvo(a)', 'União Estável'].map(v => <option key={v} value={v}>{v}</option>)}
                   </select>
                 </FL>
                 <FL label="Sexo">
                   <select value={formFunc.sexo || ''} onChange={e => setFormFunc((f: any) => ({ ...f, sexo: e.target.value }))} className={ic}>
                     <option value="">Selecione...</option>
-                    {['Masculino', 'Feminino', 'Outro', 'Prefiro não informar'].map(v => <option key={v}>{v}</option>)}
+                    {['Masculino', 'Feminino', 'Outro', 'Prefiro não informar'].map(v => <option key={v} value={v}>{v}</option>)}
                   </select>
                 </FL>
                 <FL label="Gênero">
                   <select value={formFunc.genero || ''} onChange={e => setFormFunc((f: any) => ({ ...f, genero: e.target.value }))} className={ic}>
                     <option value="">Selecione...</option>
-                    {['Homem cisgênero','Mulher cisgênero','Homem trans','Mulher trans','Não-binário','Gênero fluido','Prefiro não informar'].map(v => <option key={v}>{v}</option>)}
+                    {['Homem cisgênero','Mulher cisgênero','Homem trans','Mulher trans','Não-binário','Gênero fluido','Prefiro não informar'].map(v => <option key={v} value={v}>{v}</option>)}
                   </select>
                 </FL>
                 <FL label="Raça / Cor">
                   <select value={formFunc.raca_cor || ''} onChange={e => setFormFunc((f: any) => ({ ...f, raca_cor: e.target.value }))} className={ic}>
                     <option value="">Selecione...</option>
-                    {['Preta', 'Parda', 'Branca', 'Indígena', 'Amarela', 'Prefiro não informar'].map(v => <option key={v}>{v}</option>)}
+                    {['Preta', 'Parda', 'Branca', 'Indígena', 'Amarela', 'Prefiro não informar'].map(v => <option key={v} value={v}>{v}</option>)}
                   </select>
                 </FL>
                 <FL label="Escolaridade">
                   <select value={formFunc.escolaridade || ''} onChange={e => setFormFunc((f: any) => ({ ...f, escolaridade: e.target.value }))} className={ic}>
                     <option value="">Selecione...</option>
-                    {['Fundamental Incompleto','Fundamental Completo','Médio Incompleto','Médio Completo','Superior Incompleto','Superior Completo','Pós-graduação'].map(v => <option key={v}>{v}</option>)}
+                    {['Fundamental Incompleto','Fundamental Completo','Médio Incompleto','Médio Completo','Superior Incompleto','Superior Completo','Pós-graduação'].map(v => <option key={v} value={v}>{v}</option>)}
                   </select>
                 </FL>
               </div>
@@ -826,31 +826,31 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
                 <FL label="Estado Civil">
                   <select value={formFunc.estado_civil || ''} onChange={e => setFormFunc((f: any) => ({ ...f, estado_civil: e.target.value }))} className={ic}>
                     <option value="">Selecione...</option>
-                    {['Solteiro(a)', 'Casado(a)', 'Divorciado(a)', 'Viúvo(a)', 'União Estável'].map(v => <option key={v}>{v}</option>)}
+                    {['Solteiro(a)', 'Casado(a)', 'Divorciado(a)', 'Separado(a)', 'Viúvo(a)', 'União Estável'].map(v => <option key={v} value={v}>{v}</option>)}
                   </select>
                 </FL>
                 <FL label="Sexo">
                   <select value={formFunc.sexo || ''} onChange={e => setFormFunc((f: any) => ({ ...f, sexo: e.target.value }))} className={ic}>
                     <option value="">Selecione...</option>
-                    {['Masculino', 'Feminino', 'Outro', 'Prefiro não informar'].map(v => <option key={v}>{v}</option>)}
+                    {['Masculino', 'Feminino', 'Outro', 'Prefiro não informar'].map(v => <option key={v} value={v}>{v}</option>)}
                   </select>
                 </FL>
                 <FL label="Gênero">
                   <select value={formFunc.genero || ''} onChange={e => setFormFunc((f: any) => ({ ...f, genero: e.target.value }))} className={ic}>
                     <option value="">Selecione...</option>
-                    {['Homem cisgênero','Mulher cisgênero','Homem trans','Mulher trans','Não-binário','Gênero fluido','Prefiro não informar'].map(v => <option key={v}>{v}</option>)}
+                    {['Homem cisgênero','Mulher cisgênero','Homem trans','Mulher trans','Não-binário','Gênero fluido','Prefiro não informar'].map(v => <option key={v} value={v}>{v}</option>)}
                   </select>
                 </FL>
                 <FL label="Raça / Cor">
                   <select value={formFunc.raca_cor || ''} onChange={e => setFormFunc((f: any) => ({ ...f, raca_cor: e.target.value }))} className={ic}>
                     <option value="">Selecione...</option>
-                    {['Preta', 'Parda', 'Branca', 'Indígena', 'Amarela', 'Prefiro não informar'].map(v => <option key={v}>{v}</option>)}
+                    {['Preta', 'Parda', 'Branca', 'Indígena', 'Amarela', 'Prefiro não informar'].map(v => <option key={v} value={v}>{v}</option>)}
                   </select>
                 </FL>
                 <FL label="Escolaridade">
                   <select value={formFunc.escolaridade || ''} onChange={e => setFormFunc((f: any) => ({ ...f, escolaridade: e.target.value }))} className={ic}>
                     <option value="">Selecione...</option>
-                    {['Fundamental Incompleto','Fundamental Completo','Médio Incompleto','Médio Completo','Superior Incompleto','Superior Completo','Pós-graduação'].map(v => <option key={v}>{v}</option>)}
+                    {['Fundamental Incompleto','Fundamental Completo','Médio Incompleto','Médio Completo','Superior Incompleto','Superior Completo','Pós-graduação'].map(v => <option key={v} value={v}>{v}</option>)}
                   </select>
                 </FL>
                 <FL label="RG"><input type="text" value={formFunc.rg || ''} onChange={e => setFormFunc((f: any) => ({ ...f, rg: e.target.value }))} className={ic} /></FL>
