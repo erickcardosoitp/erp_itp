@@ -89,6 +89,7 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
   const [locais, setLocais] = useState<any[]>([]);
   const [formLocal, setFormLocal] = useState<any>({ nome: '', latitude: '', longitude: '', raio_metros: 100 });
   const [editandoLocal, setEditandoLocal] = useState<string | null>(null);
+  const [abaEdicao, setAbaEdicao] = useState(0);
 
   const [form, setForm] = useState<any>({
     tipo: 'voluntario', dias_trabalho: ['seg', 'ter', 'qua', 'qui', 'sex'],
@@ -457,7 +458,29 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
           <ExternalLink size={14} />Link Ponto
         </a>
       </div>
-      <div className="text-xs text-slate-400 mb-3">{filtrados.length} colaborador(es)</div>
+      {/* Stats */}
+      {colaboradores.length > 0 && (() => {
+        const ativos = colaboradores.filter(c => c.ativo !== false);
+        const funcs = ativos.filter(c => c.tipo === 'funcionario').length;
+        const vols = ativos.filter(c => c.tipo === 'voluntario').length;
+        const inativos = colaboradores.length - ativos.length;
+        return (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+            {[
+              { label: 'Total Ativos', value: ativos.length, color: 'text-purple-600 dark:text-purple-400' },
+              { label: 'Funcionários', value: funcs, color: 'text-blue-600 dark:text-blue-400' },
+              { label: 'Voluntários', value: vols, color: 'text-emerald-600 dark:text-emerald-400' },
+              { label: 'Inativos', value: inativos, color: 'text-slate-400' },
+            ].map(s => (
+              <div key={s.label} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3">
+                <div className={`text-2xl font-black ${s.color}`}>{s.value}</div>
+                <div className="text-xs text-slate-400 font-semibold mt-0.5">{s.label}</div>
+              </div>
+            ))}
+          </div>
+        );
+      })()}
+      <div className="text-xs text-slate-400 mb-3">{filtrados.length} colaborador(es) exibido(s)</div>
 
       {filtrados.length === 0
         ? <div className="text-center py-12 text-slate-400">Nenhum colaborador cadastrado.</div>
@@ -505,15 +528,28 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
                   </div>
                 </div>
                 {detalhe === c.id && (
-                  <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                    <div><span className="text-slate-400 block">CPF</span><span className="font-semibold">{c.funcionario?.cpf || '—'}</span></div>
-                    <div><span className="text-slate-400 block">Estado Civil</span><span className="font-semibold">{c.funcionario?.estado_civil || '—'}</span></div>
-                    <div><span className="text-slate-400 block">RG</span><span className="font-semibold">{c.funcionario?.rg || '—'}</span></div>
-                    <div><span className="text-slate-400 block">Celular</span><span className="font-semibold">{c.funcionario?.celular || '—'}</span></div>
-                    <div><span className="text-slate-400 block">Horário</span><span className="font-semibold">{c.jornada_flexivel ? `Flexível · ${Math.floor((c.horas_dia_flex ?? 420) / 60)}h/dia` : `${c.horario_entrada || '—'} → ${c.horario_saida || '—'}`}</span></div>
-                    <div><span className="text-slate-400 block">Dias</span><span className="font-semibold">{(c.dias_trabalho || []).join(', ') || '—'}</span></div>
-                    <div><span className="text-slate-400 block">Geofence</span><span className="font-semibold">{c.latitude_permitida ? `${Number(c.latitude_permitida).toFixed(4)},${Number(c.longitude_permitida).toFixed(4)}` : '—'}</span></div>
-                    <div><span className="text-slate-400 block">Raio</span><span className="font-semibold">{c.raio_metros ?? 100}m</span></div>
+                  <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700 space-y-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                      <div><span className="text-slate-400 block">CPF</span><span className="font-semibold">{c.funcionario?.cpf || '—'}</span></div>
+                      <div><span className="text-slate-400 block">Celular</span><span className="font-semibold">{c.funcionario?.celular || '—'}</span></div>
+                      <div><span className="text-slate-400 block">Email</span><span className="font-semibold truncate block">{c.funcionario?.email || '—'}</span></div>
+                      <div><span className="text-slate-400 block">Nascimento</span><span className="font-semibold">{c.funcionario?.data_nascimento ? fmt.data(c.funcionario.data_nascimento) : '—'}</span></div>
+                      <div><span className="text-slate-400 block">Estado Civil</span><span className="font-semibold">{c.funcionario?.estado_civil || '—'}</span></div>
+                      <div><span className="text-slate-400 block">Sexo / Gênero</span><span className="font-semibold">{[c.funcionario?.sexo, c.funcionario?.genero].filter(Boolean).join(' · ') || '—'}</span></div>
+                      <div><span className="text-slate-400 block">Escolaridade</span><span className="font-semibold">{c.funcionario?.escolaridade || '—'}</span></div>
+                      <div><span className="text-slate-400 block">Salário Base</span><span className="font-semibold">{c.salario_base ? fmt.moeda(Number(c.salario_base)) : '—'}</span></div>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs border-t border-slate-100 dark:border-slate-700 pt-2">
+                      <div><span className="text-slate-400 block">Horário</span><span className="font-semibold">{c.jornada_flexivel ? `Flexível · ${Math.floor((c.horas_dia_flex ?? 420) / 60)}h/dia` : `${c.horario_entrada || '—'} → ${c.horario_saida || '—'}`}</span></div>
+                      <div><span className="text-slate-400 block">Dias</span><span className="font-semibold">{(c.dias_trabalho || []).join(', ') || '—'}</span></div>
+                      <div><span className="text-slate-400 block">Geofence</span><span className="font-semibold">{c.latitude_permitida ? `${Number(c.latitude_permitida).toFixed(4)}, ${Number(c.longitude_permitida).toFixed(4)}` : '—'}</span></div>
+                      <div><span className="text-slate-400 block">Raio</span><span className="font-semibold">{c.raio_metros ?? 100}m</span></div>
+                    </div>
+                    {c.funcionario?.cidade && (
+                      <div className="text-xs text-slate-400 border-t border-slate-100 dark:border-slate-700 pt-2">
+                        📍 {[c.funcionario?.logradouro, c.funcionario?.numero_residencia, c.funcionario?.bairro, c.funcionario?.cidade, c.funcionario?.estado].filter(Boolean).join(', ')}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -717,40 +753,49 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
         </Modal>
       )}
 
-      {/* Modal: Editar Colaborador (dados pessoais + ponto) */}
+      {/* Modal: Editar Colaborador — com abas */}
       {modal === 'editar' && colSelecionado && editando && (
         <Modal title="Editar Colaborador" onClose={() => setModal(null)} wide>
-          <div className="space-y-5">
+          <div className="space-y-4">
             {/* Cabeçalho */}
-            <div className="flex items-center gap-4 p-3 bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 rounded-xl">
+            <div className="flex items-center gap-3 p-3 bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 rounded-xl">
               {colSelecionado.funcionario?.foto
-                ? <img src={colSelecionado.funcionario.foto} alt="" className="w-14 h-14 rounded-full object-cover border-2 border-purple-400 shrink-0" onError={e => { (e.target as HTMLImageElement).style.display='none'; }} />
-                : <div className="w-14 h-14 rounded-full bg-purple-200 dark:bg-purple-800 flex items-center justify-center text-purple-700 dark:text-purple-200 font-black text-xl shrink-0">{colSelecionado.funcionario?.nome?.charAt(0) ?? '?'}</div>}
-              <div className="min-w-0">
-                <div className="font-black text-slate-800 dark:text-white text-base truncate">{colSelecionado.funcionario?.nome ?? '—'}</div>
-                <div className="text-sm text-purple-600 dark:text-purple-300 font-semibold">{colSelecionado.funcionario?.cargo ?? 'Sem cargo definido'}</div>
-                <div className="text-xs text-slate-400">{colSelecionado.funcionario?.matricula ?? ''}</div>
+                ? <img src={colSelecionado.funcionario.foto} alt="" className="w-12 h-12 rounded-full object-cover border-2 border-purple-400 shrink-0" onError={e => { (e.target as HTMLImageElement).style.display='none'; }} />
+                : <div className="w-12 h-12 rounded-full bg-purple-200 dark:bg-purple-800 flex items-center justify-center text-purple-700 dark:text-purple-200 font-black text-lg shrink-0">{colSelecionado.funcionario?.nome?.charAt(0) ?? '?'}</div>}
+              <div className="min-w-0 flex-1">
+                <div className="font-black text-slate-800 dark:text-white truncate">{colSelecionado.funcionario?.nome ?? '—'}</div>
+                <div className="text-xs text-purple-600 dark:text-purple-300 font-semibold">{colSelecionado.funcionario?.cargo ?? 'Sem cargo'} · {colSelecionado.funcionario?.matricula ?? ''}</div>
               </div>
-              <label className="ml-auto shrink-0 cursor-pointer flex flex-col items-center gap-1 text-xs text-purple-600 hover:text-purple-800 transition">
-                {uploadandoFoto === colSelecionado.id ? <RefreshCw size={16} className="animate-spin" /> : <Upload size={16} />}
-                <span>Trocar foto</span>
+              <label className="shrink-0 cursor-pointer flex items-center gap-1.5 text-xs text-purple-600 hover:text-purple-800 transition bg-white dark:bg-slate-800 border border-purple-200 dark:border-purple-700 rounded-lg px-3 py-1.5">
+                {uploadandoFoto === colSelecionado.id ? <RefreshCw size={13} className="animate-spin" /> : <Upload size={13} />}
+                Foto
                 <input type="file" accept="image/*" className="hidden" onChange={e => handleFoto(e, colSelecionado.funcionario?.id, colSelecionado.id)} />
               </label>
             </div>
 
-            {/* ── Seção 1: Dados Pessoais ── */}
-            <div className="border border-slate-200 dark:border-slate-700 rounded-xl p-4 space-y-4">
-              <p className="text-xs font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest">Dados Pessoais</p>
+            {/* Abas */}
+            {(() => {
+              const abas = ['Pessoal', 'Endereço', 'Saúde & Perfil', 'Ponto'];
+              return (
+                <div className="flex border-b dark:border-slate-700 -mx-1 overflow-x-auto">
+                  {abas.map((aba, i) => (
+                    <button key={aba} onClick={() => setAbaEdicao(i)}
+                      className={`px-4 py-2 text-sm font-bold whitespace-nowrap border-b-2 transition ${abaEdicao === i ? 'border-purple-600 text-purple-600 dark:text-purple-400' : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                    >{aba}</button>
+                  ))}
+                </div>
+              );
+            })()}
+
+            {/* Aba 0: Pessoal */}
+            {abaEdicao === 0 && (
               <div className="grid grid-cols-2 gap-3">
                 <div className="col-span-2"><FL label="Nome Completo *"><input type="text" value={formFunc.nome || ''} onChange={e => setFormFunc((f: any) => ({ ...f, nome: e.target.value }))} className={ic} /></FL></div>
                 <FL label="Cargo / Função"><input type="text" value={formFunc.cargo || ''} onChange={e => setFormFunc((f: any) => ({ ...f, cargo: e.target.value }))} className={ic} /></FL>
                 <FL label="Email"><input type="email" value={formFunc.email || ''} onChange={e => setFormFunc((f: any) => ({ ...f, email: e.target.value }))} className={ic} /></FL>
                 <FL label="CPF"><input type="text" value={formFunc.cpf || ''} onChange={e => setFormFunc((f: any) => ({ ...f, cpf: e.target.value }))} className={ic} /></FL>
-                <FL label="RG"><input type="text" value={formFunc.rg || ''} onChange={e => setFormFunc((f: any) => ({ ...f, rg: e.target.value }))} className={ic} /></FL>
-                <FL label="Órgão Emissor RG"><input type="text" value={formFunc.orgao_emissor_rg || ''} onChange={e => setFormFunc((f: any) => ({ ...f, orgao_emissor_rg: e.target.value }))} className={ic} /></FL>
-                <FL label="Data de Emissão RG"><input type="date" value={formFunc.data_emissao_rg?.slice(0, 10) || ''} onChange={e => setFormFunc((f: any) => ({ ...f, data_emissao_rg: e.target.value }))} className={ic} /></FL>
-                <FL label="Data de Nascimento"><input type="date" value={formFunc.data_nascimento?.slice(0, 10) || ''} onChange={e => setFormFunc((f: any) => ({ ...f, data_nascimento: e.target.value }))} className={ic} /></FL>
                 <FL label="Celular"><input type="text" value={formFunc.celular || ''} onChange={e => setFormFunc((f: any) => ({ ...f, celular: e.target.value }))} className={ic} /></FL>
+                <FL label="Data de Nascimento"><input type="date" value={formFunc.data_nascimento?.slice(0, 10) || ''} onChange={e => setFormFunc((f: any) => ({ ...f, data_nascimento: e.target.value }))} className={ic} /></FL>
                 <FL label="Estado Civil">
                   <select value={formFunc.estado_civil || ''} onChange={e => setFormFunc((f: any) => ({ ...f, estado_civil: e.target.value }))} className={ic}>
                     <option value="">Selecione...</option>
@@ -781,9 +826,15 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
                     {['Fundamental Incompleto','Fundamental Completo','Médio Incompleto','Médio Completo','Superior Incompleto','Superior Completo','Pós-graduação'].map(v => <option key={v}>{v}</option>)}
                   </select>
                 </FL>
+                <FL label="RG"><input type="text" value={formFunc.rg || ''} onChange={e => setFormFunc((f: any) => ({ ...f, rg: e.target.value }))} className={ic} /></FL>
+                <FL label="Órgão Emissor RG"><input type="text" value={formFunc.orgao_emissor_rg || ''} onChange={e => setFormFunc((f: any) => ({ ...f, orgao_emissor_rg: e.target.value }))} className={ic} /></FL>
+                <FL label="Data de Emissão RG"><input type="date" value={formFunc.data_emissao_rg?.slice(0, 10) || ''} onChange={e => setFormFunc((f: any) => ({ ...f, data_emissao_rg: e.target.value }))} className={ic} /></FL>
               </div>
-              <div>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Endereço</p>
+            )}
+
+            {/* Aba 1: Endereço */}
+            {abaEdicao === 1 && (
+              <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-3">
                   <FL label="CEP"><input type="text" value={formFunc.cep || ''} onChange={async e => {
                     const cep = e.target.value.replace(/\D/g, '');
@@ -802,49 +853,52 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
                   <FL label="Cidade"><input type="text" value={formFunc.cidade || ''} onChange={e => setFormFunc((f: any) => ({ ...f, cidade: e.target.value }))} className={ic} /></FL>
                   <FL label="País"><input type="text" value={formFunc.pais || 'Brasil'} onChange={e => setFormFunc((f: any) => ({ ...f, pais: e.target.value }))} className={ic} /></FL>
                 </div>
-              </div>
-              <div>
-                <p className="text-xs font-bold text-orange-400 uppercase tracking-widest mb-2">Contato de Emergência</p>
+                <p className="text-xs font-bold text-orange-400 uppercase tracking-widest pt-2">Contato de Emergência</p>
                 <div className="grid grid-cols-2 gap-3">
                   <FL label="Tel. Emergência 1"><input type="text" value={formFunc.telefone_emergencia_1 || ''} onChange={e => setFormFunc((f: any) => ({ ...f, telefone_emergencia_1: e.target.value }))} className={ic} /></FL>
                   <FL label="Tel. Emergência 2"><input type="text" value={formFunc.telefone_emergencia_2 || ''} onChange={e => setFormFunc((f: any) => ({ ...f, telefone_emergencia_2: e.target.value }))} className={ic} /></FL>
                 </div>
               </div>
-              <div>
-                <p className="text-xs font-bold text-emerald-500 uppercase tracking-widest mb-2">Saúde</p>
-                <div className="space-y-2">
-                  <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!formFunc.possui_deficiencia} onChange={e => setFormFunc((f: any) => ({ ...f, possui_deficiencia: e.target.checked }))} className="w-4 h-4" />Possui algum tipo de deficiência?</label>
-                  {formFunc.possui_deficiencia && <FL label="Qual(is)?"><input type="text" value={formFunc.deficiencia_descricao || ''} onChange={e => setFormFunc((f: any) => ({ ...f, deficiencia_descricao: e.target.value }))} className={ic} /></FL>}
-                  <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!formFunc.possui_alergias} onChange={e => setFormFunc((f: any) => ({ ...f, possui_alergias: e.target.checked }))} className="w-4 h-4" />Possui alergias?</label>
-                  {formFunc.possui_alergias && <FL label="Qual(is)?"><input type="text" value={formFunc.alergias_descricao || ''} onChange={e => setFormFunc((f: any) => ({ ...f, alergias_descricao: e.target.value }))} className={ic} /></FL>}
-                  <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!formFunc.usa_medicamentos} onChange={e => setFormFunc((f: any) => ({ ...f, usa_medicamentos: e.target.checked }))} className="w-4 h-4" />Uso contínuo de medicamento?</label>
-                  {formFunc.usa_medicamentos && <FL label="Quais? (nome e dosagem)"><input type="text" value={formFunc.medicamentos_descricao || ''} onChange={e => setFormFunc((f: any) => ({ ...f, medicamentos_descricao: e.target.value }))} className={ic} /></FL>}
-                  <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!formFunc.possui_plano_saude} onChange={e => setFormFunc((f: any) => ({ ...f, possui_plano_saude: e.target.checked }))} className="w-4 h-4" />Possui plano de saúde?</label>
-                  {formFunc.possui_plano_saude && (
-                    <div className="grid grid-cols-2 gap-3">
-                      <FL label="Plano de Saúde"><input type="text" value={formFunc.plano_saude || ''} onChange={e => setFormFunc((f: any) => ({ ...f, plano_saude: e.target.value }))} className={ic} /></FL>
-                      <FL label="Nº SUS"><input type="text" value={formFunc.numero_sus || ''} onChange={e => setFormFunc((f: any) => ({ ...f, numero_sus: e.target.value }))} className={ic} /></FL>
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div>
-                <p className="text-xs font-bold text-indigo-400 uppercase tracking-widest mb-2">Perfil Social</p>
-                <div className="space-y-2">
-                  <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!formFunc.interesse_cursos} onChange={e => setFormFunc((f: any) => ({ ...f, interesse_cursos: e.target.checked }))} className="w-4 h-4" />Interesse em cursos do ITP?</label>
-                  <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!formFunc.pertence_comunidade_tradicional} onChange={e => setFormFunc((f: any) => ({ ...f, pertence_comunidade_tradicional: e.target.checked }))} className="w-4 h-4" />Pertence a comunidade tradicional?</label>
-                  {formFunc.pertence_comunidade_tradicional && <FL label="Qual comunidade?"><input type="text" value={formFunc.comunidade_tradicional || ''} onChange={e => setFormFunc((f: any) => ({ ...f, comunidade_tradicional: e.target.value }))} className={ic} /></FL>}
-                  <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!formFunc.possui_cad_unico} onChange={e => setFormFunc((f: any) => ({ ...f, possui_cad_unico: e.target.checked }))} className="w-4 h-4" />Possui CadÚnico?</label>
-                  <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!formFunc.baixo_idh} onChange={e => setFormFunc((f: any) => ({ ...f, baixo_idh: e.target.checked }))} className="w-4 h-4" />Área de baixo IDH?</label>
-                </div>
-              </div>
-            </div>
+            )}
 
-            {/* ── Seção 2: Configuração de Ponto ── */}
-            <div className="border border-slate-200 dark:border-slate-700 rounded-xl p-4 space-y-3">
-              <p className="text-xs font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest">Configuração de Ponto</p>
-              {formHorarioJSX}
-            </div>
+            {/* Aba 2: Saúde & Perfil */}
+            {abaEdicao === 2 && (
+              <div className="space-y-4">
+                <div>
+                  <p className="text-xs font-bold text-emerald-600 uppercase tracking-widest mb-2">Saúde</p>
+                  <div className="space-y-2">
+                    <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!formFunc.possui_deficiencia} onChange={e => setFormFunc((f: any) => ({ ...f, possui_deficiencia: e.target.checked }))} className="w-4 h-4" />Possui algum tipo de deficiência?</label>
+                    {formFunc.possui_deficiencia && <FL label="Qual(is)?"><input type="text" value={formFunc.deficiencia_descricao || ''} onChange={e => setFormFunc((f: any) => ({ ...f, deficiencia_descricao: e.target.value }))} className={ic} /></FL>}
+                    <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!formFunc.possui_alergias} onChange={e => setFormFunc((f: any) => ({ ...f, possui_alergias: e.target.checked }))} className="w-4 h-4" />Possui alergias?</label>
+                    {formFunc.possui_alergias && <FL label="Qual(is)?"><input type="text" value={formFunc.alergias_descricao || ''} onChange={e => setFormFunc((f: any) => ({ ...f, alergias_descricao: e.target.value }))} className={ic} /></FL>}
+                    <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!formFunc.usa_medicamentos} onChange={e => setFormFunc((f: any) => ({ ...f, usa_medicamentos: e.target.checked }))} className="w-4 h-4" />Uso contínuo de medicamento?</label>
+                    {formFunc.usa_medicamentos && <FL label="Quais? (nome e dosagem)"><input type="text" value={formFunc.medicamentos_descricao || ''} onChange={e => setFormFunc((f: any) => ({ ...f, medicamentos_descricao: e.target.value }))} className={ic} /></FL>}
+                    <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!formFunc.possui_plano_saude} onChange={e => setFormFunc((f: any) => ({ ...f, possui_plano_saude: e.target.checked }))} className="w-4 h-4" />Possui plano de saúde?</label>
+                    {formFunc.possui_plano_saude && (
+                      <div className="grid grid-cols-2 gap-3">
+                        <FL label="Plano de Saúde"><input type="text" value={formFunc.plano_saude || ''} onChange={e => setFormFunc((f: any) => ({ ...f, plano_saude: e.target.value }))} className={ic} /></FL>
+                        <FL label="Nº SUS"><input type="text" value={formFunc.numero_sus || ''} onChange={e => setFormFunc((f: any) => ({ ...f, numero_sus: e.target.value }))} className={ic} /></FL>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-indigo-500 uppercase tracking-widest mb-2">Perfil Social</p>
+                  <div className="space-y-2">
+                    <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!formFunc.interesse_cursos} onChange={e => setFormFunc((f: any) => ({ ...f, interesse_cursos: e.target.checked }))} className="w-4 h-4" />Interesse em cursos do ITP?</label>
+                    <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!formFunc.pertence_comunidade_tradicional} onChange={e => setFormFunc((f: any) => ({ ...f, pertence_comunidade_tradicional: e.target.checked }))} className="w-4 h-4" />Pertence a comunidade tradicional?</label>
+                    {formFunc.pertence_comunidade_tradicional && <FL label="Qual comunidade?"><input type="text" value={formFunc.comunidade_tradicional || ''} onChange={e => setFormFunc((f: any) => ({ ...f, comunidade_tradicional: e.target.value }))} className={ic} /></FL>}
+                    <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!formFunc.possui_cad_unico} onChange={e => setFormFunc((f: any) => ({ ...f, possui_cad_unico: e.target.checked }))} className="w-4 h-4" />Possui CadÚnico?</label>
+                    <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!formFunc.baixo_idh} onChange={e => setFormFunc((f: any) => ({ ...f, baixo_idh: e.target.checked }))} className="w-4 h-4" />Área de baixo IDH?</label>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Aba 3: Ponto */}
+            {abaEdicao === 3 && (
+              <div>{formHorarioJSX}</div>
+            )}
 
             <div className="flex justify-end gap-2 pt-2 border-t dark:border-slate-700">
               <button onClick={() => setModal(null)} className={bs}>Cancelar</button>
