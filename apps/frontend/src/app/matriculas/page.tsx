@@ -875,41 +875,36 @@ export default function GestaoMatriculas() {
                   </fieldset>
 
                   {/* ── Turmas ── */}
-                  {cursosAcademico.length > 0 && (
-                    <fieldset>
-                      <legend className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-3">
-                        Turmas a Matricular
-                        <span className="ml-2 font-normal normal-case text-slate-400">({formDireto.turma_ids.length} selecionada{formDireto.turma_ids.length !== 1 ? 's' : ''})</span>
-                      </legend>
-                      <div className="space-y-3">
-                        {cursosAcademico.map((c: any) => (
-                          <div key={c.id}>
-                            <p className="text-[10px] font-black uppercase text-slate-500 mb-1">{c.sigla} — {c.nome}</p>
-                            {c.turmas && c.turmas.length > 0 ? (
-                              <div className="grid grid-cols-2 gap-1.5">
-                                {c.turmas.map((t: any) => {
-                                  const ativo = formDireto.turma_ids.includes(t.id);
-                                  return (
-                                    <button key={t.id} type="button" onClick={() => toggleTurmaDireto(t.id)}
-                                      className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-left text-[11px] font-bold transition-all ${
-                                        ativo ? 'bg-green-600 border-green-600 text-white' : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-green-400'
-                                      }`}>
-                                      <span className={`w-4 h-4 rounded flex-shrink-0 flex items-center justify-center border ${ativo ? 'bg-white border-white' : 'border-slate-300'}`}>
-                                        {ativo && <span className="text-green-600 text-[10px] font-black">✓</span>}
-                                      </span>
-                                      <span className="truncate">{t.nome}</span>
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            ) : (
-                              <p className="text-[11px] text-slate-400 italic">Nenhuma turma ativa</p>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </fieldset>
-                  )}
+                  {cursosAcademico.length > 0 && (() => {
+                    const todasTurmas = cursosAcademico.flatMap((c: any) => (c.turmas ?? []).map((t: any) => ({ ...t, curso_nome: c.nome, curso_sigla: c.sigla })));
+                    return todasTurmas.length > 0 ? (
+                      <fieldset>
+                        <legend className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-3">
+                          Turma a Matricular
+                          <span className="ml-2 font-normal normal-case text-slate-400">({formDireto.turma_ids.length} selecionada{formDireto.turma_ids.length !== 1 ? 's' : ''})</span>
+                        </legend>
+                        <div className="grid grid-cols-2 gap-1.5">
+                          {todasTurmas.map((t: any) => {
+                            const ativo = formDireto.turma_ids.includes(t.id);
+                            return (
+                              <button key={t.id} type="button" onClick={() => toggleTurmaDireto(t.id)}
+                                className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-left text-[11px] font-bold transition-all ${
+                                  ativo ? 'bg-green-600 border-green-600 text-white' : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-green-400'
+                                }`}>
+                                <span className={`w-4 h-4 rounded flex-shrink-0 flex items-center justify-center border ${ativo ? 'bg-white border-white' : 'border-slate-300'}`}>
+                                  {ativo && <span className="text-green-600 text-[10px] font-black">✓</span>}
+                                </span>
+                                <div className="min-w-0">
+                                  <span className="truncate block">{t.nome}</span>
+                                  <span className={`text-[9px] font-normal truncate block ${ativo ? 'text-green-100' : 'text-slate-400'}`}>{t.curso_sigla}</span>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </fieldset>
+                    ) : <p className="text-[11px] text-slate-400 italic">Nenhuma turma ativa</p>;
+                  })()}
 
                   {/* ── Termos ── */}
                   <fieldset className="space-y-2">

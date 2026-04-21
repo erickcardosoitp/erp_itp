@@ -1866,20 +1866,15 @@ function TurmasTab({ cursos, professores, alunos }: { cursos: Curso[]; professor
                     <div className="space-y-1.5 max-h-52 overflow-y-auto pr-0.5">
                       {turmas.filter(t => t.ativo !== false).map(t => {
                         const selecionada = incluirTurmaId === t.id;
-                        const vagas = t.max_alunos ? t.max_alunos - (t.total_alunos ?? 0) : null;
-                        const cheio = vagas !== null && vagas <= 0;
                         return (
                           <button
                             key={t.id}
                             type="button"
-                            onClick={() => !cheio && setIncluirTurmaId(t.id)}
-                            disabled={cheio}
+                            onClick={() => setIncluirTurmaId(t.id)}
                             className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl border-2 transition-all text-left ${
                               selecionada
                                 ? 'border-indigo-500 bg-indigo-50 shadow-sm'
-                                : cheio
-                                  ? 'border-slate-100 bg-slate-50 opacity-50 cursor-not-allowed'
-                                  : 'border-slate-100 bg-white hover:border-indigo-200 hover:bg-indigo-50/30'
+                                : 'border-slate-100 bg-white hover:border-indigo-200 hover:bg-indigo-50/30'
                             }`}
                           >
                             <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: t.cor || '#7c3aed' }}/>
@@ -1890,12 +1885,10 @@ function TurmasTab({ cursos, professores, alunos }: { cursos: Curso[]; professor
                               </div>
                             </div>
                             <div className="shrink-0 text-right">
-                              <div className={`flex items-center gap-1 text-[10px] font-black ${cheio ? 'text-red-400' : selecionada ? 'text-indigo-600' : 'text-slate-500'}`}>
+                              <div className={`flex items-center gap-1 text-[10px] font-black ${selecionada ? 'text-indigo-600' : 'text-slate-500'}`}>
                                 <Users size={10}/>
-                                <span>{t.total_alunos ?? 0}{t.max_alunos ? `/${t.max_alunos}` : ''}</span>
+                                <span>{t.total_alunos ?? 0} aluno(s)</span>
                               </div>
-                              {cheio && <p className="text-[8px] text-red-400 font-bold uppercase">Turma cheia</p>}
-                              {vagas !== null && !cheio && <p className="text-[8px] text-slate-400 uppercase">{vagas} vaga{vagas !== 1 ? 's' : ''}</p>}
                             </div>
                             {selecionada && <div className="w-4 h-4 rounded-full bg-indigo-600 flex items-center justify-center shrink-0"><Check size={9} className="text-white"/></div>}
                           </button>

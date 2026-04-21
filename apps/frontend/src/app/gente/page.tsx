@@ -68,6 +68,108 @@ function FL({ label, children }: { label: string; children: React.ReactNode }) {
   );
 }
 
+// ── Documentos do Colaborador ─────────────────────────────────────────────────
+
+function DocumentosColaborador({ colaboradorId }: { colaboradorId: string }) {
+  const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? '';
+  const ic2 = 'border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 text-xs bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:outline-none focus:ring-1 focus:ring-purple-400 w-full';
+  const [docs, setDocs] = useState<any[]>([]);
+  const [form, setForm] = useState<any>({ nome: '', url: '', vencimento: '', observacao: '' });
+  const [editandoId, setEditandoId] = useState<string | null>(null);
+  const [aberto, setAberto] = useState(false);
+  const [mostrarForm, setMostrarForm] = useState(false);
+
+  const carregar = async () => {
+    const r = await fetch(`${API}/gente/colaboradores/${colaboradorId}/documentos`, { credentials: 'include' });
+    if (r.ok) setDocs(await r.json());
+  };
+
+  useEffect(() => { if (aberto) carregar(); }, [aberto]); // eslint-disable-line
+
+  const salvar = async () => {
+    const url = editandoId ? `${API}/gente/documentos/${editandoId}` : `${API}/gente/colaboradores/${colaboradorId}/documentos`;
+    const method = editandoId ? 'PATCH' : 'POST';
+    const r = await fetch(url, { method, credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) });
+    if (r.ok) { toast.success(editandoId ? 'Documento atualizado.' : 'Documento adicionado.'); setForm({ nome: '', url: '', vencimento: '', observacao: '' }); setEditandoId(null); setMostrarForm(false); carregar(); }
+    else toast.error('Erro ao salvar documento.');
+  };
+
+  const deletar = async (id: string) => {
+    if (!confirm('Excluir documento?')) return;
+    const r = await fetch(`${API}/gente/documentos/${id}`, { method: 'DELETE', credentials: 'include' });
+    if (r.ok) { toast.success('Documento removido.'); carregar(); }
+  };
+
+  const hoje = new Date().toISOString().split('T')[0];
+  const vencidos = docs.filter(d => d.vencimento && d.vencimento < hoje);
+  const aVencer = docs.filter(d => d.vencimento && d.vencimento >= hoje && d.vencimento <= new Date(Date.now() + 30*86400000).toISOString().split('T')[0]);
+
+  return (
+    <div className="border-t border-slate-100 dark:border-slate-700 pt-2">
+      <button onClick={() => setAberto(a => !a)} className="flex items-center gap-2 text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-purple-600 transition w-full">
+        <span>📄 Documentos</span>
+        {(vencidos.length > 0 || aVencer.length > 0) && (
+          <span className="bg-orange-100 dark:bg-orange-900/40 text-orange-600 dark:text-orange-300 px-1.5 py-0.5 rounded-full text-[10px] font-black">
+            {vencidos.length > 0 ? `${vencidos.length} vencido(s)` : `${aVencer.length} a vencer`}
+          </span>
+        )}
+        <span className="ml-auto">{aberto ? '▲' : '▼'}</span>
+      </button>
+      {aberto && (
+        <div className="mt-2 space-y-2">
+          {docs.length === 0 && !mostrarForm && <p className="text-xs text-slate-400 text-center py-2">Nenhum documento cadastrado.</p>}
+          {docs.map(d => {
+            const venceu = d.vencimento && d.vencimento < hoje;
+            const proxVenc = d.vencimento && !venceu && d.vencimento <= new Date(Date.now() + 30*86400000).toISOString().split('T')[0];
+            return (
+              <div key={d.id} className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs border ${venceu ? 'border-red-300 bg-red-50 dark:bg-red-900/20' : proxVenc ? 'border-orange-300 bg-orange-50 dark:bg-orange-900/20' : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800'}`}>
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold truncate">{d.nome}</div>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    {d.vencimento && <span className={`${venceu ? 'text-red-600 font-bold' : proxVenc ? 'text-orange-600 font-bold' : 'text-slate-400'}`}>Vence: {fmt.data(d.vencimento)}{venceu ? ' ⚠ VENCIDO' : proxVenc ? ' ⚠ A vencer' : ''}</span>}
+                    {d.observacao && <span className="text-slate-400">· {d.observacao}</span>}
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  {d.url && <a href={d.url} target="_blank" rel="noopener noreferrer" className="p-1 text-blue-500 hover:text-blue-700" title="Abrir documento"><ExternalLink size={12} /></a>}
+                  <button onClick={() => { setForm({ nome: d.nome, url: d.url || '', vencimento: d.vencimento || '', observacao: d.observacao || '' }); setEditandoId(d.id); setMostrarForm(true); }} className="p-1 text-slate-400 hover:text-purple-600"><Edit2 size={12} /></button>
+                  <button onClick={() => deletar(d.id)} className="p-1 text-slate-400 hover:text-red-500"><Trash2 size={12} /></button>
+                </div>
+              </div>
+            );
+          })}
+          {mostrarForm && (
+            <div className="border border-purple-200 dark:border-purple-800 rounded-xl p-3 space-y-2 bg-purple-50 dark:bg-purple-900/20">
+              <input placeholder="Nome do documento *" value={form.nome} onChange={e => setForm((f: any) => ({ ...f, nome: e.target.value }))} className={ic2} />
+              <input placeholder="URL (Google Drive ou link direto)" value={form.url} onChange={e => setForm((f: any) => ({ ...f, url: e.target.value }))} className={ic2} />
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] text-slate-400 block mb-0.5">Vencimento</label>
+                  <input type="date" value={form.vencimento} onChange={e => setForm((f: any) => ({ ...f, vencimento: e.target.value }))} className={ic2} />
+                </div>
+                <div>
+                  <label className="text-[10px] text-slate-400 block mb-0.5">Observação</label>
+                  <input placeholder="Observação" value={form.observacao} onChange={e => setForm((f: any) => ({ ...f, observacao: e.target.value }))} className={ic2} />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => { setMostrarForm(false); setEditandoId(null); setForm({ nome: '', url: '', vencimento: '', observacao: '' }); }} className="flex-1 py-1.5 text-xs text-slate-500 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-100 transition">Cancelar</button>
+                <button onClick={salvar} disabled={!form.nome} className="flex-1 py-1.5 text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition disabled:opacity-50">{editandoId ? 'Atualizar' : 'Adicionar'}</button>
+              </div>
+            </div>
+          )}
+          {!mostrarForm && (
+            <button onClick={() => { setForm({ nome: '', url: '', vencimento: '', observacao: '' }); setEditandoId(null); setMostrarForm(true); }}
+              className="w-full py-1.5 text-xs text-purple-600 dark:text-purple-400 border border-dashed border-purple-300 dark:border-purple-700 rounded-lg hover:bg-purple-50 dark:hover:bg-purple-900/20 transition flex items-center justify-center gap-1">
+              <Plus size={11} />Adicionar Documento
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Tab: Colaboradores ────────────────────────────────────────────────────────
 
 function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { reload: number; colaboradores: any[]; carregarColaboradores: () => void }) {
@@ -285,6 +387,14 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
     else toast.error('Erro ao remover local.');
   };
 
+  const [ordemCampo, setOrdemCampo] = useState<'nome' | 'cargo' | 'tipo'>('nome');
+  const [ordemDir, setOrdemDir] = useState<'asc' | 'desc'>('asc');
+
+  const toggleOrdem = (campo: 'nome' | 'cargo' | 'tipo') => {
+    if (ordemCampo === campo) setOrdemDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setOrdemCampo(campo); setOrdemDir('asc'); }
+  };
+
   const filtrados = colaboradores
     .filter(c => {
       if (filtroAtivo === 'ativo' && c.ativo === false) return false;
@@ -296,7 +406,13 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
       }
       return true;
     })
-    .sort((a, b) => (a.funcionario?.nome ?? '').localeCompare(b.funcionario?.nome ?? '', 'pt-BR'));
+    .sort((a, b) => {
+      let va = '', vb = '';
+      if (ordemCampo === 'nome') { va = a.funcionario?.nome ?? ''; vb = b.funcionario?.nome ?? ''; }
+      else if (ordemCampo === 'cargo') { va = a.funcionario?.cargo ?? ''; vb = b.funcionario?.cargo ?? ''; }
+      else if (ordemCampo === 'tipo') { va = a.tipo ?? ''; vb = b.tipo ?? ''; }
+      return ordemDir === 'asc' ? va.localeCompare(vb, 'pt-BR') : vb.localeCompare(va, 'pt-BR');
+    });
 
   const PONTO_URL = typeof window !== 'undefined' ? `${window.location.origin}/ponto?token=itp-ponto-2026` : '';
 
@@ -480,7 +596,18 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
           </div>
         );
       })()}
-      <div className="text-xs text-slate-400 mb-3">{filtrados.length} colaborador(es) exibido(s)</div>
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-xs text-slate-400">{filtrados.length} colaborador(es)</span>
+        <span className="text-xs text-slate-300 dark:text-slate-600">·</span>
+        <span className="text-xs text-slate-400">Ordenar:</span>
+        {(['nome', 'cargo', 'tipo'] as const).map(campo => (
+          <button key={campo} onClick={() => toggleOrdem(campo)}
+            className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold border transition ${ordemCampo === campo ? 'bg-purple-100 dark:bg-purple-900/40 border-purple-300 dark:border-purple-700 text-purple-700 dark:text-purple-300' : 'border-slate-200 dark:border-slate-700 text-slate-500 hover:border-slate-300 dark:hover:border-slate-500'}`}>
+            {campo.charAt(0).toUpperCase() + campo.slice(1)}
+            {ordemCampo === campo && <span className="font-black">{ordemDir === 'asc' ? ' ↑' : ' ↓'}</span>}
+          </button>
+        ))}
+      </div>
 
       {filtrados.length === 0
         ? <div className="text-center py-12 text-slate-400">Nenhum colaborador cadastrado.</div>
@@ -576,6 +703,8 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
                       <div><span className="text-slate-400 block">Geofence</span><span className="font-semibold">{c.latitude_permitida ? `${Number(c.latitude_permitida).toFixed(4)}, ${Number(c.longitude_permitida).toFixed(4)}` : '—'}</span></div>
                       <div><span className="text-slate-400 block">Raio</span><span className="font-semibold">{c.raio_metros ?? 100}m</span></div>
                     </div>
+                    {/* Linha 5: Documentos */}
+                    <DocumentosColaborador colaboradorId={c.id} />
                   </div>
                 )}
               </div>
@@ -1732,11 +1861,11 @@ const LinhaFalta = ({ item, onEdit, onDel, colaboradores }: any) => {
 
 // ── Tab Ponto ────────────────────────────────────────────────────────────────
 
-type LinhaLancamento = { id: number; data: string; entrada: string; saida: string };
+type LinhaLancamento = { id: number; data_entrada: string; hora_entrada: string; data_saida: string; hora_saida: string };
 
 let _lId = 0;
 const novaLinha = (data: string, entrada = '08:00', saida = '17:00'): LinhaLancamento =>
-  ({ id: ++_lId, data, entrada, saida });
+  ({ id: ++_lId, data_entrada: data, hora_entrada: entrada, data_saida: data, hora_saida: saida });
 
 function PontoTab({ reload, colaboradores }: { reload: number; colaboradores: any[] }) {
   const ic = 'w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-400';
@@ -1831,19 +1960,15 @@ function PontoTab({ reload, colaboradores }: { reload: number; colaboradores: an
   const salvarLote = async () => {
     if (!colId) { toast.error('Selecione um colaborador.'); return; }
     if (linhas.length === 0) { toast.error('Adicione pelo menos uma linha.'); return; }
-    const invalidas = linhas.filter(l => !l.data || !l.entrada);
+    const invalidas = linhas.filter(l => !l.data_entrada || !l.hora_entrada);
     if (invalidas.length) { toast.error('Preencha data e entrada em todas as linhas.'); return; }
     setSalvando(true);
 
-    // Para cada linha: entrada na data informada; saída na mesma data ou +1 dia se hora < entrada
     const registros: { tipo: string; data_hora: string }[] = [];
     for (const l of linhas) {
-      registros.push({ tipo: 'entrada', data_hora: new Date(`${l.data}T${l.entrada}:00`).toISOString() });
-      if (l.saida) {
-        const saidaData = l.saida < l.entrada
-          ? new Date(new Date(`${l.data}T${l.saida}:00`).getTime() + 86400000).toISOString()
-          : new Date(`${l.data}T${l.saida}:00`).toISOString();
-        registros.push({ tipo: 'saida', data_hora: saidaData });
+      registros.push({ tipo: 'entrada', data_hora: new Date(`${l.data_entrada}T${l.hora_entrada}:00`).toISOString() });
+      if (l.hora_saida && l.data_saida) {
+        registros.push({ tipo: 'saida', data_hora: new Date(`${l.data_saida}T${l.hora_saida}:00`).toISOString() });
       }
     }
 
@@ -2041,47 +2166,58 @@ function PontoTab({ reload, colaboradores }: { reload: number; colaboradores: an
             <div className="flex gap-2 mb-1">
               <button type="button" onClick={addLinha} disabled={!colId}
                 className="flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-lg bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 hover:bg-purple-200 transition disabled:opacity-40">
-                <Plus size={11} />Adicionar dia
+                <Plus size={11} />Adicionar período
               </button>
             </div>
 
             {/* Header */}
-            <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-2 px-3 text-xs font-bold text-slate-400 uppercase tracking-wider">
-              <span>Data</span><span>Entrada</span><span></span><span>Saída</span><span></span>
+            <div className="grid grid-cols-2 gap-2 px-1 text-xs font-bold text-slate-400 uppercase tracking-wider">
+              <div className="flex gap-1"><span className="w-28">Data Entrada</span><span>Hora</span></div>
+              <div className="flex gap-1"><span className="w-28">Data Saída</span><span>Hora</span></div>
             </div>
 
             <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
               {linhas.length === 0 && (
-                <p className="text-slate-400 text-xs text-center py-4">Clique em &quot;Adicionar dia&quot; para inserir uma marcação.</p>
+                <p className="text-slate-400 text-xs text-center py-4">Clique em &quot;Adicionar período&quot; para inserir uma marcação.</p>
               )}
               {linhas.map(l => {
-                const viradaDia = l.saida && l.saida < l.entrada;
+                const noturno = l.data_saida > l.data_entrada || (l.data_saida === l.data_entrada && l.hora_saida < l.hora_entrada);
                 return (
-                  <div key={l.id} className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 rounded-xl px-3 py-2">
-                    <input type="date" value={l.data} onChange={e => updLinha(l.id, 'data', e.target.value)}
-                      className="border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-xs bg-white dark:bg-slate-900 text-slate-800 dark:text-white flex-1 min-w-0" />
-                    <input type="time" value={l.entrada} onChange={e => updLinha(l.id, 'entrada', e.target.value)}
-                      className="border border-green-200 dark:border-green-800 rounded-lg px-2 py-1 text-xs bg-white dark:bg-slate-900 text-green-700 dark:text-green-400 w-24" />
-                    <span className="text-slate-400 text-xs font-bold">→</span>
-                    <div className="relative">
-                      <input type="time" value={l.saida} onChange={e => updLinha(l.id, 'saida', e.target.value)}
-                        className="border border-red-200 dark:border-red-800 rounded-lg px-2 py-1 text-xs bg-white dark:bg-slate-900 text-red-600 dark:text-red-400 w-24" />
-                      {viradaDia && (
-                        <span className="absolute -top-2 -right-1 text-[9px] font-black text-purple-600 dark:text-purple-400 bg-purple-100 dark:bg-purple-900/40 px-1 rounded">+1d</span>
-                      )}
+                  <div key={l.id} className="bg-slate-50 dark:bg-slate-800 rounded-xl px-3 py-2 space-y-2">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] font-bold text-green-600 w-10 shrink-0">ENT.</span>
+                        <input type="date" value={l.data_entrada} onChange={e => updLinha(l.id, 'data_entrada', e.target.value)}
+                          className="border border-green-200 dark:border-green-800 rounded-lg px-2 py-1 text-xs bg-white dark:bg-slate-900 text-slate-800 dark:text-white flex-1 min-w-0" />
+                        <input type="time" value={l.hora_entrada} onChange={e => updLinha(l.id, 'hora_entrada', e.target.value)}
+                          className="border border-green-200 dark:border-green-800 rounded-lg px-2 py-1 text-xs bg-white dark:bg-slate-900 text-green-700 dark:text-green-400 w-20" />
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] font-bold text-red-500 w-10 shrink-0">SAÍ.</span>
+                        <input type="date" value={l.data_saida} onChange={e => updLinha(l.id, 'data_saida', e.target.value)}
+                          className="border border-red-200 dark:border-red-800 rounded-lg px-2 py-1 text-xs bg-white dark:bg-slate-900 text-slate-800 dark:text-white flex-1 min-w-0" />
+                        <input type="time" value={l.hora_saida} onChange={e => updLinha(l.id, 'hora_saida', e.target.value)}
+                          className="border border-red-200 dark:border-red-800 rounded-lg px-2 py-1 text-xs bg-white dark:bg-slate-900 text-red-600 dark:text-red-400 w-20" />
+                        {l.data_saida > l.data_entrada && (
+                          <span className="text-[9px] font-black text-purple-600 dark:text-purple-400 bg-purple-100 dark:bg-purple-900/40 px-1 rounded shrink-0">+{Math.round((new Date(l.data_saida).getTime()-new Date(l.data_entrada).getTime())/86400000)}d</span>
+                        )}
+                        {noturno && l.data_saida === l.data_entrada && <span className="text-[9px] font-black text-blue-500 bg-blue-100 dark:bg-blue-900/40 px-1 rounded shrink-0">noturno</span>}
+                      </div>
                     </div>
-                    <button type="button" onClick={() => delLinha(l.id)} className="text-slate-300 hover:text-red-500 transition ml-1"><Trash2 size={12} /></button>
+                    <div className="flex justify-end">
+                      <button type="button" onClick={() => delLinha(l.id)} className="text-slate-300 hover:text-red-500 transition text-xs flex items-center gap-1"><Trash2 size={11} />Remover</button>
+                    </div>
                   </div>
                 );
               })}
             </div>
 
             <div className="flex justify-between items-center pt-2 border-t border-slate-100 dark:border-slate-700">
-              <span className="text-xs text-slate-400">{linhas.length} dia(s)</span>
+              <span className="text-xs text-slate-400">{linhas.length} período(s)</span>
               <div className="flex gap-2">
                 <button onClick={() => setModalAberto(false)} className={bs}>Cancelar</button>
                 <button onClick={salvarLote} disabled={salvando || !colId || linhas.length === 0} className={bp}>
-                  {salvando ? 'Registrando...' : `Registrar ${linhas.length} dia(s)`}
+                  {salvando ? 'Registrando...' : `Registrar ${linhas.length} período(s)`}
                 </button>
               </div>
             </div>
@@ -2096,27 +2232,44 @@ function PontoTab({ reload, colaboradores }: { reload: number; colaboradores: an
 
 function TransporteTab({ colaboradores, reload }: { colaboradores: any[]; reload: number }) {
   const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? '';
+  const DIAS_SEMANA_OPT = [
+    { key: 'dom', label: 'D' }, { key: 'seg', label: 'S' }, { key: 'ter', label: 'T' },
+    { key: 'qua', label: 'Q' }, { key: 'qui', label: 'Q' }, { key: 'sex', label: 'S' }, { key: 'sab', label: 'S' },
+  ];
   const [valores, setValores] = useState<Record<string, string>>({});
+  const [diasEdit, setDiasEdit] = useState<Record<string, string[]>>({});
   const [salvando, setSalvando] = useState<string | null>(null);
-  const mesAtual = new Date().toISOString().slice(0, 7);
+  const [mes, setMes] = useState(new Date().toISOString().slice(0, 7));
+  const [comprovante, setComprovante] = useState<any | null>(null);
 
   useEffect(() => {
-    const init: Record<string, string> = {};
-    colaboradores.forEach(c => { init[c.id] = c.valor_passagem != null ? String(c.valor_passagem) : ''; });
-    setValores(init);
+    const initVal: Record<string, string> = {};
+    const initDias: Record<string, string[]> = {};
+    colaboradores.forEach(c => {
+      initVal[c.id] = c.valor_passagem != null ? String(c.valor_passagem) : '';
+      initDias[c.id] = Array.isArray(c.dias_trabalho) ? c.dias_trabalho : [];
+    });
+    setValores(initVal);
+    setDiasEdit(initDias);
   }, [colaboradores, reload]);
 
   function diasNoMes(diasSemana: string[], mesRef: string): number {
     const mapa: Record<string, number> = { dom: 0, seg: 1, ter: 2, qua: 3, qui: 4, sex: 5, sab: 6 };
-    const [ano, mes] = mesRef.split('-').map(Number);
+    const [ano, m] = mesRef.split('-').map(Number);
     const alvos = new Set((diasSemana ?? []).map((d: string) => mapa[d]).filter((n: number) => n !== undefined));
-    const total = new Date(ano, mes, 0).getDate();
+    const total = new Date(ano, m, 0).getDate();
     let count = 0;
     for (let d = 1; d <= total; d++) {
-      if (alvos.has(new Date(ano, mes - 1, d).getDay())) count++;
+      if (alvos.has(new Date(ano, m - 1, d).getDay())) count++;
     }
     return count;
   }
+
+  const fmtMes = (m: string) => {
+    const [ano, mes] = m.split('-');
+    const nomes = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+    return `${nomes[parseInt(mes)-1]}/${ano}`;
+  };
 
   const salvar = async (colId: string) => {
     setSalvando(colId);
@@ -2124,63 +2277,168 @@ function TransporteTab({ colaboradores, reload }: { colaboradores: any[]; reload
       const r = await fetch(`${API}/gente/colaboradores/${colId}`, {
         method: 'PATCH', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ valor_passagem: valores[colId] === '' ? null : Number(valores[colId]) }),
+        body: JSON.stringify({
+          valor_passagem: valores[colId] === '' ? null : Number(valores[colId]),
+          dias_trabalho: diasEdit[colId] ?? [],
+        }),
       });
       if (!r.ok) { const e = await r.json(); throw new Error(e.message); }
-      toast.success('Valor de passagem salvo!');
+      toast.success('Transporte salvo!');
     } catch (e: any) { toast.error(e.message); }
     setSalvando(null);
   };
 
-  const ativos = colaboradores.filter(c => c.ativo !== false);
+  const toggleDia = (colId: string, dia: string) => {
+    setDiasEdit(prev => {
+      const atual = prev[colId] ?? [];
+      return { ...prev, [colId]: atual.includes(dia) ? atual.filter(d => d !== dia) : [...atual, dia] };
+    });
+  };
+
+  const ativos = colaboradores.filter(c => c.ativo !== false)
+    .sort((a: any, b: any) => (a.funcionario?.nome ?? '').localeCompare(b.funcionario?.nome ?? '', 'pt-BR'));
+
+  const totalGeralVT = ativos.reduce((s, c) => {
+    const vp = parseFloat(valores[c.id] ?? '') || 0;
+    return s + vp * diasNoMes(c.dias_trabalho ?? [], mes);
+  }, 0);
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-xl px-4 py-2.5">
-        <Bus size={15} className="text-blue-500 shrink-0" />
-        <span>Defina o valor da passagem de ida+volta por dia. O total mensal é calculado automaticamente na folha.</span>
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-xl px-4 py-2.5 flex-1">
+          <Bus size={15} className="text-blue-500 shrink-0" />
+          <span>Valor do bilhete único intermunicipal (ida+volta). O total por colaborador é calculado pelos dias configurados em Ponto.</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="text-xs font-bold text-slate-500">Mês:</label>
+          <input type="month" value={mes} onChange={e => setMes(e.target.value)}
+            className="border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-400" />
+        </div>
       </div>
+
+      {totalGeralVT > 0 && (
+        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-xl px-4 py-3 flex items-center justify-between">
+          <div>
+            <div className="text-xs text-blue-500 font-bold uppercase tracking-wide">Total VT — {fmtMes(mes)}</div>
+            <div className="text-2xl font-black text-blue-700 dark:text-blue-300">{totalGeralVT.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
+          </div>
+          <button onClick={() => window.print()}
+            className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition">
+            <Bus size={13} />Comprovante Geral
+          </button>
+        </div>
+      )}
+
       <div className="space-y-2">
-        {ativos.sort((a: any, b: any) => (a.funcionario?.nome ?? '').localeCompare(b.funcionario?.nome ?? '', 'pt-BR')).map((c: any) => {
+        {ativos.map((c: any) => {
           const vp = parseFloat(valores[c.id] ?? '') || 0;
-          const dias = diasNoMes(c.dias_trabalho ?? [], mesAtual);
+          const diasCol = diasEdit[c.id] ?? c.dias_trabalho ?? [];
+          const dias = diasNoMes(diasCol, mes);
           const totalMes = vp * dias;
           return (
-            <div key={c.id} className="flex items-center gap-3 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3">
-              <div className="w-8 h-8 rounded-full bg-purple-100 dark:bg-purple-900 flex items-center justify-center text-purple-700 dark:text-purple-300 font-black text-sm shrink-0">
-                {c.funcionario?.nome?.charAt(0) ?? '?'}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="font-semibold text-slate-800 dark:text-white text-sm truncate">{c.funcionario?.nome ?? '—'}</div>
-                <div className="text-xs text-slate-400">{c.tipo === 'voluntario' ? 'Voluntário' : 'Funcionário'} · {dias} dias úteis em {mesAtual}</div>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <div className="text-right text-xs text-slate-500 dark:text-slate-400 w-20 hidden sm:block">
-                  <div>Total/mês</div>
-                  <div className="font-bold text-slate-700 dark:text-slate-200">{totalMes > 0 ? totalMes.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—'}</div>
+            <div key={c.id} className="border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 space-y-2">
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-purple-100 dark:bg-purple-900 flex items-center justify-center text-purple-700 dark:text-purple-300 font-black text-sm shrink-0">
+                  {c.funcionario?.nome?.charAt(0) ?? '?'}
                 </div>
-                <div className="flex items-center border border-slate-300 dark:border-slate-600 rounded-lg overflow-hidden">
-                  <span className="px-2 text-xs text-slate-400 bg-slate-50 dark:bg-slate-800 border-r border-slate-300 dark:border-slate-600">R$</span>
-                  <input
-                    type="number" step="0.01" min="0" placeholder="0,00"
-                    value={valores[c.id] ?? ''}
-                    onChange={e => setValores(v => ({ ...v, [c.id]: e.target.value }))}
-                    className="w-24 px-2 py-1.5 text-sm bg-white dark:bg-slate-900 text-slate-800 dark:text-white focus:outline-none"
-                  />
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-slate-800 dark:text-white text-sm truncate">{c.funcionario?.nome ?? '—'}</div>
+                  <div className="text-xs text-slate-400">
+                    {c.tipo === 'voluntario' ? 'Voluntário' : 'Funcionário'} · {dias} dias em {fmtMes(mes)}
+                    {c.funcionario?.cargo && <span className="ml-1">· {c.funcionario.cargo}</span>}
+                  </div>
                 </div>
-                <button
-                  onClick={() => salvar(c.id)}
-                  disabled={salvando === c.id}
-                  className="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition disabled:opacity-50"
-                >
-                  {salvando === c.id ? '...' : 'Salvar'}
-                </button>
+                <div className="flex items-center gap-2 shrink-0">
+                  {totalMes > 0 && (
+                    <div className="text-right text-xs text-slate-500 dark:text-slate-400 w-20 hidden sm:block">
+                      <div>Total/mês</div>
+                      <div className="font-bold text-blue-600 dark:text-blue-300">{totalMes.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
+                    </div>
+                  )}
+                  <div className="flex items-center border border-slate-300 dark:border-slate-600 rounded-lg overflow-hidden">
+                    <span className="px-2 text-xs text-slate-400 bg-slate-50 dark:bg-slate-800 border-r border-slate-300 dark:border-slate-600">R$</span>
+                    <input
+                      type="number" step="0.01" min="0" placeholder="0,00"
+                      value={valores[c.id] ?? ''}
+                      onChange={e => setValores(v => ({ ...v, [c.id]: e.target.value }))}
+                      className="w-24 px-2 py-1.5 text-sm bg-white dark:bg-slate-900 text-slate-800 dark:text-white focus:outline-none"
+                    />
+                  </div>
+                  <button onClick={() => salvar(c.id)} disabled={salvando === c.id}
+                    className="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition disabled:opacity-50">
+                    {salvando === c.id ? '...' : 'Salvar'}
+                  </button>
+                  {totalMes > 0 && (
+                    <button onClick={() => setComprovante({ col: c, vp, dias, totalMes, mes })}
+                      className="bg-blue-100 dark:bg-blue-900/30 hover:bg-blue-200 text-blue-700 dark:text-blue-300 text-xs font-bold px-3 py-1.5 rounded-lg transition flex items-center gap-1">
+                      <Bus size={11} />Comp.
+                    </button>
+                  )}
+                </div>
+              </div>
+              {/* Seleção de dias da semana */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide w-20">Dias VT:</span>
+                <div className="flex gap-1">
+                  {DIAS_SEMANA_OPT.map((d, i) => {
+                    const ativo = (diasEdit[c.id] ?? c.dias_trabalho ?? []).includes(d.key);
+                    return (
+                      <button key={`${d.key}-${i}`} type="button" onClick={() => toggleDia(c.id, d.key)}
+                        className={`w-7 h-7 rounded-full text-[10px] font-black transition ${ativo ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-500 hover:bg-slate-200'}`}>
+                        {d.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <span className="text-[10px] text-slate-400">{dias} dias em {fmtMes(mes)}</span>
               </div>
             </div>
           );
         })}
         {ativos.length === 0 && <div className="text-center py-10 text-slate-400 text-sm">Nenhum colaborador ativo.</div>}
       </div>
+
+      {/* Modal Comprovante VT */}
+      {comprovante && (
+        <Modal title="Comprovante de Vale Transporte" onClose={() => setComprovante(null)}>
+          <div className="space-y-4">
+            <div id="comprovante-vt" className="border border-slate-200 dark:border-slate-700 rounded-xl p-6 space-y-4 text-sm">
+              <div className="text-center border-b border-slate-200 pb-4">
+                <div className="font-black text-lg text-slate-800 dark:text-white">INSTITUTO TIAPRETINHA</div>
+                <div className="text-xs text-slate-500">Comprovante de Vale Transporte — {fmtMes(comprovante.mes)}</div>
+              </div>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div><span className="text-slate-400 text-xs block">Colaborador</span><span className="font-bold">{comprovante.col.funcionario?.nome}</span></div>
+                <div><span className="text-slate-400 text-xs block">Cargo</span><span className="font-bold">{comprovante.col.funcionario?.cargo ?? '—'}</span></div>
+                <div><span className="text-slate-400 text-xs block">Valor da Passagem (ida+volta)</span><span className="font-bold">{comprovante.vp.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>
+                <div><span className="text-slate-400 text-xs block">Dias Trabalhados</span><span className="font-bold">{comprovante.dias}</span></div>
+                <div className="col-span-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3">
+                  <span className="text-slate-400 text-xs block">Valor Total a Receber</span>
+                  <span className="font-black text-xl text-blue-700 dark:text-blue-300">{comprovante.totalMes.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                </div>
+              </div>
+              <div className="pt-4 mt-4 border-t border-slate-200 dark:border-slate-700 space-y-8">
+                <div className="grid grid-cols-3 gap-4 text-center text-xs">
+                  {['Colaborador', 'Administração', 'Presidente'].map(label => (
+                    <div key={label}>
+                      <div className="border-b border-slate-400 dark:border-slate-500 pb-6 mb-2"></div>
+                      <span className="text-slate-500">{label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setComprovante(null)} className={bs}>Fechar</button>
+              <button onClick={() => window.print()}
+                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2 rounded-xl text-sm transition">
+                <Bus size={14} />Imprimir Comprovante
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
@@ -2205,7 +2463,7 @@ function FinanceiroTab({ reload }: { reload: number }) {
   useEffect(() => { carregar(); }, [carregar, reload]);
 
   const cols: any[] = dados?.colaboradores ?? [];
-  const totais = dados?.totais ?? { total_folha: 0, total_vales: 0, total_liquido: 0 };
+  const totais = dados?.totais ?? { total_folha: 0, total_vales: 0, total_outros_descontos: 0, total_liquido: 0 };
 
   return (
     <div>
@@ -2218,10 +2476,11 @@ function FinanceiroTab({ reload }: { reload: number }) {
       </div>
 
       {/* Cards de totais */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-4 gap-4 mb-6">
         {[
           { label: 'Total Folha', val: totais.total_folha, color: 'text-purple-600', bg: 'bg-purple-50 dark:bg-purple-900/20' },
           { label: 'Vales Pendentes', val: totais.total_vales, color: 'text-red-600', bg: 'bg-red-50 dark:bg-red-900/20' },
+          { label: 'Outros Descontos', val: totais.total_outros_descontos, color: 'text-orange-600', bg: 'bg-orange-50 dark:bg-orange-900/20' },
           { label: 'Líquido a Pagar', val: totais.total_liquido, color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-900/20' },
         ].map(c => (
           <div key={c.label} className={`${c.bg} rounded-2xl p-4`}>
@@ -2241,7 +2500,7 @@ function FinanceiroTab({ reload }: { reload: number }) {
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 dark:bg-slate-800">
                   <tr>
-                    {['Colaborador', 'VR / Benefícios', 'Total Proventos', 'Vales Pendentes', 'Líquido', 'Recibo'].map(h => (
+                    {['Colaborador', 'VR / Benefícios', 'Total Proventos', 'Vales Pendentes', 'Outros Descontos', 'Líquido', 'Recibo'].map(h => (
                       <th key={h} className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -2265,6 +2524,11 @@ function FinanceiroTab({ reload }: { reload: number }) {
                       <td className="px-4 py-3">
                         {c.qtd_vales_pendentes > 0
                           ? <span className="text-red-600 font-semibold">{fmt.moeda(c.vales_pendentes)} <span className="text-xs text-red-400">({c.qtd_vales_pendentes})</span></span>
+                          : <span className="text-slate-400">—</span>}
+                      </td>
+                      <td className="px-4 py-3">
+                        {c.qtd_outros_descontos > 0
+                          ? <span className="text-orange-600 font-semibold">{fmt.moeda(c.outros_descontos)} <span className="text-xs text-orange-400">({c.qtd_outros_descontos})</span></span>
                           : <span className="text-slate-400">—</span>}
                       </td>
                       <td className="px-4 py-3 font-black text-emerald-600 dark:text-emerald-400">{fmt.moeda(c.liquido)}</td>

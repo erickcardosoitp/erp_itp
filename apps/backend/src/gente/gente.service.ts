@@ -13,6 +13,8 @@ import { GenteColaboradorCodigo } from './entities/gente-colaborador-codigo.enti
 import { GenteColaboradorLocal } from './entities/gente-colaborador-local.entity';
 import { GenteFolgaSolicitacao } from './entities/gente-folga-solicitacao.entity';
 import { GenteTrabalhoExterno } from './entities/gente-trabalho-externo.entity';
+import { GenteColaboradorDocumento } from './entities/gente-colaborador-documento.entity';
+import { MovimentacaoFinanceira } from '../financeiro/entities/movimentacao-financeira.entity';
 
 const PONTO_TOKEN = 'itp-ponto-2026';
 
@@ -41,8 +43,26 @@ export class GenteService {
     @InjectRepository(GenteColaboradorLocal) private localRepo: Repository<GenteColaboradorLocal>,
     @InjectRepository(GenteFolgaSolicitacao) private folgaRepo: Repository<GenteFolgaSolicitacao>,
     @InjectRepository(GenteTrabalhoExterno) private trabalhoExternoRepo: Repository<GenteTrabalhoExterno>,
+    @InjectRepository(GenteColaboradorDocumento) private documentoRepo: Repository<GenteColaboradorDocumento>,
+    @InjectRepository(MovimentacaoFinanceira) private movimentacaoRepo: Repository<MovimentacaoFinanceira>,
     private dataSource: DataSource,
   ) {}
+
+  async onModuleInit() {
+    await this.dataSource.query(`
+      CREATE TABLE IF NOT EXISTS gente_colaborador_documentos (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        colaborador_id UUID NOT NULL,
+        nome TEXT NOT NULL,
+        url TEXT,
+        vencimento DATE,
+        observacao TEXT,
+        criado_por_id TEXT,
+        criado_por_nome TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+    `);
+  }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -278,6 +298,43 @@ export class GenteService {
       const totalVales = Number(valesPendentes[0]?.total ?? 0);
       const qtdVales = Number(valesPendentes[0]?.qtd ?? 0);
 
+      // Outros descontos: advertências com valor_desconto e faltas com desconto no mês
+      const advertenciasRows: any[] = await this.dataSource.query(
+        `SELECT COALESCE(SUM(valor_desconto),0) AS total, COUNT(*) AS qtd
+         FROM gente_advertencias
+         WHERE colaborador_id = $1 AND valor_desconto > 0 AND data >= $2 AND data <= $3`,
+        [col.id, mesInicio, mesFim],
+      );
+      const totalAdv = Number(advertenciasRows[0]?.total ?? 0);
+      const qtdAdv = Number(advertenciasRows[0]?.qtd ?? 0);
+
+      const faltasRows: any[] = await this.dataSource.query(
+        `SELECT percentual_desconto FROM gente_faltas
+         WHERE colaborador_id = $1 AND com_desconto = true AND tipo = 'falta' AND data >= $2 AND data <= $3`,
+        [col.id, mesInicio, mesFim],
+      );
+      const totalFaltas = faltasRows.reduce((s, f) => {
+        const pct = Number(f.percentual_desconto ?? 100) / 100;
+        return s + Math.round((totalProventos / 30) * pct * 100) / 100;
+      }, 0);
+      const qtdFaltas = faltasRows.length;
+
+      const suspensoesRows: any[] = await this.dataSource.query(
+        `SELECT data_inicio::text, data_fim::text FROM gente_suspensoes
+         WHERE colaborador_id = $1 AND com_desconto = true AND data_inicio <= $2 AND data_fim >= $3`,
+        [col.id, mesFim, mesInicio],
+      );
+      const totalSuspensoes = suspensoesRows.reduce((s, sus) => {
+        const ini = new Date(sus.data_inicio > mesInicio ? sus.data_inicio : mesInicio);
+        const fim = new Date(sus.data_fim < mesFim ? sus.data_fim : mesFim);
+        const dias = Math.max(0, Math.round((fim.getTime() - ini.getTime()) / 86400000) + 1);
+        return s + Math.round((totalProventos / 30) * dias * 100) / 100;
+      }, 0);
+      const qtdSuspensoes = suspensoesRows.length;
+
+      const totalOutrosDescontos = totalAdv + totalFaltas + totalSuspensoes;
+      const qtdOutrosDescontos = qtdAdv + qtdFaltas + qtdSuspensoes;
+
       // Recibo do mês
       const recibo: any[] = await this.dataSource.query(
         `SELECT id, status, valor FROM gente_recibos WHERE colaborador_id = $1 AND mes_referencia = $2 LIMIT 1`,
@@ -293,8 +350,10 @@ export class GenteService {
         total_proventos: totalProventos,
         vales_pendentes: totalVales,
         qtd_vales_pendentes: qtdVales,
-        total_descontos: totalVales,
-        liquido: totalProventos - totalVales,
+        outros_descontos: totalOutrosDescontos,
+        qtd_outros_descontos: qtdOutrosDescontos,
+        total_descontos: totalVales + totalOutrosDescontos,
+        liquido: totalProventos - totalVales - totalOutrosDescontos,
         recibo_id: recibo[0]?.id ?? null,
         recibo_status: recibo[0]?.status ?? null,
       };
@@ -307,6 +366,7 @@ export class GenteService {
       totais: {
         total_folha: lista.reduce((s, r) => s + r!.total_proventos, 0),
         total_vales: lista.reduce((s, r) => s + r!.vales_pendentes, 0),
+        total_outros_descontos: lista.reduce((s, r) => s + r!.outros_descontos, 0),
         total_liquido: lista.reduce((s, r) => s + r!.liquido, 0),
       },
     };
@@ -476,9 +536,27 @@ export class GenteService {
       const totalDescontos = descontos.reduce((s, d) => s + d.valor, 0);
       const liquido = totalProventos - totalDescontos;
 
-      // Marca vales como descontados
+      // Marca vales como descontados e gera Entrada financeira de recuperação
       for (const v of valesDoMes) {
         await this.valeRepo.update(v.id, { descontado: true });
+        try {
+          const tipoLabel: Record<string, string> = {
+            alimentacao: 'Alimentação', transporte: 'Transporte', adiantamento: 'Adiantamento', outro: 'Vale',
+          };
+          const movEntrada = await this.movimentacaoRepo.save(this.movimentacaoRepo.create({
+            nome: `Recuperação ${tipoLabel[v.tipo] ?? 'Vale'} — ${func.nome}`,
+            tipo_movimentacao: 'Receita',
+            plano_contas: 'Funcionários 2026',
+            categoria: 'Pessoal',
+            forma_pagamento: 'Desconto em Folha',
+            valor: Number(v.valor),
+            data: mes_referencia + '-01',
+            status: 'Concluído',
+            descricao: `Desconto folha ${mes_referencia} — ${func.nome}`,
+            usuario_nome: criado_por_nome ?? null,
+          }));
+          await this.valeRepo.update(v.id, { movimentacao_entrada_id: movEntrada.id });
+        } catch { /* não bloqueia o cálculo */ }
       }
 
       // Gera recibo
@@ -549,15 +627,6 @@ export class GenteService {
       referencia: mesRef,
       valor: Number(cc.valor_efetivo),
     }));
-    if (col.valor_passagem && Number(col.valor_passagem) > 0) {
-      const [ano, mes] = mes_referencia.split('-').map(Number);
-      const diasTrab = this._contarDiasTrabalho(col.dias_trabalho ?? [], ano, mes);
-      const vtMensal = Number(col.valor_passagem) * diasTrab;
-      if (vtMensal > 0) {
-        proventos.push({ codigo: 'VT', descricao: `VALE TRANSPORTE (${diasTrab}x)`, referencia: mesRef, valor: vtMensal });
-      }
-    }
-
     const mesInicio = `${mes_referencia}-01`;
     const mesFim = new Date(Number(mes_referencia.split('-')[0]), Number(mes_referencia.split('-')[1]), 0)
       .toISOString().split('T')[0];
@@ -598,6 +667,54 @@ export class GenteService {
     }
 
     const totalProventos = proventos.reduce((s, p) => s + p.valor, 0);
+
+    // Faltas com desconto no mês (calculado sobre totalProventos / 30 por dia)
+    const faltasDoMes = await this.faltaRepo
+      .createQueryBuilder('f')
+      .where('f.colaborador_id = :id', { id: col.id })
+      .andWhere('f.com_desconto = true')
+      .andWhere('f.tipo = :tipo', { tipo: 'falta' })
+      .andWhere('f.data >= :inicio', { inicio: mesInicio })
+      .andWhere('f.data <= :fim', { fim: mesFim })
+      .getMany();
+
+    for (const f of faltasDoMes) {
+      const pct = Number(f.percentual_desconto ?? 100) / 100;
+      const valorDesc = Math.round((totalProventos / 30) * pct * 100) / 100;
+      if (valorDesc > 0) {
+        descontos.push({
+          codigo: 'FALTA',
+          descricao: `Falta ${f.data}${f.motivo ? ' — ' + f.motivo.substring(0, 30) : ''}`,
+          referencia: mesRef,
+          valor: valorDesc,
+        });
+      }
+    }
+
+    // Suspensões com desconto que se sobrepõem ao mês
+    const suspensoesDoMes = await this.suspensaoRepo
+      .createQueryBuilder('s')
+      .where('s.colaborador_id = :id', { id: col.id })
+      .andWhere('s.com_desconto = true')
+      .andWhere('s.data_inicio <= :fim', { fim: mesFim })
+      .andWhere('s.data_fim >= :inicio', { inicio: mesInicio })
+      .getMany();
+
+    for (const s of suspensoesDoMes) {
+      const ini = new Date(s.data_inicio > mesInicio ? s.data_inicio : mesInicio);
+      const fim = new Date(s.data_fim < mesFim ? s.data_fim : mesFim);
+      const dias = Math.max(0, Math.round((fim.getTime() - ini.getTime()) / 86400000) + 1);
+      if (dias > 0) {
+        const valorDesc = Math.round((totalProventos / 30) * dias * 100) / 100;
+        descontos.push({
+          codigo: 'SUSP',
+          descricao: `Suspensão ${dias}d — ${s.motivo.substring(0, 30)}`,
+          referencia: mesRef,
+          valor: valorDesc,
+        });
+      }
+    }
+
     const totalDescontos = descontos.reduce((s, d) => s + d.valor, 0);
     const liquido = totalProventos - totalDescontos;
 
@@ -644,6 +761,24 @@ export class GenteService {
 
     for (const v of r.valesDoMes) {
       await this.valeRepo.update(v.id, { descontado: true });
+      try {
+        const tipoLabel: Record<string, string> = {
+          alimentacao: 'Alimentação', transporte: 'Transporte', adiantamento: 'Adiantamento', outro: 'Vale',
+        };
+        const movEntrada = await this.movimentacaoRepo.save(this.movimentacaoRepo.create({
+          nome: `Recuperação ${tipoLabel[v.tipo] ?? 'Vale'} — ${r.func.nome}`,
+          tipo_movimentacao: 'Receita',
+          plano_contas: 'Funcionários 2026',
+          categoria: 'Pessoal',
+          forma_pagamento: 'Desconto em Folha',
+          valor: Number(v.valor),
+          data: mes_referencia + '-01',
+          status: 'Concluído',
+          descricao: `Desconto folha ${mes_referencia} — ${r.func.nome}`,
+          usuario_nome: criado_por_nome ?? null,
+        }));
+        await this.valeRepo.update(v.id, { movimentacao_entrada_id: movEntrada.id });
+      } catch { /* não bloqueia o cálculo */ }
     }
 
     const reciboExistente = await this.reciboRepo.findOne({ where: { colaborador_id, mes_referencia } });
@@ -862,7 +997,42 @@ export class GenteService {
     return this.valeRepo.find({ where, order: { createdAt: 'DESC' } });
   }
 
-  async criarVale(dto: any) { return this.valeRepo.save(this.valeRepo.create(dto)); }
+  async criarVale(dto: any) {
+    const vale = await this.valeRepo.save(this.valeRepo.create(dto));
+
+    // Gerar movimentação de saída no financeiro
+    if (dto.forma_pagamento && dto.valor) {
+      try {
+        const col = await this.colaboradorRepo.findOneBy({ id: dto.colaborador_id });
+        let nomeColaborador = 'Colaborador';
+        if (col?.funcionario_id) {
+          const [func] = await this.dataSource.query(
+            `SELECT nome FROM funcionarios WHERE id = $1`, [col.funcionario_id],
+          );
+          if (func?.nome) nomeColaborador = func.nome;
+        }
+        const tipoLabel: Record<string, string> = {
+          alimentacao: 'Alimentação', transporte: 'Transporte', adiantamento: 'Adiantamento', outro: 'Vale',
+        };
+        const mov = await this.movimentacaoRepo.save(this.movimentacaoRepo.create({
+          nome: `${tipoLabel[dto.tipo] ?? 'Vale'} — ${nomeColaborador}`,
+          tipo_movimentacao: 'Saída',
+          plano_contas: 'Funcionários 2026',
+          categoria: 'Pessoal',
+          forma_pagamento: dto.forma_pagamento,
+          valor: Number(dto.valor),
+          data: dto.data ?? new Date().toISOString().split('T')[0],
+          status: 'Concluído',
+          descricao: dto.descricao ? `Vale: ${dto.descricao}` : `Vale liberado para ${nomeColaborador}`,
+          usuario_nome: dto.criado_por_nome ?? null,
+        }));
+        await this.valeRepo.update(vale.id, { movimentacao_saida_id: mov.id });
+        vale.movimentacao_saida_id = mov.id;
+      } catch { /* não bloqueia o vale se financeiro falhar */ }
+    }
+
+    return vale;
+  }
   async editarVale(id: string, dto: any) { await this.valeRepo.update(id, dto); return this.valeRepo.findOneBy({ id }); }
   async deletarVale(id: string) { await this.valeRepo.delete(id); return { ok: true }; }
 
@@ -915,6 +1085,15 @@ export class GenteService {
     return this.faltaRepo.findOneBy({ id });
   }
   async deletarFalta(id: string) { await this.faltaRepo.delete(id); return { ok: true }; }
+
+  // ── Documentos do colaborador ─────────────────────────────────────────────
+
+  async listarDocumentos(colaborador_id: string) {
+    return this.documentoRepo.find({ where: { colaborador_id }, order: { createdAt: 'DESC' } });
+  }
+  async criarDocumento(dto: any) { return this.documentoRepo.save(this.documentoRepo.create(dto)); }
+  async editarDocumento(id: string, dto: any) { await this.documentoRepo.update(id, dto); return this.documentoRepo.findOneBy({ id }); }
+  async deletarDocumento(id: string) { await this.documentoRepo.delete(id); return { ok: true }; }
 
   // ── Resumo do colaborador ─────────────────────────────────────────────────
 

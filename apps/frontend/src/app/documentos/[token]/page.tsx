@@ -732,35 +732,36 @@ export default function DocumentosPage() {
         </section>
 
         {/* Botão de Conclusão */}
-        <div className="pb-8">
-          {status?.completo ? (
-            <div className="text-center space-y-3">
-              <div className="inline-flex items-center gap-2 text-green-600 dark:text-green-400 font-semibold">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-                Todos os documentos obrigatórios foram enviados!
-              </div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                Nossa equipe irá analisar e entrar em contato em breve.
+        <div className="pb-8 space-y-3">
+          {status && !status.completo && status.obrigatorios_pendentes.length > 0 && (
+            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-xl p-4">
+              <p className="text-sm text-yellow-700 dark:text-yellow-300 font-medium text-center">
+                ⚠ {status.obrigatorios_pendentes.length} documento(s) recomendado(s) ainda não enviado(s)
               </p>
-              <button
-                onClick={() => setConcluido(true)}
-                className="bg-green-600 hover:bg-green-700 text-white font-semibold px-8 py-3 rounded-xl shadow transition-colors"
-              >
-                Concluir Envio
-              </button>
-            </div>
-          ) : (
-            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-xl p-4 text-center">
-              <p className="text-sm text-yellow-700 dark:text-yellow-300 font-medium">
-                {status?.obrigatorios_pendentes.length} documento(s) obrigatório(s) pendente(s)
-              </p>
-              <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-1">
-                Envie todos os documentos marcados com * para concluir.
+              <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-1 text-center">
+                Você pode concluir agora, mas nossa equipe poderá solicitar os documentos faltantes posteriormente.
               </p>
             </div>
           )}
+          {status?.completo && (
+            <div className="inline-flex items-center gap-2 text-green-600 dark:text-green-400 font-semibold w-full justify-center">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+              Todos os documentos foram enviados!
+            </div>
+          )}
+          <div className="text-center">
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
+              Nossa equipe irá analisar e entrar em contato em breve.
+            </p>
+            <button
+              onClick={() => setConcluido(true)}
+              className="bg-green-600 hover:bg-green-700 text-white font-semibold px-8 py-3 rounded-xl shadow transition-colors"
+            >
+              Concluir Envio
+            </button>
+          </div>
         </div>
 
         {/* Informações */}

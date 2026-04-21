@@ -26,6 +26,15 @@ export class GenteVale {
   descontado: boolean;
 
   @Column({ type: 'text', nullable: true })
+  forma_pagamento: string;
+
+  @Column({ type: 'text', nullable: true })
+  movimentacao_saida_id: string;
+
+  @Column({ type: 'text', nullable: true })
+  movimentacao_entrada_id: string;
+
+  @Column({ type: 'text', nullable: true })
   criado_por_id: string;
 
   @Column({ type: 'text', nullable: true })

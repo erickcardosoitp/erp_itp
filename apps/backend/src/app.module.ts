@@ -687,6 +687,13 @@ export class AppModule implements OnModuleInit {
           ADD COLUMN IF NOT EXISTS valor_desconto NUMERIC(10,2)
       `);
       this.logger.log('✅ Coluna gente_advertencias.valor_desconto aplicada (IF NOT EXISTS)');
+      await this.dataSource.query(`
+        ALTER TABLE IF EXISTS gente_vales
+          ADD COLUMN IF NOT EXISTS forma_pagamento TEXT,
+          ADD COLUMN IF NOT EXISTS movimentacao_saida_id TEXT,
+          ADD COLUMN IF NOT EXISTS movimentacao_entrada_id TEXT
+      `);
+      this.logger.log('✅ Colunas gente_vales (forma_pagamento, movimentacao_saida_id, movimentacao_entrada_id) aplicadas (IF NOT EXISTS)');
       this.logger.log('✅ Tabelas do módulo Gente criadas (IF NOT EXISTS)');
 
     } catch (err: any) {

@@ -80,6 +80,26 @@ export class GenteController {
   @ModuloPerm('gente', 'excluir')
   remover(@Param('id') id: string) { return this.svc.removerColaborador(id); }
 
+  // ── Documentos do colaborador ─────────────────────────────────────────────
+
+  @Get('colaboradores/:id/documentos')
+  @ModuloPerm('gente', 'visualizar')
+  listarDocumentos(@Param('id') id: string) { return this.svc.listarDocumentos(id); }
+
+  @Post('colaboradores/:id/documentos')
+  @ModuloPerm('gente', 'editar')
+  criarDocumento(@Param('id') id: string, @Body() dto: any, @Request() req: any) {
+    return this.svc.criarDocumento({ ...dto, colaborador_id: id, criado_por_id: req.user?.userId, criado_por_nome: req.user?.nome });
+  }
+
+  @Patch('documentos/:id')
+  @ModuloPerm('gente', 'editar')
+  editarDocumento(@Param('id') id: string, @Body() dto: any) { return this.svc.editarDocumento(id, dto); }
+
+  @Delete('documentos/:id')
+  @ModuloPerm('gente', 'editar')
+  deletarDocumento(@Param('id') id: string) { return this.svc.deletarDocumento(id); }
+
   // ── Locais permitidos por colaborador ─────────────────────────────────────
 
   @Get('colaboradores/:id/locais')

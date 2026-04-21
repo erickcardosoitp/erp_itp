@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { GenteController } from './gente.controller';
 import { GenteService } from './gente.service';
+import { MovimentacaoFinanceira } from '../financeiro/entities/movimentacao-financeira.entity';
 import { GenteColaborador } from './entities/gente-colaborador.entity';
 import { GentePonto } from './entities/gente-ponto.entity';
 import { GenteRecibo } from './entities/gente-recibo.entity';
@@ -14,6 +15,7 @@ import { GenteColaboradorCodigo } from './entities/gente-colaborador-codigo.enti
 import { GenteColaboradorLocal } from './entities/gente-colaborador-local.entity';
 import { GenteFolgaSolicitacao } from './entities/gente-folga-solicitacao.entity';
 import { GenteTrabalhoExterno } from './entities/gente-trabalho-externo.entity';
+import { GenteColaboradorDocumento } from './entities/gente-colaborador-documento.entity';
 
 @Module({
   imports: [
@@ -22,6 +24,7 @@ import { GenteTrabalhoExterno } from './entities/gente-trabalho-externo.entity';
       GenteAdvertencia, GenteSuspensao, GenteFalta,
       GenteCodigoAjuda, GenteColaboradorCodigo, GenteColaboradorLocal,
       GenteFolgaSolicitacao, GenteTrabalhoExterno,
+      MovimentacaoFinanceira, GenteColaboradorDocumento,
     ]),
   ],
   controllers: [GenteController],
