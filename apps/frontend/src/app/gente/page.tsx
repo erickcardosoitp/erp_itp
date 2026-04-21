@@ -575,7 +575,12 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
                     {['Masculino', 'Feminino', 'Outro', 'Prefiro não informar'].map(v => <option key={v}>{v}</option>)}
                   </select>
                 </FL>
-                <FL label="Gênero"><input type="text" placeholder="Ex: Não-binário" value={formFunc.genero || ''} onChange={e => setFormFunc((f: any) => ({ ...f, genero: e.target.value }))} className={ic} /></FL>
+                <FL label="Gênero">
+                  <select value={formFunc.genero || ''} onChange={e => setFormFunc((f: any) => ({ ...f, genero: e.target.value }))} className={ic}>
+                    <option value="">Selecione...</option>
+                    {['Homem cisgênero','Mulher cisgênero','Homem trans','Mulher trans','Não-binário','Gênero fluido','Prefiro não informar'].map(v => <option key={v}>{v}</option>)}
+                  </select>
+                </FL>
                 <FL label="Raça / Cor">
                   <select value={formFunc.raca_cor || ''} onChange={e => setFormFunc((f: any) => ({ ...f, raca_cor: e.target.value }))} className={ic}>
                     <option value="">Selecione...</option>
@@ -751,7 +756,12 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
                     {['Masculino', 'Feminino', 'Outro', 'Prefiro não informar'].map(v => <option key={v}>{v}</option>)}
                   </select>
                 </FL>
-                <FL label="Gênero"><input type="text" placeholder="Ex: Não-binário" value={formFunc.genero || ''} onChange={e => setFormFunc((f: any) => ({ ...f, genero: e.target.value }))} className={ic} /></FL>
+                <FL label="Gênero">
+                  <select value={formFunc.genero || ''} onChange={e => setFormFunc((f: any) => ({ ...f, genero: e.target.value }))} className={ic}>
+                    <option value="">Selecione...</option>
+                    {['Homem cisgênero','Mulher cisgênero','Homem trans','Mulher trans','Não-binário','Gênero fluido','Prefiro não informar'].map(v => <option key={v}>{v}</option>)}
+                  </select>
+                </FL>
                 <FL label="Raça / Cor">
                   <select value={formFunc.raca_cor || ''} onChange={e => setFormFunc((f: any) => ({ ...f, raca_cor: e.target.value }))} className={ic}>
                     <option value="">Selecione...</option>
@@ -2663,7 +2673,7 @@ export default function GentePage() {
 
   const carregarColaboradores = useCallback(async () => {
     try {
-      const r = await fetch(`${API}/gente/colaboradores`, { credentials: 'include' });
+      const r = await fetch(`${API}/gente/colaboradores`, { credentials: 'include', cache: 'no-store' });
       const data = await r.json();
       setColaboradores(Array.isArray(data) ? data : []);
     } catch {}
