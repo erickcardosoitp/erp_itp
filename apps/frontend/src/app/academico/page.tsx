@@ -757,6 +757,7 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
                   <th className="text-left px-4 py-3">Matrícula</th>
                   <th className="text-left px-4 py-3">CPF</th>
                   <th className="text-left px-4 py-3">Cursos</th>
+                  <th className="text-left px-4 py-3">Turma</th>
                   <th className="text-left px-4 py-3">Turno</th>
                   <th className="text-center px-4 py-3">Status</th>
                   <th className="text-left px-4 py-3">Data Matr.</th>
@@ -774,6 +775,13 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
                     <td className="px-4 py-3 font-mono text-purple-700 font-bold">{a.numero_matricula || '–'}</td>
                     <td className="px-4 py-3 text-slate-500">{a.cpf || '–'}</td>
                     <td className="px-4 py-3 max-w-[160px] truncate text-slate-600">{a.cursos_matriculados || '–'}</td>
+                    <td className="px-4 py-3 text-slate-500">
+                      {a.turma_nome
+                        ? <span className="text-[10px] font-bold text-indigo-700">{a.turma_nome}</span>
+                        : a.turma_status === 'backlog'
+                          ? <span className="px-2 py-0.5 rounded-full text-[8px] font-black uppercase bg-amber-100 text-amber-700">Backlog</span>
+                          : <span className="text-slate-300">–</span>}
+                    </td>
                     <td className="px-4 py-3 text-slate-500">{a.turno_escolar || '–'}</td>
                     <td className="px-4 py-3 text-center">
                       <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase ${a.ativo ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-500'}`}>

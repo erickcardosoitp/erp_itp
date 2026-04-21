@@ -262,11 +262,23 @@ export class AcademicoService {
     if (filtros.curso)    qb = qb.andWhere('LOWER(a.cursos_matriculados) LIKE :curso', { curso: `%${filtros.curso.toLowerCase()}%` });
     if (filtros.turma_id) {
       qb = qb
-        .innerJoin('turma_alunos', 'ta', 'ta.aluno_id = a.id')
+        .innerJoin('turma_alunos', 'ta', 'ta.aluno_id = a.id::text')
         .andWhere('ta.turma_id = :turmaId', { turmaId: filtros.turma_id })
         .andWhere('ta.status = :taStatus', { taStatus: 'ativo' });
     }
-    return qb.orderBy('a.ativo', 'DESC').addOrderBy('a.nome_completo', 'ASC').getMany();
+    const alunos = await qb.orderBy('a.ativo', 'DESC').addOrderBy('a.nome_completo', 'ASC').getMany();
+    if (!alunos.length) return alunos;
+    // Enriquece com turma_status (ativo | backlog | sem_turma)
+    const alunoIds = alunos.map(a => `'${a.id}'`).join(',');
+    const turmaRows: any[] = await this.dataSource.query(
+      `SELECT ta.aluno_id, ta.status, t.nome as turma_nome
+       FROM turma_alunos ta
+       LEFT JOIN turmas t ON t.id = ta.turma_id::uuid
+       WHERE ta.aluno_id IN (${alunoIds})`
+    );
+    const turmaMap: Record<string, any> = {};
+    turmaRows.forEach(r => { turmaMap[r.aluno_id] = r; });
+    return alunos.map(a => ({ ...a, turma_status: turmaMap[a.id]?.status ?? 'sem_turma', turma_nome: turmaMap[a.id]?.turma_nome ?? null }));
   }
 
   async fichaAluno(id: string) {

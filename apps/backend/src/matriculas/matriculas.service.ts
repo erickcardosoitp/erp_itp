@@ -734,46 +734,49 @@ export class MatriculasService {
 
       const alunoSalvo = await queryRunner.manager.save(novoAluno);
 
-      // Cria registros TurmaAluno para cada curso selecionado
-      if (cursoIds.length > 0) {
+      // Cria registros TurmaAluno para turmas selecionadas ou via curso
+      const turmaIds: string[] = dados.turma_ids ?? [];
+      const cursoIdsParaBacklog: string[] = [];
+
+      if (turmaIds.length > 0) {
+        // Modo preferencial: admin selecionou turmas específicas
+        for (const turmaId of turmaIds) {
+          await queryRunner.manager.query(
+            `INSERT INTO turma_alunos (id, aluno_id, turma_id, status, tipo_vinculo, created_at)
+             VALUES (gen_random_uuid(), $1, $2, 'ativo', 'aluno', NOW())`,
+            [alunoSalvo.id, turmaId]
+          );
+          this.logger.log(`✅ Aluno ${alunoSalvo.numero_matricula} adicionado à turma ${turmaId}`);
+        }
+      } else if (cursoIds.length > 0) {
+        // Fallback: encontra a primeira turma ativa de cada curso
         let backlogCriado = false;
         for (const cursoId of cursoIds) {
-          // Busca a turma ativa do curso
           const turma = await queryRunner.manager.findOne(Turma, {
             where: { curso_id: cursoId, ativo: true }
           });
-
           if (turma) {
-            // Cria registro de TurmaAluno já como 'ativo' (não backlog)
-            this.logger.log(`⏳ [criarAlunoDireto] Inserindo TurmaAluno ativo: aluno=${alunoSalvo.id} turma=${turma.id}`);
             await queryRunner.manager.query(
               `INSERT INTO turma_alunos (id, aluno_id, turma_id, status, tipo_vinculo, created_at)
-               VALUES (gen_random_uuid(), $1, $2, 'ativo', 'aluno', NOW())
-               ON CONFLICT (aluno_id) DO NOTHING`,
+               VALUES (gen_random_uuid(), $1, $2, 'ativo', 'aluno', NOW())`,
               [alunoSalvo.id, turma.id]
             );
             this.logger.log(`✅ Aluno ${alunoSalvo.numero_matricula} adicionado à turma ${turma.id} (${turma.nome})`);
           } else if (!backlogCriado) {
-            // Se não houver turma ativa, adiciona ao backlog (apenas uma vez por aluno)
-            this.logger.log(`⏳ [criarAlunoDireto] Inserindo TurmaAluno backlog: aluno=${alunoSalvo.id} curso=${cursoId}`);
             await queryRunner.manager.query(
               `INSERT INTO turma_alunos (id, aluno_id, status, tipo_vinculo, created_at)
-               VALUES (gen_random_uuid(), $1, 'backlog', 'aluno', NOW())
-               ON CONFLICT (aluno_id) DO NOTHING`,
+               VALUES (gen_random_uuid(), $1, 'backlog', 'aluno', NOW())`,
               [alunoSalvo.id]
             );
             backlogCriado = true;
-            this.logger.warn(`⚠️ Aluno ${alunoSalvo.numero_matricula} adicionado ao backlog (nenhuma turma ativa para o curso)`);
-          } else {
-            this.logger.warn(`⚠️ Aluno ${alunoSalvo.numero_matricula} – curso ${cursoId} sem turma ativa (backlog já registrado)`);
+            this.logger.warn(`⚠️ Aluno ${alunoSalvo.numero_matricula} adicionado ao backlog`);
           }
         }
       } else {
-        // Se nenhum curso foi selecionado, adiciona ao backlog
+        // Nenhum curso/turma selecionado: backlog
         await queryRunner.manager.query(
           `INSERT INTO turma_alunos (id, aluno_id, status, tipo_vinculo, created_at)
-           VALUES (gen_random_uuid(), $1, 'backlog', 'aluno', NOW())
-           ON CONFLICT (aluno_id) DO NOTHING`,
+           VALUES (gen_random_uuid(), $1, 'backlog', 'aluno', NOW())`,
           [alunoSalvo.id]
         );
       }

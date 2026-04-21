@@ -150,7 +150,7 @@ export class MatriculasController {
   }
 
   @Post('inscricao/:id/anotacoes')
-  @ModuloPerm('matriculas', 'visualizar')
+  @ModuloPerm('matriculas', 'editar')
   async adicionarAnotacao(
     @Param('id', ParseIntPipe) id: number,
     @Body() body: { texto_anotacao: string },

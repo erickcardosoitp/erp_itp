@@ -73,7 +73,7 @@ export default function GestaoMatriculas() {
 
   // Modal de Cadastro Direto (bypass do workflow)
   const [showCadastroDireto, setShowCadastroDireto] = useState(false);
-  const [cursosAcademico, setCursosAcademico] = useState<Array<{ id: string; nome: string; sigla: string }>>([]);
+  const [cursosAcademico, setCursosAcademico] = useState<Array<{ id: string; nome: string; sigla: string; turmas: Array<{ id: string; nome: string; codigo: string }> }>>([]);
   const FORM_DIRETO_VAZIO: Record<string, any> = {
     nome_completo: '', cpf: '', email: '', celular: '',
     data_nascimento: '', sexo: '', escolaridade: '', turno_escolar: '',
@@ -87,8 +87,8 @@ export default function GestaoMatriculas() {
     possui_alergias: 'Não', cuidado_especial: 'Não', detalhes_cuidado: '', uso_medicamento: 'Não',
     // Termos
     lgpd_aceito: false, autoriza_imagem: false,
-    // Cursos
-    curso_ids: [] as string[],
+    // Turmas (seleção direta de turma, não só curso)
+    turma_ids: [] as string[],
   };
   const [formDireto, setFormDireto] = useState<Record<string, any>>({ ...FORM_DIRETO_VAZIO });
   const [salvandoDireto, setSalvandoDireto] = useState(false);
@@ -124,17 +124,17 @@ export default function GestaoMatriculas() {
   };
   const menorDeIdadeDireto = formDireto.data_nascimento ? calcularIdadeDireto(formDireto.data_nascimento) < 18 : false;
 
-  const toggleCursoDireto = (id: string) => {
+  const toggleTurmaDireto = (id: string) => {
     setFormDireto(prev => ({
       ...prev,
-      curso_ids: prev.curso_ids.includes(id)
-        ? prev.curso_ids.filter((c: string) => c !== id)
-        : [...prev.curso_ids, id],
+      turma_ids: prev.turma_ids.includes(id)
+        ? prev.turma_ids.filter((t: string) => t !== id)
+        : [...prev.turma_ids, id],
     }));
   };
 
   const abrirCadastroDireto = () => {
-    setFormDireto({ ...FORM_DIRETO_VAZIO, curso_ids: [] });
+    setFormDireto({ ...FORM_DIRETO_VAZIO, turma_ids: [] });
     setErroDireto(null);
     setResultadoDireto(null);
     setShowCadastroDireto(true);
@@ -198,7 +198,7 @@ export default function GestaoMatriculas() {
         uso_medicamento:      formDireto.uso_medicamento || undefined,
         lgpd_aceito:          formDireto.lgpd_aceito,
         autoriza_imagem:      formDireto.autoriza_imagem,
-        curso_ids:            formDireto.curso_ids,
+        turma_ids:            formDireto.turma_ids,
       };
       const r = await api.post('/matriculas/aluno-direto', payload);
       setResultadoDireto(r.data);
@@ -661,7 +661,7 @@ export default function GestaoMatriculas() {
                   <p className="text-[10px] text-slate-500">Número de Matrícula</p>
                   <p className="font-mono text-2xl font-black text-green-700 tracking-wider">{resultadoDireto.numero_matricula}</p>
                   <div className="flex gap-3 justify-center mt-4">
-                    <button onClick={() => { setResultadoDireto(null); setFormDireto({ ...FORM_DIRETO_VAZIO, curso_ids: [] }); setErroDireto(null); }}
+                    <button onClick={() => { setResultadoDireto(null); setFormDireto({ ...FORM_DIRETO_VAZIO, turma_ids: [] }); setErroDireto(null); }}
                       className="px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl font-black text-xs uppercase">
                       + Cadastrar Outro
                     </button>
@@ -874,28 +874,39 @@ export default function GestaoMatriculas() {
                     )}
                   </fieldset>
 
-                  {/* ── Cursos ── */}
+                  {/* ── Turmas ── */}
                   {cursosAcademico.length > 0 && (
                     <fieldset>
                       <legend className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-3">
-                        Cursos a Matricular
-                        <span className="ml-2 font-normal normal-case text-slate-400">({formDireto.curso_ids.length} selecionado{formDireto.curso_ids.length !== 1 ? 's' : ''})</span>
+                        Turmas a Matricular
+                        <span className="ml-2 font-normal normal-case text-slate-400">({formDireto.turma_ids.length} selecionada{formDireto.turma_ids.length !== 1 ? 's' : ''})</span>
                       </legend>
-                      <div className="grid grid-cols-2 gap-2">
-                        {cursosAcademico.map((c: any) => {
-                          const ativo = formDireto.curso_ids.includes(c.id);
-                          return (
-                            <button key={c.id} type="button" onClick={() => toggleCursoDireto(c.id)}
-                              className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-left text-[11px] font-bold transition-all ${
-                                ativo ? 'bg-green-600 border-green-600 text-white' : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-green-400'
-                              }`}>
-                              <span className={`w-4 h-4 rounded flex-shrink-0 flex items-center justify-center border ${ativo ? 'bg-white border-white' : 'border-slate-300'}`}>
-                                {ativo && <span className="text-green-600 text-[10px] font-black">✓</span>}
-                              </span>
-                              <span className="truncate">{c.sigla} – {c.nome}</span>
-                            </button>
-                          );
-                        })}
+                      <div className="space-y-3">
+                        {cursosAcademico.map((c: any) => (
+                          <div key={c.id}>
+                            <p className="text-[10px] font-black uppercase text-slate-500 mb-1">{c.sigla} — {c.nome}</p>
+                            {c.turmas && c.turmas.length > 0 ? (
+                              <div className="grid grid-cols-2 gap-1.5">
+                                {c.turmas.map((t: any) => {
+                                  const ativo = formDireto.turma_ids.includes(t.id);
+                                  return (
+                                    <button key={t.id} type="button" onClick={() => toggleTurmaDireto(t.id)}
+                                      className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-left text-[11px] font-bold transition-all ${
+                                        ativo ? 'bg-green-600 border-green-600 text-white' : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-green-400'
+                                      }`}>
+                                      <span className={`w-4 h-4 rounded flex-shrink-0 flex items-center justify-center border ${ativo ? 'bg-white border-white' : 'border-slate-300'}`}>
+                                        {ativo && <span className="text-green-600 text-[10px] font-black">✓</span>}
+                                      </span>
+                                      <span className="truncate">{t.nome}</span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <p className="text-[11px] text-slate-400 italic">Nenhuma turma ativa</p>
+                            )}
+                          </div>
+                        ))}
                       </div>
                     </fieldset>
                   )}
