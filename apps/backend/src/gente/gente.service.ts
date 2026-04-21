@@ -998,7 +998,7 @@ export class GenteService {
   }
 
   async criarVale(dto: any) {
-    const vale = await this.valeRepo.save(this.valeRepo.create(dto)) as import('./entities/gente-vale.entity').GenteVale;
+    const vale = await this.valeRepo.save(this.valeRepo.create(dto)) as unknown as import('./entities/gente-vale.entity').GenteVale;
 
     // Gerar movimentação de saída no financeiro
     if (dto.forma_pagamento && dto.valor) {
