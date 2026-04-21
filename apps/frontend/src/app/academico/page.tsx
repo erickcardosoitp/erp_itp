@@ -28,6 +28,7 @@ interface Aluno {
   cursos_matriculados?: string; ativo?: boolean; data_matricula?: string; lgpd_aceito?: boolean; autoriza_imagem?: boolean;
   maior_18_anos?: boolean; nome_responsavel?: string; email_responsavel?: string; grau_parentesco?: string; cpf_responsavel?: string; telefone_alternativo?: string;
   possui_alergias?: string; cuidado_especial?: string; detalhes_cuidado?: string; uso_medicamento?: string;
+  turma_nome?: string | null; turma_status?: string;
 }
 interface PresencaSessao { id: string; turma_id: string; turma_nome?: string; data: string; tema_aula?: string; conteudo_abordado?: string; usuario_nome?: string; total_presentes: number; total_ausentes: number; created_at: string; }
 
