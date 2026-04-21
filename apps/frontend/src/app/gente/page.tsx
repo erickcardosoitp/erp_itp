@@ -538,7 +538,6 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
                       <div><span className="text-slate-400 block">Estado Civil</span><span className="font-semibold">{c.funcionario?.estado_civil || '—'}</span></div>
                       <div><span className="text-slate-400 block">Sexo / Gênero</span><span className="font-semibold">{[c.funcionario?.sexo, c.funcionario?.genero].filter(Boolean).join(' · ') || '—'}</span></div>
                       <div><span className="text-slate-400 block">Escolaridade</span><span className="font-semibold">{c.funcionario?.escolaridade || '—'}</span></div>
-                      <div><span className="text-slate-400 block">Salário Base</span><span className="font-semibold">{c.salario_base ? fmt.moeda(Number(c.salario_base)) : '—'}</span></div>
                     </div>
                     {/* Linha 2: Endereço */}
                     {(c.funcionario?.logradouro || c.funcionario?.cidade) && (
@@ -2242,7 +2241,7 @@ function FinanceiroTab({ reload }: { reload: number }) {
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 dark:bg-slate-800">
                   <tr>
-                    {['Colaborador', 'Salário Base', 'VR / Benefícios', 'Total Proventos', 'Vales Pendentes', 'Líquido', 'Recibo'].map(h => (
+                    {['Colaborador', 'VR / Benefícios', 'Total Proventos', 'Vales Pendentes', 'Líquido', 'Recibo'].map(h => (
                       <th key={h} className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -2261,7 +2260,6 @@ function FinanceiroTab({ reload }: { reload: number }) {
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{fmt.moeda(c.salario_base)}</td>
                       <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{fmt.moeda(c.total_vr)}</td>
                       <td className="px-4 py-3 font-bold text-purple-700 dark:text-purple-300">{fmt.moeda(c.total_proventos)}</td>
                       <td className="px-4 py-3">

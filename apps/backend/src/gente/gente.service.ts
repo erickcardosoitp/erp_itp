@@ -194,7 +194,6 @@ export class GenteService {
       jornada_flexivel: colDto.jornada_flexivel ?? false,
       horas_dia_flex: colDto.horas_dia_flex ?? null,
       horario_flexivel_semana: colDto.horario_flexivel_semana ?? null,
-      salario_base: colDto.salario_base ?? null,
     });
     const saved = await this.colaboradorRepo.save(col);
     return { ...saved, funcionario: func };
@@ -202,11 +201,10 @@ export class GenteService {
 
   async editarColaborador(id: string, dto: any) {
     const colunas = ['tipo','horario_entrada','horario_saida','dias_trabalho',
-      'latitude_permitida','longitude_permitida','raio_metros','salario_base','ativo',
+      'latitude_permitida','longitude_permitida','raio_metros','ativo',
       'jornada_flexivel','horas_dia_flex','horario_flexivel_semana','valor_passagem'];
     const payload: any = {};
     colunas.forEach(k => { if (dto[k] !== undefined) payload[k] = dto[k]; });
-    if (payload.tipo === 'voluntario') payload.salario_base = null;
     if (Object.keys(payload).length) await this.colaboradorRepo.update(id, payload);
     return this.buscarColaborador(id);
   }
@@ -267,11 +265,9 @@ export class GenteService {
         `SELECT id, nome, cargo, foto FROM funcionarios WHERE id = $1`, [col.funcionario_id]);
       if (!func) return null;
 
-      // Proventos: salário base + VR codes
-      const salBase = Number(col.salario_base ?? 0);
       const codigosCol = await this.listarCodigosColaborador(col.id);
       const totalVR = codigosCol.reduce((s, cc) => s + Number(cc.valor_efetivo ?? 0), 0);
-      const totalProventos = salBase + totalVR;
+      const totalProventos = totalVR;
 
       // Vales pendentes (não descontados, do mês corrente ou acumulados)
       const valesPendentes: any[] = await this.dataSource.query(
@@ -293,7 +289,6 @@ export class GenteService {
         nome: func.nome,
         cargo: func.cargo,
         foto: func.foto,
-        salario_base: salBase,
         total_vr: totalVR,
         total_proventos: totalProventos,
         vales_pendentes: totalVales,
@@ -407,12 +402,8 @@ export class GenteService {
       );
       if (!func) continue;
 
-      // Proventos: salário base + códigos atribuídos
       const mesRef = mes_referencia.slice(2).replace('-', '/').toUpperCase();
       const proventos: any[] = [];
-      if (col.tipo !== 'voluntario' && col.salario_base && Number(col.salario_base) > 0) {
-        proventos.push({ codigo: 'SAL', descricao: 'SALÁRIO BASE', referencia: mesRef, valor: Number(col.salario_base) });
-      }
       const codigosCol = await this.listarCodigosColaborador(col.id);
       codigosCol.forEach(cc => proventos.push({
         codigo: cc.codigo?.codigo ?? '',
@@ -462,62 +453,6 @@ export class GenteService {
         valor: Number(v.valor),
         vale_id: v.id,
       }));
-
-      // Suspensões com desconto que incidem no mês
-      const suspensoes = await this.suspensaoRepo
-        .createQueryBuilder('s')
-        .where('s.colaborador_id = :id', { id: col.id })
-        .andWhere('s.com_desconto = true')
-        .andWhere('s.data_inicio <= :fim', { fim: mesFim })
-        .andWhere('s.data_fim >= :inicio', { inicio: mesInicio })
-        .getMany();
-
-      for (const s of suspensoes) {
-        const inicioSusp = new Date(s.data_inicio + 'T12:00:00');
-        const fimSusp = new Date(s.data_fim + 'T12:00:00');
-        const inicioMes = new Date(mesInicio + 'T12:00:00');
-        const fimMes = new Date(mesFim + 'T12:00:00');
-        const sobreInicio = inicioSusp > inicioMes ? inicioSusp : inicioMes;
-        const sobreFim = fimSusp < fimMes ? fimSusp : fimMes;
-        const dias = Math.round((sobreFim.getTime() - sobreInicio.getTime()) / 86400000) + 1;
-        if (dias > 0 && col.salario_base && Number(col.salario_base) > 0) {
-          const [ano, mes] = mes_referencia.split('-').map(Number);
-          const diasUteis = this._contarDiasTrabalho(col.dias_trabalho ?? [], ano, mes) || 22;
-          const valorDia = Number(col.salario_base) / diasUteis;
-          descontos.push({
-            codigo: 'SUSP',
-            descricao: `Suspensão (${dias}d) — ${s.motivo.substring(0, 40)}`,
-            referencia: mes_referencia.slice(2).replace('-', '/').toUpperCase(),
-            valor: Math.round(valorDia * dias * 100) / 100,
-          });
-        }
-      }
-
-      // Faltas com desconto no mês
-      const faltasDoMes = await this.faltaRepo
-        .createQueryBuilder('f')
-        .where('f.colaborador_id = :id', { id: col.id })
-        .andWhere('f.com_desconto = true')
-        .andWhere('f.tipo = :tipo', { tipo: 'falta' })
-        .andWhere('f.data >= :inicio', { inicio: mesInicio })
-        .andWhere('f.data <= :fim', { fim: mesFim })
-        .getMany();
-
-      if (faltasDoMes.length > 0 && col.salario_base && Number(col.salario_base) > 0) {
-        const [ano, mes] = mes_referencia.split('-').map(Number);
-        const diasUteis = this._contarDiasTrabalho(col.dias_trabalho ?? [], ano, mes) || 22;
-        const valorDia = Number(col.salario_base) / diasUteis;
-        for (const f of faltasDoMes) {
-          const pct = f.percentual_desconto != null ? f.percentual_desconto : 100;
-          const valor = Math.round(valorDia * (pct / 100) * 100) / 100;
-          descontos.push({
-            codigo: 'FALTA',
-            descricao: `Falta ${f.data}${f.motivo ? ' — ' + f.motivo.substring(0, 30) : ''}${pct !== 100 ? ` (${pct}%)` : ''}`,
-            referencia: mes_referencia.slice(2).replace('-', '/').toUpperCase(),
-            valor,
-          });
-        }
-      }
 
       // Advertências com valor_desconto no mês
       const advertenciasDoMes = await this.advertenciaRepo
@@ -607,9 +542,6 @@ export class GenteService {
 
     const mesRef = mes_referencia.slice(2).replace('-', '/').toUpperCase();
     const proventos: any[] = [];
-    if (col.tipo !== 'voluntario' && col.salario_base && Number(col.salario_base) > 0) {
-      proventos.push({ codigo: 'SAL', descricao: 'SALÁRIO BASE', referencia: mesRef, valor: Number(col.salario_base) });
-    }
     const codigosCol = await this.listarCodigosColaborador(col.id);
     codigosCol.forEach(cc => proventos.push({
       codigo: cc.codigo?.codigo ?? '',
@@ -645,62 +577,6 @@ export class GenteService {
       valor: Number(v.valor),
       vale_id: v.id,
     }));
-
-    // Suspensões com desconto que incidem no mês
-    const suspensoes = await this.suspensaoRepo
-      .createQueryBuilder('s')
-      .where('s.colaborador_id = :id', { id: col.id })
-      .andWhere('s.com_desconto = true')
-      .andWhere('s.data_inicio <= :fim', { fim: mesFim })
-      .andWhere('s.data_fim >= :inicio', { inicio: mesInicio })
-      .getMany();
-
-    for (const s of suspensoes) {
-      const inicioSusp = new Date(s.data_inicio + 'T12:00:00');
-      const fimSusp = new Date(s.data_fim + 'T12:00:00');
-      const inicioMes = new Date(mesInicio + 'T12:00:00');
-      const fimMes = new Date(mesFim + 'T12:00:00');
-      const sobreInicio = inicioSusp > inicioMes ? inicioSusp : inicioMes;
-      const sobreFim = fimSusp < fimMes ? fimSusp : fimMes;
-      const dias = Math.round((sobreFim.getTime() - sobreInicio.getTime()) / 86400000) + 1;
-      if (dias > 0 && col.salario_base && Number(col.salario_base) > 0) {
-        const [ano, mes] = mes_referencia.split('-').map(Number);
-        const diasUteis = this._contarDiasTrabalho(col.dias_trabalho ?? [], ano, mes) || 22;
-        const valorDia = Number(col.salario_base) / diasUteis;
-        descontos.push({
-          codigo: 'SUSP',
-          descricao: `Suspensão (${dias}d) — ${s.motivo.substring(0, 40)}`,
-          referencia: mesRef,
-          valor: Math.round(valorDia * dias * 100) / 100,
-        });
-      }
-    }
-
-    // Faltas com desconto no mês
-    const faltasDoMes = await this.faltaRepo
-      .createQueryBuilder('f')
-      .where('f.colaborador_id = :id', { id: col.id })
-      .andWhere('f.com_desconto = true')
-      .andWhere('f.tipo = :tipo', { tipo: 'falta' })
-      .andWhere('f.data >= :inicio', { inicio: mesInicio })
-      .andWhere('f.data <= :fim', { fim: mesFim })
-      .getMany();
-
-    if (faltasDoMes.length > 0 && col.salario_base && Number(col.salario_base) > 0) {
-      const [ano, mes] = mes_referencia.split('-').map(Number);
-      const diasUteis = this._contarDiasTrabalho(col.dias_trabalho ?? [], ano, mes) || 22;
-      const valorDia = Number(col.salario_base) / diasUteis;
-      for (const f of faltasDoMes) {
-        const pct = f.percentual_desconto != null ? f.percentual_desconto : 100;
-        const valor = Math.round(valorDia * (pct / 100) * 100) / 100;
-        descontos.push({
-          codigo: 'FALTA',
-          descricao: `Falta ${f.data}${f.motivo ? ' — ' + f.motivo.substring(0, 30) : ''}${pct !== 100 ? ` (${pct}%)` : ''}`,
-          referencia: mesRef,
-          valor,
-        });
-      }
-    }
 
     // Advertências com valor_desconto no mês
     const advertenciasDoMes = await this.advertenciaRepo
