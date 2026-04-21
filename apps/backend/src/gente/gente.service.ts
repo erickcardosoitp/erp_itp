@@ -607,7 +607,7 @@ export class GenteService {
 
     const mesRef = mes_referencia.slice(2).replace('-', '/').toUpperCase();
     const proventos: any[] = [];
-    if (col.salario_base && Number(col.salario_base) > 0) {
+    if (col.tipo !== 'voluntario' && col.salario_base && Number(col.salario_base) > 0) {
       proventos.push({ codigo: 'SAL', descricao: 'SALÁRIO BASE', referencia: mesRef, valor: Number(col.salario_base) });
     }
     const codigosCol = await this.listarCodigosColaborador(col.id);
