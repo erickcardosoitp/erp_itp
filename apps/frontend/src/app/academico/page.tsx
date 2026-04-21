@@ -135,12 +135,12 @@ function FieldSelect({ label, value, onChange, options, required = false }: { la
 
 // ─── KpiCard (Grade) ──────────────────────────────────────────────────────────
 
-const KPI_GRADE_COLORS: Record<string, { bg: string; text: string; sub: string; border: string }> = {
-  purple: { bg: 'bg-purple-50',  text: 'text-purple-700',  sub: 'text-purple-400',  border: 'border-purple-100'  },
-  blue:   { bg: 'bg-blue-50',    text: 'text-blue-700',    sub: 'text-blue-400',    border: 'border-blue-100'    },
-  green:  { bg: 'bg-emerald-50', text: 'text-emerald-700', sub: 'text-emerald-400', border: 'border-emerald-100' },
-  amber:  { bg: 'bg-amber-50',   text: 'text-amber-700',   sub: 'text-amber-400',   border: 'border-amber-100'   },
-  red:    { bg: 'bg-red-50',     text: 'text-red-700',     sub: 'text-red-400',     border: 'border-red-100'     },
+const KPI_GRADE_COLORS: Record<string, { accent: string; bg: string; text: string; sub: string; dot: string }> = {
+  purple: { accent: 'bg-purple-500', bg: 'bg-white', text: 'text-slate-800',  sub: 'text-slate-400', dot: 'bg-purple-500' },
+  blue:   { accent: 'bg-blue-500',   bg: 'bg-white', text: 'text-slate-800',  sub: 'text-slate-400', dot: 'bg-blue-500'   },
+  green:  { accent: 'bg-emerald-500',bg: 'bg-white', text: 'text-slate-800',  sub: 'text-slate-400', dot: 'bg-emerald-500'},
+  amber:  { accent: 'bg-amber-400',  bg: 'bg-white', text: 'text-slate-800',  sub: 'text-slate-400', dot: 'bg-amber-400'  },
+  red:    { accent: 'bg-red-500',    bg: 'bg-white', text: 'text-slate-800',  sub: 'text-slate-400', dot: 'bg-red-500'    },
 };
 
 function KpiGrade({ label, value, sub, color, isText }: {
@@ -148,18 +148,21 @@ function KpiGrade({ label, value, sub, color, isText }: {
 }) {
   const c = KPI_GRADE_COLORS[color] ?? KPI_GRADE_COLORS.purple;
   return (
-    <div className={`${c.bg} ${c.border} border rounded-2xl p-4 flex flex-col gap-1 min-w-0`}>
-      <span className={`text-[9px] font-black uppercase tracking-widest ${c.sub}`}>{label}</span>
-      <span className={`font-black ${c.text} leading-tight truncate ${isText ? 'text-sm' : 'text-3xl'}`}>{value}</span>
-      <span className={`text-[9px] font-medium ${c.sub} truncate`}>{sub}</span>
+    <div className={`${c.bg} border border-slate-100 rounded-2xl p-4 flex flex-col gap-1.5 min-w-0 overflow-hidden relative shadow-sm`}>
+      <div className={`absolute left-0 top-0 bottom-0 w-1 ${c.accent} rounded-l-2xl`} />
+      <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 pl-2">{label}</span>
+      <span className={`font-black ${c.text} leading-none truncate pl-2 ${isText ? 'text-base' : 'text-[2rem]'}`}>{value}</span>
+      <span className="text-[10px] font-medium text-slate-400 truncate pl-2 flex items-center gap-1.5">
+        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${c.dot}`} />{sub}
+      </span>
     </div>
   );
 }
 
 // ─── Tab: Grade ───────────────────────────────────────────────────────────────
 
-const GRADE_ROW_H  = 48;
-const GRADE_HEAD_H = 48;
+const GRADE_ROW_H  = 56;
+const GRADE_HEAD_H = 56;
 
 function timeToMinsGrade(t: string) {
   const [h, m] = (t || '00:00').split(':').map(Number);
@@ -278,163 +281,171 @@ function GradeTab({ podeEditar, turmas }: { podeEditar: boolean; turmas: Turma[]
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
 
       {/* ── KPIs ─────────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <KpiGrade
-          label="Aulas na Semana"
-          value={grade.length}
-          sub="horários cadastrados"
-          color="purple"
-        />
-        <KpiGrade
-          label="Professores"
-          value={professoresArr.length}
-          sub={profSubtext}
-          color="blue"
-        />
-        <KpiGrade
-          label="Aulas Hoje"
-          value={aulasHoje.length}
-          sub={todayDia >= 1 ? DIAS_SEMANA[todayDia - 1] : 'Sem aula hoje'}
-          color="green"
-        />
+        <KpiGrade label="Aulas na Semana" value={grade.length} sub="horários cadastrados" color="purple" />
+        <KpiGrade label="Professores" value={professoresArr.length} sub={profSubtext} color="blue" />
+        <KpiGrade label="Aulas Hoje" value={aulasHoje.length} sub={todayDia >= 1 ? DIAS_SEMANA[todayDia - 1] : 'Sem aula hoje'} color="green" />
         <KpiGrade
           label={aulaAgora.length ? 'Em Aula Agora' : 'Próxima Aula'}
           value={aulaAgora.length ? (aulaAgora[0].nome_turma || '–') : (proxAula?.nome_turma ?? '–')}
-          sub={aulaAgora.length
-            ? (aulaAgora[0].nome_professor || aulaAgora[0].horario_inicio?.slice(0, 5) || '')
-            : proxAula ? proxAula.horario_inicio?.slice(0, 5) ?? '' : 'Nenhuma hoje'}
-          color={aulaAgora.length ? 'red' : 'amber'}
-          isText
+          sub={aulaAgora.length ? (aulaAgora[0].nome_professor || aulaAgora[0].horario_inicio?.slice(0,5) || '') : proxAula ? proxAula.horario_inicio?.slice(0,5) ?? '' : 'Nenhuma hoje'}
+          color={aulaAgora.length ? 'red' : 'amber'} isText
         />
       </div>
 
+      {/* ── Cabeçalho da seção ────────────────────────────────────────────── */}
       <div className="flex justify-between items-center">
-        <h2 className="text-lg font-black uppercase tracking-tight text-slate-800">Grade Horária Semanal</h2>
+        <div>
+          <h2 className="text-lg font-black text-slate-800 tracking-tight">Grade Horária Semanal</h2>
+          <p className="text-[10px] text-slate-400 font-medium mt-0.5">
+            {grade.length === 0 ? 'Nenhum horário cadastrado ainda' : `${grade.length} aula${grade.length !== 1 ? 's' : ''} distribuídas na semana`}
+          </p>
+        </div>
         {podeEditar && (
-          <button onClick={() => setShowModal(true)} className="flex items-center gap-2 bg-purple-600 text-white px-5 py-2.5 rounded-xl font-black text-[10px] uppercase hover:bg-purple-700 transition-colors">
+          <button onClick={() => setShowModal(true)}
+            className="flex items-center gap-2 bg-purple-600 text-white px-5 py-2.5 rounded-xl font-black text-[10px] uppercase hover:bg-purple-700 active:scale-95 transition-all shadow-sm shadow-purple-200">
             <Plus size={14}/> Adicionar Horário
           </button>
         )}
       </div>
 
-      <div className="bg-white rounded-3xl border border-slate-100 shadow-md overflow-x-auto">
-        <div className="min-w-[900px] relative">
+      {/* ── Grade principal ───────────────────────────────────────────────── */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <div className="min-w-[820px] relative">
 
-          {/* ── Indicador de hora atual (sobreposto ao flex) ── */}
-          {lineTop >= 0 && todayDia >= 1 && (
-            <div className="absolute left-0 right-0 z-20 pointer-events-none flex items-center"
-              style={{ top: `${lineTop}px` }}>
-              <span className="text-[9px] font-black text-red-600 bg-white border border-red-300 px-1.5 rounded-full shadow-sm ml-2 shrink-0 leading-4 whitespace-nowrap">
-                {now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-              </span>
-              <div className="flex-1 h-[2px] bg-gradient-to-r from-red-500 via-red-400 to-transparent" />
-              <div className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse shrink-0 mr-2 shadow" />
-            </div>
-          )}
-
-          {/* ── Grade: layout flex com colunas por dia ── */}
-          <div className="flex">
-            {/* Coluna de horários */}
-            <div style={{ width: 72, flexShrink: 0 }} className="bg-slate-50/80">
-              <div style={{ height: GRADE_HEAD_H }} className="border-b border-r border-slate-100 flex items-center justify-center">
-                <span className="text-[8px] font-black uppercase text-slate-400 tracking-widest">Hora</span>
+            {/* Indicador de hora atual */}
+            {lineTop >= 0 && todayDia >= 1 && (
+              <div className="absolute left-0 right-0 z-20 pointer-events-none"
+                style={{ top: `${lineTop + GRADE_HEAD_H}px` }}>
+                <div className="flex items-center">
+                  <div className="flex items-center justify-end pr-2" style={{ width: 68, flexShrink: 0 }}>
+                    <span className="text-[9px] font-black text-red-500 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded-full leading-none whitespace-nowrap">
+                      {now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                  <div className="w-2 h-2 rounded-full bg-red-500 ring-4 ring-red-100 shrink-0 -ml-1 z-10" />
+                  <div className="flex-1 h-px bg-red-400" style={{ backgroundImage: 'repeating-linear-gradient(90deg,#f87171 0,#f87171 6px,transparent 6px,transparent 12px)' }} />
+                </div>
               </div>
-              {HORARIOS.map((h, idx) => {
-                const isCurrentRow = idx === currentRowIdx && todayDia >= 1;
+            )}
+
+            <div className="flex">
+              {/* Coluna de horários */}
+              <div style={{ width: 68, flexShrink: 0 }} className="border-r border-slate-100">
+                <div style={{ height: GRADE_HEAD_H }}
+                  className="border-b border-slate-100 flex items-center justify-center bg-slate-50">
+                  <Clock size={12} className="text-slate-300" />
+                </div>
+                {HORARIOS.map((h, idx) => {
+                  const isCurrentRow = idx === currentRowIdx && todayDia >= 1;
+                  return (
+                    <div key={idx}
+                      style={{ height: GRADE_ROW_H }}
+                      className={`border-b border-slate-100 flex items-center justify-end pr-3 transition-colors
+                        ${h.lanche ? 'bg-amber-50/70' : isCurrentRow ? 'bg-red-50/40' : idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/40'}`}>
+                      {h.lanche
+                        ? <Coffee size={11} className="text-amber-300" />
+                        : <span className={`text-[10px] tabular-nums font-semibold ${isCurrentRow ? 'text-red-500 font-black' : 'text-slate-300'}`}>{h.label}</span>}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Colunas dos dias */}
+              {DIAS_SEMANA.map((d, di) => {
+                const diaNum = di + 1;
+                const isToday = diaNum === todayDia;
+                const cardsForDay = grade.filter(g => g.dia_semana === diaNum);
+                const totalBodyH = HORARIOS.length * GRADE_ROW_H;
+
                 return (
-                  <div key={idx}
-                    style={{ height: GRADE_ROW_H }}
-                    className={`border-b border-r border-slate-100 flex items-center justify-center
-                      ${h.lanche ? 'bg-amber-50/80' : ''}
-                      ${isCurrentRow ? 'bg-red-50/60' : ''}`}>
-                    {h.lanche
-                      ? <Coffee size={10} className="text-amber-400" />
-                      : <span className={`text-[10px] font-bold tabular-nums ${isCurrentRow ? 'text-red-500 font-black' : 'text-slate-400'}`}>{h.label}</span>}
+                  <div key={d} className="flex-1 border-r border-slate-100 last:border-0 flex flex-col min-w-0">
+                    {/* Cabeçalho do dia */}
+                    <div style={{ height: GRADE_HEAD_H }}
+                      className={`border-b flex flex-col items-center justify-center shrink-0 gap-0.5 transition-colors
+                        ${isToday
+                          ? 'bg-gradient-to-b from-purple-600 to-purple-700 border-purple-700'
+                          : 'bg-slate-50 border-slate-100'}`}>
+                      <span className={`text-[11px] font-black uppercase tracking-widest ${isToday ? 'text-white' : 'text-slate-500'}`}>{d.slice(0,3)}</span>
+                      {isToday
+                        ? <span className="text-[8px] font-black text-purple-200 uppercase tracking-wider">Hoje</span>
+                        : cardsForDay.length > 0
+                          ? <span className="text-[8px] font-semibold text-slate-400">{cardsForDay.length} aula{cardsForDay.length > 1 ? 's' : ''}</span>
+                          : <span className="text-[8px] text-slate-200">—</span>}
+                    </div>
+
+                    {/* Corpo com drop zones e cards */}
+                    <div className="relative" style={{ height: totalBodyH }}>
+                      {HORARIOS.map((h, idx) => (
+                        <div key={idx}
+                          style={{ position: 'absolute', top: idx * GRADE_ROW_H, height: GRADE_ROW_H, left: 0, right: 0 }}
+                          className={`border-b border-slate-100/70 transition-colors group/slot
+                            ${h.lanche ? 'bg-amber-50/50' : isToday ? (idx % 2 === 0 ? 'bg-purple-50/20' : 'bg-purple-50/10') : (idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/30')}
+                            ${podeEditar && !h.lanche ? 'hover:bg-purple-50/40' : ''}`}
+                          onDragOver={e => { if (podeEditar && !h.lanche) e.preventDefault(); }}
+                          onDrop={e => { if (!h.lanche && h.value) handleDrop(e, diaNum, h.value); }}
+                        />
+                      ))}
+
+                      {cardsForDay.filter(card => card.horario_inicio).map(card => {
+                        const topY   = timeToPixelGrade(card.horario_inicio!);
+                        const endY   = card.horario_fim ? timeToPixelGrade(card.horario_fim) : topY + GRADE_ROW_H;
+                        const top    = topY + 3;
+                        const height = Math.max(endY - topY, GRADE_ROW_H - 6) - 6;
+                        const isDragging = dragCard?.id === card.id;
+                        return (
+                          <div key={card.id}
+                            draggable={podeEditar}
+                            onDragStart={() => setDragCard(card)}
+                            onDragEnd={() => setDragCard(null)}
+                            className={`absolute rounded-xl text-white z-10 group/card overflow-hidden transition-all duration-150
+                              ${isDragging ? 'opacity-40 scale-95' : 'hover:z-50 hover:shadow-xl hover:scale-[1.03] hover:-translate-y-0.5 shadow-md shadow-black/10'}`}
+                            style={{
+                              top, height, left: '3px', right: '3px',
+                              backgroundColor: card.cor || '#7c3aed',
+                              cursor: podeEditar ? 'grab' : 'default',
+                              backgroundImage: `linear-gradient(160deg, color-mix(in srgb, ${card.cor || '#7c3aed'} 80%, white) 0%, ${card.cor || '#7c3aed'} 60%)`,
+                            }}>
+                            <div className="absolute inset-x-0 top-0 h-px bg-white/30" />
+                            {podeEditar && (
+                              <button onClick={() => handleDeletar(card.id)}
+                                className="absolute top-1.5 right-1.5 bg-black/20 hover:bg-black/40 rounded-full p-0.5 opacity-0 group-hover/card:opacity-100 transition-all z-20">
+                                <X size={8}/>
+                              </button>
+                            )}
+                            <div className="p-2 h-full flex flex-col gap-0.5">
+                              <div className="text-[10px] font-black leading-tight line-clamp-2 drop-shadow-sm">
+                                {card.nome_turma || card.nome_curso || '–'}
+                              </div>
+                              <div className="text-[9px] font-semibold text-white/70 tabular-nums flex items-center gap-1 mt-0.5">
+                                <Clock size={7} className="shrink-0 opacity-70"/>
+                                {card.horario_inicio?.slice(0,5)}–{card.horario_fim?.slice(0,5)}
+                                {card.sala && <span className="text-white/50 ml-0.5">· {card.sala}</span>}
+                              </div>
+                              {height > 66 && card.nome_professor && (
+                                <div className="text-[9px] text-white/75 truncate flex items-center gap-1 mt-auto">
+                                  <User size={7} className="shrink-0 opacity-60"/>
+                                  {card.nome_professor}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 );
               })}
             </div>
-
-            {/* Colunas dos dias */}
-            {DIAS_SEMANA.map((d, di) => {
-              const diaNum = di + 1;
-              const isToday = diaNum === todayDia;
-              const cardsForDay = grade.filter(g => g.dia_semana === diaNum);
-              const totalBodyH = HORARIOS.length * GRADE_ROW_H;
-
-              return (
-                <div key={d} className="flex-1 border-r border-slate-100 last:border-0 flex flex-col min-w-0">
-                  {/* Cabeçalho do dia */}
-                  <div style={{ height: GRADE_HEAD_H }}
-                    className={`border-b border-slate-100 flex flex-col items-center justify-center shrink-0 transition-colors
-                      ${isToday ? 'bg-purple-600 text-white' : 'bg-slate-50 text-slate-500'}`}>
-                    {isToday && <div className="text-[7px] font-black uppercase tracking-widest opacity-70 mb-0.5">HOJE</div>}
-                    <span className="text-[11px] font-black uppercase tracking-wide">{d}</span>
-                    {cardsForDay.length > 0 && (
-                      <span className={`text-[7px] font-bold mt-0.5 ${isToday ? 'text-purple-200' : 'text-slate-400'}`}>
-                        {cardsForDay.length} aula{cardsForDay.length > 1 ? 's' : ''}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Corpo: fundo de slots + cards absolutos */}
-                  <div className="relative" style={{ height: totalBodyH }}>
-                    {/* Linhas de fundo (drop zones) */}
-                    {HORARIOS.map((h, idx) => (
-                      <div key={idx}
-                        style={{ position: 'absolute', top: idx * GRADE_ROW_H, height: GRADE_ROW_H, left: 0, right: 0 }}
-                        className={`border-b border-slate-100/80 transition-colors
-                          ${isToday ? 'bg-purple-50/30' : ''}
-                          ${h.lanche ? 'bg-amber-50/60' : ''}`}
-                        onDragOver={e => { if (podeEditar && !h.lanche) e.preventDefault(); }}
-                        onDrop={e => { if (!h.lanche && h.value) handleDrop(e, diaNum, h.value); }}
-                      />
-                    ))}
-
-                    {/* Cards — 1 coluna por dia, altura baseada em tempo real */}
-                    {cardsForDay.filter(card => card.horario_inicio).map(card => {
-                      const topY   = timeToPixelGrade(card.horario_inicio!);
-                      const endY   = card.horario_fim ? timeToPixelGrade(card.horario_fim) : topY + GRADE_ROW_H;
-                      const top    = topY + 2;
-                      const height = Math.max(endY - topY, GRADE_ROW_H) - 4;
-                      return (
-                        <div key={card.id}
-                          draggable={podeEditar}
-                          onDragStart={() => setDragCard(card)}
-                          onDragEnd={() => setDragCard(null)}
-                          className="absolute rounded-xl text-white shadow-md group/card overflow-hidden z-10 border border-white/20 hover:z-50 hover:shadow-2xl hover:scale-[1.04] hover:-translate-y-0.5 transition-all duration-150"
-                          style={{ top, height, left: '2px', right: '2px', backgroundColor: card.cor || '#7c3aed', cursor: podeEditar ? 'grab' : 'default' }}>
-                          {podeEditar && (
-                            <button onClick={() => handleDeletar(card.id)}
-                              className="absolute top-1 right-1 bg-black/30 hover:bg-black/50 rounded-full p-0.5 opacity-0 group-hover/card:opacity-100 transition-opacity z-20">
-                              <X size={9}/>
-                            </button>
-                          )}
-                          <div className="p-1.5 h-full flex flex-col">
-                            <div className="text-[9px] font-black leading-tight truncate">{card.nome_turma || card.nome_curso || '–'}</div>
-                            <div className="text-[8px] opacity-70 font-bold mt-0.5">
-                              {card.horario_inicio?.slice(0,5)} – {card.horario_fim?.slice(0,5)}
-                              {card.sala && <span className="ml-1 opacity-80">· {card.sala}</span>}
-                            </div>
-                            {height > 48 && card.nome_professor && (
-                              <div className="text-[8px] opacity-85 truncate mt-1">{card.nome_professor}</div>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
           </div>
         </div>
       </div>
 
-      {/* ── Legenda de turmas ─────────────────────────────────────────── */}
+      {/* ── Legenda de turmas ─────────────────────────────────────────────── */}
       {grade.length > 0 && (() => {
         const turmasNaGrade = [...new Map(
           grade.filter(g => g.turma_id && (g.nome_turma || g.nome_curso))
@@ -442,38 +453,51 @@ function GradeTab({ podeEditar, turmas }: { podeEditar: boolean; turmas: Turma[]
         ).values()];
         if (!turmasNaGrade.length) return null;
         return (
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
-            <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-2.5">Legenda de Turmas</p>
-            <div className="flex flex-wrap gap-2">
-              {turmasNaGrade.map(t => (
-                <div key={t.id} className="flex items-center gap-1.5 bg-slate-50 border border-slate-100 rounded-lg px-3 py-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: t.cor }} />
-                  <span className="text-[10px] font-bold text-slate-700">{t.nome}</span>
-                </div>
-              ))}
-            </div>
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className="text-[9px] font-black uppercase text-slate-300 tracking-widest shrink-0">Turmas</span>
+            {turmasNaGrade.map(t => (
+              <div key={t.id} className="flex items-center gap-2 bg-white border border-slate-100 rounded-full px-3 py-1.5 shadow-sm">
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: t.cor }} />
+                <span className="text-[10px] font-bold text-slate-600">{t.nome}</span>
+              </div>
+            ))}
           </div>
         );
       })()}
 
-      {!podeEditar && (
-        <p className="text-[10px] text-center text-slate-400 font-bold uppercase tracking-widest">
-          Visualização apenas · Edição restrita a ADMIN / PRT / VP / DRT
+      {grade.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-4">
+            <Calendar size={28} className="text-slate-300" />
+          </div>
+          <p className="text-slate-500 font-bold text-sm">Nenhum horário cadastrado</p>
+          <p className="text-slate-400 text-xs mt-1">
+            {podeEditar ? 'Clique em "Adicionar Horário" para montar a grade semanal.' : 'A grade ainda não foi configurada.'}
+          </p>
+        </div>
+      )}
+
+      {!podeEditar && grade.length > 0 && (
+        <p className="text-[10px] text-center text-slate-300 font-medium">
+          Visualização apenas — edição restrita a ADMIN / PRT / VP / DRT
         </p>
       )}
 
+      {/* ── Modal: Adicionar Horário ──────────────────────────────────────── */}
       {showModal && (
         <Modal title="Adicionar Horário na Grade" onClose={() => { setShowModal(false); setForm({ cor: '#7c3aed' }); setErroGrade(null); }}>
-          <form onSubmit={handleCriar} className="space-y-3">
+          <form onSubmit={handleCriar} className="space-y-4">
             <FieldSelect label="Turma *" value={form.turma_id ?? ''}
               onChange={v => {
                 const t = turmas.find(t => t.id === v);
                 setForm(p => ({ ...p, turma_id: v, cor: t?.cor || p.cor || '#7c3aed' }));
               }}
               options={turmas.map(t => ({ value: t.id, label: t.nome }))} required />
+
             <FieldSelect label="Dia da Semana" value={String(form.dia_semana ?? '')}
               onChange={v => setForm(p => ({ ...p, dia_semana: Number(v) }))}
               options={DIAS_SEMANA.map((d, i) => ({ value: String(i+1), label: d }))} required />
+
             <div className="grid grid-cols-2 gap-3">
               <FieldSelect label="Hora Início" value={form.horario_inicio}
                 onChange={v => setForm(p => ({ ...p, horario_inicio: v }))}
@@ -482,33 +506,61 @@ function GradeTab({ podeEditar, turmas }: { podeEditar: boolean; turmas: Turma[]
                 onChange={v => setForm(p => ({ ...p, horario_fim: v }))}
                 options={HORARIOS.filter(h => h.value).map(h => ({ value: h.value!, label: h.label }))} required />
             </div>
+
+            {/* Preview da duração */}
+            {form.horario_inicio && form.horario_fim && (
+              <div className="bg-purple-50 border border-purple-100 rounded-xl px-4 py-2.5 flex items-center gap-2">
+                <Clock size={12} className="text-purple-400 shrink-0" />
+                <span className="text-[11px] font-bold text-purple-700">
+                  {form.horario_inicio} → {form.horario_fim}
+                  {' · '}
+                  {(() => {
+                    const [h1, m1] = form.horario_inicio.split(':').map(Number);
+                    const [h2, m2] = form.horario_fim.split(':').map(Number);
+                    const mins = (h2*60+m2) - (h1*60+m1);
+                    return mins > 0 ? `${mins} min` : '–';
+                  })()}
+                </span>
+              </div>
+            )}
+
             <FieldInput label="Sala (opcional)" value={form.sala} onChange={v => setForm(p => ({ ...p, sala: v }))} />
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-black uppercase text-slate-500">Cor do Card</label>
+
+            <div className="space-y-2">
+              <label className="text-[10px] font-black uppercase text-slate-500 block">Cor do Card</label>
               <div className="flex items-center gap-3">
-                <input
-                  type="color"
-                  value={form.cor || '#7c3aed'}
-                  onChange={e => setForm(p => ({ ...p, cor: e.target.value }))}
-                  className="w-10 h-10 rounded-xl cursor-pointer border border-slate-200 p-0.5 bg-white"
-                  title="Escolher cor personalizada"
-                />
-                <div className="flex gap-1.5 flex-wrap">
+                <div className="w-10 h-10 rounded-xl border-2 border-slate-200 shadow-sm shrink-0 overflow-hidden">
+                  <input type="color" value={form.cor || '#7c3aed'}
+                    onChange={e => setForm(p => ({ ...p, cor: e.target.value }))}
+                    className="w-14 h-14 -ml-2 -mt-2 cursor-pointer border-0" />
+                </div>
+                <div className="flex gap-1.5 flex-wrap flex-1">
                   {CORES_CARD.map(c => (
                     <button key={c} type="button" onClick={() => setForm(p => ({ ...p, cor: c }))}
-                      className={`w-6 h-6 rounded-lg transition-all ${form.cor === c ? 'ring-2 ring-offset-1 ring-slate-800 scale-110' : 'hover:scale-105'}`}
+                      className={`w-6 h-6 rounded-lg transition-all shadow-sm ${form.cor === c ? 'ring-2 ring-offset-2 ring-slate-700 scale-110' : 'hover:scale-110 hover:shadow-md'}`}
                       style={{ backgroundColor: c }} />
                   ))}
                 </div>
               </div>
-              <p className="text-[9px] text-slate-400">Clique no quadrado colorido para escolher qualquer cor</p>
             </div>
-            {erroGrade && (
-              <div className="bg-red-50 border border-red-200 text-red-700 text-[11px] font-bold rounded-xl px-4 py-2.5 uppercase tracking-wide">
-                ⚠ {erroGrade}
+
+            {/* Preview do card */}
+            {form.turma_id && (
+              <div className="rounded-xl p-3 text-white text-[11px] font-black shadow-sm"
+                style={{ backgroundColor: form.cor || '#7c3aed' }}>
+                {turmas.find(t => t.id === form.turma_id)?.nome || 'Turma'}
+                {form.horario_inicio && <span className="font-semibold opacity-75 ml-2">{form.horario_inicio}–{form.horario_fim}</span>}
               </div>
             )}
-            <button type="submit" className="w-full bg-purple-600 text-white py-2.5 rounded-xl font-black text-xs uppercase hover:bg-purple-700">
+
+            {erroGrade && (
+              <div className="bg-red-50 border border-red-200 text-red-600 text-[11px] font-bold rounded-xl px-4 py-3 flex items-center gap-2">
+                <X size={12} className="shrink-0" /> {erroGrade}
+              </div>
+            )}
+
+            <button type="submit"
+              className="w-full bg-purple-600 text-white py-3 rounded-xl font-black text-xs uppercase hover:bg-purple-700 active:scale-[0.98] transition-all shadow-sm">
               Confirmar
             </button>
           </form>
