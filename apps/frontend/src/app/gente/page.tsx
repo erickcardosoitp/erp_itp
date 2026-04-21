@@ -128,7 +128,11 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payloadFunc),
       });
-      if (!r1.ok) { const e = await r1.json(); throw new Error(e.message ?? 'Erro ao salvar dados pessoais'); }
+      if (!r1.ok) {
+        let msg = 'Erro ao salvar dados pessoais';
+        try { const e = await r1.json(); msg = e.message ?? e.error ?? msg; } catch {}
+        throw new Error(`[${r1.status}] ${msg}`);
+      }
 
       // Salva configuração de ponto do colaborador (strip campos grandes/aninhados)
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -138,7 +142,11 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payloadCol),
       });
-      if (!r2.ok) { const e = await r2.json(); throw new Error(e.message ?? 'Erro ao salvar configuração de ponto'); }
+      if (!r2.ok) {
+        let msg2 = 'Erro ao salvar configuração de ponto';
+        try { const e2 = await r2.json(); msg2 = e2.message ?? e2.error ?? msg2; } catch {}
+        throw new Error(`[${r2.status}] ${msg2}`);
+      }
 
       toast.success('Cadastro atualizado!'); setModal(null); carregarColaboradores();
     } catch (e: any) { toast.error(e.message); }
@@ -479,6 +487,7 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
                     {c.jornada_flexivel ? <span className="text-xs text-slate-400 hidden sm:block">Jornada flexível</span> : c.horario_entrada && <span className="text-xs text-slate-400 hidden sm:block">{c.horario_entrada}→{c.horario_saida}</span>}
                     <button onClick={() => abrirCodigosColaborador(c)} className="p-1.5 text-slate-400 hover:text-emerald-600 transition" title="Códigos VR"><Tag size={14} /></button>
                     <button onClick={() => {
+                      if (!c.funcionario) { toast.error('Este colaborador não possui funcionário vinculado. Desvincule e recadastre.'); return; }
                       setColSelecionado(c);
                       setFormFunc({ ...c.funcionario });
                       setEditando(c);
@@ -551,7 +560,8 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
                 <FL label="CPF"><input type="text" value={formFunc.cpf || ''} onChange={e => setFormFunc((f: any) => ({ ...f, cpf: e.target.value }))} className={ic} /></FL>
                 <FL label="RG"><input type="text" value={formFunc.rg || ''} onChange={e => setFormFunc((f: any) => ({ ...f, rg: e.target.value }))} className={ic} /></FL>
                 <FL label="Órgão Emissor RG"><input type="text" value={formFunc.orgao_emissor_rg || ''} onChange={e => setFormFunc((f: any) => ({ ...f, orgao_emissor_rg: e.target.value }))} className={ic} /></FL>
-                <FL label="Data de Nascimento"><input type="date" value={formFunc.data_nascimento || ''} onChange={e => setFormFunc((f: any) => ({ ...f, data_nascimento: e.target.value }))} className={ic} /></FL>
+                <FL label="Data de Emissão RG"><input type="date" value={formFunc.data_emissao_rg?.slice(0, 10) || ''} onChange={e => setFormFunc((f: any) => ({ ...f, data_emissao_rg: e.target.value }))} className={ic} /></FL>
+                <FL label="Data de Nascimento"><input type="date" value={formFunc.data_nascimento?.slice(0, 10) || ''} onChange={e => setFormFunc((f: any) => ({ ...f, data_nascimento: e.target.value }))} className={ic} /></FL>
                 <FL label="Celular"><input type="text" value={formFunc.celular || ''} onChange={e => setFormFunc((f: any) => ({ ...f, celular: e.target.value }))} className={ic} /></FL>
                 <FL label="Estado Civil">
                   <select value={formFunc.estado_civil || ''} onChange={e => setFormFunc((f: any) => ({ ...f, estado_civil: e.target.value }))} className={ic}>
@@ -565,6 +575,7 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
                     {['Masculino', 'Feminino', 'Outro', 'Prefiro não informar'].map(v => <option key={v}>{v}</option>)}
                   </select>
                 </FL>
+                <FL label="Gênero"><input type="text" placeholder="Ex: Não-binário" value={formFunc.genero || ''} onChange={e => setFormFunc((f: any) => ({ ...f, genero: e.target.value }))} className={ic} /></FL>
                 <FL label="Raça / Cor">
                   <select value={formFunc.raca_cor || ''} onChange={e => setFormFunc((f: any) => ({ ...f, raca_cor: e.target.value }))} className={ic}>
                     <option value="">Selecione...</option>
@@ -725,8 +736,8 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
                 <FL label="CPF"><input type="text" value={formFunc.cpf || ''} onChange={e => setFormFunc((f: any) => ({ ...f, cpf: e.target.value }))} className={ic} /></FL>
                 <FL label="RG"><input type="text" value={formFunc.rg || ''} onChange={e => setFormFunc((f: any) => ({ ...f, rg: e.target.value }))} className={ic} /></FL>
                 <FL label="Órgão Emissor RG"><input type="text" value={formFunc.orgao_emissor_rg || ''} onChange={e => setFormFunc((f: any) => ({ ...f, orgao_emissor_rg: e.target.value }))} className={ic} /></FL>
-                <FL label="Data de Emissão RG"><input type="date" value={formFunc.data_emissao_rg || ''} onChange={e => setFormFunc((f: any) => ({ ...f, data_emissao_rg: e.target.value }))} className={ic} /></FL>
-                <FL label="Data de Nascimento"><input type="date" value={formFunc.data_nascimento || ''} onChange={e => setFormFunc((f: any) => ({ ...f, data_nascimento: e.target.value }))} className={ic} /></FL>
+                <FL label="Data de Emissão RG"><input type="date" value={formFunc.data_emissao_rg?.slice(0, 10) || ''} onChange={e => setFormFunc((f: any) => ({ ...f, data_emissao_rg: e.target.value }))} className={ic} /></FL>
+                <FL label="Data de Nascimento"><input type="date" value={formFunc.data_nascimento?.slice(0, 10) || ''} onChange={e => setFormFunc((f: any) => ({ ...f, data_nascimento: e.target.value }))} className={ic} /></FL>
                 <FL label="Celular"><input type="text" value={formFunc.celular || ''} onChange={e => setFormFunc((f: any) => ({ ...f, celular: e.target.value }))} className={ic} /></FL>
                 <FL label="Estado Civil">
                   <select value={formFunc.estado_civil || ''} onChange={e => setFormFunc((f: any) => ({ ...f, estado_civil: e.target.value }))} className={ic}>

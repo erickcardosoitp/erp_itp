@@ -48,8 +48,11 @@ export class GenteService {
 
   private async enrichColaborador(col: GenteColaborador) {
     const [func] = await this.dataSource.query(
-      `SELECT id, nome, cargo, email, cpf, celular, rg, orgao_emissor_rg, data_emissao_rg,
-              estado_civil, pais, data_nascimento, cep, logradouro, numero_residencia,
+      `SELECT id, nome, cargo, email, cpf, celular, rg, orgao_emissor_rg,
+              TO_CHAR(data_emissao_rg, 'YYYY-MM-DD') AS data_emissao_rg,
+              estado_civil, pais,
+              TO_CHAR(data_nascimento, 'YYYY-MM-DD') AS data_nascimento,
+              cep, logradouro, numero_residencia,
               complemento, bairro, cidade, estado, telefone_emergencia_1, telefone_emergencia_2,
               sexo, raca_cor, escolaridade,
               possui_deficiencia, deficiencia_descricao,
@@ -72,8 +75,11 @@ export class GenteService {
     if (!colaboradores.length) return [];
     const ids = colaboradores.map(c => c.funcionario_id);
     const funcionarios: any[] = await this.dataSource.query(
-      `SELECT id, nome, cargo, email, cpf, celular, rg, orgao_emissor_rg, data_emissao_rg,
-              estado_civil, pais, data_nascimento, cep, logradouro, numero_residencia,
+      `SELECT id, nome, cargo, email, cpf, celular, rg, orgao_emissor_rg,
+              TO_CHAR(data_emissao_rg, 'YYYY-MM-DD') AS data_emissao_rg,
+              estado_civil, pais,
+              TO_CHAR(data_nascimento, 'YYYY-MM-DD') AS data_nascimento,
+              cep, logradouro, numero_residencia,
               complemento, bairro, cidade, estado, telefone_emergencia_1, telefone_emergencia_2,
               sexo, raca_cor, escolaridade,
               possui_deficiencia, deficiencia_descricao,
@@ -152,20 +158,20 @@ export class GenteService {
           $19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,true
         ) RETURNING id, nome, cargo, matricula`,
         [
-          funcDto.nome, funcDto.cargo ?? null, funcDto.email ?? null, funcDto.cpf ?? null,
-          funcDto.celular ?? null, funcDto.data_nascimento ?? null, funcDto.sexo ?? null,
-          funcDto.genero ?? null, funcDto.raca_cor ?? null, funcDto.escolaridade ?? null,
-          funcDto.cep ?? null, funcDto.logradouro ?? null, funcDto.numero_residencia ?? null,
-          funcDto.complemento ?? null, funcDto.bairro ?? null, funcDto.cidade ?? null,
-          funcDto.estado ?? null, funcDto.pais ?? 'Brasil',
-          funcDto.estado_civil ?? null, funcDto.rg ?? null,
-          funcDto.orgao_emissor_rg ?? null, funcDto.data_emissao_rg ?? null,
-          funcDto.telefone_emergencia_1 ?? null, funcDto.telefone_emergencia_2 ?? null,
-          funcDto.possui_deficiencia ?? false, funcDto.deficiencia_descricao ?? null,
-          funcDto.possui_alergias ?? false, funcDto.alergias_descricao ?? null,
-          funcDto.usa_medicamentos ?? false, funcDto.medicamentos_descricao ?? null,
+          funcDto.nome, funcDto.cargo || null, funcDto.email || null, funcDto.cpf || null,
+          funcDto.celular || null, funcDto.data_nascimento || null, funcDto.sexo || null,
+          funcDto.genero || null, funcDto.raca_cor || null, funcDto.escolaridade || null,
+          funcDto.cep || null, funcDto.logradouro || null, funcDto.numero_residencia || null,
+          funcDto.complemento || null, funcDto.bairro || null, funcDto.cidade || null,
+          funcDto.estado || null, funcDto.pais || 'Brasil',
+          funcDto.estado_civil || null, funcDto.rg || null,
+          funcDto.orgao_emissor_rg || null, funcDto.data_emissao_rg || null,
+          funcDto.telefone_emergencia_1 || null, funcDto.telefone_emergencia_2 || null,
+          funcDto.possui_deficiencia ?? false, funcDto.deficiencia_descricao || null,
+          funcDto.possui_alergias ?? false, funcDto.alergias_descricao || null,
+          funcDto.usa_medicamentos ?? false, funcDto.medicamentos_descricao || null,
           funcDto.interesse_cursos ?? false, funcDto.pertence_comunidade_tradicional ?? false,
-          funcDto.comunidade_tradicional ?? null,
+          funcDto.comunidade_tradicional || null,
           funcDto.possui_cad_unico ?? false, funcDto.baixo_idh ?? false,
           matricula,
         ],
@@ -212,6 +218,7 @@ export class GenteService {
   async editarFuncionarioViaGente(colaboradorId: string, dto: any) {
     const col = await this.colaboradorRepo.findOne({ where: { id: colaboradorId } });
     if (!col) throw new NotFoundException('Colaborador não encontrado.');
+    if (!col.funcionario_id) throw new BadRequestException('Colaborador sem funcionário vinculado — não é possível atualizar dados cadastrais.');
     const campos = ['nome','cargo','email','cpf','celular','rg','orgao_emissor_rg','data_emissao_rg',
       'estado_civil','pais','data_nascimento','cep','logradouro','numero_residencia',
       'complemento','bairro','cidade','estado','telefone_emergencia_1','telefone_emergencia_2',
@@ -224,18 +231,24 @@ export class GenteService {
       'pertence_comunidade_tradicional','comunidade_tradicional',
       'possui_cad_unico','baixo_idh'];
     // Sanitiza: string vazia → null (evita erro em colunas DATE/NUMERIC)
+    // Normaliza timestamps ISO → YYYY-MM-DD para colunas DATE
+    const dateFields = new Set(['data_nascimento', 'data_emissao_rg']);
     const sanitizado: any = {};
     campos.forEach(c => {
-      if (dto[c] !== undefined) sanitizado[c] = (dto[c] === '' ? null : dto[c]);
+      if (dto[c] === undefined) return;
+      let val = dto[c] === '' ? null : dto[c];
+      if (val && typeof val === 'string' && dateFields.has(c) && val.length > 10) val = val.slice(0, 10);
+      sanitizado[c] = val;
     });
     const keys = Object.keys(sanitizado);
     if (!keys.length) return this.buscarColaborador(colaboradorId);
     const sets = keys.map((c, i) => `${c} = $${i + 2}`);
     const vals = keys.map(c => sanitizado[c]);
-    await this.dataSource.query(
-      `UPDATE funcionarios SET ${sets.join(', ')} WHERE id = $1`,
+    const updated = await this.dataSource.query(
+      `UPDATE funcionarios SET ${sets.join(', ')} WHERE id = $1 RETURNING id`,
       [col.funcionario_id, ...vals],
     );
+    if (!updated?.length) throw new NotFoundException('Funcionário não encontrado na base de dados — dado pode ter sido excluído.');
     return this.buscarColaborador(colaboradorId);
   }
 
