@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Component, ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 import { AuthProvider } from '@/context/auth-context';
 import { ThemeProvider } from 'next-themes';
@@ -10,7 +10,28 @@ import { Toaster } from '@/components/ui/sonner';
 import PwaInstall from './PwaInstall';
 import SettingsApplier from './SettingsApplier';
 import LaunchPad from './LaunchPad';
-import { Menu } from 'lucide-react';
+import { Menu, RefreshCw } from 'lucide-react';
+
+class PageErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state = { error: null };
+  static getDerivedStateFromError(error: Error) { return { error }; }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 p-8 text-center">
+          <p className="text-slate-500 dark:text-slate-400 text-sm">Algo deu errado nesta página.</p>
+          <button
+            onClick={() => { this.setState({ error: null }); window.location.reload(); }}
+            className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white font-bold px-4 py-2 rounded-xl text-sm"
+          >
+            <RefreshCw size={14} /> Recarregar
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 function isChunkError(msg: string): boolean {
   return (
@@ -106,7 +127,9 @@ export default function ClientShell({ children }: { children: React.ReactNode })
             </header>
           )}
           {/* pb-20 no mobile para não ficar atrás da bottom nav */}
-          <div className={`flex-1 ${!isPublicPage ? 'pb-20 lg:pb-0' : ''}`}>{children}</div>
+          <div className={`flex-1 ${!isPublicPage ? 'pb-20 lg:pb-0' : ''}`}>
+            <PageErrorBoundary>{children}</PageErrorBoundary>
+          </div>
         </main>
 
         {/* ── Bottom Navigation (mobile only) ──────────────────────────── */}
