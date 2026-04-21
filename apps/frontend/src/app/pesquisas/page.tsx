@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/context/auth-context';
 import { useRouter } from 'next/navigation';
 import api from '@/services/api';
-import { Plus, X, Trash2, StopCircle, RefreshCw, BarChart2, Copy, Check, ChevronDown, ChevronUp, Star, AlertTriangle } from 'lucide-react';
+import { Plus, X, Trash2, StopCircle, RefreshCw, BarChart2, Copy, Check, ChevronDown, ChevronUp, Star, AlertTriangle, Eye } from 'lucide-react';
 
 type TipoPergunta = 'nota' | 'texto' | 'multipla_escolha' | 'checkbox';
 interface Pergunta { id: string; texto: string; tipo: TipoPergunta; opcoes?: string[]; }
@@ -55,6 +55,7 @@ export default function PesquisasPage() {
   const [showForm, setShowForm] = useState(false);
   const [expandida, setExpandida] = useState<string | null>(null);
   const [resultados, setResultados] = useState<Record<string, { stats: StatPergunta[]; total_respostas: number; respostas: RespostaItem[] }>>({});
+  const [modalResposta, setModalResposta] = useState<{ pesquisaId: string; resposta: RespostaItem; perguntas: Pergunta[]; idx: number } | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -173,6 +174,7 @@ export default function PesquisasPage() {
   };
 
   return (
+    <>
     <div className="min-h-screen bg-slate-50 p-4 sm:p-8">
       <div className="max-w-4xl mx-auto space-y-6">
         {/* Header */}
@@ -394,26 +396,28 @@ export default function PesquisasPage() {
 
                         {/* Respostas individuais com expurgação */}
                         <div className="mt-4 space-y-2">
-                          <p className="text-[9px] font-black uppercase text-slate-400">Respostas individuais (expurgação)</p>
+                          <p className="text-[9px] font-black uppercase text-slate-400">Respostas individuais ({resultados[p.id].respostas.length})</p>
                           <div className="space-y-1.5 max-h-64 overflow-y-auto">
                             {resultados[p.id].respostas.map((r, idx) => (
-                              <div key={r.id} className={`flex items-center gap-3 px-3 py-2 rounded-xl border text-[10px] ${r.expurgado ? 'bg-red-50 border-red-100 opacity-60' : 'bg-white border-slate-100'}`}>
-                                <span className="text-slate-400 shrink-0 font-mono">#{idx + 1}</span>
+                              <div key={r.id} className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-[10px] ${r.expurgado ? 'bg-red-50 border-red-100 opacity-60' : 'bg-white border-slate-100'}`}>
+                                <span className="text-slate-400 shrink-0 font-mono w-6">#{idx + 1}</span>
                                 <span className="text-slate-500 shrink-0">{new Date(r.created_at).toLocaleDateString('pt-BR')}</span>
-                                <div className="flex-1 flex gap-2 flex-wrap">
-                                  {r.respostas.map(rp => {
-                                    const perg = p.perguntas?.find(pq => pq.id === rp.pergunta_id);
-                                    if (!perg) return null;
-                                    if (rp.nota != null) return <span key={rp.pergunta_id} className="text-amber-600 font-black">{rp.nota}★</span>;
-                                    if (rp.texto) return <span key={rp.pergunta_id} className="text-slate-500 truncate max-w-[120px]">&quot;{rp.texto}&quot;</span>;
-                                    if (rp.opcoes_selecionadas?.length) return <span key={rp.pergunta_id} className="text-purple-600">{rp.opcoes_selecionadas.join(', ')}</span>;
+                                <div className="flex-1 flex gap-1.5 flex-wrap min-w-0">
+                                  {r.respostas.slice(0, 3).map(rp => {
+                                    if (rp.nota != null) return <span key={rp.pergunta_id} className="text-amber-600 font-black shrink-0">{rp.nota}★</span>;
+                                    if (rp.texto) return <span key={rp.pergunta_id} className="text-slate-400 truncate max-w-[80px] italic">{rp.texto}</span>;
+                                    if (rp.opcoes_selecionadas?.length) return <span key={rp.pergunta_id} className="text-purple-500 truncate max-w-[80px]">{rp.opcoes_selecionadas[0]}{rp.opcoes_selecionadas.length > 1 ? `…` : ''}</span>;
                                     return null;
                                   })}
+                                  {r.respostas.length > 3 && <span className="text-slate-300 text-[9px]">+{r.respostas.length - 3}</span>}
                                 </div>
-                                {r.expurgado && <span className="shrink-0 text-[8px] font-black uppercase text-red-500 flex items-center gap-0.5"><AlertTriangle size={9}/> Expurgado</span>}
-                                <button
-                                  onClick={() => toggleExpurgar(p.id, r.id, !r.expurgado)}
-                                  className={`shrink-0 text-[8px] font-black uppercase px-2 py-0.5 rounded-lg ${r.expurgado ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-red-100 text-red-600 hover:bg-red-200'}`}>
+                                {r.expurgado && <span className="shrink-0 text-[8px] font-black text-red-400 flex items-center gap-0.5"><AlertTriangle size={8}/> Expurgado</span>}
+                                <button onClick={() => setModalResposta({ pesquisaId: p.id, resposta: r, perguntas: p.perguntas || [], idx })}
+                                  className="shrink-0 p-1 rounded-lg bg-slate-100 text-slate-500 hover:bg-purple-100 hover:text-purple-600 transition-colors" title="Ver detalhes">
+                                  <Eye size={11}/>
+                                </button>
+                                <button onClick={() => toggleExpurgar(p.id, r.id, !r.expurgado)}
+                                  className={`shrink-0 text-[8px] font-black uppercase px-2 py-0.5 rounded-lg transition-colors ${r.expurgado ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-red-100 text-red-600 hover:bg-red-200'}`}>
                                   {r.expurgado ? 'Incluir' : 'Expurgar'}
                                 </button>
                               </div>
@@ -430,5 +434,77 @@ export default function PesquisasPage() {
         )}
       </div>
     </div>
+
+    {/* Modal de detalhe de resposta */}
+    {modalResposta && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setModalResposta(null)}>
+        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+          {/* Header */}
+          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0">
+            <div>
+              <p className="font-black text-sm text-slate-800">Resposta #{modalResposta.idx + 1}</p>
+              <p className="text-[10px] text-slate-400 mt-0.5">
+                {new Date(modalResposta.resposta.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                {modalResposta.resposta.expurgado && <span className="ml-2 text-red-500 font-black">· EXPURGADA</span>}
+              </p>
+            </div>
+            <button onClick={() => setModalResposta(null)} className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"><X size={16}/></button>
+          </div>
+
+          {/* Conteúdo */}
+          <div className="overflow-y-auto flex-1 px-6 py-4 space-y-4">
+            {modalResposta.perguntas.map((perg, i) => {
+              const rp = modalResposta.resposta.respostas.find(r => r.pergunta_id === perg.id);
+              return (
+                <div key={perg.id} className="space-y-2">
+                  <p className="text-[10px] font-black uppercase text-slate-400 tracking-wide">
+                    <span className="text-purple-500 mr-1">{i + 1}.</span> {perg.texto}
+                  </p>
+                  {!rp || (rp.nota == null && !rp.texto && !rp.opcoes_selecionadas?.length) ? (
+                    <p className="text-xs text-slate-300 italic pl-3">Sem resposta</p>
+                  ) : perg.tipo === 'nota' && rp.nota != null ? (
+                    <div className="flex items-center gap-2 pl-3">
+                      <div className="flex gap-1">
+                        {[1,2,3,4,5].map(n => (
+                          <Star key={n} size={20} className={n <= rp.nota! ? 'text-amber-400 fill-amber-400' : 'text-slate-200'}/>
+                        ))}
+                      </div>
+                      <span className="text-sm font-black text-slate-700">{rp.nota} / 5</span>
+                    </div>
+                  ) : perg.tipo === 'texto' && rp.texto ? (
+                    <div className="pl-3">
+                      <p className="text-sm text-slate-700 bg-slate-50 rounded-xl px-4 py-3 leading-relaxed">{rp.texto}</p>
+                    </div>
+                  ) : (perg.tipo === 'multipla_escolha' || perg.tipo === 'checkbox') && rp.opcoes_selecionadas?.length ? (
+                    <div className="pl-3 flex flex-wrap gap-1.5">
+                      {rp.opcoes_selecionadas.map(opc => (
+                        <span key={opc} className="px-3 py-1 rounded-full bg-purple-100 text-purple-700 text-xs font-bold">{opc}</span>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Footer */}
+          <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between shrink-0">
+            <button
+              onClick={() => {
+                toggleExpurgar(modalResposta.pesquisaId, modalResposta.resposta.id, !modalResposta.resposta.expurgado);
+                setModalResposta(prev => prev ? { ...prev, resposta: { ...prev.resposta, expurgado: !prev.resposta.expurgado } } : null);
+              }}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl font-black text-xs uppercase transition-colors ${modalResposta.resposta.expurgado ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-red-100 text-red-600 hover:bg-red-200'}`}>
+              {modalResposta.resposta.expurgado ? '✓ Incluir no NPS' : <><AlertTriangle size={12}/> Expurgar do NPS</>}
+            </button>
+            <button onClick={() => setModalResposta(null)}
+              className="px-4 py-2 rounded-xl font-black text-xs uppercase text-slate-500 hover:bg-slate-100 transition-colors">
+              Fechar
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
