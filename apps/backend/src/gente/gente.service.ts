@@ -574,6 +574,52 @@ export class GenteService {
         });
       }
 
+      // Faltas com desconto no mês
+      const faltasDoMes = await this.faltaRepo
+        .createQueryBuilder('f')
+        .where('f.colaborador_id = :id', { id: col.id })
+        .andWhere('f.com_desconto = true')
+        .andWhere('f.tipo = :tipo', { tipo: 'falta' })
+        .andWhere('f.data >= :inicio', { inicio: mesInicio })
+        .andWhere('f.data <= :fim', { fim: mesFim })
+        .getMany();
+
+      for (const f of faltasDoMes) {
+        const pct = Number(f.percentual_desconto ?? 100) / 100;
+        const valorDesc = Math.round((totalProventos / 30) * pct * 100) / 100;
+        if (valorDesc > 0) {
+          descontos.push({
+            codigo: 'FALTA',
+            descricao: `Falta ${f.data}${f.motivo ? ' — ' + f.motivo.substring(0, 30) : ''}`,
+            referencia: mes_referencia.slice(2).replace('-', '/').toUpperCase(),
+            valor: valorDesc,
+          });
+        }
+      }
+
+      // Suspensões com desconto que se sobrepõem ao mês
+      const suspensoesDoMes = await this.suspensaoRepo
+        .createQueryBuilder('s')
+        .where('s.colaborador_id = :id', { id: col.id })
+        .andWhere('s.com_desconto = true')
+        .andWhere('s.data_inicio <= :fim', { fim: mesFim })
+        .andWhere('s.data_fim >= :inicio', { inicio: mesInicio })
+        .getMany();
+
+      for (const s of suspensoesDoMes) {
+        const ini = new Date(s.data_inicio > mesInicio ? s.data_inicio : mesInicio);
+        const fim2 = new Date(s.data_fim < mesFim ? s.data_fim : mesFim);
+        const dias = Math.max(0, Math.round((fim2.getTime() - ini.getTime()) / 86400000) + 1);
+        if (dias > 0) {
+          descontos.push({
+            codigo: 'SUSP',
+            descricao: `Suspensão ${dias}d — ${s.motivo.substring(0, 30)}`,
+            referencia: mes_referencia.slice(2).replace('-', '/').toUpperCase(),
+            valor: Math.round((totalProventos / 30) * dias * 100) / 100,
+          });
+        }
+      }
+
       const totalDescontos = descontos.reduce((s, d) => s + d.valor, 0);
       const liquido = totalProventos - totalDescontos;
 
