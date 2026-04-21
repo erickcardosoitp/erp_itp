@@ -22,6 +22,9 @@ export class GenteAdvertencia {
   @Column({ type: 'text', default: 'escrita' })
   nivel: string; // 'verbal' | 'escrita' | 'grave'
 
+  @Column({ type: 'numeric', precision: 10, scale: 2, nullable: true })
+  valor_desconto: number;
+
   @Column({ type: 'text', nullable: true })
   criado_por_id: string;
 

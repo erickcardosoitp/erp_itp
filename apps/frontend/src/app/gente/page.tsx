@@ -1552,6 +1552,7 @@ const CamposAdvertencia = ({ form, setForm }: any) => (
     <FL label="Nível"><select value={form.nivel || 'escrita'} onChange={e => setForm((f: any) => ({ ...f, nivel: e.target.value }))} className={ic}>
       <option value="verbal">Verbal</option><option value="escrita">Escrita</option><option value="grave">Grave</option>
     </select></FL>
+    <FL label="Valor do Desconto (R$)"><input type="number" min="0" step="0.01" placeholder="0,00 — deixe vazio para sem desconto" value={form.valor_desconto || ''} onChange={e => setForm((f: any) => ({ ...f, valor_desconto: e.target.value ? Number(e.target.value) : null }))} className={ic} /></FL>
     <FL label="Descrição"><textarea value={form.descricao || ''} onChange={e => setForm((f: any) => ({ ...f, descricao: e.target.value }))} className={`${ic} h-20 resize-none`} /></FL>
   </>
 );
@@ -1668,6 +1669,7 @@ const LinhaAdvertencia = ({ item, onEdit, onDel, colaboradores }: any) => {
       <div className="min-w-0"><div className="font-semibold truncate">{nome}</div><div className="text-xs text-slate-500">{fmt.data(item.data)} · {item.motivo}</div></div>
       <div className="flex items-center gap-2 shrink-0">
         <Badge label={item.nivel} color={cor[item.nivel] || ''} />
+        {item.valor_desconto ? <span className="text-xs font-semibold text-red-600">-R$ {Number(item.valor_desconto).toFixed(2)}</span> : null}
         <button onClick={onEdit} className="p-1.5 text-slate-400 hover:text-purple-600"><Edit2 size={13} /></button>
         <button onClick={onDel} className={bd}><Trash2 size={12} /></button>
       </div>

@@ -71,7 +71,7 @@ export class GenteService {
   // ── Colaboradores ──────────────────────────────────────────────────────────
 
   async listarColaboradores() {
-    const colaboradores = await this.colaboradorRepo.find({ order: { createdAt: 'DESC' } });
+    const colaboradores = await this.colaboradorRepo.find({ where: { ativo: true }, order: { createdAt: 'DESC' } });
     if (!colaboradores.length) return [];
     const ids = colaboradores.map(c => c.funcionario_id);
     const funcionarios: any[] = await this.dataSource.query(
@@ -206,6 +206,7 @@ export class GenteService {
       'jornada_flexivel','horas_dia_flex','horario_flexivel_semana','valor_passagem'];
     const payload: any = {};
     colunas.forEach(k => { if (dto[k] !== undefined) payload[k] = dto[k]; });
+    if (payload.tipo === 'voluntario') payload.salario_base = null;
     if (Object.keys(payload).length) await this.colaboradorRepo.update(id, payload);
     return this.buscarColaborador(id);
   }
@@ -409,7 +410,7 @@ export class GenteService {
       // Proventos: salário base + códigos atribuídos
       const mesRef = mes_referencia.slice(2).replace('-', '/').toUpperCase();
       const proventos: any[] = [];
-      if (col.salario_base && Number(col.salario_base) > 0) {
+      if (col.tipo !== 'voluntario' && col.salario_base && Number(col.salario_base) > 0) {
         proventos.push({ codigo: 'SAL', descricao: 'SALÁRIO BASE', referencia: mesRef, valor: Number(col.salario_base) });
       }
       const codigosCol = await this.listarCodigosColaborador(col.id);
@@ -433,6 +434,18 @@ export class GenteService {
       const mesInicio = `${mes_referencia}-01`;
       const mesFim = new Date(Number(mes_referencia.split('-')[0]), Number(mes_referencia.split('-')[1]), 0)
         .toISOString().split('T')[0];
+
+      // Resetar vales do recibo anterior ao regenerar
+      const recAnterior = await this.reciboRepo.findOne({ where: { colaborador_id: col.id, mes_referencia } });
+      if (recAnterior?.observacao) {
+        try {
+          const obs = JSON.parse(recAnterior.observacao);
+          const valeIds: string[] = (obs.descontos ?? []).filter((d: any) => d.vale_id).map((d: any) => d.vale_id);
+          for (const vid of valeIds) {
+            await this.valeRepo.update(vid, { descontado: false });
+          }
+        } catch { /* ignorar JSON inválido */ }
+      }
 
       // Vales pendentes até o fim do mês (inclui meses anteriores não descontados)
       const valesDoMes = await this.valeRepo
@@ -478,6 +491,51 @@ export class GenteService {
             valor: Math.round(valorDia * dias * 100) / 100,
           });
         }
+      }
+
+      // Faltas com desconto no mês
+      const faltasDoMes = await this.faltaRepo
+        .createQueryBuilder('f')
+        .where('f.colaborador_id = :id', { id: col.id })
+        .andWhere('f.com_desconto = true')
+        .andWhere('f.tipo = :tipo', { tipo: 'falta' })
+        .andWhere('f.data >= :inicio', { inicio: mesInicio })
+        .andWhere('f.data <= :fim', { fim: mesFim })
+        .getMany();
+
+      if (faltasDoMes.length > 0 && col.salario_base && Number(col.salario_base) > 0) {
+        const [ano, mes] = mes_referencia.split('-').map(Number);
+        const diasUteis = this._contarDiasTrabalho(col.dias_trabalho ?? [], ano, mes) || 22;
+        const valorDia = Number(col.salario_base) / diasUteis;
+        for (const f of faltasDoMes) {
+          const pct = f.percentual_desconto != null ? f.percentual_desconto : 100;
+          const valor = Math.round(valorDia * (pct / 100) * 100) / 100;
+          descontos.push({
+            codigo: 'FALTA',
+            descricao: `Falta ${f.data}${f.motivo ? ' — ' + f.motivo.substring(0, 30) : ''}${pct !== 100 ? ` (${pct}%)` : ''}`,
+            referencia: mes_referencia.slice(2).replace('-', '/').toUpperCase(),
+            valor,
+          });
+        }
+      }
+
+      // Advertências com valor_desconto no mês
+      const advertenciasDoMes = await this.advertenciaRepo
+        .createQueryBuilder('a')
+        .where('a.colaborador_id = :id', { id: col.id })
+        .andWhere('a.valor_desconto IS NOT NULL')
+        .andWhere('a.valor_desconto > 0')
+        .andWhere('a.data >= :inicio', { inicio: mesInicio })
+        .andWhere('a.data <= :fim', { fim: mesFim })
+        .getMany();
+
+      for (const a of advertenciasDoMes) {
+        descontos.push({
+          codigo: 'ADV',
+          descricao: `Advertência ${a.nivel.toUpperCase()} — ${a.motivo.substring(0, 40)}`,
+          referencia: mes_referencia.slice(2).replace('-', '/').toUpperCase(),
+          valor: Math.round(Number(a.valor_desconto) * 100) / 100,
+        });
       }
 
       const totalDescontos = descontos.reduce((s, d) => s + d.valor, 0);
@@ -618,6 +676,51 @@ export class GenteService {
       }
     }
 
+    // Faltas com desconto no mês
+    const faltasDoMes = await this.faltaRepo
+      .createQueryBuilder('f')
+      .where('f.colaborador_id = :id', { id: col.id })
+      .andWhere('f.com_desconto = true')
+      .andWhere('f.tipo = :tipo', { tipo: 'falta' })
+      .andWhere('f.data >= :inicio', { inicio: mesInicio })
+      .andWhere('f.data <= :fim', { fim: mesFim })
+      .getMany();
+
+    if (faltasDoMes.length > 0 && col.salario_base && Number(col.salario_base) > 0) {
+      const [ano, mes] = mes_referencia.split('-').map(Number);
+      const diasUteis = this._contarDiasTrabalho(col.dias_trabalho ?? [], ano, mes) || 22;
+      const valorDia = Number(col.salario_base) / diasUteis;
+      for (const f of faltasDoMes) {
+        const pct = f.percentual_desconto != null ? f.percentual_desconto : 100;
+        const valor = Math.round(valorDia * (pct / 100) * 100) / 100;
+        descontos.push({
+          codigo: 'FALTA',
+          descricao: `Falta ${f.data}${f.motivo ? ' — ' + f.motivo.substring(0, 30) : ''}${pct !== 100 ? ` (${pct}%)` : ''}`,
+          referencia: mesRef,
+          valor,
+        });
+      }
+    }
+
+    // Advertências com valor_desconto no mês
+    const advertenciasDoMes = await this.advertenciaRepo
+      .createQueryBuilder('a')
+      .where('a.colaborador_id = :id', { id: col.id })
+      .andWhere('a.valor_desconto IS NOT NULL')
+      .andWhere('a.valor_desconto > 0')
+      .andWhere('a.data >= :inicio', { inicio: mesInicio })
+      .andWhere('a.data <= :fim', { fim: mesFim })
+      .getMany();
+
+    for (const a of advertenciasDoMes) {
+      descontos.push({
+        codigo: 'ADV',
+        descricao: `Advertência ${a.nivel.toUpperCase()} — ${a.motivo.substring(0, 40)}`,
+        referencia: mesRef,
+        valor: Math.round(Number(a.valor_desconto) * 100) / 100,
+      });
+    }
+
     const totalProventos = proventos.reduce((s, p) => s + p.valor, 0);
     const totalDescontos = descontos.reduce((s, d) => s + d.valor, 0);
     const liquido = totalProventos - totalDescontos;
@@ -647,6 +750,19 @@ export class GenteService {
   async calcularFolhaColaborador(colaborador_id: string, mes_referencia: string, criado_por_id: string, criado_por_nome: string) {
     const col = await this.colaboradorRepo.findOne({ where: { id: colaborador_id, ativo: true } });
     if (!col) throw new NotFoundException('Colaborador não encontrado.');
+
+    // Ao regenerar, resetar vales do recibo anterior para que sejam re-incluídos
+    const reciboAnterior = await this.reciboRepo.findOne({ where: { colaborador_id, mes_referencia } });
+    if (reciboAnterior?.observacao) {
+      try {
+        const obs = JSON.parse(reciboAnterior.observacao);
+        const valeIds: string[] = (obs.descontos ?? []).filter((d: any) => d.vale_id).map((d: any) => d.vale_id);
+        for (const vid of valeIds) {
+          await this.valeRepo.update(vid, { descontado: false });
+        }
+      } catch { /* ignorar JSON inválido */ }
+    }
+
     const r = await this._computarFolhaColaborador(col, mes_referencia);
     if (!r) throw new NotFoundException('Funcionário não encontrado.');
 

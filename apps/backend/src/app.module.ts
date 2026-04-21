@@ -682,6 +682,11 @@ export class AppModule implements OnModuleInit {
           ADD COLUMN IF NOT EXISTS sexo TEXT
       `);
       this.logger.log('✅ Colunas funcionarios (data_nascimento, celular, sexo) garantidas (IF NOT EXISTS)');
+      await this.dataSource.query(`
+        ALTER TABLE IF EXISTS gente_advertencias
+          ADD COLUMN IF NOT EXISTS valor_desconto NUMERIC(10,2)
+      `);
+      this.logger.log('✅ Coluna gente_advertencias.valor_desconto aplicada (IF NOT EXISTS)');
       this.logger.log('✅ Tabelas do módulo Gente criadas (IF NOT EXISTS)');
 
     } catch (err: any) {
