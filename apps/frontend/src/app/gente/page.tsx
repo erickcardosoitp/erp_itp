@@ -1988,7 +1988,7 @@ function ControlePresencaTab({ reload, colaboradores }: { reload: number; colabo
       setExpandLoading(colId);
       try {
         const r = await fetch(`${API}/gente/ponto/externo/banco-horas?colaborador_id=${colId}&mes=${mes}`);
-        if (r.ok) setExpandDados(prev => ({ ...prev, [colId + mes]: await r.json() }));
+        if (r.ok) { const data = await r.json(); setExpandDados(prev => ({ ...prev, [colId + mes]: data })); }
       } catch {}
       setExpandLoading(null);
     }
