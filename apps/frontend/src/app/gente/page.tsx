@@ -59,7 +59,7 @@ function Modal({ title, onClose, wide, children }: { title: string; onClose: () 
   );
 }
 
-function FL({ label, children }: { label: string; children: React.ReactNode }) {
+function FL({ label, children }: { label: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="space-y-1">
       <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">{label}</label>
