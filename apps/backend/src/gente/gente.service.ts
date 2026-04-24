@@ -1614,6 +1614,135 @@ export class GenteService {
     return alertas;
   }
 
+  async controlePresencaMes(mes: string): Promise<any[]> {
+    const [year, month] = mes.split('-').map(Number);
+    const inicioMs = Date.UTC(year, month - 1, 1);
+    const fimDoMesMs = Date.UTC(year, month, 0, 23, 59, 59, 999);
+
+    const hojeUtc = new Date();
+    const hojeInicioMs = Date.UTC(hojeUtc.getUTCFullYear(), hojeUtc.getUTCMonth(), hojeUtc.getUTCDate());
+    const ontemMs = hojeInicioMs - 86400000;
+    const ontemFimMs = hojeInicioMs - 1;
+    const mesAtual = new Date().toISOString().slice(0, 7) === mes;
+    const fimMs = mesAtual ? (ontemMs >= inicioMs ? ontemFimMs : inicioMs) : fimDoMesMs;
+    const inicioISO = new Date(inicioMs).toISOString().split('T')[0];
+    const fimISO = new Date(fimMs).toISOString().split('T')[0];
+
+    const colaboradores = await this.colaboradorRepo.find({ where: { ativo: true } });
+    if (!colaboradores.length) return [];
+    const colIds = colaboradores.map(c => c.id);
+    const funcIds = colaboradores.map(c => c.funcionario_id);
+    const BRT_OFFSET_MS = 3 * 3600 * 1000;
+
+    const [pontosRaw, funcionarios, folgasRows, atestadosRows] = await Promise.all([
+      this.dataSource.query(
+        `SELECT colaborador_id, data_hora, tipo FROM gente_ponto
+         WHERE colaborador_id = ANY($1::uuid[]) AND data_hora >= $2 AND data_hora <= $3
+         ORDER BY colaborador_id, data_hora`,
+        [colIds, new Date(inicioMs - BRT_OFFSET_MS).toISOString(), new Date(fimMs + BRT_OFFSET_MS).toISOString()],
+      ),
+      funcIds.length
+        ? this.dataSource.query(`SELECT id, nome FROM funcionarios WHERE id = ANY($1::uuid[])`, [funcIds])
+        : Promise.resolve([]),
+      this.dataSource.query(
+        `SELECT colaborador_id, data::text, realizada FROM gente_folga_solicitacoes
+         WHERE colaborador_id = ANY($1::uuid[]) AND status = 'aprovada' AND data >= $2::date AND data <= $3::date`,
+        [colIds, inicioISO, fimISO],
+      ),
+      this.dataSource.query(
+        `SELECT colaborador_id, data::text, data_fim::text FROM gente_faltas
+         WHERE colaborador_id = ANY($1::uuid[]) AND tipo IN ('atestado','afastamento')
+           AND data <= $3::date AND (data_fim IS NULL OR data_fim >= $2::date)`,
+        [colIds, inicioISO, fimISO],
+      ),
+    ]);
+
+    const feriadosSet = await this._feriadosNoIntervalo(inicioISO, fimISO);
+
+    const funcMap: Record<string, string> = {};
+    for (const f of funcionarios) funcMap[f.id] = f.nome;
+
+    const pontosMap: Record<string, any[]> = {};
+    for (const p of pontosRaw) {
+      if (!pontosMap[p.colaborador_id]) pontosMap[p.colaborador_id] = [];
+      pontosMap[p.colaborador_id].push(p);
+    }
+
+    const folgasMap: Record<string, Set<string>> = {};
+    for (const f of folgasRows) {
+      if (!folgasMap[f.colaborador_id]) folgasMap[f.colaborador_id] = new Set();
+      if (f.realizada !== true) folgasMap[f.colaborador_id].add(String(f.data).slice(0, 10));
+    }
+
+    const atestadosMap: Record<string, Set<string>> = {};
+    for (const a of atestadosRows) {
+      const cid = a.colaborador_id;
+      if (!atestadosMap[cid]) atestadosMap[cid] = new Set();
+      const start = new Date(String(a.data).slice(0, 10) + 'T12:00:00Z').getTime();
+      const fim = new Date((a.data_fim ? String(a.data_fim).slice(0, 10) : fimISO) + 'T12:00:00Z').getTime();
+      for (let d = start; d <= fim; d += 86400000) {
+        const iso = new Date(d).toISOString().split('T')[0];
+        if (iso >= inicioISO && iso <= fimISO) atestadosMap[cid].add(iso);
+      }
+    }
+
+    const brtISO = (ts: number) => new Date(ts - BRT_OFFSET_MS).toISOString().split('T')[0];
+    const fmt = (m: number) => `${m < 0 ? '-' : '+'}${String(Math.floor(Math.abs(m) / 60)).padStart(2, '0')}:${String(Math.round(Math.abs(m) % 60)).padStart(2, '0')}`;
+
+    const resultado: any[] = [];
+
+    for (const col of colaboradores) {
+      const diasNums = (col.dias_trabalho ?? [])
+        .map((d: string) => GenteService.DIAS_MAP[d])
+        .filter((n: any) => n !== undefined) as number[];
+      if (!diasNums.length) continue;
+
+      const datasExcluidas = new Set<string>([
+        ...(folgasMap[col.id] ?? []),
+        ...(atestadosMap[col.id] ?? []),
+        ...feriadosSet,
+      ]);
+
+      const colPontos = pontosMap[col.id] ?? [];
+      const presencaDias = new Set<string>();
+      for (const p of colPontos) presencaDias.add(brtISO(new Date(p.data_hora).getTime()));
+
+      const { minutos: minEsperados } = this.calcularMinutosEsperados(col, inicioMs, fimMs, datasExcluidas);
+      const minTrabalhados = this.calcularMinutosTrabalhados(colPontos);
+
+      const diasAusentes: string[] = [];
+      let diasPresentes = 0;
+      let diasEsperados = 0;
+      let cur = inicioMs;
+      while (cur <= fimMs) {
+        const date = new Date(cur);
+        const iso = date.toISOString().split('T')[0];
+        const dow = date.getUTCDay();
+        if (diasNums.includes(dow) && !datasExcluidas.has(iso)) {
+          diasEsperados++;
+          if (presencaDias.has(iso)) diasPresentes++;
+          else diasAusentes.push(iso);
+        }
+        cur += 86400000;
+      }
+
+      resultado.push({
+        colaborador_id: col.id,
+        nome: funcMap[col.funcionario_id] ?? col.funcionario_id,
+        dias_presentes: diasPresentes,
+        dias_esperados: diasEsperados,
+        dias_ausentes: diasAusentes,
+        saldo_minutos: Math.round(minTrabalhados - minEsperados),
+        saldo: fmt(minTrabalhados - minEsperados),
+        horas_trabalhadas: fmt(minTrabalhados),
+      });
+    }
+
+    return resultado.sort((a, b) =>
+      b.dias_ausentes.length - a.dias_ausentes.length || a.nome.localeCompare(b.nome),
+    );
+  }
+
   async debugAlertas() {
     const hojeUtc = new Date();
     const hojeInicioMs = Date.UTC(hojeUtc.getUTCFullYear(), hojeUtc.getUTCMonth(), hojeUtc.getUTCDate());

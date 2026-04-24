@@ -213,6 +213,12 @@ export class GenteController {
     return this.svc.relatorioPonto(inicio, fim);
   }
 
+  @Get('ponto/controle')
+  @ModuloPerm('gente', 'visualizar')
+  controlePresencaMes(@Query('mes') mes?: string) {
+    return this.svc.controlePresencaMes(mes || new Date().toISOString().slice(0, 7));
+  }
+
   @Delete('ponto/:id')
   @ModuloPerm('gente', 'excluir')
   deletarPonto(@Param('id') id: string) { return this.svc.deletarPonto(id); }

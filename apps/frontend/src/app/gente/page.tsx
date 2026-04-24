@@ -1867,6 +1867,406 @@ let _lId = 0;
 const novaLinha = (data: string, entrada = '08:00', saida = '17:00'): LinhaLancamento =>
   ({ id: ++_lId, data_entrada: data, hora_entrada: entrada, data_saida: data, hora_saida: saida });
 
+// ── Controle de Presença (visão mensal unificada) ──────────────────────────────
+
+function ControlePresencaTab({ reload, colaboradores }: { reload: number; colaboradores: any[] }) {
+  const ic = 'border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-400';
+  const bp = 'flex items-center gap-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold px-4 py-2 rounded-xl text-sm transition';
+  const bs = 'p-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition text-slate-600 dark:text-slate-300';
+
+  const [mes, setMes] = useState(() => new Date().toISOString().slice(0, 7));
+  const [dados, setDados] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [expandido, setExpandido] = useState<string | null>(null);
+  const [expandDados, setExpandDados] = useState<Record<string, any>>({});
+  const [expandLoading, setExpandLoading] = useState<string | null>(null);
+
+  // Relatório bruto
+  const [relatorio, setRelatorio] = useState<any[]>([]);
+  const [loadingRel, setLoadingRel] = useState(false);
+  const [filtroCol, setFiltroCol] = useState('');
+  const [filtroInicio, setFiltroInicio] = useState('');
+  const [filtroFim, setFiltroFim] = useState('');
+
+  // Modal lançar ponto
+  type ModalPonto = { colId: string; nome: string; data: string; horaEntrada: string; horaSaida: string };
+  const [modal, setModal] = useState<ModalPonto | null>(null);
+  const [salvando, setSalvando] = useState(false);
+
+  // Modal lote (lançar ponto genérico)
+  const [modalLote, setModalLote] = useState(false);
+  const [loteColId, setLoteColId] = useState('');
+  const [loteLinhas, setLoteLinhas] = useState<LinhaLancamento[]>([]);
+  const [salvandoLote, setSalvandoLote] = useState(false);
+  const hoje = new Date().toISOString().split('T')[0];
+
+  const carregar = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await fetch(`${API}/gente/ponto/controle?mes=${mes}`, { credentials: 'include' });
+      if (r.ok) setDados(await r.json());
+    } catch { toast.error('Erro ao carregar controle de presença.'); }
+    setLoading(false);
+  }, [mes]);
+
+  const carregarRelatorio = useCallback(async () => {
+    setLoadingRel(true);
+    const rp = new URLSearchParams();
+    if (filtroInicio) rp.set('data_inicio', filtroInicio);
+    if (filtroFim) rp.set('data_fim', filtroFim);
+    try {
+      const r = await fetch(`${API}/gente/ponto/relatorio?${rp}`, { credentials: 'include' });
+      let lista = r.ok ? await r.json() : [];
+      if (!Array.isArray(lista)) lista = [];
+      if (filtroCol) lista = lista.filter((c: any) => c.colaborador_id === filtroCol);
+      setRelatorio(lista);
+    } catch { toast.error('Erro ao carregar relatório.'); }
+    setLoadingRel(false);
+  }, [filtroCol, filtroInicio, filtroFim]);
+
+  useEffect(() => { carregar(); }, [carregar, reload]);
+  useEffect(() => { carregarRelatorio(); }, [carregarRelatorio, reload]);
+
+  const toggleExpandido = async (colId: string) => {
+    if (expandido === colId) { setExpandido(null); return; }
+    setExpandido(colId);
+    if (!expandDados[colId + mes]) {
+      setExpandLoading(colId);
+      try {
+        const r = await fetch(`${API}/gente/ponto/externo/banco-horas?colaborador_id=${colId}&mes=${mes}`);
+        if (r.ok) setExpandDados(prev => ({ ...prev, [colId + mes]: await r.json() }));
+      } catch {}
+      setExpandLoading(null);
+    }
+  };
+
+  const fmtData = (iso: string) => { const [, m, d] = iso.split('-'); return `${d}/${m}`; };
+  const fmtMin = (min: number) => {
+    const abs = Math.abs(min);
+    const h = String(Math.floor(abs / 60)).padStart(2, '0');
+    const m = String(abs % 60).padStart(2, '0');
+    return min === 0 ? '—' : `${min < 0 ? '-' : '+'}${h}:${m}`;
+  };
+
+  const abrirModalDia = (colId: string, nome: string, data: string) => {
+    const col = colaboradores.find(c => c.id === colId);
+    setModal({ colId, nome, data, horaEntrada: col?.horario_entrada ?? '08:00', horaSaida: col?.horario_saida ?? '17:00' });
+  };
+
+  const salvarModalDia = async () => {
+    if (!modal) return;
+    setSalvando(true);
+    try {
+      const reqs = [
+        fetch(`${API}/gente/ponto`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ colaborador_id: modal.colId, tipo: 'entrada', data_hora: new Date(`${modal.data}T${modal.horaEntrada}:00`).toISOString() }) }),
+        ...(modal.horaSaida ? [fetch(`${API}/gente/ponto`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ colaborador_id: modal.colId, tipo: 'saida', data_hora: new Date(`${modal.data}T${modal.horaSaida}:00`).toISOString() }) })] : []),
+      ];
+      await Promise.all(reqs);
+      toast.success('Ponto registrado.');
+      setModal(null);
+      setExpandDados({});
+      carregar();
+      carregarRelatorio();
+    } catch { toast.error('Erro ao registrar ponto.'); }
+    setSalvando(false);
+  };
+
+  const abrirModalLote = () => {
+    setLoteColId('');
+    setLoteLinhas([novaLinha(hoje)]);
+    setModalLote(true);
+  };
+
+  const salvarLote = async () => {
+    if (!loteColId) { toast.error('Selecione um colaborador.'); return; }
+    setSalvandoLote(true);
+    const registros: { tipo: string; data_hora: string }[] = [];
+    for (const l of loteLinhas) {
+      registros.push({ tipo: 'entrada', data_hora: new Date(`${l.data_entrada}T${l.hora_entrada}:00`).toISOString() });
+      if (l.hora_saida && l.data_saida) registros.push({ tipo: 'saida', data_hora: new Date(`${l.data_saida}T${l.hora_saida}:00`).toISOString() });
+    }
+    await Promise.allSettled(registros.map(reg => fetch(`${API}/gente/ponto`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ colaborador_id: loteColId, ...reg }) })));
+    toast.success('Pontos registrados.');
+    setSalvandoLote(false);
+    setModalLote(false);
+    setExpandDados({});
+    carregar();
+    carregarRelatorio();
+  };
+
+  const deletarReg = async (id: string) => {
+    if (!confirm('Excluir?')) return;
+    await fetch(`${API}/gente/ponto/${id}`, { method: 'DELETE', credentials: 'include' });
+    toast.success('Excluído.'); carregar(); carregarRelatorio();
+  };
+
+  const totalComAusencia = dados.filter(d => d.dias_ausentes.length > 0).length;
+  const totalDiasAusentes = dados.reduce((s, d) => s + d.dias_ausentes.length, 0);
+
+  const statusCfg: Record<string, { label: string; row: string; badge: string }> = {
+    fds:      { label: 'FDS',      row: 'bg-slate-50 dark:bg-slate-900/30',   badge: 'bg-slate-100 text-slate-400 dark:bg-slate-800' },
+    presente: { label: 'Presente', row: 'bg-white dark:bg-slate-900',          badge: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400' },
+    ausente:  { label: 'Ausente',  row: 'bg-red-50 dark:bg-red-950/20',        badge: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400' },
+    atestado: { label: 'Atestado', row: 'bg-blue-50 dark:bg-blue-950/20',      badge: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' },
+    folga:    { label: 'Folga',    row: 'bg-purple-50 dark:bg-purple-950/20',  badge: 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300' },
+  };
+
+  return (
+    <div className="space-y-6">
+
+      {/* ── Seção A: Visão Geral do Mês ─────────────────────────────────── */}
+      <div>
+        <div className="flex items-center gap-3 flex-wrap mb-4">
+          <input type="month" value={mes} onChange={e => { setMes(e.target.value); setExpandido(null); setExpandDados({}); }} className={ic} />
+          <button onClick={carregar} className={bs} title="Recarregar"><RefreshCw size={14} className={loading ? 'animate-spin' : ''} /></button>
+          <button onClick={abrirModalLote} className={bp}><Plus size={14} />Lançar Ponto</button>
+          {!loading && dados.length > 0 && (
+            <div className="flex gap-2 ml-auto flex-wrap">
+              {totalComAusencia > 0 && (
+                <span className="px-3 py-1 rounded-full text-xs font-bold bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300">
+                  {totalComAusencia} com ausência · {totalDiasAusentes} dia{totalDiasAusentes !== 1 ? 's' : ''} sem ponto
+                </span>
+              )}
+              {totalComAusencia === 0 && (
+                <span className="px-3 py-1 rounded-full text-xs font-bold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 flex items-center gap-1">
+                  <Check size={11} /> Todos em dia
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+
+        {loading ? (
+          <div className="text-center py-10 text-slate-400">Carregando...</div>
+        ) : dados.length === 0 ? (
+          <div className="text-center py-10 text-slate-400">Nenhum colaborador ativo.</div>
+        ) : (
+          <div className="space-y-1.5">
+            {dados.map(col => {
+              const temAusencia = col.dias_ausentes.length > 0;
+              const corSaldo = col.saldo_minutos >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400';
+              const isExp = expandido === col.colaborador_id;
+              const det = expandDados[col.colaborador_id + mes];
+
+              return (
+                <div key={col.colaborador_id}
+                  className={`rounded-xl border overflow-hidden ${temAusencia ? 'border-red-200 dark:border-red-800' : 'border-slate-200 dark:border-slate-700'}`}>
+
+                  {/* Linha resumo */}
+                  <div
+                    className={`px-4 py-3 flex items-center gap-3 cursor-pointer select-none ${temAusencia ? 'bg-red-50/60 dark:bg-red-950/10' : 'bg-white dark:bg-slate-900'}`}
+                    onClick={() => toggleExpandido(col.colaborador_id)}>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-sm text-slate-800 dark:text-white truncate">{col.nome}</div>
+                      <div className="text-xs text-slate-500 dark:text-slate-400">
+                        {col.dias_presentes}/{col.dias_esperados} dias · {col.horas_trabalhadas.replace('+', '')} trabalhadas
+                      </div>
+                    </div>
+
+                    {/* Badges de ausência clicáveis */}
+                    {temAusencia && (
+                      <div className="flex flex-wrap gap-1 max-w-[220px] sm:max-w-xs">
+                        {col.dias_ausentes.map((iso: string) => (
+                          <button key={iso}
+                            onClick={e => { e.stopPropagation(); abrirModalDia(col.colaborador_id, col.nome, iso); }}
+                            className="px-1.5 py-0.5 rounded-full text-[11px] font-bold bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800/60 transition"
+                            title={`Lançar ponto — ${fmtData(iso)}`}>
+                            {fmtData(iso)} +
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {!temAusencia && (
+                      <span className="text-xs font-bold text-green-600 dark:text-green-400 flex items-center gap-1 shrink-0">
+                        <Check size={11} /> Em dia
+                      </span>
+                    )}
+
+                    <div className={`text-sm font-black font-mono shrink-0 ${corSaldo}`}>{col.saldo}</div>
+                    <ChevronDown size={14} className={`text-slate-400 shrink-0 transition-transform ${isExp ? 'rotate-180' : ''}`} />
+                  </div>
+
+                  {/* Detalhamento banco de horas */}
+                  {isExp && (
+                    <div className="border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 px-4 py-3">
+                      {expandLoading === col.colaborador_id ? (
+                        <div className="text-center py-4 text-slate-400 text-sm">Carregando...</div>
+                      ) : det ? (
+                        <>
+                          <div className="grid grid-cols-3 gap-3 mb-3 text-center text-xs">
+                            <div><div className="text-slate-400 font-bold uppercase mb-0.5">Trabalhado</div><div className="font-black text-slate-800 dark:text-white">{det.trabalhado}</div></div>
+                            <div><div className="text-slate-400 font-bold uppercase mb-0.5">Esperado</div><div className="font-black text-slate-800 dark:text-white">{det.esperado} <span className="text-slate-400 font-normal">({det.dias_esperados}d)</span></div></div>
+                            <div><div className="text-slate-400 font-bold uppercase mb-0.5">Saldo</div><div className={`font-black ${col.saldo_minutos >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500'}`}>{det.saldo}</div></div>
+                          </div>
+                          {det.marcacoes_incompletas?.length > 0 && (
+                            <div className="mb-3 text-xs text-yellow-700 dark:text-yellow-300 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg px-3 py-2 space-y-0.5">
+                              <div className="font-bold">⚠️ Marcações com problema:</div>
+                              {det.marcacoes_incompletas.map((m: string, i: number) => <div key={i}>• {m}</div>)}
+                            </div>
+                          )}
+                          <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
+                            <table className="w-full text-xs">
+                              <thead>
+                                <tr className="bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 uppercase">
+                                  <th className="px-2 py-1.5 text-left font-bold">Data</th>
+                                  <th className="px-2 py-1.5 text-left font-bold">Status</th>
+                                  <th className="px-2 py-1.5 text-center font-bold">Marcações</th>
+                                  <th className="px-2 py-1.5 text-center font-bold">Saldo</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {(det.dias ?? []).filter((d: any) => d.status !== 'fds').map((d: any) => {
+                                  const cfg = statusCfg[d.status] ?? statusCfg.ausente;
+                                  const [, mm, dd] = d.data.split('-');
+                                  return (
+                                    <tr key={d.data} className={`border-t border-slate-100 dark:border-slate-700 ${cfg.row}`}>
+                                      <td className="px-2 py-1.5 font-mono whitespace-nowrap">{dd}/{mm} <span className="text-slate-400">{d.dia_semana}</span></td>
+                                      <td className="px-2 py-1.5">
+                                        <span className={`px-1.5 py-0.5 rounded-full font-bold ${cfg.badge}`}>{cfg.label}{d.incompleto ? ' ⚠️' : ''}</span>
+                                      </td>
+                                      <td className="px-2 py-1.5 text-center font-mono">
+                                        {(!d.sessoes || d.sessoes.length === 0) ? '—' : d.sessoes.map((s: any, si: number) => (
+                                          <span key={si} className="inline-flex items-center gap-0.5 mr-1.5">
+                                            <span className="text-green-600 dark:text-green-400">{s.entrada ?? '?'}</span>
+                                            <span className="text-slate-400">→</span>
+                                            <span className={!s.saida ? 'text-yellow-500' : 'text-red-400'}>{s.saida ?? '—'}</span>
+                                          </span>
+                                        ))}
+                                      </td>
+                                      <td className={`px-2 py-1.5 text-center font-mono font-bold ${d.saldo_min < 0 ? 'text-red-500' : d.saldo_min > 0 ? 'text-green-600' : 'text-slate-400'}`}>
+                                        {fmtMin(d.saldo_min)}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </>
+                      ) : <div className="text-center py-4 text-slate-400 text-sm">Sem dados.</div>}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ── Seção B: Relatório de Ponto (marcações brutas) ──────────────── */}
+      <div className="border-t border-slate-200 dark:border-slate-700 pt-6">
+        <h3 className="font-black text-slate-700 dark:text-slate-200 flex items-center gap-2 mb-4">
+          <Clock size={16} className="text-purple-500" />
+          Relatório de Ponto
+        </h3>
+        <div className="flex flex-col sm:flex-row gap-3 mb-4 flex-wrap">
+          <select value={filtroCol} onChange={e => setFiltroCol(e.target.value)} className={`${ic} flex-1`}>
+            <option value="">Todos os colaboradores</option>
+            {colaboradores.map(c => <option key={c.id} value={c.id}>{c.funcionario?.nome ?? c.id}</option>)}
+          </select>
+          <input type="date" value={filtroInicio} onChange={e => setFiltroInicio(e.target.value)} className={`${ic} w-36`} />
+          <input type="date" value={filtroFim} onChange={e => setFiltroFim(e.target.value)} className={`${ic} w-36`} />
+          <button onClick={carregarRelatorio} className={bs}><RefreshCw size={14} /></button>
+        </div>
+
+        {loadingRel ? (
+          <div className="text-center py-8 text-slate-400">Carregando...</div>
+        ) : relatorio.length === 0 ? (
+          <div className="text-center py-8 text-slate-400">Nenhum registro no período.</div>
+        ) : (
+          <div className="space-y-3">
+            {relatorio.map((col: any) => (
+              <div key={col.colaborador_id} className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                <div className="bg-slate-50 dark:bg-slate-800 px-4 py-2.5 flex items-center justify-between">
+                  <span className="font-black text-slate-800 dark:text-white text-sm">{col.nome}</span>
+                  <span className="text-xs font-bold text-purple-600 dark:text-purple-300">
+                    {Math.floor(col.total_minutos / 60)}h{col.total_minutos % 60 > 0 ? String(col.total_minutos % 60).padStart(2, '0') + 'm' : ''}
+                  </span>
+                </div>
+                {col.dias.map((dia: any) => (
+                  <div key={dia.data} className="border-t border-slate-100 dark:border-slate-800 px-4 py-2 flex items-center gap-3">
+                    <span className="text-xs font-mono text-slate-500 w-16 shrink-0">{fmtData(dia.data)}</span>
+                    <div className="flex flex-wrap gap-2 flex-1">
+                      {dia.registros.map((r: any) => (
+                        <span key={r.id} className={`flex items-center gap-1 text-xs font-mono px-2 py-0.5 rounded-full ${r.tipo === 'entrada' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'}`}>
+                          {r.tipo === 'entrada' ? '▶' : '◀'} {r.hora}
+                          <button onClick={() => deletarReg(r.id)} className="ml-1 opacity-40 hover:opacity-100"><X size={10} /></button>
+                        </span>
+                      ))}
+                    </div>
+                    {!dia.completo && <span className="text-xs text-yellow-600 dark:text-yellow-400 font-bold shrink-0">⚠️ incompleto</span>}
+                    <span className="text-xs font-mono text-slate-400 shrink-0">
+                      {dia.minutos_trabalhados > 0 ? `${Math.floor(dia.minutos_trabalhados / 60)}h${dia.minutos_trabalhados % 60 > 0 ? String(dia.minutos_trabalhados % 60).padStart(2,'0')+'m' : ''}` : ''}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── Modal: lançar ponto em dia específico ───────────────────────── */}
+      {modal && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+            <h3 className="font-black text-slate-800 dark:text-white">Lançar Ponto</h3>
+            <div className="text-sm text-slate-500 dark:text-slate-400">{modal.nome} · {fmtData(modal.data)}/{modal.data.slice(0, 4)}</div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-bold text-slate-500 mb-1 block">Entrada</label>
+                <input type="time" value={modal.horaEntrada} onChange={e => setModal(m => m ? { ...m, horaEntrada: e.target.value } : m)} className={`${ic} w-full`} />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-500 mb-1 block">Saída</label>
+                <input type="time" value={modal.horaSaida} onChange={e => setModal(m => m ? { ...m, horaSaida: e.target.value } : m)} className={`${ic} w-full`} />
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => setModal(null)} className="flex-1 border border-slate-300 dark:border-slate-600 rounded-xl py-2 text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition">Cancelar</button>
+              <button onClick={salvarModalDia} disabled={salvando} className="flex-1 bg-purple-600 hover:bg-purple-700 text-white rounded-xl py-2 text-sm font-bold transition disabled:opacity-50">
+                {salvando ? 'Salvando...' : 'Salvar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal: lançamento em lote genérico ─────────────────────────── */}
+      {modalLote && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <h3 className="font-black text-slate-800 dark:text-white">Lançar Ponto Manual</h3>
+            <select value={loteColId} onChange={e => setLoteColId(e.target.value)} className={`${ic} w-full`}>
+              <option value="">Selecione colaborador...</option>
+              {colaboradores.map(c => <option key={c.id} value={c.id}>{c.funcionario?.nome ?? c.id}</option>)}
+            </select>
+            <div className="space-y-2">
+              {loteLinhas.map(l => (
+                <div key={l.id} className="grid grid-cols-5 gap-2 items-center">
+                  <input type="date" value={l.data_entrada} onChange={e => setLoteLinhas(ls => ls.map(r => r.id === l.id ? { ...r, data_entrada: e.target.value, data_saida: e.target.value } : r))} className={`${ic} col-span-2`} />
+                  <input type="time" value={l.hora_entrada} onChange={e => setLoteLinhas(ls => ls.map(r => r.id === l.id ? { ...r, hora_entrada: e.target.value } : r))} className={ic} />
+                  <input type="time" value={l.hora_saida} onChange={e => setLoteLinhas(ls => ls.map(r => r.id === l.id ? { ...r, hora_saida: e.target.value } : r))} className={ic} />
+                  <button onClick={() => setLoteLinhas(ls => ls.filter(r => r.id !== l.id))} className="text-red-400 hover:text-red-600"><X size={14} /></button>
+                </div>
+              ))}
+            </div>
+            <button onClick={() => setLoteLinhas(ls => [...ls, novaLinha(hoje)])} className="text-sm text-purple-600 hover:text-purple-800 font-bold">+ Adicionar linha</button>
+            <div className="flex gap-3">
+              <button onClick={() => setModalLote(false)} className="flex-1 border border-slate-300 dark:border-slate-600 rounded-xl py-2 text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition">Cancelar</button>
+              <button onClick={salvarLote} disabled={salvandoLote} className="flex-1 bg-purple-600 hover:bg-purple-700 text-white rounded-xl py-2 text-sm font-bold transition disabled:opacity-50">
+                {salvandoLote ? 'Salvando...' : 'Salvar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PontoTab({ reload, colaboradores }: { reload: number; colaboradores: any[] }) {
   const ic = 'w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-400';
 
@@ -3149,8 +3549,7 @@ const MAIN_TABS = [
 ];
 
 const SUB_PONTO = [
-  { key: 'alertas' as const, label: 'Alertas & Ponto', icon: Clock },
-  { key: 'banco-horas' as const, label: 'Banco de Horas', icon: Calculator },
+  { key: 'controle' as const, label: 'Controle', icon: Users },
   { key: 'relatorio-folha' as const, label: 'Folha de Ponto', icon: Printer },
   { key: 'folgas' as const, label: 'Folgas', icon: Check },
   { key: 'trabalho-externo' as const, label: 'Trab. Externo', icon: MapPin },
@@ -3172,7 +3571,7 @@ const SUB_DISCIPLINAR = [
 
 export default function GentePage() {
   const [tab, setTab] = useState<MainTab>('colaboradores');
-  const [subPonto, setSubPonto] = useState<typeof SUB_PONTO[number]['key']>('alertas');
+  const [subPonto, setSubPonto] = useState<typeof SUB_PONTO[number]['key']>('controle');
   const [subFolha, setSubFolha] = useState<typeof SUB_FOLHA[number]['key']>('recibos');
   const [subDisc, setSubDisc] = useState<typeof SUB_DISCIPLINAR[number]['key']>('advertencias');
   const [reload, setReload] = useState(0);
@@ -3222,8 +3621,7 @@ export default function GentePage() {
         {tab === 'ponto' && (
           <>
             <SubTabs tabs={SUB_PONTO} active={subPonto} setActive={setSubPonto} />
-            {subPonto === 'alertas' && <PontoTab reload={reload} colaboradores={colaboradores} />}
-            {subPonto === 'banco-horas' && <BancoHorasAdminTab colaboradores={colaboradores} />}
+            {subPonto === 'controle' && <ControlePresencaTab reload={reload} colaboradores={colaboradores} />}
             {subPonto === 'relatorio-folha' && <FolhaPontoRelatorio colaboradores={colaboradores} />}
             {subPonto === 'folgas' && <FolgasTab reload={reload} colaboradores={colaboradores} />}
             {subPonto === 'trabalho-externo' && <TrabalhoExternoTab reload={reload} colaboradores={colaboradores} />}
