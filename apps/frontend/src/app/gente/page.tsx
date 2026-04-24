@@ -76,8 +76,26 @@ function DocumentosModal({ colaboradorId, colaboradorNome, onClose }: { colabora
   const [form, setForm] = useState<any>({ nome: '', url: '', vencimento: '', observacao: '', categoria: 'pessoal' });
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [mostrarForm, setMostrarForm] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [nomeArquivo, setNomeArquivo] = useState('');
+  const fileRef = useRef<HTMLInputElement>(null);
   const hoje = new Date().toISOString().split('T')[0];
   const em30 = new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0];
+
+  const handleArquivo = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) { toast.error('Arquivo muito grande. Limite: 10 MB.'); return; }
+    setUploading(true);
+    setNomeArquivo(file.name);
+    const reader = new FileReader();
+    reader.onload = () => {
+      setForm((f: any) => ({ ...f, url: reader.result as string, nome: f.nome || file.name.replace(/\.[^.]+$/, '') }));
+      setUploading(false);
+    };
+    reader.onerror = () => { toast.error('Erro ao ler arquivo.'); setUploading(false); };
+    reader.readAsDataURL(file);
+  };
 
   const carregar = useCallback(async () => {
     const r = await fetch(`${API}/gente/colaboradores/${colaboradorId}/documentos`, { credentials: 'include' });
@@ -90,7 +108,7 @@ function DocumentosModal({ colaboradorId, colaboradorNome, onClose }: { colabora
     if (!form.nome) { toast.error('Informe o nome do documento.'); return; }
     const url = editandoId ? `${API}/gente/documentos/${editandoId}` : `${API}/gente/colaboradores/${colaboradorId}/documentos`;
     const r = await fetch(url, { method: editandoId ? 'PATCH' : 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) });
-    if (r.ok) { toast.success(editandoId ? 'Atualizado.' : 'Adicionado.'); setForm({ nome: '', url: '', vencimento: '', observacao: '', categoria: 'pessoal' }); setEditandoId(null); setMostrarForm(false); carregar(); }
+    if (r.ok) { toast.success(editandoId ? 'Atualizado.' : 'Adicionado.'); setForm({ nome: '', url: '', vencimento: '', observacao: '', categoria: 'pessoal' }); setNomeArquivo(''); setEditandoId(null); setMostrarForm(false); carregar(); }
     else toast.error('Erro ao salvar documento.');
   };
 
@@ -110,12 +128,13 @@ function DocumentosModal({ colaboradorId, colaboradorNome, onClose }: { colabora
           <div className="flex flex-wrap items-center gap-2 mt-0.5 text-slate-400">
             {d.vencimento && <span className={venceu ? 'text-red-600 font-bold' : proxVenc ? 'text-orange-600 font-bold' : ''}>Vence: {fmt.data(String(d.vencimento).slice(0,10))}{venceu ? ' ⚠ VENCIDO' : proxVenc ? ' ⚠ A vencer' : ''}</span>}
             {d.observacao && <span>· {d.observacao}</span>}
+            {d.createdAt && <span className="text-slate-300 dark:text-slate-600">Inserido em {fmt.data(d.createdAt)}{d.criado_por_nome ? ` por ${d.criado_por_nome}` : ''}</span>}
           </div>
         </div>
         <div className="flex items-center gap-1 shrink-0">
           {d.url && <a href={d.url} target="_blank" rel="noopener noreferrer" className="p-1 text-blue-500 hover:text-blue-700" title="Abrir"><ExternalLink size={12} /></a>}
           {d.categoria !== 'vale' && <>
-            <button onClick={() => { setForm({ nome: d.nome, url: d.url || '', vencimento: String(d.vencimento || '').slice(0,10), observacao: d.observacao || '', categoria: d.categoria || 'pessoal' }); setEditandoId(d.id); setMostrarForm(true); }} className="p-1 text-slate-400 hover:text-purple-600"><Edit2 size={12} /></button>
+            <button onClick={() => { setForm({ nome: d.nome, url: d.url || '', vencimento: String(d.vencimento || '').slice(0,10), observacao: d.observacao || '', categoria: d.categoria || 'pessoal' }); setNomeArquivo(''); setEditandoId(d.id); setMostrarForm(true); }} className="p-1 text-slate-400 hover:text-purple-600"><Edit2 size={12} /></button>
             <button onClick={() => deletar(d.id)} className="p-1 text-slate-400 hover:text-red-500"><Trash2 size={12} /></button>
           </>}
         </div>
@@ -170,7 +189,21 @@ function DocumentosModal({ colaboradorId, colaboradorNome, onClose }: { colabora
                   <input placeholder="Ex: RG, CNH, Contrato..." value={form.nome} onChange={e => setForm((f: any) => ({ ...f, nome: e.target.value }))} className={ic2} />
                 </div>
               </div>
-              <input placeholder="URL do documento (Google Drive, etc.)" value={form.url} onChange={e => setForm((f: any) => ({ ...f, url: e.target.value }))} className={ic2} />
+              <div>
+                <label className="text-[10px] text-slate-400 block mb-0.5">Anexo</label>
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-dashed border-purple-400 dark:border-purple-600 rounded-lg text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition disabled:opacity-50 shrink-0">
+                    {uploading ? <RefreshCw size={12} className="animate-spin" /> : <Upload size={12} />}
+                    {uploading ? 'Carregando...' : 'Escolher arquivo'}
+                  </button>
+                  <input ref={fileRef} type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" className="hidden" onChange={handleArquivo} />
+                  {nomeArquivo && !uploading
+                    ? <span className="flex-1 text-xs text-slate-500 truncate flex items-center">{nomeArquivo}</span>
+                    : <input placeholder="ou cole uma URL (Google Drive...)" value={form.url?.startsWith('data:') ? '' : (form.url || '')} onChange={e => setForm((f: any) => ({ ...f, url: e.target.value }))} className={`${ic2} flex-1`} />
+                  }
+                </div>
+              </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="text-[10px] text-slate-400 block mb-0.5">Vencimento</label>
@@ -182,7 +215,7 @@ function DocumentosModal({ colaboradorId, colaboradorNome, onClose }: { colabora
                 </div>
               </div>
               <div className="flex gap-2">
-                <button onClick={() => { setMostrarForm(false); setEditandoId(null); setForm({ nome: '', url: '', vencimento: '', observacao: '', categoria: 'pessoal' }); }} className="flex-1 py-1.5 text-xs text-slate-500 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-100 transition">Cancelar</button>
+                <button onClick={() => { setMostrarForm(false); setEditandoId(null); setNomeArquivo(''); setForm({ nome: '', url: '', vencimento: '', observacao: '', categoria: 'pessoal' }); }} className="flex-1 py-1.5 text-xs text-slate-500 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-100 transition">Cancelar</button>
                 <button onClick={salvar} disabled={!form.nome} className="flex-1 py-1.5 text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition disabled:opacity-50">{editandoId ? 'Atualizar' : 'Adicionar'}</button>
               </div>
             </div>
