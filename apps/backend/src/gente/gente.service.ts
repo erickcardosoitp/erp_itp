@@ -63,6 +63,8 @@ export class GenteService {
         criado_por_nome TEXT,
         created_at TIMESTAMPTZ DEFAULT NOW()
       );
+      ALTER TABLE gente_colaborador_documentos ADD COLUMN IF NOT EXISTS categoria TEXT DEFAULT 'pessoal';
+      ALTER TABLE gente_vales ADD COLUMN IF NOT EXISTS ficha_url TEXT;
       CREATE TABLE IF NOT EXISTS gente_feriados (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         data DATE NOT NULL UNIQUE,
@@ -1118,6 +1120,23 @@ export class GenteService {
         await this.valeRepo.update(vale.id, { movimentacao_saida_id: mov.id });
         vale.movimentacao_saida_id = mov.id;
       } catch { /* não bloqueia o vale se financeiro falhar */ }
+    }
+
+    // Auto-criar documento vinculado quando há ficha de solicitação
+    if (dto.ficha_url) {
+      try {
+        const tipoLabelDoc: Record<string, string> = {
+          alimentacao: 'Alimentação', transporte: 'Transporte', adiantamento: 'Adiantamento', outro: 'Vale',
+        };
+        await this.documentoRepo.save(this.documentoRepo.create({
+          colaborador_id: dto.colaborador_id,
+          nome: `Ficha de Vale — ${tipoLabelDoc[dto.tipo] ?? 'Vale'} · ${dto.data}`,
+          url: dto.ficha_url,
+          categoria: 'vale',
+          criado_por_id: dto.criado_por_id,
+          criado_por_nome: dto.criado_por_nome,
+        }));
+      } catch { /* não bloqueia o vale se documento falhar */ }
     }
 
     return vale;

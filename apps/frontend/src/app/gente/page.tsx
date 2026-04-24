@@ -68,80 +68,109 @@ function FL({ label, children }: { label: string; children: React.ReactNode }) {
   );
 }
 
-// ── Documentos do Colaborador ─────────────────────────────────────────────────
+// ── Modal de Documentos do Colaborador ────────────────────────────────────────
 
-function DocumentosColaborador({ colaboradorId }: { colaboradorId: string }) {
-  const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? '';
+function DocumentosModal({ colaboradorId, colaboradorNome, onClose }: { colaboradorId: string; colaboradorNome: string; onClose: () => void }) {
   const ic2 = 'border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 text-xs bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:outline-none focus:ring-1 focus:ring-purple-400 w-full';
   const [docs, setDocs] = useState<any[]>([]);
-  const [form, setForm] = useState<any>({ nome: '', url: '', vencimento: '', observacao: '' });
+  const [form, setForm] = useState<any>({ nome: '', url: '', vencimento: '', observacao: '', categoria: 'pessoal' });
   const [editandoId, setEditandoId] = useState<string | null>(null);
-  const [aberto, setAberto] = useState(false);
   const [mostrarForm, setMostrarForm] = useState(false);
+  const hoje = new Date().toISOString().split('T')[0];
+  const em30 = new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0];
 
-  const carregar = async () => {
+  const carregar = useCallback(async () => {
     const r = await fetch(`${API}/gente/colaboradores/${colaboradorId}/documentos`, { credentials: 'include' });
     if (r.ok) setDocs(await r.json());
-  };
+  }, [colaboradorId]);
 
-  useEffect(() => { if (aberto) carregar(); }, [aberto]); // eslint-disable-line
+  useEffect(() => { carregar(); }, [carregar]);
 
   const salvar = async () => {
+    if (!form.nome) { toast.error('Informe o nome do documento.'); return; }
     const url = editandoId ? `${API}/gente/documentos/${editandoId}` : `${API}/gente/colaboradores/${colaboradorId}/documentos`;
-    const method = editandoId ? 'PATCH' : 'POST';
-    const r = await fetch(url, { method, credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) });
-    if (r.ok) { toast.success(editandoId ? 'Documento atualizado.' : 'Documento adicionado.'); setForm({ nome: '', url: '', vencimento: '', observacao: '' }); setEditandoId(null); setMostrarForm(false); carregar(); }
+    const r = await fetch(url, { method: editandoId ? 'PATCH' : 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) });
+    if (r.ok) { toast.success(editandoId ? 'Atualizado.' : 'Adicionado.'); setForm({ nome: '', url: '', vencimento: '', observacao: '', categoria: 'pessoal' }); setEditandoId(null); setMostrarForm(false); carregar(); }
     else toast.error('Erro ao salvar documento.');
   };
 
   const deletar = async (id: string) => {
     if (!confirm('Excluir documento?')) return;
     const r = await fetch(`${API}/gente/documentos/${id}`, { method: 'DELETE', credentials: 'include' });
-    if (r.ok) { toast.success('Documento removido.'); carregar(); }
+    if (r.ok) { toast.success('Removido.'); carregar(); }
   };
 
-  const hoje = new Date().toISOString().split('T')[0];
-  const vencidos = docs.filter(d => d.vencimento && d.vencimento < hoje);
-  const aVencer = docs.filter(d => d.vencimento && d.vencimento >= hoje && d.vencimento <= new Date(Date.now() + 30*86400000).toISOString().split('T')[0]);
+  const DocItem = ({ d }: { d: any }) => {
+    const venceu = d.vencimento && String(d.vencimento).slice(0, 10) < hoje;
+    const proxVenc = d.vencimento && !venceu && String(d.vencimento).slice(0, 10) <= em30;
+    return (
+      <div className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs border ${venceu ? 'border-red-300 bg-red-50 dark:bg-red-900/20' : proxVenc ? 'border-orange-300 bg-orange-50 dark:bg-orange-900/20' : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60'}`}>
+        <div className="flex-1 min-w-0">
+          <div className="font-semibold truncate">{d.nome}</div>
+          <div className="flex flex-wrap items-center gap-2 mt-0.5 text-slate-400">
+            {d.vencimento && <span className={venceu ? 'text-red-600 font-bold' : proxVenc ? 'text-orange-600 font-bold' : ''}>Vence: {fmt.data(String(d.vencimento).slice(0,10))}{venceu ? ' ⚠ VENCIDO' : proxVenc ? ' ⚠ A vencer' : ''}</span>}
+            {d.observacao && <span>· {d.observacao}</span>}
+          </div>
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          {d.url && <a href={d.url} target="_blank" rel="noopener noreferrer" className="p-1 text-blue-500 hover:text-blue-700" title="Abrir"><ExternalLink size={12} /></a>}
+          {d.categoria !== 'vale' && <>
+            <button onClick={() => { setForm({ nome: d.nome, url: d.url || '', vencimento: String(d.vencimento || '').slice(0,10), observacao: d.observacao || '', categoria: d.categoria || 'pessoal' }); setEditandoId(d.id); setMostrarForm(true); }} className="p-1 text-slate-400 hover:text-purple-600"><Edit2 size={12} /></button>
+            <button onClick={() => deletar(d.id)} className="p-1 text-slate-400 hover:text-red-500"><Trash2 size={12} /></button>
+          </>}
+        </div>
+      </div>
+    );
+  };
+
+  const pessoais = docs.filter(d => !d.categoria || d.categoria === 'pessoal');
+  const vales = docs.filter(d => d.categoria === 'vale');
+  const outros = docs.filter(d => d.categoria === 'outros');
+
+  const Secao = ({ titulo, lista, cor }: { titulo: string; lista: any[]; cor: string }) => (
+    <div>
+      <div className={`text-[10px] font-black uppercase tracking-widest ${cor} mb-2`}>{titulo} <span className="font-normal opacity-60">({lista.length})</span></div>
+      {lista.length === 0 ? <p className="text-xs text-slate-400 py-1">Nenhum documento.</p> : <div className="space-y-1.5">{lista.map(d => <DocItem key={d.id} d={d} />)}</div>}
+    </div>
+  );
 
   return (
-    <div className="border-t border-slate-100 dark:border-slate-700 pt-2">
-      <button onClick={() => setAberto(a => !a)} className="flex items-center gap-2 text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-purple-600 transition w-full">
-        <span>📄 Documentos</span>
-        {(vencidos.length > 0 || aVencer.length > 0) && (
-          <span className="bg-orange-100 dark:bg-orange-900/40 text-orange-600 dark:text-orange-300 px-1.5 py-0.5 rounded-full text-[10px] font-black">
-            {vencidos.length > 0 ? `${vencidos.length} vencido(s)` : `${aVencer.length} a vencer`}
-          </span>
-        )}
-        <span className="ml-auto">{aberto ? '▲' : '▼'}</span>
-      </button>
-      {aberto && (
-        <div className="mt-2 space-y-2">
-          {docs.length === 0 && !mostrarForm && <p className="text-xs text-slate-400 text-center py-2">Nenhum documento cadastrado.</p>}
-          {docs.map(d => {
-            const venceu = d.vencimento && d.vencimento < hoje;
-            const proxVenc = d.vencimento && !venceu && d.vencimento <= new Date(Date.now() + 30*86400000).toISOString().split('T')[0];
-            return (
-              <div key={d.id} className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs border ${venceu ? 'border-red-300 bg-red-50 dark:bg-red-900/20' : proxVenc ? 'border-orange-300 bg-orange-50 dark:bg-orange-900/20' : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800'}`}>
-                <div className="flex-1 min-w-0">
-                  <div className="font-semibold truncate">{d.nome}</div>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    {d.vencimento && <span className={`${venceu ? 'text-red-600 font-bold' : proxVenc ? 'text-orange-600 font-bold' : 'text-slate-400'}`}>Vence: {fmt.data(d.vencimento)}{venceu ? ' ⚠ VENCIDO' : proxVenc ? ' ⚠ A vencer' : ''}</span>}
-                    {d.observacao && <span className="text-slate-400">· {d.observacao}</span>}
-                  </div>
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-start justify-center p-4 pt-10 overflow-y-auto">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-xl">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+          <div>
+            <h2 className="font-black text-slate-800 dark:text-white flex items-center gap-2"><Paperclip size={16} /> Documentos</h2>
+            <p className="text-xs text-slate-400 mt-0.5">{colaboradorNome}</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-white"><X size={18} /></button>
+        </div>
+
+        {/* Body */}
+        <div className="px-6 py-5 space-y-6 max-h-[70vh] overflow-y-auto">
+          <Secao titulo="Documentos Pessoais" lista={pessoais} cor="text-purple-600 dark:text-purple-400" />
+          {vales.length > 0 && <Secao titulo="Fichas de Vale" lista={vales} cor="text-emerald-600 dark:text-emerald-400" />}
+          <Secao titulo="Outros Documentos" lista={outros} cor="text-slate-500 dark:text-slate-400" />
+        </div>
+
+        {/* Form adicionar */}
+        <div className="px-6 pb-6 border-t border-slate-200 dark:border-slate-700 pt-4">
+          {mostrarForm ? (
+            <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] text-slate-400 block mb-0.5">Categoria</label>
+                  <select value={form.categoria} onChange={e => setForm((f: any) => ({ ...f, categoria: e.target.value }))} className={ic2}>
+                    <option value="pessoal">Documentos Pessoais</option>
+                    <option value="outros">Outros Documentos</option>
+                  </select>
                 </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  {d.url && <a href={d.url} target="_blank" rel="noopener noreferrer" className="p-1 text-blue-500 hover:text-blue-700" title="Abrir documento"><ExternalLink size={12} /></a>}
-                  <button onClick={() => { setForm({ nome: d.nome, url: d.url || '', vencimento: d.vencimento || '', observacao: d.observacao || '' }); setEditandoId(d.id); setMostrarForm(true); }} className="p-1 text-slate-400 hover:text-purple-600"><Edit2 size={12} /></button>
-                  <button onClick={() => deletar(d.id)} className="p-1 text-slate-400 hover:text-red-500"><Trash2 size={12} /></button>
+                <div>
+                  <label className="text-[10px] text-slate-400 block mb-0.5">Nome *</label>
+                  <input placeholder="Ex: RG, CNH, Contrato..." value={form.nome} onChange={e => setForm((f: any) => ({ ...f, nome: e.target.value }))} className={ic2} />
                 </div>
               </div>
-            );
-          })}
-          {mostrarForm && (
-            <div className="border border-purple-200 dark:border-purple-800 rounded-xl p-3 space-y-2 bg-purple-50 dark:bg-purple-900/20">
-              <input placeholder="Nome do documento *" value={form.nome} onChange={e => setForm((f: any) => ({ ...f, nome: e.target.value }))} className={ic2} />
-              <input placeholder="URL (Google Drive ou link direto)" value={form.url} onChange={e => setForm((f: any) => ({ ...f, url: e.target.value }))} className={ic2} />
+              <input placeholder="URL do documento (Google Drive, etc.)" value={form.url} onChange={e => setForm((f: any) => ({ ...f, url: e.target.value }))} className={ic2} />
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="text-[10px] text-slate-400 block mb-0.5">Vencimento</label>
@@ -153,19 +182,18 @@ function DocumentosColaborador({ colaboradorId }: { colaboradorId: string }) {
                 </div>
               </div>
               <div className="flex gap-2">
-                <button onClick={() => { setMostrarForm(false); setEditandoId(null); setForm({ nome: '', url: '', vencimento: '', observacao: '' }); }} className="flex-1 py-1.5 text-xs text-slate-500 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-100 transition">Cancelar</button>
+                <button onClick={() => { setMostrarForm(false); setEditandoId(null); setForm({ nome: '', url: '', vencimento: '', observacao: '', categoria: 'pessoal' }); }} className="flex-1 py-1.5 text-xs text-slate-500 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-100 transition">Cancelar</button>
                 <button onClick={salvar} disabled={!form.nome} className="flex-1 py-1.5 text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition disabled:opacity-50">{editandoId ? 'Atualizar' : 'Adicionar'}</button>
               </div>
             </div>
-          )}
-          {!mostrarForm && (
-            <button onClick={() => { setForm({ nome: '', url: '', vencimento: '', observacao: '' }); setEditandoId(null); setMostrarForm(true); }}
-              className="w-full py-1.5 text-xs text-purple-600 dark:text-purple-400 border border-dashed border-purple-300 dark:border-purple-700 rounded-lg hover:bg-purple-50 dark:hover:bg-purple-900/20 transition flex items-center justify-center gap-1">
-              <Plus size={11} />Adicionar Documento
+          ) : (
+            <button onClick={() => { setForm({ nome: '', url: '', vencimento: '', observacao: '', categoria: 'pessoal' }); setEditandoId(null); setMostrarForm(true); }}
+              className="w-full py-2 text-xs text-purple-600 dark:text-purple-400 border border-dashed border-purple-300 dark:border-purple-700 rounded-xl hover:bg-purple-50 dark:hover:bg-purple-900/20 transition flex items-center justify-center gap-1.5 font-bold">
+              <Plus size={12} /> Adicionar Documento
             </button>
           )}
         </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -198,6 +226,7 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
     horario_entrada: '08:00', horario_saida: '17:00',
   });
   const [formFunc, setFormFunc] = useState<any>({ pais: 'Brasil' });
+  const [docModalColaborador, setDocModalColaborador] = useState<{ id: string; nome: string } | null>(null);
 
   const carregarDisp = async () => {
     const r = await fetch(`${API}/gente/colaboradores/funcionarios-disponiveis`, { credentials: 'include' });
@@ -636,6 +665,7 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
                     <Badge label={c.tipo === 'voluntario' ? 'Voluntário' : 'Funcionário'} color={c.tipo === 'voluntario' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' : 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300'} />
                     {c.jornada_flexivel ? <span className="text-xs text-slate-400 hidden sm:block">Jornada flexível</span> : c.horario_entrada && <span className="text-xs text-slate-400 hidden sm:block">{c.horario_entrada}→{c.horario_saida}</span>}
                     <button onClick={() => abrirCodigosColaborador(c)} className="p-1.5 text-slate-400 hover:text-emerald-600 transition" title="Códigos VR"><Tag size={14} /></button>
+                    <button onClick={() => setDocModalColaborador({ id: c.id, nome: c.funcionario?.nome ?? '' })} className="p-1.5 text-slate-400 hover:text-blue-600 transition" title="Documentos"><Paperclip size={14} /></button>
                     <button onClick={() => {
                       if (!c.funcionario) { toast.error('Este colaborador não possui funcionário vinculado. Desvincule e recadastre.'); return; }
                       setColSelecionado(c);
@@ -704,7 +734,10 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
                       <div><span className="text-slate-400 block">Raio</span><span className="font-semibold">{c.raio_metros ?? 100}m</span></div>
                     </div>
                     {/* Linha 5: Documentos */}
-                    <DocumentosColaborador colaboradorId={c.id} />
+                    <div className="text-xs text-slate-400 border-t border-slate-100 dark:border-slate-700 pt-2 flex items-center gap-1.5">
+                      <Paperclip size={12} />
+                      <button onClick={() => setDocModalColaborador({ id: c.id, nome: c.funcionario?.nome ?? '' })} className="text-blue-500 hover:underline">Ver documentos do colaborador</button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -1061,6 +1094,14 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
             </div>
           </div>
         </Modal>
+      )}
+
+      {docModalColaborador && (
+        <DocumentosModal
+          colaboradorId={docModalColaborador.id}
+          colaboradorNome={docModalColaborador.nome}
+          onClose={() => setDocModalColaborador(null)}
+        />
       )}
     </div>
   );
@@ -1602,6 +1643,9 @@ function GenericTab({ endpoint, titulo, reload, colaboradores, CamposComp, rende
     if (endpoint === 'faltas' && (form.tipo === 'atestado' || form.tipo === 'afastamento') && !form.data_fim) {
       toast.error('Informe a data fim do período do atestado/afastamento.'); return;
     }
+    if (endpoint === 'vales' && !editando && !form.ficha_url) {
+      toast.error('Anexe a ficha de solicitação de vale (URL obrigatória).'); return;
+    }
     setSalvando(true);
     try {
       const url = editando ? `${API}/gente/${endpoint}/${editando.id}` : `${API}/gente/${endpoint}`;
@@ -1669,6 +1713,16 @@ const CamposVale = ({ form, setForm }: any) => (
     </div>
     <FL label="Data"><input type="date" value={form.data || hoje()} onChange={e => setForm((f: any) => ({ ...f, data: e.target.value }))} className={ic} /></FL>
     <FL label="Descrição"><input type="text" value={form.descricao || ''} onChange={e => setForm((f: any) => ({ ...f, descricao: e.target.value }))} className={ic} /></FL>
+    <FL label={<span>Ficha de Solicitação <span className="text-red-500 font-black">*</span></span>}>
+      <input
+        type="url"
+        placeholder="URL da ficha (Google Drive, OneDrive...)"
+        value={form.ficha_url || ''}
+        onChange={e => setForm((f: any) => ({ ...f, ficha_url: e.target.value }))}
+        className={`${ic} ${!form.ficha_url ? 'border-red-300 dark:border-red-700 ring-1 ring-red-200' : ''}`}
+      />
+      <p className="text-[10px] text-slate-400 mt-0.5">Faça upload da ficha no Google Drive e cole o link aqui.</p>
+    </FL>
     <div className="flex items-center gap-2"><input type="checkbox" id="desc" checked={!!form.descontado} onChange={e => setForm((f: any) => ({ ...f, descontado: e.target.checked }))} className="w-4 h-4" /><label htmlFor="desc" className="text-sm text-slate-700 dark:text-slate-300">Já descontado</label></div>
   </>
 );

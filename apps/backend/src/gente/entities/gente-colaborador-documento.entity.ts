@@ -20,6 +20,9 @@ export class GenteColaboradorDocumento {
   @Column({ type: 'text', nullable: true })
   observacao: string;
 
+  @Column({ type: 'text', nullable: true, default: 'pessoal' })
+  categoria: string; // 'pessoal' | 'outros' | 'vale'
+
   @Column({ type: 'text', nullable: true })
   criado_por_id: string;
 

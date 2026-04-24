@@ -35,6 +35,9 @@ export class GenteVale {
   movimentacao_entrada_id: string;
 
   @Column({ type: 'text', nullable: true })
+  ficha_url: string;
+
+  @Column({ type: 'text', nullable: true })
   criado_por_id: string;
 
   @Column({ type: 'text', nullable: true })
