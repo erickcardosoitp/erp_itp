@@ -674,9 +674,6 @@ export class MatriculasService {
       const hoje = new Date();
       // Validação de campos obrigatórios
       if (!dados.nome_completo?.trim()) throw new BadRequestException('Nome completo é obrigatório.');
-      if (!dados.cpf?.trim()) throw new BadRequestException('CPF é obrigatório.');
-      if (!dados.email?.trim()) throw new BadRequestException('Email é obrigatório.');
-      if (!dados.celular?.trim()) throw new BadRequestException('Celular é obrigatório.');
       
       // Verifica se já existe aluno com esse CPF
       const existente = await queryRunner.manager.findOne(Aluno, { where: { cpf: dados.cpf } });
@@ -963,6 +960,71 @@ export class MatriculasService {
     }
 
     return salvo;
+  }
+
+  /**
+   * Lista documentos de uma inscrição diretamente pelo ID (uso admin).
+   */
+  async listarDocumentosPorId(inscricaoId: number) {
+    const documentos = await this.documentoRepository.find({
+      where: { inscricao_id: inscricaoId },
+      order: { createdAt: 'ASC' },
+    });
+    const tiposEnviados = documentos.map(d => d.tipo);
+    const obrigatoriosPendentes = TIPOS_OBRIGATORIOS.filter(t => !tiposEnviados.includes(t));
+    return {
+      documentos,
+      tipos_enviados: tiposEnviados,
+      obrigatorios_pendentes: obrigatoriosPendentes,
+      completo: obrigatoriosPendentes.length === 0,
+    };
+  }
+
+  /**
+   * Upload de documento por admin, usando inscricao_id diretamente.
+   */
+  async uploadDocumentoAdmin(
+    inscricaoId: number,
+    tipo: TipoDocumento,
+    file: Express.Multer.File,
+    nomeExtra?: string,
+  ): Promise<DocumentoInscricao> {
+    const inscricao = await this.inscricaoRepository.findOneBy({ id: inscricaoId });
+    if (!inscricao) throw new NotFoundException('Inscrição não encontrada.');
+
+    if (!MIMETYPES_ACEITOS.includes(file.mimetype)) {
+      throw new BadRequestException('Tipo de arquivo não permitido. Use JPEG, PNG, WebP ou PDF.');
+    }
+    if (file.size > TAMANHO_MAX_BYTES) {
+      throw new BadRequestException('Arquivo excede o limite de 8 MB.');
+    }
+
+    if (tipo !== TipoDocumento.EXTRA) {
+      const anterior = await this.documentoRepository.findOne({
+        where: { inscricao_id: inscricaoId, tipo },
+      });
+      if (anterior) await this.documentoRepository.remove(anterior);
+    }
+
+    if (tipo === TipoDocumento.EXTRA) {
+      const qtdExtra = await this.documentoRepository.count({
+        where: { inscricao_id: inscricaoId, tipo: TipoDocumento.EXTRA },
+      });
+      if (qtdExtra >= 5) throw new BadRequestException('Limite de 5 documentos extras atingido.');
+    }
+
+    const urlArquivo = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
+
+    const doc = this.documentoRepository.create({
+      inscricao_id: inscricaoId,
+      tipo,
+      nome_extra: tipo === TipoDocumento.EXTRA ? (nomeExtra ?? 'Documento extra') : null,
+      url_arquivo: urlArquivo,
+      mimetype: file.mimetype,
+      tamanho_bytes: file.size,
+    });
+
+    return await this.documentoRepository.save(doc);
   }
 
   /**

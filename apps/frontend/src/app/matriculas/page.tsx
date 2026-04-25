@@ -163,9 +163,6 @@ export default function GestaoMatriculas() {
   const salvarCadastroDireto = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formDireto.nome_completo.trim()) { setErroDireto('Nome completo é obrigatório.'); return; }
-    if (!formDireto.cpf.trim()) { setErroDireto('CPF é obrigatório.'); return; }
-    if (!formDireto.email.trim()) { setErroDireto('E-mail é obrigatório.'); return; }
-    if (!formDireto.celular.trim()) { setErroDireto('Celular é obrigatório.'); return; }
     setSalvandoDireto(true);
     setErroDireto(null);
     try {
@@ -684,8 +681,8 @@ export default function GestaoMatriculas() {
                           className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400" />
                       </div>
                       <div>
-                        <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">CPF *</label>
-                        <input required value={formDireto.cpf} onChange={e => setFormDireto(p => ({ ...p, cpf: e.target.value }))}
+                        <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">CPF</label>
+                        <input value={formDireto.cpf} onChange={e => setFormDireto(p => ({ ...p, cpf: e.target.value }))}
                           placeholder="000.000.000-00"
                           className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400" />
                       </div>
@@ -731,13 +728,13 @@ export default function GestaoMatriculas() {
                     <legend className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2">Contato</legend>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                        <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">E-mail *</label>
-                        <input required type="email" value={formDireto.email} onChange={e => setFormDireto(p => ({ ...p, email: e.target.value }))}
+                        <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">E-mail</label>
+                        <input type="email" value={formDireto.email} onChange={e => setFormDireto(p => ({ ...p, email: e.target.value }))}
                           className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400" />
                       </div>
                       <div>
-                        <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Celular *</label>
-                        <input required value={formDireto.celular} onChange={e => setFormDireto(p => ({ ...p, celular: e.target.value }))}
+                        <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Celular</label>
+                        <input value={formDireto.celular} onChange={e => setFormDireto(p => ({ ...p, celular: e.target.value }))}
                           placeholder="(21) 99999-9999"
                           className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400" />
                       </div>

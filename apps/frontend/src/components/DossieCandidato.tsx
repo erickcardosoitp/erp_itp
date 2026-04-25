@@ -108,11 +108,14 @@ export default function DossieCandidato({ aluno, onClose, onSuccess }: DossiePro
 
   const erroMaioridade = formData.idade < 18 && formData.maior_18_anos === true;
 
-  // ── Carrega documentos quando aba é ativada ──────────────────
-  useEffect(() => {
-    if (abaAtiva !== 'documentos' || !formData.doc_token) return;
+  const [uploadingDoc, setUploadingDoc] = useState(false);
+  const [uploadTipo, setUploadTipo] = useState('identidade');
+  const [uploadNomeExtra, setUploadNomeExtra] = useState('');
+
+  const recarregarDocumentos = useCallback(() => {
+    if (!formData.id) return;
     setLoadingDocs(true);
-    api.get(`/matriculas/documentos/status/${formData.doc_token}`)
+    api.get(`/matriculas/inscricao/${formData.id}/documentos`)
       .then(res => {
         setUploadedDocs(res.data?.documentos ?? []);
         setObrigatoriosPendentes(res.data?.obrigatorios_pendentes ?? []);
@@ -120,7 +123,13 @@ export default function DossieCandidato({ aluno, onClose, onSuccess }: DossiePro
       })
       .catch(() => { setUploadedDocs([]); setObrigatoriosPendentes([]); setDocsCompleto(false); })
       .finally(() => setLoadingDocs(false));
-  }, [abaAtiva, formData.doc_token]);
+  }, [formData.id]);
+
+  // ── Carrega documentos quando aba é ativada ──────────────────
+  useEffect(() => {
+    if (abaAtiva !== 'documentos') return;
+    recarregarDocumentos();
+  }, [abaAtiva, recarregarDocumentos]);
 
   // ── Fetch inicial ────────────────────────────────────────────
   useEffect(() => {
@@ -259,6 +268,27 @@ export default function DossieCandidato({ aluno, onClose, onSuccess }: DossiePro
 
   const handleFieldChange = useCallback((field: string, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+  }, []);
+
+  const [buscandoCep, setBuscandoCep] = useState(false);
+  const buscarCep = useCallback(async (cep: string) => {
+    const limpo = cep.replace(/\D/g, '');
+    if (limpo.length !== 8) return;
+    setBuscandoCep(true);
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${limpo}/json/`);
+      const data = await res.json();
+      if (!data.erro) {
+        setFormData(prev => ({
+          ...prev,
+          logradouro: data.logradouro || prev.logradouro,
+          bairro:     data.bairro     || prev.bairro,
+          cidade:     data.localidade || prev.cidade,
+          estado_uf:  data.uf         || prev.estado_uf,
+        }));
+      }
+    } catch { /* silencia erros de rede */ }
+    finally { setBuscandoCep(false); }
   }, []);
 
   // ── Helpers ──────────────────────────────────────────────────
@@ -407,7 +437,28 @@ export default function DossieCandidato({ aluno, onClose, onSuccess }: DossiePro
                   <EditField label="Número" field="numero" value={formData.numero} isEditing={isEditing} onChange={handleFieldChange} />
                   <EditField label="Complemento" field="complemento" value={formData.complemento} isEditing={isEditing} onChange={handleFieldChange} />
                   <EditField label="Estado (UF)" field="estado_uf" value={formData.estado_uf} isEditing={isEditing} onChange={handleFieldChange} />
-                  <EditField label="CEP" field="cep" value={formData.cep} isEditing={isEditing} onChange={handleFieldChange} />
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[8px] font-black text-gray-400 uppercase tracking-widest">
+                      CEP {buscandoCep && <span className="text-purple-400 ml-1 normal-case">buscando...</span>}
+                    </label>
+                    {isEditing ? (
+                      <input
+                        type="text"
+                        value={formData.cep ?? ''}
+                        maxLength={9}
+                        placeholder="00000-000"
+                        onChange={e => {
+                          const v = e.target.value;
+                          handleFieldChange('cep', v);
+                          if (v.replace(/\D/g, '').length === 8) buscarCep(v);
+                        }}
+                        onBlur={e => buscarCep(e.target.value)}
+                        className="p-2 bg-white border border-purple-200 rounded-lg text-xs font-bold text-purple-900 outline-none focus:ring-2 focus:ring-purple-300"
+                      />
+                    ) : (
+                      <p className="text-xs font-black text-black uppercase truncate">{formData.cep || '—'}</p>
+                    )}
+                  </div>
                   <div className="col-span-2">
                     <EditField label="Cursos Desejados" field="cursos_desejados" value={formData.cursos_desejados} isEditing={isEditing} onChange={handleFieldChange} />
                   </div>
@@ -596,20 +647,75 @@ export default function DossieCandidato({ aluno, onClose, onSuccess }: DossiePro
           {/* ABA DOCUMENTOS */}
           {!loading && abaAtiva === 'documentos' && (
             <div className="space-y-3">
-              {!formData.doc_token ? (
-                <>
-                  <p className="text-[10px] font-black text-gray-400 uppercase mb-4">
-                    Documentos enviados via Google Forms (legado)
-                  </p>
+              {/* ── Upload Manual ── */}
+              <div className="bg-purple-50 border border-purple-100 rounded-2xl p-4 space-y-3">
+                <p className="text-[9px] font-black uppercase text-purple-600 tracking-widest">Adicionar Documento</p>
+                <div className="flex gap-2 flex-wrap">
+                  <select
+                    value={uploadTipo}
+                    onChange={e => setUploadTipo(e.target.value)}
+                    className="flex-1 min-w-[160px] border border-purple-200 rounded-xl px-3 py-2 text-xs font-bold text-purple-900 bg-white outline-none focus:ring-2 focus:ring-purple-300"
+                  >
+                    <option value="foto_aluno">Foto do Aluno</option>
+                    <option value="identidade">Identidade</option>
+                    <option value="comprovante_residencia">Comprovante de Residência</option>
+                    <option value="certidao_nascimento">Certidão de Nascimento</option>
+                    <option value="identidade_responsavel">Identidade do Responsável</option>
+                    <option value="declaracao_escolaridade">Declaração de Escolaridade</option>
+                    <option value="extra">Outro (Adicional)</option>
+                  </select>
+                  {uploadTipo === 'extra' && (
+                    <input
+                      type="text"
+                      placeholder="Nome do documento"
+                      value={uploadNomeExtra}
+                      onChange={e => setUploadNomeExtra(e.target.value)}
+                      className="flex-1 min-w-[140px] border border-purple-200 rounded-xl px-3 py-2 text-xs font-bold text-purple-900 bg-white outline-none focus:ring-2 focus:ring-purple-300"
+                    />
+                  )}
+                </div>
+                <label className={`flex items-center justify-center gap-2 w-full py-3 rounded-xl border-2 border-dashed cursor-pointer transition-all text-[10px] font-black uppercase ${uploadingDoc ? 'border-purple-300 bg-purple-100 text-purple-400 cursor-not-allowed' : 'border-purple-300 hover:border-purple-500 hover:bg-purple-100 text-purple-600'}`}>
+                  {uploadingDoc ? <><Loader2 size={13} className="animate-spin" /> Enviando...</> : <><Paperclip size={13} /> Selecionar arquivo (JPG, PNG, PDF · máx 8 MB)</>}
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,application/pdf"
+                    disabled={uploadingDoc}
+                    className="hidden"
+                    onChange={async e => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      setUploadingDoc(true);
+                      try {
+                        const fd = new FormData();
+                        fd.append('arquivo', file);
+                        fd.append('tipo', uploadTipo);
+                        if (uploadTipo === 'extra' && uploadNomeExtra.trim()) fd.append('nome_extra', uploadNomeExtra.trim());
+                        await api.post(`/matriculas/inscricao/${formData.id}/documentos/upload`, fd, {
+                          headers: { 'Content-Type': 'multipart/form-data' },
+                        });
+                        e.target.value = '';
+                        setUploadNomeExtra('');
+                        recarregarDocumentos();
+                      } catch (err: any) {
+                        alert(err?.response?.data?.message || 'Erro ao enviar documento.');
+                      } finally {
+                        setUploadingDoc(false);
+                      }
+                    }}
+                  />
+                </label>
+              </div>
+
+              {/* ── Legado: docs do Google Forms ── */}
+              {(formData.url_documentos_zip || formData.url_termo_lgpd) && (
+                <div className="space-y-1">
+                  <p className="text-[9px] font-black uppercase text-gray-400 mb-1">Documentos Legado (Google Forms)</p>
                   <DocItem label="Documentos (ZIP)" url={formData.url_documentos_zip} icon={<Paperclip size={14} />} />
                   <DocItem label="Termo LGPD Assinado" url={formData.url_termo_lgpd} icon={<ShieldCheck size={14} />} />
-                  {!formData.url_documentos_zip && !formData.url_termo_lgpd && (
-                    <p className="text-center text-[11px] text-gray-400 font-bold uppercase py-8">
-                      Nenhum documento disponível ainda.
-                    </p>
-                  )}
-                </>
-              ) : loadingDocs ? (
+                </div>
+              )}
+
+              {loadingDocs ? (
                 <div className="flex justify-center py-10">
                   <Loader2 className="animate-spin text-purple-400" size={24} />
                 </div>
@@ -617,11 +723,11 @@ export default function DossieCandidato({ aluno, onClose, onSuccess }: DossiePro
                 <>
                   {/* Barra de progresso */}
                   {(() => {
-                    const total = 5; // TIPOS_OBRIGATORIOS.length no backend
+                    const total = 5;
                     const enviados = total - obrigatoriosPendentes.length;
                     const pct = Math.round((enviados / total) * 100);
                     return (
-                      <div className={`p-4 rounded-2xl border ${docsCompleto ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'} mb-1`}>
+                      <div className={`p-4 rounded-2xl border ${docsCompleto ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'}`}>
                         <div className="flex justify-between items-center mb-2">
                           <p className="text-[10px] font-black uppercase text-gray-700">
                             Obrigatórios: {enviados}/{total}
@@ -640,7 +746,7 @@ export default function DossieCandidato({ aluno, onClose, onSuccess }: DossiePro
                     );
                   })()}
 
-                  {/* Documentos pendentes */}
+                  {/* Pendentes */}
                   {obrigatoriosPendentes.length > 0 && (
                     <div className="space-y-1">
                       <p className="text-[9px] font-black uppercase text-red-400 mb-1">Pendentes</p>
@@ -662,7 +768,7 @@ export default function DossieCandidato({ aluno, onClose, onSuccess }: DossiePro
                     </div>
                   )}
 
-                  {/* Documentos enviados */}
+                  {/* Enviados */}
                   {uploadedDocs.length === 0 ? (
                     <p className="text-center text-[11px] text-gray-400 font-bold uppercase py-4">
                       Nenhum documento enviado ainda.
@@ -715,7 +821,7 @@ export default function DossieCandidato({ aluno, onClose, onSuccess }: DossiePro
                                   if (!confirm(`Remover "${nomeLabel}"?`)) return;
                                   try {
                                     await api.delete(`/matriculas/documentos/${doc.id}`);
-                                    setUploadedDocs(prev => prev.filter(d => d.id !== doc.id));
+                                    recarregarDocumentos();
                                   } catch { alert('Erro ao remover documento.'); }
                                 }}
                                 className="flex items-center gap-1 px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-[9px] font-black uppercase text-red-400 hover:bg-red-500 hover:text-white hover:border-red-500 transition-all"

@@ -270,10 +270,31 @@ export class MatriculasController {
   @Get('inscricao/:id/documentos')
   @ModuloPerm('matriculas', 'visualizar')
   async listarDocumentosAdmin(@Param('id', ParseIntPipe) id: number) {
-    const inscricao = await this.matriculasService.buscarPorId(id);
-    if (!inscricao.doc_token) {
-      return { documentos: [], tipos_enviados: [], obrigatorios_pendentes: [], completo: false };
-    }
-    return await this.matriculasService.listarDocumentosPublico(inscricao.doc_token);
+    return await this.matriculasService.listarDocumentosPorId(id);
+  }
+
+  /**
+   * Admin faz upload de um documento para uma inscrição pelo ID.
+   */
+  @Post('inscricao/:id/documentos/upload')
+  @ModuloPerm('matriculas', 'editar')
+  @UseInterceptors(
+    FileInterceptor('arquivo', {
+      storage: memoryStorage(),
+      limits: { fileSize: 8 * 1024 * 1024 },
+    }),
+  )
+  async uploadDocumentoAdmin(
+    @Param('id', ParseIntPipe) id: number,
+    @Body('tipo') tipo: string,
+    @Body('nome_extra') nomeExtra: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!file) throw new BadRequestException('Nenhum arquivo enviado.');
+    const tipoEnum = Object.values(TipoDocumento).includes(tipo as TipoDocumento)
+      ? (tipo as TipoDocumento)
+      : null;
+    if (!tipoEnum) throw new BadRequestException('Tipo de documento inválido.');
+    return await this.matriculasService.uploadDocumentoAdmin(id, tipoEnum, file, nomeExtra);
   }
 }
