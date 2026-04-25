@@ -69,7 +69,7 @@ import { GenteModule } from './gente/gente.module';
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
         secret: config.get<string>('JWT_SECRET'),
-        signOptions: { expiresIn: '8h' },
+        signOptions: { expiresIn: '3h' },
       }),
     }),
     
