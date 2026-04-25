@@ -597,6 +597,7 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
   const [filtroTurno, setFiltroTurno] = useState('');
   const [filtroSexo, setFiltroSexo] = useState('');
   const [filtroCidade, setFiltroCidade] = useState('');
+  const [erroLoad, setErroLoad] = useState<string | null>(null);
   const [fichaAluno, setFichaAluno] = useState<any>(null);
   const [fichaAba, setFichaAba] = useState<'dados' | 'presenca'>('dados');
   const [dossieCandidato, setDossieCandidato] = useState<any>(null);
@@ -624,6 +625,7 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
 
   const load = useCallback(async () => {
     setLoading(true);
+    setErroLoad(null);
     try {
       const params: Record<string, string> = {};
       if (filtroNome)      params.nome     = filtroNome;
@@ -635,7 +637,10 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
       if (filtroCidade)    params.cidade   = filtroCidade;
       const r = await api.get('/academico/alunos', { params });
       setAlunos(r.data);
-    } catch {}
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || err?.message || 'Erro ao carregar alunos.';
+      setErroLoad(Array.isArray(msg) ? msg.join(', ') : msg);
+    }
     setLoading(false);
   }, [filtroNome, filtroCursoNome, filtroTurmaId, filtroStatus, filtroTurno, filtroSexo, filtroCidade]);
 
@@ -815,6 +820,12 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
       <div className="bg-white rounded-3xl border border-slate-100 shadow overflow-hidden">
         {loading ? (
           <div className="py-16 text-center text-sm text-slate-400">Carregando...</div>
+        ) : erroLoad ? (
+          <div className="py-12 text-center space-y-2">
+            <div className="text-red-500 text-sm font-bold">Erro ao carregar alunos</div>
+            <div className="text-slate-400 text-xs max-w-md mx-auto">{erroLoad}</div>
+            <button onClick={load} className="mt-2 text-xs text-purple-600 underline">Tentar novamente</button>
+          </div>
         ) : alunos.length === 0 ? (
           <div className="py-16 text-center text-sm text-slate-400">Nenhum aluno encontrado.</div>
         ) : (

@@ -269,16 +269,21 @@ export class AcademicoService {
     const alunos = await qb.orderBy('a.ativo', 'DESC').addOrderBy('a.nome_completo', 'ASC').getMany();
     if (!alunos.length) return alunos;
     // Enriquece com turma_status (ativo | backlog | sem_turma)
-    const alunoIds = alunos.map(a => `'${a.id}'`).join(',');
-    const turmaRows: any[] = await this.dataSource.query(
-      `SELECT ta.aluno_id, ta.status, t.nome as turma_nome
-       FROM turma_alunos ta
-       LEFT JOIN turmas t ON ta.turma_id IS NOT NULL AND t.id::text = ta.turma_id
-       WHERE ta.aluno_id IN (${alunoIds})`
-    );
-    const turmaMap: Record<string, any> = {};
-    turmaRows.forEach(r => { turmaMap[r.aluno_id] = r; });
-    return alunos.map(a => ({ ...a, turma_status: turmaMap[a.id]?.status ?? 'sem_turma', turma_nome: turmaMap[a.id]?.turma_nome ?? null }));
+    try {
+      const alunoIds = alunos.map(a => `'${a.id}'`).join(',');
+      const turmaRows: any[] = await this.dataSource.query(
+        `SELECT ta.aluno_id, ta.status, t.nome as turma_nome
+         FROM turma_alunos ta
+         LEFT JOIN turmas t ON ta.turma_id IS NOT NULL AND t.id::text = ta.turma_id
+         WHERE ta.aluno_id IN (${alunoIds})`
+      );
+      const turmaMap: Record<string, any> = {};
+      turmaRows.forEach(r => { turmaMap[r.aluno_id] = r; });
+      return alunos.map(a => ({ ...a, turma_status: turmaMap[a.id]?.status ?? 'sem_turma', turma_nome: turmaMap[a.id]?.turma_nome ?? null }));
+    } catch (e: any) {
+      this.logger.warn(`[listarAlunos] enriquecimento falhou, retornando sem turma: ${e?.message}`);
+      return alunos.map(a => ({ ...a, turma_status: 'sem_turma', turma_nome: null }));
+    }
   }
 
   async fichaAluno(id: string) {
