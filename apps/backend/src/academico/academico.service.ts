@@ -273,7 +273,7 @@ export class AcademicoService {
     const turmaRows: any[] = await this.dataSource.query(
       `SELECT ta.aluno_id, ta.status, t.nome as turma_nome
        FROM turma_alunos ta
-       LEFT JOIN turmas t ON t.id = ta.turma_id::uuid
+       LEFT JOIN turmas t ON ta.turma_id IS NOT NULL AND t.id::text = ta.turma_id
        WHERE ta.aluno_id IN (${alunoIds})`
     );
     const turmaMap: Record<string, any> = {};

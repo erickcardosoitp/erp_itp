@@ -571,7 +571,7 @@ export class MatriculasService {
    * FASE FINAL: Transação atômica para criação de Aluno e encerramento de Inscrição.
    * Gera número ITP-YYYY-MMDDX (X = sequencial de matrículas no dia).
    */
-  async finalizarMatricula(inscricaoId: number, cursosSelecionados?: string[]): Promise<Aluno> {
+  async finalizarMatricula(inscricaoId: number, cursosSelecionados?: string[], turmaIds?: string[]): Promise<Aluno> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -642,12 +642,23 @@ export class MatriculasService {
         [inscricao.id, alunoSalvo.id],
       );
 
-      // Adiciona aluno ao backlog de turmas
-      try {
-        await queryRunner.manager.save(
-          queryRunner.manager.create(TurmaAluno, { aluno_id: alunoSalvo.id, status: 'backlog' })
-        );
-      } catch (_) { /* ignora se já existir */ }
+      // Adiciona aluno às turmas selecionadas ou ao backlog
+      if (turmaIds && turmaIds.length > 0) {
+        for (const turmaId of turmaIds) {
+          await queryRunner.manager.query(
+            `INSERT INTO turma_alunos (id, aluno_id, turma_id, status, tipo_vinculo, created_at)
+             VALUES (gen_random_uuid(), $1, $2, 'ativo', 'aluno', NOW())
+             ON CONFLICT DO NOTHING`,
+            [alunoSalvo.id, turmaId]
+          );
+        }
+      } else {
+        try {
+          await queryRunner.manager.save(
+            queryRunner.manager.create(TurmaAluno, { aluno_id: alunoSalvo.id, status: 'backlog' })
+          );
+        } catch (_) { /* ignora se já existir */ }
+      }
 
       await queryRunner.commitTransaction();
       this.logger.log(`🎉 Matrícula efetivada: ${alunoSalvo.numero_matricula} – ${alunoSalvo.nome_completo}`);

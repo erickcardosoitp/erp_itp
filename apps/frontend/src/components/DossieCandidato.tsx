@@ -87,7 +87,7 @@ export default function DossieCandidato({ aluno, onClose, onSuccess }: DossiePro
   const [loading, setLoading] = useState(false);
   const [abaAtiva, setAbaAtiva] = useState<'cadastro' | 'anotacoes' | 'movimentacoes' | 'documentos'>('cadastro');
 
-  const [availableCourses, setAvailableCourses] = useState<string[]>([]);
+  const [cursosAcademico, setCursosAcademico] = useState<Array<{ id: string; nome: string; sigla: string; turmas: Array<{ id: string; nome: string; codigo: string }> }>>([]);
   const [cursosCarregados, setCursosCarregados] = useState(false);
   const [cursosSelecionados, setCursosSelecionados] = useState<string[]>([]);
   const [anotacoes, setAnotacoes] = useState<Anotacao[]>([]);
@@ -139,33 +139,16 @@ export default function DossieCandidato({ aluno, onClose, onSuccess }: DossiePro
       try {
         const [resInscricao, resCursos, resAnot, resMov, resDocs] = await Promise.allSettled([
           api.get(`/matriculas/inscricao/${aluno.id}`),
-          api.get('/matriculas/cursos-disponiveis'),
+          api.get('/matriculas/cursos-ativos-academico'),
           api.get(`/matriculas/inscricao/${aluno.id}/anotacoes`),
           api.get(`/matriculas/inscricao/${aluno.id}/movimentacoes`),
           api.get(`/matriculas/inscricao/${aluno.id}/documentos`),
         ]);
-        // Atualiza formData com dados frescos do banco (garante bairro, email, cursos_desejados etc.)
         if (resInscricao.status === 'fulfilled') {
           setFormData(resInscricao.value.data);
         }
         if (resCursos.status === 'fulfilled') {
-          const cursos: string[] = resCursos.value.data;
-          setAvailableCourses(cursos);
-          const desejadosStr = resInscricao.status === 'fulfilled'
-            ? resInscricao.value.data.cursos_desejados
-            : aluno.cursos_desejados;
-          if (cursos.length > 0 && desejadosStr) {
-            const desejados = desejadosStr
-              .split(/[,;]/)
-              .map((s: string) => s.trim().toLowerCase())
-              .filter(Boolean);
-            const preSelected = cursos.filter(c =>
-              desejados.some((d: string) =>
-                c.toLowerCase().includes(d) || d.includes(c.toLowerCase())
-              )
-            );
-            if (preSelected.length > 0) setCursosSelecionados(preSelected);
-          }
+          setCursosAcademico(Array.isArray(resCursos.value.data) ? resCursos.value.data : []);
         }
         setCursosCarregados(true);
         if (resAnot.status === 'fulfilled') setAnotacoes(resAnot.value.data);
@@ -228,7 +211,7 @@ export default function DossieCandidato({ aluno, onClose, onSuccess }: DossiePro
     if (cursosSelecionados.length === 0) return;
     setLoading(true);
     try {
-      const res = await api.post(`/matriculas/${aluno.id}/finalizar`, { cursos: cursosSelecionados });
+      const res = await api.post(`/matriculas/${aluno.id}/finalizar`, { turma_ids: cursosSelecionados });
       const numMatricula = res.data?.numero_matricula ?? null;
       setMatriculaNumero(numMatricula);
       setFormData(prev => ({ ...prev, status_matricula: 'Matriculado' }));
@@ -652,7 +635,7 @@ export default function DossieCandidato({ aluno, onClose, onSuccess }: DossiePro
 
           {/* ABA DOCUMENTOS */}
           {!loading && abaAtiva === 'documentos' && (
-            <div className="space-y-3">
+            <div className="space-y-4">
               {/* ── Upload Manual ── */}
               <div className="bg-purple-50 border border-purple-100 rounded-2xl p-4 space-y-3">
                 <p className="text-[9px] font-black uppercase text-purple-600 tracking-widest">Adicionar Documento</p>
@@ -842,14 +825,72 @@ export default function DossieCandidato({ aluno, onClose, onSuccess }: DossiePro
                   )}
                 </>
               )}
+
+              {/* ── Efetivar Matrícula ── */}
+              {['Em Validação', 'Aguardando Documentos', 'Documentos Enviados'].includes(formData.status_matricula) && (
+                <div className="bg-white p-5 rounded-[24px] border-2 border-purple-100 shadow-sm">
+                  <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                    <p className="text-[10px] font-black uppercase text-purple-600">Efetivar Matrícula — Selecionar Turmas</p>
+                    {formData.cursos_desejados && (
+                      <span className="text-[9px] text-gray-400 font-bold">
+                        Interesse: <span className="text-purple-600">{formData.cursos_desejados}</span>
+                      </span>
+                    )}
+                  </div>
+                  {!cursosCarregados ? (
+                    <p className="text-[10px] text-amber-600 font-bold uppercase text-center py-3 bg-amber-50 rounded-xl">Carregando turmas…</p>
+                  ) : cursosAcademico.length === 0 ? (
+                    <p className="text-[10px] text-red-500 font-bold uppercase text-center py-3 bg-red-50 rounded-xl">Nenhuma turma ativa.</p>
+                  ) : (
+                    <div className="space-y-3 mb-4">
+                      {cursosAcademico.map(curso => (
+                        <div key={curso.id}>
+                          <p className="text-[8px] font-black uppercase tracking-widest text-slate-400 mb-1.5">{curso.sigla} — {curso.nome}</p>
+                          <div className="grid grid-cols-2 gap-1.5">
+                            {curso.turmas.map(t => {
+                              const ativo = cursosSelecionados.includes(t.id);
+                              return (
+                                <label key={t.id} className={`flex items-center gap-2 px-3 py-2 rounded-xl border-2 cursor-pointer transition-all select-none ${ativo ? 'border-purple-400 bg-purple-50' : 'border-gray-100 bg-gray-50 hover:border-purple-200'}`}>
+                                  <input type="checkbox" checked={ativo} onChange={() => setCursosSelecionados(prev => prev.includes(t.id) ? prev.filter(c => c !== t.id) : [...prev, t.id])} className="accent-purple-600 w-3 h-3 cursor-pointer shrink-0" />
+                                  <span className={`text-[9px] font-black uppercase leading-tight ${ativo ? 'text-purple-700' : 'text-gray-500'}`}>{t.nome}{t.codigo ? <span className="font-normal normal-case opacity-60 ml-1">({t.codigo})</span> : ''}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {/* Indicador documentos */}
+                  {(() => {
+                    const total = 5; const enviados = total - obrigatoriosPendentes.length;
+                    const pct = Math.round((enviados / total) * 100);
+                    return (
+                      <div className={`flex items-center gap-3 px-4 py-2.5 rounded-xl mb-3 ${docsCompleto ? 'bg-green-50 border border-green-200' : 'bg-amber-50 border border-amber-200'}`}>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex justify-between items-center mb-1">
+                            <span className={`text-[9px] font-black uppercase ${docsCompleto ? 'text-green-700' : 'text-amber-700'}`}>Documentos: {enviados}/{total}</span>
+                            <span className={`text-[8px] font-black ${docsCompleto ? 'text-green-700' : 'text-amber-600'}`}>{pct}%</span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-1"><div className={`h-1 rounded-full transition-all ${docsCompleto ? 'bg-green-500' : pct >= 60 ? 'bg-amber-400' : 'bg-red-400'}`} style={{ width: `${pct}%` }} /></div>
+                        </div>
+                        {!docsCompleto && <span className="text-[8px] font-black text-amber-600 bg-amber-100 px-2 py-1 rounded-lg uppercase shrink-0">Permitido</span>}
+                      </div>
+                    );
+                  })()}
+                  <button onClick={handleEfetivarMatricula} disabled={cursosSelecionados.length === 0 || loading} className="w-full py-3.5 bg-green-500 hover:bg-green-600 text-white rounded-2xl font-black text-[10px] uppercase flex items-center justify-center gap-2 transition-all disabled:opacity-50">
+                    {loading ? <Loader2 className="animate-spin" size={14} /> : <><CheckCircle size={14} /> Efetivar Matrícula ({cursosSelecionados.length} turma{cursosSelecionados.length !== 1 ? 's' : ''})</>}
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
 
         {/* ── FOOTER ─────────────────────────────────────────── */}
-        <div className="p-6 border-t border-gray-100 bg-gray-50 flex flex-col gap-4">
+        <div className="p-5 border-t border-gray-100 bg-gray-50 flex flex-col gap-3">
           {['Em Validação', 'Aguardando Documentos'].includes(formData.status_matricula) && (
-            <div className="bg-blue-50/50 dark:bg-blue-900/20 p-4 rounded-2xl border border-blue-100 dark:border-blue-800 flex justify-between items-center gap-4 mb-2">
+            <div className="bg-blue-50/50 p-3.5 rounded-2xl border border-blue-100 flex justify-between items-center gap-3">
               <div>
                 <p className="text-[10px] font-black uppercase text-blue-700 mb-1">Link de Documentos</p>
                 <span className={`text-[10px] font-black px-3 py-1 rounded-full ${formData.doc_token ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
@@ -859,106 +900,10 @@ export default function DossieCandidato({ aluno, onClose, onSuccess }: DossiePro
               <button
                 onClick={handleSolicitarDocumentos}
                 disabled={docLoading}
-                className="flex items-center gap-2 px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-60 shrink-0"
+                className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-60 shrink-0"
               >
-                {docLoading ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-                {formData.doc_token ? 'Reenviar Link' : 'Solicitar Documentos'}
-              </button>
-            </div>
-          )}
-
-          {['Em Validação', 'Aguardando Documentos', 'Documentos Enviados'].includes(formData.status_matricula) && (
-            <div className="bg-white dark:bg-gray-800 p-5 rounded-[32px] border-2 border-purple-100 dark:border-purple-900 shadow-sm">
-              <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-                <p className="text-[10px] font-black uppercase text-purple-600">
-                  Selecionar Cursos para Matricular:
-                </p>
-                {formData.cursos_desejados && (
-                  <span className="text-[9px] text-gray-400 font-bold">
-                    Desejado: <span className="text-purple-600">{formData.cursos_desejados}</span>
-                  </span>
-                )}
-              </div>
-              {!cursosCarregados ? (
-                <p className="text-[10px] text-amber-600 font-bold uppercase text-center py-3 bg-amber-50 rounded-xl">
-                  Carregando cursos disponíveis…
-                </p>
-              ) : availableCourses.length === 0 ? (
-                <p className="text-[10px] text-red-500 font-bold uppercase text-center py-3 bg-red-50 rounded-xl">
-                  Nenhum curso encontrado.
-                </p>
-              ) : (
-              <div className="grid grid-cols-2 gap-1.5 mb-4">
-                {availableCourses.map(curso => (
-                  <label
-                    key={curso}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-xl border-2 cursor-pointer transition-all select-none ${
-                      cursosSelecionados.includes(curso)
-                        ? 'border-purple-400 bg-purple-50'
-                        : 'border-gray-100 bg-gray-50 hover:border-purple-200'
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={cursosSelecionados.includes(curso)}
-                      onChange={() =>
-                        setCursosSelecionados(prev =>
-                          prev.includes(curso)
-                            ? prev.filter(c => c !== curso)
-                            : [...prev, curso]
-                        )
-                      }
-                      className="accent-purple-600 w-3 h-3 cursor-pointer shrink-0"
-                    />
-                    <span className={`text-[9px] font-black uppercase leading-tight ${
-                      cursosSelecionados.includes(curso) ? 'text-purple-700' : 'text-gray-500'
-                    }`}>
-                      {curso}
-                    </span>
-                  </label>
-                ))}
-              </div>
-              )}
-              {/* Indicador de documentos — informativo, não bloqueia */}
-              {(() => {
-                const total = 5;
-                const enviados = total - obrigatoriosPendentes.length;
-                const pct = Math.round((enviados / total) * 100);
-                return (
-                  <div className={`flex items-center gap-3 px-4 py-3 rounded-xl mb-3 ${docsCompleto ? 'bg-green-50 border border-green-200' : 'bg-amber-50 border border-amber-200'}`}>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex justify-between items-center mb-1">
-                        <span className={`text-[9px] font-black uppercase tracking-widest ${docsCompleto ? 'text-green-700' : 'text-amber-700'}`}>
-                          Documentos entregues
-                        </span>
-                        <span className={`text-[10px] font-black ${docsCompleto ? 'text-green-700' : 'text-amber-700'}`}>
-                          {pct}% ({enviados}/{total})
-                        </span>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-1.5">
-                        <div
-                          className={`h-1.5 rounded-full transition-all ${docsCompleto ? 'bg-green-500' : pct >= 60 ? 'bg-amber-400' : 'bg-red-400'}`}
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                    </div>
-                    {!docsCompleto && (
-                      <span className="text-[8px] font-black text-amber-600 bg-amber-100 px-2 py-1 rounded-lg uppercase shrink-0">
-                        Matrícula permitida
-                      </span>
-                    )}
-                  </div>
-                );
-              })()}
-
-              <button
-                onClick={handleEfetivarMatricula}
-                disabled={cursosSelecionados.length === 0 || loading}
-                className="w-full py-4 bg-green-500 hover:bg-green-600 text-white rounded-2xl font-black text-[10px] uppercase flex items-center justify-center gap-2 transition-all disabled:opacity-50"
-              >
-                {loading
-                  ? <Loader2 className="animate-spin" size={16} />
-                  : <><CheckCircle size={16} /> Efetivar Matrícula</>}
+                {docLoading ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+                {formData.doc_token ? 'Reenviar Link' : 'Solicitar Docs'}
               </button>
             </div>
           )}

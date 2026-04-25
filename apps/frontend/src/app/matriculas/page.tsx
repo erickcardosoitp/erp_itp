@@ -296,12 +296,21 @@ export default function GestaoMatriculas() {
   // Verde = sucesso | Vermelho = problema | Cinza-escuro = saída passiva
   const podeMatricular = (status: string) => !['Matriculado', 'Desistente', 'Cancelada'].includes(status);
 
+  const calcCompletude = (m: any) => {
+    const faltando: string[] = [];
+    if (!m.cpf) faltando.push('CPF');
+    if (!m.email) faltando.push('E-mail');
+    if (!m.celular) faltando.push('Celular');
+    if (!m.data_nascimento) faltando.push('Data de nascimento');
+    if (!m.cidade) faltando.push('Cidade');
+    if (!m.lgpd_aceito) faltando.push('Termo LGPD não assinado');
+    if (!['Documentos Enviados', 'Matriculado'].includes(m.status_matricula)) faltando.push('Documentos pendentes');
+    const pct = Math.round(((7 - faltando.length) / 7) * 100);
+    return { pct, faltando };
+  };
+
   const abrirModalMatricular = (m: any) => {
-    const raw = m.cursos_desejados ?? '';
-    const desejados = Array.isArray(raw)
-      ? raw
-      : raw.split(',').map((s: string) => s.trim()).filter(Boolean);
-    setCursosSelecionados(desejados);
+    setCursosSelecionados([]);
     setMatriculaResultado(null);
     setModalMatricular({ aberto: true, candidato: m });
   };
@@ -312,18 +321,18 @@ export default function GestaoMatriculas() {
     setMatriculaResultado(null);
   };
 
-  const toggleCurso = (curso: string) => {
+  const toggleCurso = (id: string) => {
     setCursosSelecionados(prev =>
-      prev.includes(curso) ? prev.filter(c => c !== curso) : [...prev, curso]
+      prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]
     );
   };
 
   const confirmarMatricula = async () => {
     if (!modalMatricular.candidato) return;
-    if (cursosSelecionados.length === 0) { alert('Selecione ao menos um curso para efetivar a matrícula.'); return; }
+    if (cursosSelecionados.length === 0) { alert('Selecione ao menos uma turma para efetivar a matrícula.'); return; }
     setMatriculando(true);
     try {
-      const r = await api.post(`/matriculas/${modalMatricular.candidato.id}/finalizar`, { cursos: cursosSelecionados });
+      const r = await api.post(`/matriculas/${modalMatricular.candidato.id}/finalizar`, { turma_ids: cursosSelecionados });
       const num = r.data?.numero_matricula || r.data?.aluno?.numero_matricula || '—';
       setMatriculaResultado({ numero: num, nome: modalMatricular.candidato.nome_completo });
       fetchMatriculas();
@@ -531,8 +540,28 @@ export default function GestaoMatriculas() {
                     return (
                       <tr key={m.id || idx} className="hover:bg-purple-50/30 transition-all group">
                         <td className="px-6 py-4">
-                          <div className="font-black text-gray-800 uppercase text-xs">{m.nome_completo}</div>
-                          <div className="text-[10px] text-gray-400 font-bold">{m.cpf}</div>
+                          <div className="flex items-center gap-2">
+                            {(() => {
+                              const { pct, faltando } = calcCompletude(m);
+                              const cor = pct >= 80 ? 'bg-green-500' : 'bg-red-400';
+                              return (
+                                <div className="relative group/kpi shrink-0">
+                                  <span className={`block w-2.5 h-2.5 rounded-full ${cor} cursor-default`} title={`${pct}% completo`} />
+                                  <div className="absolute left-4 top-0 z-50 hidden group-hover/kpi:block bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-xl p-2.5 min-w-[160px] shadow-xl pointer-events-none">
+                                    <p className="text-[9px] font-black uppercase text-slate-400 mb-1.5">{pct}% completo</p>
+                                    {faltando.length === 0
+                                      ? <p className="text-[9px] text-green-600 font-bold">Cadastro completo</p>
+                                      : faltando.map(f => <p key={f} className="text-[9px] text-red-500 font-bold leading-relaxed">• {f}</p>)
+                                    }
+                                  </div>
+                                </div>
+                              );
+                            })()}
+                            <div>
+                              <div className="font-black text-gray-800 uppercase text-xs">{m.nome_completo}</div>
+                              <div className="text-[10px] text-gray-400 font-bold">{m.cpf}</div>
+                            </div>
+                          </div>
                         </td>
                         <td className="px-6 py-4">
                           <div className="font-bold text-gray-700 uppercase text-[11px]">
@@ -1003,36 +1032,47 @@ export default function GestaoMatriculas() {
                     )}
                   </div>
 
-                  {/* Seleção de cursos */}
+                  {/* Seleção de turmas */}
                   <div>
                     <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-3">
-                      Cursos a matricular <span className="text-red-500">*</span>
-                      <span className="ml-2 font-normal normal-case text-slate-400">({cursosSelecionados.length} selecionado{cursosSelecionados.length !== 1 ? 's' : ''})</span>
+                      Turmas a matricular <span className="text-red-500">*</span>
+                      <span className="ml-2 font-normal normal-case text-slate-400">({cursosSelecionados.length} selecionada{cursosSelecionados.length !== 1 ? 's' : ''})</span>
                     </p>
-                    <div className="grid grid-cols-2 gap-2">
-                      {cursosDisponiveis.map(curso => {
-                        const ativo = cursosSelecionados.includes(curso);
-                        return (
-                          <button
-                            key={curso}
-                            type="button"
-                            onClick={() => toggleCurso(curso)}
-                            className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-left text-[11px] font-bold transition-all ${
-                              ativo
-                                ? 'bg-green-600 border-green-600 text-white shadow-sm'
-                                : 'bg-slate-50 dark:bg-slate-700 border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:border-green-400'
-                            }`}
-                          >
-                            <span className={`w-4 h-4 rounded flex-shrink-0 flex items-center justify-center border ${
-                              ativo ? 'bg-white border-white' : 'border-slate-300 dark:border-slate-500'
-                            }`}>
-                              {ativo && <span className="text-green-600 text-[10px] font-black">✓</span>}
-                            </span>
-                            {curso}
-                          </button>
-                        );
-                      })}
-                    </div>
+                    {cursosAcademico.length === 0 ? (
+                      <p className="text-[10px] text-amber-600 font-bold uppercase text-center py-3 bg-amber-50 rounded-xl">Nenhuma turma ativa encontrada.</p>
+                    ) : (
+                      <div className="space-y-3">
+                        {cursosAcademico.map(curso => (
+                          <div key={curso.id}>
+                            <p className="text-[8px] font-black uppercase tracking-widest text-slate-400 mb-1.5">{curso.sigla} — {curso.nome}</p>
+                            <div className="grid grid-cols-2 gap-1.5">
+                              {curso.turmas.map(t => {
+                                const ativo = cursosSelecionados.includes(t.id);
+                                return (
+                                  <button
+                                    key={t.id}
+                                    type="button"
+                                    onClick={() => toggleCurso(t.id)}
+                                    className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-left text-[10px] font-bold transition-all ${
+                                      ativo
+                                        ? 'bg-green-600 border-green-600 text-white shadow-sm'
+                                        : 'bg-slate-50 dark:bg-slate-700 border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:border-green-400'
+                                    }`}
+                                  >
+                                    <span className={`w-3.5 h-3.5 rounded flex-shrink-0 flex items-center justify-center border ${
+                                      ativo ? 'bg-white border-white' : 'border-slate-300 dark:border-slate-500'
+                                    }`}>
+                                      {ativo && <span className="text-green-600 text-[9px] font-black">✓</span>}
+                                    </span>
+                                    <span className="leading-tight">{t.nome}{t.codigo ? <span className="font-normal opacity-60 ml-1">({t.codigo})</span> : ''}</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   {/* Aviso */}

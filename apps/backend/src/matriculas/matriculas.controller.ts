@@ -109,12 +109,12 @@ export class MatriculasController {
   }
 
   @Post(':id/finalizar')
-  @ModuloPerm('matriculas', 'editar') 
+  @ModuloPerm('matriculas', 'editar')
   async finalizarMatricula(
     @Param('id', ParseIntPipe) id: number,
-    @Body() body: { cursos?: string[] }
+    @Body() body: { cursos?: string[]; turma_ids?: string[] }
   ) {
-    return await this.matriculasService.finalizarMatricula(id, body.cursos);
+    return await this.matriculasService.finalizarMatricula(id, body.cursos, body.turma_ids);
   }
 
   @Patch(':id/status')
