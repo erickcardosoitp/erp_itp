@@ -702,6 +702,24 @@ export class AppModule implements OnModuleInit {
       await this.dataSource.query(`ALTER TABLE IF EXISTS inscricoes ALTER COLUMN celular DROP NOT NULL`);
       this.logger.log('✅ cpf/email/celular em inscricoes passaram a ser opcionais (DROP NOT NULL)');
 
+      // ── CPF de alunos: limpar dados inválidos e usar índice parcial ──────────
+      // Converte strings vazias e placeholders TEMP... para NULL (crianças sem CPF)
+      await this.dataSource.query(`
+        UPDATE alunos SET cpf = NULL
+        WHERE cpf = '' OR cpf ILIKE 'TEMP%'
+      `);
+      // Substitui o unique constraint completo por índice parcial (permite múltiplos NULLs
+      // e ignora duplicatas de CPF nulo — apenas CPFs reais precisam ser únicos)
+      await this.dataSource.query(`
+        ALTER TABLE alunos DROP CONSTRAINT IF EXISTS "UQ_1f9a8f3f4e5a314a2d7f828a605"
+      `);
+      await this.dataSource.query(`
+        CREATE UNIQUE INDEX IF NOT EXISTS alunos_cpf_unico
+        ON alunos(cpf)
+        WHERE cpf IS NOT NULL
+      `);
+      this.logger.log('✅ alunos.cpf: dados TEMP limpos, constraint substituída por índice parcial');
+
     } catch (err: any) {
       this.logger.error(`❌ Erro nas migrations automáticas: ${err.message}`);
     }

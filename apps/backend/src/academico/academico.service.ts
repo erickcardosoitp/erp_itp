@@ -392,6 +392,16 @@ export class AcademicoService {
     return { message: 'Aluno desativado com sucesso' };
   }
 
+  async excluirAlunoPermanente(id: string) {
+    const aluno = await this.alunoRepo.findOneBy({ id });
+    if (!aluno) throw new NotFoundException('Aluno não encontrado');
+    if (aluno.ativo) throw new BadRequestException('Só é possível excluir alunos inativos.');
+    await this.dataSource.query(`DELETE FROM turma_alunos WHERE aluno_id = $1`, [id]);
+    await this.dataSource.query(`DELETE FROM diario_academico WHERE aluno_id = $1`, [id]);
+    await this.alunoRepo.delete(id);
+    return { message: 'Aluno excluído permanentemente.' };
+  }
+
   // ── TURMA ALUNOS / BACKLOG ─────────────────────────────────────────────────
 
   listarBacklog() {

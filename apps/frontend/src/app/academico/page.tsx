@@ -589,6 +589,7 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
   const [alunos, setAlunos] = useState<Aluno[]>([]);
   const [loading, setLoading] = useState(true);
   const [inativandoId, setInativandoId] = useState<string | null>(null);
+  const [excluindoId, setExcluindoId] = useState<string | null>(null);
   const [filtroNome, setFiltroNome] = useState('');
   const [filtroCursoNome, setFiltroCursoNome] = useState('');
   const [filtroTurmaId, setFiltroTurmaId] = useState('');
@@ -691,6 +692,20 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
       alert(Array.isArray(msg) ? msg.join(', ') : msg);
     } finally {
       setInativandoId(null);
+    }
+  };
+
+  const excluirAlunoPermanente = async (a: Aluno) => {
+    if (!confirm(`Excluir permanentemente "${a.nome_completo}"? Esta ação não pode ser desfeita.`)) return;
+    setExcluindoId(a.id);
+    try {
+      await api.delete(`/academico/alunos/${a.id}/permanente`);
+      await load();
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || err?.message || 'Erro ao excluir aluno.';
+      alert(Array.isArray(msg) ? msg.join(', ') : msg);
+    } finally {
+      setExcluindoId(null);
     }
   };
 
@@ -851,13 +866,24 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
                     </td>
                     {podeEditar && (
                       <td className="px-4 py-3 text-center">
-                        <button
-                          onClick={() => inativarAluno(a)}
-                          disabled={inativandoId === a.id}
-                          title={a.ativo ? 'Inativar aluno' : 'Reativar aluno'}
-                          className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase transition-colors disabled:opacity-50 ${a.ativo ? 'bg-red-50 text-red-500 hover:bg-red-100' : 'bg-green-50 text-green-600 hover:bg-green-100'}`}>
-                          {inativandoId === a.id ? '...' : a.ativo ? 'Inativar' : 'Reativar'}
-                        </button>
+                        <div className="flex items-center justify-center gap-1">
+                          <button
+                            onClick={() => inativarAluno(a)}
+                            disabled={inativandoId === a.id || excluindoId === a.id}
+                            title={a.ativo ? 'Inativar aluno' : 'Reativar aluno'}
+                            className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase transition-colors disabled:opacity-50 ${a.ativo ? 'bg-red-50 text-red-500 hover:bg-red-100' : 'bg-green-50 text-green-600 hover:bg-green-100'}`}>
+                            {inativandoId === a.id ? '...' : a.ativo ? 'Inativar' : 'Reativar'}
+                          </button>
+                          {!a.ativo && (
+                            <button
+                              onClick={() => excluirAlunoPermanente(a)}
+                              disabled={excluindoId === a.id || inativandoId === a.id}
+                              title="Excluir permanentemente"
+                              className="px-2 py-1 rounded-lg text-[9px] font-black uppercase bg-red-100 text-red-700 hover:bg-red-200 transition-colors disabled:opacity-50">
+                              {excluindoId === a.id ? '...' : <Trash2 size={10} />}
+                            </button>
+                          )}
+                        </div>
                       </td>
                     )}
                   </tr>

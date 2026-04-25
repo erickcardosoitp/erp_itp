@@ -209,6 +209,10 @@ export class AcademicoController {
   @ModuloPerm('academico', 'excluir')
   deletarAluno(@Param('id') id: string) { return this.svc.deletarAluno(id); }
 
+  @Delete('alunos/:id/permanente')
+  @ModuloPerm('academico', 'excluir')
+  excluirAlunoPermanente(@Param('id') id: string) { return this.svc.excluirAlunoPermanente(id); }
+
   @Get('alunos/:id/ficha')
   @ModuloPerm('academico', 'visualizar')
   fichaAluno(@Param('id') id: string) { return this.svc.fichaAluno(id); }
