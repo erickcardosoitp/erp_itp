@@ -468,13 +468,17 @@ export class MatriculasService {
   /**
    * Busca uma inscrição por ID.
    */
-  async buscarPorId(id: number): Promise<Inscricao> {
+  async buscarPorId(id: number): Promise<Inscricao & { foto_url?: string }> {
     const inscricao = await this.inscricaoRepository.findOne({
       where: { id },
       relations: { aluno: true },
     });
     if (!inscricao) throw new NotFoundException(`Inscrição ID ${id} não encontrada.`);
-    return inscricao;
+    const fotoDoc = await this.documentoRepository.findOne({
+      where: { inscricao_id: id, tipo: TipoDocumento.FOTO_ALUNO },
+      order: { createdAt: 'DESC' },
+    });
+    return fotoDoc ? { ...inscricao, foto_url: fotoDoc.url_arquivo } : inscricao;
   }
 
   /**
