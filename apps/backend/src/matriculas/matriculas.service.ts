@@ -291,26 +291,36 @@ export class MatriculasService {
   async assinarLGPD(token: string, nomeDigitado: string, cpf: string, ip: string): Promise<Inscricao> {
     const inscricao = await this.buscarPorTokenLGPD(token);
 
+    // Aceita CPF da aluna OU do responsável (para menores cujo responsável assina)
     const cpfLimpo = cpf.replace(/\D/g, '');
-    const cpfCadastro = (inscricao.cpf || '').replace(/\D/g, '');
-    if (cpfLimpo !== cpfCadastro) {
-      throw new BadRequestException('CPF não confere com o cadastro. Verifique e tente novamente.');
+    const cpfAluna = (inscricao.cpf || '').replace(/\D/g, '');
+    const cpfResponsavel = (inscricao.cpf_responsavel || '').replace(/\D/g, '');
+    const cpfValido = (cpfAluna && cpfLimpo === cpfAluna) || (cpfResponsavel && cpfLimpo === cpfResponsavel);
+    if (!cpfValido) {
+      throw new BadRequestException('CPF não confere com o cadastro. Use o CPF da aluna ou do responsável.');
     }
 
     inscricao.lgpd_aceito = true;
     inscricao.data_assinatura_lgpd = new Date();
     inscricao.nome_assinatura_imagem = nomeDigitado;
     inscricao.lgpd_ip = ip;
-    inscricao.lgpd_token = null;           // invalida o token após uso
+    inscricao.lgpd_token = null;
     inscricao.lgpd_token_expires_at = null;
-    inscricao.status_matricula = StatusMatricula.EM_VALIDACAO;
+
+    // Não reverte o status se a aluna já foi matriculada
+    const jaMatriculado = inscricao.status_matricula === StatusMatricula.MATRICULADO;
+    if (!jaMatriculado) {
+      inscricao.status_matricula = StatusMatricula.EM_VALIDACAO;
+    }
 
     const salva = (await this.inscricaoRepository.save(inscricao)) as Inscricao;
     this.logger.log(`✅ LGPD assinado: ${inscricao.nome_completo} | IP: ${ip}`);
 
-    // Auto-dispara link de documentos ao entrar em EM_VALIDACAO
-    this.enviarLinkDocumentos(salva.id)
-      .catch(err => this.logger.error(`❌ Falha ao auto-enviar link docs (LGPD): ${err.message}`));
+    // Auto-dispara link de documentos apenas se ainda não matriculada
+    if (!jaMatriculado) {
+      this.enviarLinkDocumentos(salva.id)
+        .catch(err => this.logger.error(`❌ Falha ao auto-enviar link docs (LGPD): ${err.message}`));
+    }
 
     return salva;
   }
