@@ -587,6 +587,26 @@ export class MatriculasService {
         throw new BadRequestException('Candidato já possui matrícula ativa.');
       }
 
+      // Idempotência: se um Aluno já foi criado para esta inscrição (falha parcial anterior), retorná-lo
+      const [existingRow] = await queryRunner.manager.query(
+        `SELECT id FROM alunos WHERE inscricao_id = $1 LIMIT 1`, [inscricaoId]
+      );
+      if (existingRow) {
+        inscricao.status_matricula = StatusMatricula.MATRICULADO;
+        await queryRunner.manager.save(Inscricao, inscricao);
+        await queryRunner.commitTransaction();
+        const aluno = await queryRunner.manager.findOneBy(Aluno, { id: existingRow.id });
+        return aluno!;
+      }
+
+      // CPF temporário (placeholder) não deve ser persistido
+      const cpfLimpo = (cpf: string | null): string | null => {
+        if (!cpf) return null;
+        const s = cpf.trim();
+        if (!s || s.toUpperCase().startsWith('TEMP')) return null;
+        return s;
+      };
+
       const hoje = new Date();
       const cursosFinal = cursosSelecionados?.length
         ? cursosSelecionados.join(', ')
@@ -597,7 +617,7 @@ export class MatriculasService {
       const novoAluno = queryRunner.manager.create(Aluno, {
         numero_matricula:    numeroMatricula,
         nome_completo:       inscricao.nome_completo,
-        cpf:                 inscricao.cpf || null,
+        cpf:                 cpfLimpo(inscricao.cpf),
         email:               inscricao.email || null,
         celular:             inscricao.celular || null,
         data_nascimento:     inscricao.data_nascimento,
