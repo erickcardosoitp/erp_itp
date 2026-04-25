@@ -137,11 +137,12 @@ export default function DossieCandidato({ aluno, onClose, onSuccess }: DossiePro
     const load = async () => {
       setLoading(true);
       try {
-        const [resInscricao, resCursos, resAnot, resMov] = await Promise.allSettled([
+        const [resInscricao, resCursos, resAnot, resMov, resDocs] = await Promise.allSettled([
           api.get(`/matriculas/inscricao/${aluno.id}`),
           api.get('/matriculas/cursos-disponiveis'),
           api.get(`/matriculas/inscricao/${aluno.id}/anotacoes`),
           api.get(`/matriculas/inscricao/${aluno.id}/movimentacoes`),
+          api.get(`/matriculas/inscricao/${aluno.id}/documentos`),
         ]);
         // Atualiza formData com dados frescos do banco (garante bairro, email, cursos_desejados etc.)
         if (resInscricao.status === 'fulfilled') {
@@ -169,6 +170,11 @@ export default function DossieCandidato({ aluno, onClose, onSuccess }: DossiePro
         setCursosCarregados(true);
         if (resAnot.status === 'fulfilled') setAnotacoes(resAnot.value.data);
         if (resMov.status === 'fulfilled') setMovimentacoes(resMov.value.data);
+        if (resDocs.status === 'fulfilled') {
+          setUploadedDocs(resDocs.value.data?.documentos ?? []);
+          setObrigatoriosPendentes(resDocs.value.data?.obrigatorios_pendentes ?? []);
+          setDocsCompleto(resDocs.value.data?.completo ?? false);
+        }
       } catch (e: any) {
         console.error('Erro no load do Dossier:', e.response?.status);
       } finally {
@@ -913,6 +919,38 @@ export default function DossieCandidato({ aluno, onClose, onSuccess }: DossiePro
                 ))}
               </div>
               )}
+              {/* Indicador de documentos — informativo, não bloqueia */}
+              {(() => {
+                const total = 5;
+                const enviados = total - obrigatoriosPendentes.length;
+                const pct = Math.round((enviados / total) * 100);
+                return (
+                  <div className={`flex items-center gap-3 px-4 py-3 rounded-xl mb-3 ${docsCompleto ? 'bg-green-50 border border-green-200' : 'bg-amber-50 border border-amber-200'}`}>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex justify-between items-center mb-1">
+                        <span className={`text-[9px] font-black uppercase tracking-widest ${docsCompleto ? 'text-green-700' : 'text-amber-700'}`}>
+                          Documentos entregues
+                        </span>
+                        <span className={`text-[10px] font-black ${docsCompleto ? 'text-green-700' : 'text-amber-700'}`}>
+                          {pct}% ({enviados}/{total})
+                        </span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-1.5">
+                        <div
+                          className={`h-1.5 rounded-full transition-all ${docsCompleto ? 'bg-green-500' : pct >= 60 ? 'bg-amber-400' : 'bg-red-400'}`}
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    </div>
+                    {!docsCompleto && (
+                      <span className="text-[8px] font-black text-amber-600 bg-amber-100 px-2 py-1 rounded-lg uppercase shrink-0">
+                        Matrícula permitida
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
+
               <button
                 onClick={handleEfetivarMatricula}
                 disabled={cursosSelecionados.length === 0 || loading}
