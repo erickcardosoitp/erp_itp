@@ -367,16 +367,14 @@ export class MatriculasService {
     const ehMenor = dados.maior_18_anos === false || (dados.idade && parseInt(dados.idade) < 18);
 
     // ── Validações com notificação amigável em caso de falha ──────────
-    // CPF é obrigatório apenas para maiores de 18; menores podem não ter CPF ainda
-    if (!dados.nome_completo || (!cpfLimpo && !ehMenor)) {
-      const motivo = !dados.nome_completo ? 'Nome completo ausente' : 'CPF ausente ou inválido';
+    if (!dados.nome_completo) {
       this.notificacoes.criar({
         tipo: 'alerta',
         titulo: '⚠️ Inscrição recusada — dados incompletos',
-        mensagem: `Uma inscrição chegou com dados obrigatórios faltando (${motivo}). Origem: ${dados.origem_inscricao || 'não identificada'}. Verifique o formulário.`,
+        mensagem: `Uma inscrição chegou sem nome completo. Origem: ${dados.origem_inscricao || 'não identificada'}. Verifique o formulário.`,
         referencia_tipo: 'inscricao',
       }).catch(() => {});
-      throw new BadRequestException(`Campos obrigatórios ausentes: ${motivo}.`);
+      throw new BadRequestException('Nome completo é obrigatório.');
     }
 
     // Verificação de duplicidade: apenas quando CPF está preenchido
@@ -599,9 +597,9 @@ export class MatriculasService {
       const novoAluno = queryRunner.manager.create(Aluno, {
         numero_matricula:    numeroMatricula,
         nome_completo:       inscricao.nome_completo,
-        cpf:                 inscricao.cpf,
-        email:               inscricao.email,
-        celular:             inscricao.celular,
+        cpf:                 inscricao.cpf || null,
+        email:               inscricao.email || null,
+        celular:             inscricao.celular || null,
         data_nascimento:     inscricao.data_nascimento,
         idade:               inscricao.idade,
         sexo:                inscricao.sexo,
@@ -685,9 +683,12 @@ export class MatriculasService {
       // Validação de campos obrigatórios
       if (!dados.nome_completo?.trim()) throw new BadRequestException('Nome completo é obrigatório.');
       
-      // Verifica se já existe aluno com esse CPF
-      const existente = await queryRunner.manager.findOne(Aluno, { where: { cpf: dados.cpf } });
-      if (existente) throw new BadRequestException(`CPF ${dados.cpf} já possui matrícula ativa.`);
+      // Verifica duplicidade de CPF apenas quando informado
+      const cpfLimpo = dados.cpf?.replace(/\D/g, '') || null;
+      if (cpfLimpo) {
+        const existente = await queryRunner.manager.findOne(Aluno, { where: { cpf: dados.cpf } });
+        if (existente) throw new BadRequestException(`CPF ${dados.cpf} já possui matrícula ativa.`);
+      }
 
       // Processa cursos: busca os cursos selecionados se fornecidos
       let descricaoCursos = 'A Definir';
@@ -707,9 +708,9 @@ export class MatriculasService {
       const novoAluno = queryRunner.manager.create(Aluno, {
         numero_matricula: numeroMatricula,
         nome_completo: dados.nome_completo,
-        cpf: dados.cpf,
-        email: dados.email,
-        celular: dados.celular,
+        cpf: dados.cpf || null,
+        email: dados.email || null,
+        celular: dados.celular || null,
         data_nascimento: dados.data_nascimento || null,
         idade: dados.idade || null,
         sexo: dados.sexo || null,

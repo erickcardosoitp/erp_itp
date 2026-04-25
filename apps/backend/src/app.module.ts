@@ -696,6 +696,12 @@ export class AppModule implements OnModuleInit {
       this.logger.log('✅ Colunas gente_vales (forma_pagamento, movimentacao_saida_id, movimentacao_entrada_id) aplicadas (IF NOT EXISTS)');
       this.logger.log('✅ Tabelas do módulo Gente criadas (IF NOT EXISTS)');
 
+      // ── CPF, email e celular opcionais em inscricoes ───────────────────────
+      await this.dataSource.query(`ALTER TABLE IF EXISTS inscricoes ALTER COLUMN cpf DROP NOT NULL`);
+      await this.dataSource.query(`ALTER TABLE IF EXISTS inscricoes ALTER COLUMN email DROP NOT NULL`);
+      await this.dataSource.query(`ALTER TABLE IF EXISTS inscricoes ALTER COLUMN celular DROP NOT NULL`);
+      this.logger.log('✅ cpf/email/celular em inscricoes passaram a ser opcionais (DROP NOT NULL)');
+
     } catch (err: any) {
       this.logger.error(`❌ Erro nas migrations automáticas: ${err.message}`);
     }

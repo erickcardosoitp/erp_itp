@@ -20,13 +20,13 @@ export class Aluno {
   nome_completo: string;
 
   @Column({ type: 'varchar', unique: true, nullable: true })
-  cpf: string;
+  cpf: string | null;
 
   @Column({ type: 'varchar', nullable: true })
-  email: string;
+  email: string | null;
 
   @Column({ type: 'varchar', nullable: true })
-  celular: string;
+  celular: string | null;
 
   @Column({ type: 'date', nullable: true })
   data_nascimento: string;

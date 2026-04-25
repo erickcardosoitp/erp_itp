@@ -29,13 +29,13 @@ export class Inscricao {
   @Column({ name: 'nome_completo', type: 'varchar' }) 
   nome_completo: string;
 
-  @Column({ type: 'varchar' })
+  @Column({ type: 'varchar', nullable: true })
   cpf: string;
 
-  @Column({ type: 'varchar' }) 
+  @Column({ type: 'varchar', nullable: true })
   email: string;
 
-  @Column({ type: 'varchar' }) 
+  @Column({ type: 'varchar', nullable: true })
   celular: string;
 
   @Column({ name: 'data_nascimento', type: 'date', nullable: true }) 
