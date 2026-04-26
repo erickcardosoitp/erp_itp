@@ -235,6 +235,7 @@ export class MatriculasService {
 
   /**
    * FASE 1 -> 2: Gera token único, envia e-mail e marca como aguardando LGPD.
+   * Se o aluno já está MATRICULADO, apenas reenvia o e-mail sem alterar o status.
    */
   async marcarComoAguardandoLGPD(id: number): Promise<Inscricao> {
     const inscricao = await this.inscricaoRepository.findOneBy({ id });
@@ -244,10 +245,16 @@ export class MatriculasService {
     const expires = new Date();
     expires.setHours(expires.getHours() + 72); // válido por 72h
 
-    inscricao.status_matricula = StatusMatricula.AGUARDANDO_LGPD;
+    const jaMatriculado = inscricao.status_matricula === StatusMatricula.MATRICULADO;
+
+    // Não reverter status nem lgpd_aceito se o aluno já foi matriculado
+    if (!jaMatriculado) {
+      inscricao.status_matricula = StatusMatricula.AGUARDANDO_LGPD;
+      inscricao.lgpd_aceito = false;
+    }
+
     inscricao.lgpd_token = token;
     inscricao.lgpd_token_expires_at = expires;
-    inscricao.lgpd_aceito = false;
 
     const salva = (await this.inscricaoRepository.save(inscricao)) as Inscricao;
 
