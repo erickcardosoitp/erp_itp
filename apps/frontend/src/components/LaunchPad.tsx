@@ -6,7 +6,7 @@ import {
   Rocket, X, ClipboardCheck, Package,
   ChevronRight, CheckSquare, Square,
   Loader2, CheckCircle2, QrCode, ArrowLeft,
-  BookOpen, CalendarDays, Clock,
+  BookOpen, CalendarDays, Clock, ExternalLink,
 } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
 import api from '@/services/api';
@@ -264,6 +264,23 @@ export default function LaunchPad() {
                     </div>
                     <ChevronRight size={16} className="text-purple-500 shrink-0" />
                   </button>
+                )}
+                {podeChamada && (
+                  <a
+                    href="/academico/chamada-professor"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full flex items-center gap-4 bg-indigo-900/30 hover:bg-indigo-800/40 border border-indigo-700/30 rounded-2xl px-4 py-4 text-left transition-all group"
+                  >
+                    <div className="bg-indigo-600 p-2.5 rounded-xl shrink-0 group-hover:bg-indigo-500 transition-colors">
+                      <ExternalLink size={20} className="text-white" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-black text-white">Link do Professor</p>
+                      <p className="text-[10px] text-indigo-400 mt-0.5">Chamada externa via CPF</p>
+                    </div>
+                    <ChevronRight size={16} className="text-indigo-500 shrink-0" />
+                  </a>
                 )}
                 {podeEstoque && (
                   <a

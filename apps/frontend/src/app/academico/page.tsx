@@ -986,9 +986,12 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
             {/* Header */}
             <div className="p-5 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center text-purple-600 font-black text-lg">
-                  {(fichaAluno.aluno?.nome_completo || '?')[0].toUpperCase()}
-                </div>
+                {fichaAluno.foto_url
+                  ? <img src={fichaAluno.foto_url} alt="" className="w-12 h-12 rounded-xl object-cover shrink-0 border border-slate-200 shadow-sm" />
+                  : <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center text-purple-600 font-black text-lg">
+                      {(fichaAluno.aluno?.nome_completo || '?')[0].toUpperCase()}
+                    </div>
+                }
                 <div>
                   <h2 className="font-black text-slate-800 text-base uppercase tracking-tight">{fichaAluno.aluno?.nome_completo}</h2>
                   <div className="flex gap-1.5 mt-0.5 flex-wrap items-center">

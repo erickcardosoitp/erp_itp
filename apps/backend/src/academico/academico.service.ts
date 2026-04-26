@@ -268,42 +268,46 @@ export class AcademicoService {
     }
     const alunos = await qb.orderBy('a.ativo', 'DESC').addOrderBy('a.nome_completo', 'ASC').getMany();
     if (!alunos.length) return alunos;
-    // Enriquece com todas as turmas + foto_url
+    // Enriquece com turmas e foto separadamente (falhas independentes)
+    const alunoIds = alunos.map(a => `'${a.id}'`).join(',');
+
+    let turmaMap: Record<string, any[]> = {};
     try {
-      const alunoIds = alunos.map(a => `'${a.id}'`).join(',');
-      const [turmaRows, fotoRows]: [any[], any[]] = await Promise.all([
-        this.dataSource.query(
-          `SELECT ta.aluno_id::text AS aluno_id,
-              json_agg(json_build_object('id', ta.turma_id::text, 'nome', t.nome, 'cor', t.cor, 'status', ta.status)
-                       ORDER BY ta.created_at) FILTER (WHERE ta.turma_id IS NOT NULL) AS turmas
-           FROM turma_alunos ta
-           LEFT JOIN turmas t ON ta.turma_id IS NOT NULL AND t.id::text = ta.turma_id::text
-           WHERE ta.aluno_id::text IN (${alunoIds})
-           GROUP BY ta.aluno_id`
-        ),
-        this.dataSource.query(
-          `SELECT DISTINCT ON (a.id) a.id::text AS aluno_id, d.url_arquivo AS foto_url
-           FROM alunos a
-           JOIN documentos_inscricao d ON d.inscricao_id = a.inscricao_id AND d.tipo = 'foto_aluno'
-           WHERE a.id::text IN (${alunoIds})
-           ORDER BY a.id, d.created_at DESC`
-        ),
-      ]);
-      const turmaMap: Record<string, any[]> = {};
-      turmaRows.forEach(r => { turmaMap[r.aluno_id] = r.turmas ?? []; });
-      const fotoMap: Record<string, string> = {};
-      fotoRows.forEach(r => { fotoMap[r.aluno_id] = r.foto_url; });
-      return alunos.map(a => ({
-        ...a,
-        turmas: turmaMap[a.id] ?? [],
-        foto_url: fotoMap[a.id] ?? null,
-        turma_status: (turmaMap[a.id] ?? []).find((t: any) => t.status === 'ativo') ? 'ativo' : ((turmaMap[a.id] ?? []).length ? 'backlog' : 'sem_turma'),
-        turma_nome: (turmaMap[a.id] ?? []).find((t: any) => t.status === 'ativo')?.nome ?? null,
-      }));
+      const turmaRows = await this.dataSource.query(
+        `SELECT ta.aluno_id::text AS aluno_id,
+            json_agg(json_build_object('id', ta.turma_id::text, 'nome', t.nome, 'cor', t.cor, 'status', ta.status)
+                     ORDER BY ta.created_at) FILTER (WHERE ta.turma_id IS NOT NULL) AS turmas
+         FROM turma_alunos ta
+         LEFT JOIN turmas t ON ta.turma_id IS NOT NULL AND t.id::text = ta.turma_id::text
+         WHERE ta.aluno_id::text IN (${alunoIds})
+         GROUP BY ta.aluno_id`,
+      );
+      turmaRows.forEach((r: any) => { turmaMap[r.aluno_id] = r.turmas ?? []; });
     } catch (e: any) {
-      this.logger.warn(`[listarAlunos] enriquecimento falhou: ${e?.message}`);
-      return alunos.map(a => ({ ...a, turmas: [], foto_url: null, turma_status: 'sem_turma', turma_nome: null }));
+      this.logger.warn(`[listarAlunos] turmas falhou: ${e?.message}`);
     }
+
+    let fotoMap: Record<string, string> = {};
+    try {
+      const fotoRows = await this.dataSource.query(
+        `SELECT DISTINCT ON (a.id) a.id::text AS aluno_id, d.url_arquivo AS foto_url
+         FROM alunos a
+         JOIN documentos_inscricao d ON d.inscricao_id = a.inscricao_id AND d.tipo = 'foto_aluno'
+         WHERE a.id::text IN (${alunoIds}) AND a.inscricao_id IS NOT NULL
+         ORDER BY a.id, d.created_at DESC`,
+      );
+      fotoRows.forEach((r: any) => { fotoMap[r.aluno_id] = r.foto_url; });
+    } catch (e: any) {
+      this.logger.warn(`[listarAlunos] fotos falhou: ${e?.message}`);
+    }
+
+    return alunos.map(a => ({
+      ...a,
+      turmas: turmaMap[a.id] ?? [],
+      foto_url: fotoMap[a.id] ?? null,
+      turma_status: (turmaMap[a.id] ?? []).find((t: any) => t.status === 'ativo') ? 'ativo' : ((turmaMap[a.id] ?? []).length ? 'backlog' : 'sem_turma'),
+      turma_nome: (turmaMap[a.id] ?? []).find((t: any) => t.status === 'ativo')?.nome ?? null,
+    }));
   }
 
   async fichaAluno(id: string) {
@@ -336,8 +340,19 @@ export class AcademicoService {
     const totalPresencas = frequencia.filter(f => f.descricao?.toLowerCase().includes('presente')).length;
     const totalFaltas    = frequencia.filter(f => f.descricao?.toLowerCase().includes('falta') || !f.descricao?.toLowerCase().includes('presente')).length;
 
+    let foto_url: string | null = null;
+    if (inscricao_id) {
+      try {
+        const [fotoRow] = await this.dataSource.query(
+          `SELECT url_arquivo FROM documentos_inscricao WHERE inscricao_id = $1 AND tipo = 'foto_aluno' ORDER BY created_at DESC LIMIT 1`,
+          [inscricao_id],
+        );
+        foto_url = fotoRow?.url_arquivo ?? null;
+      } catch { /* sem foto */ }
+    }
+
     this.logger.log(`Ficha do aluno ${aluno.nome_completo}: ${historico.length} registros no diário, inscricao_id=${inscricao_id}`);
-    return { aluno, inscricao_id, frequencia, historico, turmaInfo, turmasDoAluno, totalPresencas, totalFaltas };
+    return { aluno, inscricao_id, frequencia, historico, turmaInfo, turmasDoAluno, totalPresencas, totalFaltas, foto_url };
   }
 
   async criarAluno(dto: Partial<Aluno>) {
