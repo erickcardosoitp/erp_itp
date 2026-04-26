@@ -273,11 +273,11 @@ export class AcademicoService {
       const alunoIds = alunos.map(a => `'${a.id}'`).join(',');
       const [turmaRows, fotoRows]: [any[], any[]] = await Promise.all([
         this.dataSource.query(
-          `SELECT ta.aluno_id::text,
+          `SELECT ta.aluno_id::text AS aluno_id,
               json_agg(json_build_object('id', ta.turma_id::text, 'nome', t.nome, 'cor', t.cor, 'status', ta.status)
                        ORDER BY ta.created_at) FILTER (WHERE ta.turma_id IS NOT NULL) AS turmas
            FROM turma_alunos ta
-           LEFT JOIN turmas t ON ta.turma_id IS NOT NULL AND t.id = ta.turma_id
+           LEFT JOIN turmas t ON ta.turma_id IS NOT NULL AND t.id::text = ta.turma_id::text
            WHERE ta.aluno_id::text IN (${alunoIds})
            GROUP BY ta.aluno_id`
         ),
@@ -286,7 +286,7 @@ export class AcademicoService {
            FROM alunos a
            JOIN documentos_inscricao d ON d.inscricao_id = a.inscricao_id AND d.tipo = 'foto_aluno'
            WHERE a.id::text IN (${alunoIds})
-           ORDER BY a.id, d."createdAt" DESC`
+           ORDER BY a.id, d.created_at DESC`
         ),
       ]);
       const turmaMap: Record<string, any[]> = {};
@@ -323,7 +323,7 @@ export class AcademicoService {
       this.dataSource.query(
         `SELECT ta.id::text, ta.turma_id::text, ta.status, t.nome AS turma_nome, t.cor AS turma_cor, t.turno
          FROM turma_alunos ta
-         LEFT JOIN turmas t ON ta.turma_id IS NOT NULL AND t.id = ta.turma_id
+         LEFT JOIN turmas t ON ta.turma_id IS NOT NULL AND t.id::text = ta.turma_id::text
          WHERE ta.aluno_id::text = $1
          ORDER BY ta.status DESC, t.nome ASC`, [id]
       ),
@@ -451,7 +451,7 @@ export class AcademicoService {
        LEFT JOIN LATERAL (
          SELECT url_arquivo FROM documentos_inscricao
          WHERE inscricao_id = a.inscricao_id AND tipo = 'foto_aluno'
-         ORDER BY "createdAt" DESC LIMIT 1
+         ORDER BY created_at DESC LIMIT 1
        ) d ON true
        WHERE ta.turma_id::text = $1 AND ta.status = 'ativo'
        ORDER BY a.nome_completo ASC`,
