@@ -57,7 +57,7 @@ export class AcademicoController {
     this.svc.validarTokenChamada(dto.token);
     const { token: _token, ...alunoData } = dto;
     try {
-      return await this.svc.criarAluno(alunoData);
+      return await this.svc.criarAlunoViaChamada(alunoData);
     } catch (e) {
       this.logger.error('[chamada/aluno-rapido] Erro ao criar aluno:', (e as any)?.message, (e as any)?.stack);
       throw e;
@@ -203,6 +203,10 @@ export class AcademicoController {
   @Get('alunos/kpis')
   @ModuloPerm('academico', 'visualizar')
   getKpisTurmas() { return this.svc.kpisTurmas(); }
+
+  @Get('alunos/pendentes')
+  @ModuloPerm('academico', 'visualizar')
+  getPendentes() { return this.svc.listarAlunosPendentes(); }
 
   @Get('documentos/acervo')
   @ModuloPerm('academico', 'visualizar')

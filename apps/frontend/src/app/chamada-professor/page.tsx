@@ -1,14 +1,14 @@
 'use client';
 
 import React, { useState, useCallback } from 'react';
-import { GraduationCap, Search, ChevronRight, Check, X, RefreshCw, ClipboardCheck, Users, ArrowLeft, Phone, UserCircle, ChevronDown } from 'lucide-react';
+import { GraduationCap, Search, ChevronRight, Check, X, RefreshCw, ClipboardCheck, Users, ArrowLeft, Phone, UserCircle, ChevronDown, UserPlus } from 'lucide-react';
 
 // Chama o backend diretamente — sem passar pelo proxy do Next.js
 const BACKEND = (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001/api');
 const TOKEN   = process.env.NEXT_PUBLIC_CHAMADA_TOKEN || 'itp-chamada-2026';
 
 type Step = 'login' | 'turmas' | 'chamada' | 'sucesso';
-type ChamadaTab = 'chamada' | 'fichas';
+type ChamadaTab = 'chamada' | 'fichas' | 'novo_aluno';
 
 interface Turma   { id: string; nome: string; cor?: string; turno?: string; curso_nome?: string; }
 interface Professor { id: string; nome: string; }
@@ -62,6 +62,10 @@ export default function ChamadaProfessorPage() {
   const [erroSalvar, setErroSalvar]   = useState<string | null>(null);
   const [chamadaTab, setChamadaTab]   = useState<ChamadaTab>('chamada');
   const [fichaAberta, setFichaAberta] = useState<string | null>(null);
+  const [novoAluno, setNovoAluno]     = useState({ nome_completo: '', data_nascimento: '', celular: '' });
+  const [salvandoNovo, setSalvandoNovo] = useState(false);
+  const [erroNovo, setErroNovo]       = useState<string | null>(null);
+  const [sucessoNovo, setSucessoNovo] = useState<string | null>(null);
 
   const buscarProfessor = useCallback(async () => {
     const cpfLimpo = cpf.replace(/\D/g, '');
@@ -107,6 +111,33 @@ export default function ChamadaProfessorPage() {
   const togglePresenca = (alunoId: string) => {
     setRegistros(prev => prev.map(r => r.aluno_id === alunoId ? { ...r, presente: !r.presente } : r));
   };
+
+  const criarAlunoRapido = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!novoAluno.nome_completo.trim()) { setErroNovo('Nome completo é obrigatório.'); return; }
+    setSalvandoNovo(true); setErroNovo(null); setSucessoNovo(null);
+    try {
+      const res = await fetch(`${BACKEND}/academico/chamada/aluno-rapido`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token: TOKEN,
+          nome_completo: novoAluno.nome_completo.trim(),
+          data_nascimento: novoAluno.data_nascimento || undefined,
+          celular: novoAluno.celular.trim() || undefined,
+          professor_nome: professor?.nome,
+        }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.message || 'Erro ao cadastrar.');
+      setSucessoNovo(`"${body.nome_completo}" cadastrado! Matrícula: ${body.numero_matricula}`);
+      setNovoAluno({ nome_completo: '', data_nascimento: '', celular: '' });
+    } catch (err: any) {
+      setErroNovo(err.message || 'Erro ao cadastrar aluno.');
+    } finally {
+      setSalvandoNovo(false);
+    }
+  }, [novoAluno, professor]);
 
   const salvar = useCallback(async () => {
     if (!turmaEscolhida || !professor) return;
@@ -248,11 +279,17 @@ export default function ChamadaProfessorPage() {
 
             {/* Tabs */}
             <div className="flex border-b border-white/10">
-              {(['chamada', 'fichas'] as ChamadaTab[]).map(tab => (
-                <button key={tab} onClick={() => setChamadaTab(tab)}
-                  className={`flex-1 py-3 text-xs font-black uppercase tracking-widest transition-colors ${chamadaTab === tab ? 'text-purple-400 border-b-2 border-purple-400' : 'text-slate-500 hover:text-slate-300'}`}>
-                  {tab === 'chamada' ? <span className="flex items-center justify-center gap-1.5"><ClipboardCheck size={13}/> Chamada</span>
-                                    : <span className="flex items-center justify-center gap-1.5"><Users size={13}/> Fichas</span>}
+              {([
+                { id: 'chamada',    label: 'Chamada',    Icon: ClipboardCheck },
+                { id: 'fichas',     label: 'Fichas',     Icon: Users },
+                { id: 'novo_aluno', label: 'Novo Aluno', Icon: UserPlus },
+              ] as { id: ChamadaTab; label: string; Icon: any }[]).map(({ id, label, Icon }) => (
+                <button key={id} onClick={() => { setChamadaTab(id); setErroNovo(null); setSucessoNovo(null); }}
+                  className={`flex-1 py-3 text-xs font-black uppercase tracking-widest transition-colors
+                    ${chamadaTab === id
+                      ? id === 'novo_aluno' ? 'text-green-400 border-b-2 border-green-400' : 'text-purple-400 border-b-2 border-purple-400'
+                      : 'text-slate-500 hover:text-slate-300'}`}>
+                  <span className="flex items-center justify-center gap-1.5"><Icon size={13}/> {label}</span>
                 </button>
               ))}
             </div>
@@ -323,6 +360,75 @@ export default function ChamadaProfessorPage() {
                   </div>
                 </div>
               </>
+            )}
+
+            {/* Tab: Novo Aluno */}
+            {chamadaTab === 'novo_aluno' && (
+              <div className="px-6 py-6 space-y-4">
+                <div className="text-center space-y-1 mb-2">
+                  <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-green-500/10 border border-green-500/20">
+                    <UserPlus size={22} className="text-green-400" />
+                  </div>
+                  <p className="text-white font-black text-sm">Cadastro Rápido</p>
+                  <p className="text-slate-400 text-xs">O aluno ficará pendente de matrícula formal no sistema.</p>
+                </div>
+
+                {sucessoNovo ? (
+                  <div className="space-y-3">
+                    <div className="bg-green-500/10 border border-green-500/20 rounded-2xl px-5 py-5 text-center space-y-2">
+                      <Check size={28} className="text-green-400 mx-auto" />
+                      <p className="text-green-400 font-black text-sm">{sucessoNovo}</p>
+                      <p className="text-slate-400 text-xs">A equipe DRT foi notificada para formalizar a matrícula.</p>
+                    </div>
+                    <button
+                      onClick={() => { setSucessoNovo(null); setNovoAluno({ nome_completo: '', data_nascimento: '', celular: '' }); }}
+                      className="w-full py-3 bg-green-600 hover:bg-green-500 text-white font-black rounded-xl text-xs uppercase tracking-wider">
+                      + Cadastrar Outro
+                    </button>
+                  </div>
+                ) : (
+                  <form onSubmit={criarAlunoRapido} className="space-y-3">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Nome Completo *</label>
+                      <input
+                        value={novoAluno.nome_completo}
+                        onChange={e => setNovoAluno(p => ({ ...p, nome_completo: e.target.value }))}
+                        placeholder="Nome do aluno"
+                        required
+                        className="w-full bg-white/10 border border-white/20 text-white placeholder-slate-500 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Data de Nascimento</label>
+                      <input
+                        type="date"
+                        value={novoAluno.data_nascimento}
+                        onChange={e => setNovoAluno(p => ({ ...p, data_nascimento: e.target.value }))}
+                        className="w-full bg-white/10 border border-white/20 text-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 [color-scheme:dark]"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Telefone do Responsável</label>
+                      <input
+                        type="tel"
+                        value={novoAluno.celular}
+                        onChange={e => setNovoAluno(p => ({ ...p, celular: e.target.value }))}
+                        placeholder="(11) 99999-9999"
+                        className="w-full bg-white/10 border border-white/20 text-white placeholder-slate-500 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                      />
+                    </div>
+                    {erroNovo && (
+                      <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold rounded-xl px-4 py-3">
+                        <X size={12} className="shrink-0 mt-0.5"/>{erroNovo}
+                      </div>
+                    )}
+                    <button type="submit" disabled={salvandoNovo}
+                      className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-500 disabled:opacity-40 text-white font-black py-3 rounded-xl text-xs uppercase tracking-wider transition-all active:scale-95">
+                      {salvandoNovo ? <><RefreshCw size={13} className="animate-spin"/> Cadastrando...</> : <><UserPlus size={13}/> Cadastrar Aluno</>}
+                    </button>
+                  </form>
+                )}
+              </div>
             )}
 
             {/* Tab: Fichas */}

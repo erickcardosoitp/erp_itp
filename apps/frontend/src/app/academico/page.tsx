@@ -7,7 +7,8 @@ import {
   Plus, Trash2, Search, X, ClipboardList, AlertCircle,
   Edit3, Coffee, UserPlus, RefreshCw, ClipboardCheck, CheckSquare, Square,
   ChevronDown, ChevronUp, FileText, Eye, Smartphone, Copy, Check, Save,
-  Clock, User, Calendar,
+  Clock, User, Calendar, MapPin, Mail, Shield, ShieldCheck, AlertTriangle,
+  Heart, Phone, BadgeCheck,
 } from 'lucide-react';
 import api from '@/services/api';
 import { useAuth } from '@/context/auth-context';
@@ -711,6 +712,8 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
   const [fichaEditSalvando, setFichaEditSalvando] = useState(false);
   const [fichaEditErro, setFichaEditErro] = useState<string | null>(null);
   const [buscandoCepFicha, setBuscandoCepFicha] = useState(false);
+  const [pendentes, setPendentes] = useState<any[]>([]);
+  const [showPendentes, setShowPendentes] = useState(true);
 
   const buscarCepFicha = useCallback(async (cep: string) => {
     const limpo = cep.replace(/\D/g, '');
@@ -769,6 +772,10 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
   }, [filtroNome, filtroCursoNome, filtroTurmaId, filtroStatus, filtroTurno, filtroSexo, filtroCidade]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    api.get('/academico/alunos/pendentes').then(r => setPendentes(r.data)).catch(() => {});
+  }, []);
 
   const verFicha = async (id: string) => {
     setFichaErro(null);
@@ -868,6 +875,66 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
 
   return (
     <div className="space-y-4">
+
+      {/* ── Matrículas Pendentes ─────────────────────────────────────────────── */}
+      {pendentes.length > 0 && (
+        <div className="bg-orange-50 dark:bg-orange-900/10 border border-orange-200 dark:border-orange-800/40 rounded-2xl overflow-hidden">
+          <button
+            onClick={() => setShowPendentes(p => !p)}
+            className="w-full flex items-center gap-3 px-5 py-3.5 text-left hover:bg-orange-100/50 dark:hover:bg-orange-900/20 transition-colors"
+          >
+            <AlertTriangle size={16} className="text-orange-500 shrink-0" />
+            <span className="font-black text-orange-700 dark:text-orange-400 text-sm uppercase tracking-wide flex-1">
+              Matrículas Pendentes
+            </span>
+            <span className="bg-orange-500 text-white text-[10px] font-black px-2.5 py-0.5 rounded-full">{pendentes.length}</span>
+            <ChevronDown size={14} className={`text-orange-400 transition-transform ${showPendentes ? 'rotate-180' : ''}`} />
+          </button>
+          {showPendentes && (
+            <div className="border-t border-orange-200 dark:border-orange-800/40 divide-y divide-orange-100 dark:divide-orange-900/30">
+              {pendentes.map((p: any) => {
+                const idade = p.data_nascimento ? (() => {
+                  const hoje = new Date();
+                  const nasc = new Date(p.data_nascimento + 'T12:00:00');
+                  let i = hoje.getFullYear() - nasc.getFullYear();
+                  const m = hoje.getMonth() - nasc.getMonth();
+                  if (m < 0 || (m === 0 && hoje.getDate() < nasc.getDate())) i--;
+                  return i;
+                })() : null;
+                const wa = p.celular ? `https://wa.me/55${p.celular.replace(/\D/g, '')}` : null;
+                return (
+                  <div key={p.id} className="flex items-center gap-3 px-5 py-3 flex-wrap">
+                    <div className="w-8 h-8 rounded-full bg-orange-200 dark:bg-orange-800 flex items-center justify-center text-orange-700 dark:text-orange-300 font-black text-sm shrink-0">
+                      {(p.nome_completo[0] || '?').toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-[140px]">
+                      <p className="font-bold text-sm text-slate-800 dark:text-slate-100">{p.nome_completo}</p>
+                      <p className="text-[10px] text-slate-400 flex items-center gap-2">
+                        <span className="font-mono">{p.numero_matricula}</span>
+                        {idade !== null && <span>· {idade} anos</span>}
+                        {p.nome_responsavel && <span>· Resp: {p.nome_responsavel}</span>}
+                      </p>
+                    </div>
+                    <div className="flex gap-2 items-center">
+                      {wa && (
+                        <a href={wa} target="_blank" rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-[10px] font-bold text-green-600 hover:text-green-700 bg-green-50 dark:bg-green-900/20 px-2.5 py-1.5 rounded-lg">
+                          <Smartphone size={11}/> WhatsApp
+                        </a>
+                      )}
+                      <button onClick={() => verFicha(p.id)}
+                        className="text-[10px] font-black uppercase px-3 py-1.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-white transition-colors">
+                        Ver Ficha
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       <KpisTurmas alunos={alunos} turmas={turmas} />
       <div className="flex flex-wrap gap-3 items-end bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
         <div className="flex-1 min-w-[180px]">
@@ -1110,406 +1177,436 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
         </Modal>
       )}
 
-      {fichaAluno && (
-        <div className="fixed inset-0 z-[300] bg-purple-950/60 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="w-full max-w-2xl bg-white rounded-[32px] shadow-2xl flex flex-col overflow-hidden max-h-[92vh]">
-            {/* Header */}
-            <div className="p-5 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
-              <div className="flex items-center gap-3">
-                {fichaAluno.foto_url
-                  ? <img src={fichaAluno.foto_url} alt="" className="w-12 h-12 rounded-xl object-cover shrink-0 border border-slate-200 shadow-sm" />
-                  : <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center text-purple-600 font-black text-lg">
-                      {(fichaAluno.aluno?.nome_completo || '?')[0].toUpperCase()}
-                    </div>
-                }
-                <div>
-                  <h2 className="font-black text-slate-800 text-base uppercase tracking-tight">{fichaAluno.aluno?.nome_completo}</h2>
-                  <div className="flex gap-1.5 mt-0.5 flex-wrap items-center">
-                    <span className="font-mono text-[10px] font-black text-purple-700 bg-purple-50 px-2 py-0.5 rounded">{fichaAluno.aluno?.numero_matricula || '–'}</span>
-                    {(fichaAluno.turmasDoAluno || []).filter((t: any) => t.status === 'ativo' && t.turma_id).map((t: any) => (
-                      <span key={t.id} className="text-[9px] font-black text-white px-2 py-0.5 rounded shadow-sm" style={{ backgroundColor: t.turma_cor || '#4f46e5' }}>{t.turma_nome}</span>
-                    ))}
-                    <span className={`text-[10px] font-black px-2 py-0.5 rounded ${fichaAluno.aluno?.ativo ? 'bg-green-50 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
-                      {fichaAluno.aluno?.ativo ? 'Ativo' : 'Inativo'}
-                    </span>
-                    {(() => { const dn = fichaAluno.aluno?.data_nascimento; const idade = dn ? calcularIdade(dn) : 99; return idade < 99 ? <span className="text-[10px] font-black text-amber-700 bg-amber-50 px-2 py-0.5 rounded">{idade} anos</span> : null; })()}
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                {fichaAluno.inscricao_id && !fichaEditando && (
-                  <button
-                    onClick={() => {
-                      api.get(`/matriculas/inscricao/${fichaAluno.inscricao_id}`)
-                        .then(r => { setFichaAluno(null); setDossieCandidato(r.data); })
-                        .catch(() => alert('Não foi possível carregar o dossier do candidato.'));
-                    }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-[9px] font-black uppercase transition-colors"
-                    title="Abrir Dossier Completo (LGPD, documentos, movimentações)"
-                  >
-                    <FileText size={11}/> Dossier Completo
-                  </button>
-                )}
-                {fichaEditando ? (
-                  <div className="flex gap-1.5">
-                    <button onClick={() => { setFichaEditando(false); setFichaEditErro(null); }}
-                      className="px-3 py-1.5 rounded-xl text-[9px] font-black uppercase border border-slate-200 text-slate-500 hover:bg-slate-50">
-                      Cancelar
-                    </button>
-                    <button onClick={salvarFicha} disabled={fichaEditSalvando}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-[9px] font-black uppercase disabled:opacity-50">
-                      <Save size={11}/> {fichaEditSalvando ? 'Salvando...' : 'Salvar'}
-                    </button>
-                  </div>
-                ) : (
-                  <button onClick={() => { setFichaForm({ ...fichaAluno.aluno }); setFichaEditErro(null); setFichaEditando(true); }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-[9px] font-black uppercase">
-                    <Edit3 size={11}/> Editar
-                  </button>
-                )}
-                <button onClick={() => { setFichaAluno(null); setFichaEditando(false); }} className="p-1.5 hover:bg-slate-100 rounded-xl text-slate-400"><X size={16}/></button>
-              </div>
-            </div>
+      {fichaAluno && (() => {
+        const a = fichaAluno.aluno;
+        const idade = a?.data_nascimento ? calcularIdade(a.data_nascimento) : null;
+        const wa = a?.celular ? `https://wa.me/55${a.celular.replace(/\D/g, '')}` : null;
+        const waResp = a?.telefone_alternativo ? `https://wa.me/55${a.telefone_alternativo.replace(/\D/g, '')}` : null;
+        const lgpdOk = a?.lgpd_aceito;
+        return (
+          <div className="fixed inset-0 z-[300] bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-3">
+            <div className="w-full max-w-3xl bg-white dark:bg-slate-900 rounded-[28px] shadow-2xl flex flex-col overflow-hidden max-h-[95vh]">
 
-            {/* Tabs */}
-            <div className="flex border-b border-slate-100 bg-white shrink-0 px-4">
-              {(['dados', 'presenca'] as const).map(aba => (
-                <button key={aba} onClick={() => setFichaAba(aba)}
-                  className={`px-4 py-2.5 text-[10px] font-black uppercase tracking-widest border-b-2 transition-colors ${
-                    fichaAba === aba ? 'border-purple-600 text-purple-700' : 'border-transparent text-slate-400 hover:text-slate-700'
-                  }`}>
-                  {aba === 'dados' ? 'Cadastro' : `Presença (${fichaAluno.totalPresencas ?? 0}P / ${fichaAluno.totalFaltas ?? 0}F)`}
+              {/* ── HERO HEADER ─────────────────────────────────────────────── */}
+              <div className="relative bg-gradient-to-br from-purple-700 via-purple-600 to-indigo-700 px-6 pt-6 pb-8 shrink-0">
+                <button
+                  onClick={() => { setFichaAluno(null); setFichaEditando(false); }}
+                  className="absolute top-4 right-4 p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-all">
+                  <X size={16}/>
                 </button>
-              ))}
-            </div>
 
-            {/* Content */}
-            <div className="overflow-y-auto flex-1 p-5 space-y-4">
-              {fichaAba === 'dados' && fichaEditando ? (
-                /* ── Modo Edição ──────────────────────────────────────── */
-                <div className="space-y-4">
-                  {fichaEditErro && (
-                    <div className="bg-red-50 border border-red-200 text-red-700 text-[11px] font-bold rounded-xl px-4 py-2.5">⚠ {fichaEditErro}</div>
-                  )}
-                  {/* Identificação */}
-                  <section>
-                    <h4 className="text-[9px] font-black uppercase text-purple-600 mb-2 tracking-widest border-b border-purple-100 pb-1">Identificação</h4>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="col-span-2 space-y-1">
-                        <label className="text-[9px] font-black uppercase text-slate-400">Nome Completo</label>
-                        <input value={fichaForm.nome_completo || ''} onChange={e => setFichaForm(p => ({ ...p, nome_completo: e.target.value }))}
-                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400" />
-                      </div>
-                      {([
-                        ['CPF', 'cpf'], ['Celular', 'celular'], ['E-mail', 'email'], ['Tel. Alternativo', 'telefone_alternativo'],
-                      ] as [string, keyof Aluno][]).map(([label, field]) => (
-                        <div key={field} className="space-y-1">
-                          <label className="text-[9px] font-black uppercase text-slate-400">{label}</label>
-                          <input value={(fichaForm[field] as string) || ''} onChange={e => setFichaForm(p => ({ ...p, [field]: e.target.value }))}
-                            className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400" />
+                <div className="flex items-start gap-4">
+                  {/* Avatar */}
+                  <div className="shrink-0">
+                    {fichaAluno.foto_url
+                      ? <img src={fichaAluno.foto_url} alt="" className="w-20 h-20 rounded-2xl object-cover border-4 border-white/30 shadow-xl" />
+                      : <div className="w-20 h-20 rounded-2xl bg-white/20 border-4 border-white/25 flex items-center justify-center text-4xl font-black text-white shadow-xl">
+                          {(a?.nome_completo || '?')[0].toUpperCase()}
                         </div>
-                      ))}
-                      <div className="space-y-1">
-                        <label className="text-[9px] font-black uppercase text-slate-400">Nascimento</label>
-                        <input type="date" value={fichaForm.data_nascimento || ''} onChange={e => setFichaForm(p => ({ ...p, data_nascimento: e.target.value }))}
-                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400" />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[9px] font-black uppercase text-slate-400">Sexo</label>
-                        <select value={fichaForm.sexo || ''} onChange={e => setFichaForm(p => ({ ...p, sexo: e.target.value }))}
-                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white">
-                          <option value="">—</option>
-                          {['Masculino', 'Feminino', 'Outro', 'Prefiro não informar'].map(o => <option key={o}>{o}</option>)}
-                        </select>
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[9px] font-black uppercase text-slate-400">Escolaridade</label>
-                        <select value={fichaForm.escolaridade || ''} onChange={e => setFichaForm(p => ({ ...p, escolaridade: e.target.value }))}
-                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white">
-                          <option value="">—</option>
-                          {['Fund. Incompleto', 'Fund. Completo', 'Médio Incompleto', 'Médio Completo', 'Superior Incompleto', 'Superior Completo'].map(o => <option key={o}>{o}</option>)}
-                        </select>
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[9px] font-black uppercase text-slate-400">Turno Escolar</label>
-                        <select value={fichaForm.turno_escolar || ''} onChange={e => setFichaForm(p => ({ ...p, turno_escolar: e.target.value }))}
-                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white">
-                          <option value="">—</option>
-                          {['Manhã', 'Tarde', 'Noite', 'Integral', 'Não estuda'].map(o => <option key={o}>{o}</option>)}
-                        </select>
-                      </div>
-                    </div>
-                  </section>
-                  {/* Endereço */}
-                  <section>
-                    <h4 className="text-[9px] font-black uppercase text-purple-600 mb-2 tracking-widest border-b border-purple-100 pb-1 flex items-center gap-2">
-                      Endereço
-                      {buscandoCepFicha && <span className="text-[8px] font-black text-green-600 animate-pulse normal-case">Buscando CEP...</span>}
-                    </h4>
-                    <div className="grid grid-cols-2 gap-2">
-                      {/* CEP primeiro — aciona lookup automático */}
-                      <div className="space-y-1">
-                        <label className="text-[9px] font-black uppercase text-slate-400">CEP</label>
-                        <input
-                          value={fichaForm.cep || ''}
-                          onChange={e => {
-                            setFichaForm(p => ({ ...p, cep: e.target.value }));
-                            if (e.target.value.replace(/\D/g, '').length === 8) buscarCepFicha(e.target.value);
-                          }}
-                          onBlur={e => buscarCepFicha(e.target.value)}
-                          placeholder="00000-000"
-                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[9px] font-black uppercase text-slate-400">Número</label>
-                        <input value={fichaForm.numero || ''} onChange={e => setFichaForm(p => ({ ...p, numero: e.target.value }))}
-                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400" />
-                      </div>
-                      {([
-                        ['Logradouro', 'logradouro'], ['Complemento', 'complemento'],
-                        ['Bairro', 'bairro'], ['Cidade', 'cidade'], ['Estado (UF)', 'estado_uf'],
-                      ] as [string, keyof Aluno][]).map(([label, field]) => (
-                        <div key={field} className="space-y-1">
-                          <label className="text-[9px] font-black uppercase text-slate-400">{label}</label>
-                          <input value={(fichaForm[field] as string) || ''} onChange={e => setFichaForm(p => ({ ...p, [field]: e.target.value }))}
-                            className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400" />
-                        </div>
-                      ))}
-                    </div>
-                  </section>
-                  {/* Responsável */}
-                  <section>
-                    <h4 className="text-[9px] font-black uppercase text-purple-600 mb-2 tracking-widest border-b border-purple-100 pb-1">Responsável</h4>
-                    <div className="grid grid-cols-2 gap-2">
-                      {([
-                        ['Nome', 'nome_responsavel'], ['Parentesco', 'grau_parentesco'],
-                        ['E-mail', 'email_responsavel'], ['CPF', 'cpf_responsavel'],
-                      ] as [string, keyof Aluno][]).map(([label, field]) => (
-                        <div key={field} className="space-y-1">
-                          <label className="text-[9px] font-black uppercase text-slate-400">{label}</label>
-                          <input value={(fichaForm[field] as string) || ''} onChange={e => setFichaForm(p => ({ ...p, [field]: e.target.value }))}
-                            className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400" />
-                        </div>
-                      ))}
-                    </div>
-                  </section>
-                  {/* Saúde */}
-                  <section>
-                    <h4 className="text-[9px] font-black uppercase text-amber-600 mb-2 tracking-widest border-b border-amber-100 pb-1">Saúde / Cuidados</h4>
-                    <div className="grid grid-cols-2 gap-2">
-                      {([
-                        ['Alergias', 'possui_alergias'], ['Cuidado Especial', 'cuidado_especial'], ['Medicamentos', 'uso_medicamento'],
-                      ] as [string, keyof Aluno][]).map(([label, field]) => (
-                        <div key={field} className="space-y-1">
-                          <label className="text-[9px] font-black uppercase text-slate-400">{label}</label>
-                          <input value={(fichaForm[field] as string) || ''} onChange={e => setFichaForm(p => ({ ...p, [field]: e.target.value }))}
-                            className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400" />
-                        </div>
-                      ))}
-                      <div className="col-span-2 space-y-1">
-                        <label className="text-[9px] font-black uppercase text-slate-400">Detalhes do Cuidado</label>
-                        <textarea rows={2} value={fichaForm.detalhes_cuidado || ''} onChange={e => setFichaForm(p => ({ ...p, detalhes_cuidado: e.target.value }))}
-                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400 resize-none" />
-                      </div>
-                    </div>
-                  </section>
-                </div>
-              ) : fichaAba === 'dados' ? (
-                /* ── Modo Visualização ────────────────────────────────── */
-                <>
-                  {/* Dados Pessoais */}
-                  <section>
-                    <h4 className="text-[9px] font-black uppercase text-purple-600 mb-2 tracking-widest">Dados Pessoais</h4>
-                    <div className="grid grid-cols-2 gap-2 text-xs">
-                      {([
-                        ['CPF', fichaAluno.aluno?.cpf],
-                        ['Celular', fichaAluno.aluno?.celular],
-                        ['E-mail', fichaAluno.aluno?.email?.toUpperCase()],
-                        ['Nascimento', fmtDate(fichaAluno.aluno?.data_nascimento)],
-                        ['Sexo', fichaAluno.aluno?.sexo],
-                        ['Escolaridade', fichaAluno.aluno?.escolaridade],
-                        ['Turno', fichaAluno.aluno?.turno_escolar],
-                        ['Cursos Matriculados', fichaAluno.aluno?.cursos_matriculados],
-                      ] as [string, string][]).map(([k, v]) => (
-                        <div key={k} className="bg-slate-50 rounded-xl p-2">
-                          <span className="text-[8px] font-black uppercase text-slate-400 block">{k}</span>
-                          <span className="font-bold text-slate-700 truncate block">{v || '–'}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </section>
+                    }
+                  </div>
 
-                  {/* Endereço */}
-                  <section>
-                    <h4 className="text-[9px] font-black uppercase text-purple-600 mb-2 tracking-widest">Endereço</h4>
-                    <div className="grid grid-cols-2 gap-2 text-xs">
-                      {([
-                        ['Cidade', fichaAluno.aluno?.cidade],
-                        ['Bairro', fichaAluno.aluno?.bairro],
-                        ['Logradouro', fichaAluno.aluno?.logradouro],
-                        ['CEP', fichaAluno.aluno?.cep],
-                      ] as [string, string][]).map(([k, v]) => (
-                        <div key={k} className="bg-slate-50 rounded-xl p-2">
-                          <span className="text-[8px] font-black uppercase text-slate-400 block">{k}</span>
-                          <span className="font-bold text-slate-700 truncate block">{v || '–'}</span>
-                        </div>
+                  {/* Info */}
+                  <div className="flex-1 min-w-0 pt-1">
+                    <h2 className="text-white font-black text-xl leading-tight tracking-tight">{a?.nome_completo}</h2>
+                    <p className="text-purple-200 font-mono text-xs mt-0.5">{a?.numero_matricula || '–'}</p>
+                    <div className="flex gap-1.5 mt-2 flex-wrap items-center">
+                      {(fichaAluno.turmasDoAluno || []).filter((t: any) => t.status === 'ativo' && t.turma_id).map((t: any) => (
+                        <span key={t.id} className="text-[9px] font-black text-white px-2.5 py-1 rounded-full shadow-sm border border-white/20"
+                          style={{ backgroundColor: (t.turma_cor || '#4f46e5') + 'cc' }}>
+                          {t.turma_nome}
+                        </span>
                       ))}
-                    </div>
-                  </section>
-
-                  {/* LGPD & Documentos */}
-                  <section>
-                    <h4 className="text-[9px] font-black uppercase text-purple-600 mb-2 tracking-widest">LGPD & Documentos</h4>
-                    <div className="flex flex-wrap gap-2">
-                      <div className={`flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] font-black ${fichaAluno.aluno?.lgpd_aceito ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
-                        {fichaAluno.aluno?.lgpd_aceito ? '✔ LGPD Assinado' : '⏳ LGPD Pendente'}
-                      </div>
-                      {fichaAluno.inscricao_id && (
-                        <button
-                          onClick={() => {
-                            api.get(`/matriculas/inscricao/${fichaAluno.inscricao_id}`)
-                              .then(r => { setFichaAluno(null); setDossieCandidato(r.data); })
-                              .catch(() => alert('Não foi possível carregar o dossier.'));
-                          }}
-                          className="flex items-center gap-1.5 px-3 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-xl text-[10px] font-black uppercase transition-colors"
-                        >
-                          Ver Documentos & Dossier
-                        </button>
+                      <span className={`text-[9px] font-black px-2.5 py-1 rounded-full border ${a?.ativo ? 'bg-green-500/20 border-green-400/40 text-green-200' : 'bg-slate-500/20 border-slate-400/40 text-slate-300'}`}>
+                        {a?.ativo ? 'Ativo' : 'Inativo'}
+                      </span>
+                      {idade !== null && idade < 99 && (
+                        <span className="text-[9px] font-black px-2.5 py-1 rounded-full bg-amber-400/20 border border-amber-400/40 text-amber-200">{idade} anos</span>
                       )}
                     </div>
-                  </section>
-
-                  {/* Turmas */}
-                  {(fichaAluno.turmasDoAluno || []).length > 0 && (
-                    <section>
-                      <h4 className="text-[9px] font-black uppercase text-indigo-600 mb-2 tracking-widest">Turmas Matriculadas</h4>
-                      <div className="flex flex-wrap gap-2">
-                        {(fichaAluno.turmasDoAluno as any[]).map((t: any) => (
-                          <div key={t.id} className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-bold ${t.status === 'ativo' ? 'border-indigo-200 bg-indigo-50 text-indigo-800' : 'border-slate-100 bg-slate-50 text-slate-500'}`}>
-                            {t.turma_id && <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: t.turma_cor || '#6d28d9' }} />}
-                            <span>{t.turma_nome || 'Backlog'}</span>
-                            {t.turno && <span className="text-[9px] text-slate-400 font-medium">{t.turno}</span>}
-                            <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded-full ${t.status === 'ativo' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>{t.status}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </section>
-                  )}
-
-                  {/* Responsável */}
-                  {fichaAluno.aluno?.nome_responsavel && (
-                    <section>
-                      <h4 className="text-[9px] font-black uppercase text-purple-600 mb-2 tracking-widest">Responsável</h4>
-                      <div className="grid grid-cols-2 gap-2 text-xs">
-                        {([
-                          ['Nome', fichaAluno.aluno?.nome_responsavel],
-                          ['Parentesco', fichaAluno.aluno?.grau_parentesco],
-                          ['E-mail', fichaAluno.aluno?.email_responsavel],
-                          ['CPF', fichaAluno.aluno?.cpf_responsavel],
-                        ] as [string, string][]).map(([k, v]) => (
-                          <div key={k} className="bg-slate-50 rounded-xl p-2">
-                            <span className="text-[8px] font-black uppercase text-slate-400 block">{k}</span>
-                            <span className="font-bold text-slate-700 truncate block">{v || '–'}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </section>
-                  )}
-
-                  {/* Saúde */}
-                  {(fichaAluno.aluno?.possui_alergias || fichaAluno.aluno?.cuidado_especial || fichaAluno.aluno?.uso_medicamento) && (
-                    <section>
-                      <h4 className="text-[9px] font-black uppercase text-amber-600 mb-2 tracking-widest">Saúde / Cuidados</h4>
-                      <div className="grid grid-cols-2 gap-2 text-xs">
-                        {([
-                          ['Alergias', fichaAluno.aluno?.possui_alergias],
-                          ['Cuidado Especial', fichaAluno.aluno?.cuidado_especial],
-                          ['Medicamentos', fichaAluno.aluno?.uso_medicamento],
-                          ['Detalhes', fichaAluno.aluno?.detalhes_cuidado],
-                        ] as [string, string][]).map(([k, v]) => v ? (
-                          <div key={k} className="bg-amber-50 rounded-xl p-2 col-span-1">
-                            <span className="text-[8px] font-black uppercase text-amber-500 block">{k}</span>
-                            <span className="font-bold text-amber-700 block text-xs leading-tight">{v}</span>
-                          </div>
-                        ) : null)}
-                      </div>
-                    </section>
-                  )}
-                </>
-              ) : null}
-
-              {fichaAba === 'presenca' && (
-                <>
-                  {/* KPIs */}
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="bg-green-50 border border-green-100 rounded-xl p-3 text-center">
-                      <span className="text-[8px] font-black uppercase text-green-500 block">Presenças</span>
-                      <span className="font-black text-green-700 text-2xl">{fichaAluno.totalPresencas ?? 0}</span>
-                    </div>
-                    <div className="bg-red-50 border border-red-100 rounded-xl p-3 text-center">
-                      <span className="text-[8px] font-black uppercase text-red-500 block">Faltas</span>
-                      <span className="font-black text-red-700 text-2xl">{fichaAluno.totalFaltas ?? 0}</span>
-                    </div>
-                    <div className="bg-purple-50 border border-purple-100 rounded-xl p-3 text-center">
-                      <span className="text-[8px] font-black uppercase text-purple-500 block">% Freq.</span>
-                      <span className="font-black text-purple-700 text-2xl">
-                        {fichaAluno.totalPresencas + fichaAluno.totalFaltas > 0
-                          ? Math.round((fichaAluno.totalPresencas / (fichaAluno.totalPresencas + fichaAluno.totalFaltas)) * 100)
-                          : 0}%
-                      </span>
-                    </div>
                   </div>
 
-                  {/* Histórico de presença detalhado */}
-                  {fichaAluno.frequencia?.length > 0 ? (
-                    <section>
-                      <h4 className="text-[9px] font-black uppercase text-purple-600 mb-2 tracking-widest">Registro por Aula</h4>
-                      <div className="space-y-1.5 max-h-[340px] overflow-y-auto pr-1">
-                        {fichaAluno.frequencia.map((f: any) => (
-                          <div key={f.id} className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold ${
-                            f.descricao === 'Presente' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'
-                          }`}>
-                            <div className={`w-2 h-2 rounded-full shrink-0 ${f.descricao === 'Presente' ? 'bg-green-500' : 'bg-red-400'}`} />
-                            <span className="flex-1 truncate">{fmtDate(f.data)}</span>
-                            <span className="shrink-0 text-[9px] uppercase font-black">{f.descricao}</span>
-                            {f.turma_id && turmas.find(t => t.id === f.turma_id) && (
-                              <span className="shrink-0 text-[8px] font-bold text-slate-400">
-                                {turmas.find(t => t.id === f.turma_id)?.nome}
-                              </span>
-                            )}
+                  {/* Action buttons */}
+                  <div className="flex gap-1.5 shrink-0 pt-1">
+                    {fichaAluno.inscricao_id && !fichaEditando && (
+                      <button
+                        onClick={() => { api.get(`/matriculas/inscricao/${fichaAluno.inscricao_id}`).then(r => { setFichaAluno(null); setDossieCandidato(r.data); }).catch(() => alert('Não foi possível carregar o dossier.')); }}
+                        className="flex items-center gap-1.5 px-3 py-2 bg-white/15 hover:bg-white/25 text-white rounded-xl text-[9px] font-black uppercase border border-white/20 transition-all">
+                        <FileText size={11}/> Dossier
+                      </button>
+                    )}
+                    {fichaEditando ? (
+                      <>
+                        <button onClick={() => { setFichaEditando(false); setFichaEditErro(null); }}
+                          className="px-3 py-2 rounded-xl text-[9px] font-black uppercase bg-white/10 hover:bg-white/20 text-white/70 border border-white/20">
+                          Cancelar
+                        </button>
+                        <button onClick={salvarFicha} disabled={fichaEditSalvando}
+                          className="flex items-center gap-1.5 px-3 py-2 bg-green-500 hover:bg-green-400 text-white rounded-xl text-[9px] font-black uppercase disabled:opacity-50 border border-green-400/50">
+                          <Save size={11}/> {fichaEditSalvando ? 'Salvando...' : 'Salvar'}
+                        </button>
+                      </>
+                    ) : (
+                      <button onClick={() => { setFichaForm({ ...a }); setFichaEditErro(null); setFichaEditando(true); }}
+                        className="flex items-center gap-1.5 px-3 py-2 bg-white/15 hover:bg-white/25 text-white rounded-xl text-[9px] font-black uppercase border border-white/20 transition-all">
+                        <Edit3 size={11}/> Editar
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Contact quick bar */}
+                {!fichaEditando && (
+                  <div className="flex gap-2 mt-4 flex-wrap">
+                    {wa && (
+                      <a href={wa} target="_blank" rel="noopener noreferrer"
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-green-500/20 hover:bg-green-500/30 border border-green-400/30 text-green-200 rounded-xl text-[10px] font-bold transition-all">
+                        <Smartphone size={11}/> {a?.celular}
+                      </a>
+                    )}
+                    {a?.email && (
+                      <a href={`mailto:${a.email}`}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/20 border border-white/20 text-purple-200 rounded-xl text-[10px] font-bold transition-all">
+                        <Mail size={11}/> {a.email}
+                      </a>
+                    )}
+                    {!wa && !a?.email && (
+                      <span className="text-purple-300/60 text-[10px] italic">Sem contatos cadastrados</span>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* ── OVERLAP STRIP ────────────────────────────────────────────── */}
+              <div className="shrink-0 -mt-4 px-5 z-10 space-y-2">
+
+                {/* LGPD alert */}
+                {!lgpdOk && !fichaEditando && (
+                  <div className="flex items-center gap-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-700/40 rounded-2xl px-4 py-3 shadow-sm">
+                    <AlertTriangle size={16} className="text-orange-500 shrink-0 animate-pulse"/>
+                    <div className="flex-1">
+                      <p className="text-orange-700 dark:text-orange-400 font-black text-xs uppercase tracking-wide">Termo LGPD Pendente</p>
+                      <p className="text-orange-500 text-[10px]">O responsável ainda não assinou o termo de consentimento.</p>
+                    </div>
+                  </div>
+                )}
+                {lgpdOk && !fichaEditando && (
+                  <div className="flex items-center gap-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/40 rounded-2xl px-4 py-3 shadow-sm">
+                    <ShieldCheck size={16} className="text-blue-500 shrink-0"/>
+                    <p className="text-blue-700 dark:text-blue-400 font-black text-xs">Termo LGPD assinado</p>
+                  </div>
+                )}
+
+                {/* Tabs */}
+                <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl gap-1 shadow-sm">
+                  {(['dados', 'presenca'] as const).map(aba => (
+                    <button key={aba} onClick={() => setFichaAba(aba)}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${
+                        fichaAba === aba ? 'bg-white dark:bg-slate-700 text-purple-700 dark:text-purple-300 shadow' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
+                      }`}>
+                      {aba === 'dados' ? <><User size={11}/> Cadastro</> : <><ClipboardCheck size={11}/> Presença ({fichaAluno.totalPresencas ?? 0}P/{fichaAluno.totalFaltas ?? 0}F)</>}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* ── CONTENT ──────────────────────────────────────────────────── */}
+              <div className="overflow-y-auto flex-1 px-5 pb-5 pt-3 space-y-4">
+
+                {fichaAba === 'dados' && fichaEditando && (
+                  <div className="space-y-4">
+                    {fichaEditErro && (
+                      <div className="bg-red-50 border border-red-200 text-red-700 text-[11px] font-bold rounded-xl px-4 py-2.5">⚠ {fichaEditErro}</div>
+                    )}
+                    <section className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 p-4">
+                      <h4 className="text-[9px] font-black uppercase text-purple-600 mb-3 tracking-widest flex items-center gap-2"><User size={11}/> Identificação</h4>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="col-span-2 space-y-1">
+                          <label className="text-[9px] font-black uppercase text-slate-400">Nome Completo</label>
+                          <input value={fichaForm.nome_completo || ''} onChange={e => setFichaForm(p => ({ ...p, nome_completo: e.target.value }))}
+                            className="w-full border border-slate-200 dark:border-slate-600 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400 dark:bg-slate-700 dark:text-white" />
+                        </div>
+                        {([['CPF', 'cpf'], ['Celular', 'celular'], ['E-mail', 'email'], ['Tel. Alternativo', 'telefone_alternativo']] as [string, keyof Aluno][]).map(([label, field]) => (
+                          <div key={field} className="space-y-1">
+                            <label className="text-[9px] font-black uppercase text-slate-400">{label}</label>
+                            <input value={(fichaForm[field] as string) || ''} onChange={e => setFichaForm(p => ({ ...p, [field]: e.target.value }))}
+                              className="w-full border border-slate-200 dark:border-slate-600 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400 dark:bg-slate-700 dark:text-white" />
+                          </div>
+                        ))}
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-black uppercase text-slate-400">Nascimento</label>
+                          <input type="date" value={fichaForm.data_nascimento || ''} onChange={e => setFichaForm(p => ({ ...p, data_nascimento: e.target.value }))}
+                            className="w-full border border-slate-200 dark:border-slate-600 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400 dark:bg-slate-700 dark:text-white" />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-black uppercase text-slate-400">Sexo</label>
+                          <select value={fichaForm.sexo || ''} onChange={e => setFichaForm(p => ({ ...p, sexo: e.target.value }))}
+                            className="w-full border border-slate-200 dark:border-slate-600 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white dark:bg-slate-700 dark:text-white">
+                            <option value="">—</option>
+                            {['Masculino', 'Feminino', 'Outro', 'Prefiro não informar'].map(o => <option key={o}>{o}</option>)}
+                          </select>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-black uppercase text-slate-400">Escolaridade</label>
+                          <select value={fichaForm.escolaridade || ''} onChange={e => setFichaForm(p => ({ ...p, escolaridade: e.target.value }))}
+                            className="w-full border border-slate-200 dark:border-slate-600 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white dark:bg-slate-700 dark:text-white">
+                            <option value="">—</option>
+                            {['Fund. Incompleto', 'Fund. Completo', 'Médio Incompleto', 'Médio Completo', 'Superior Incompleto', 'Superior Completo'].map(o => <option key={o}>{o}</option>)}
+                          </select>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-black uppercase text-slate-400">Turno Escolar</label>
+                          <select value={fichaForm.turno_escolar || ''} onChange={e => setFichaForm(p => ({ ...p, turno_escolar: e.target.value }))}
+                            className="w-full border border-slate-200 dark:border-slate-600 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white dark:bg-slate-700 dark:text-white">
+                            <option value="">—</option>
+                            {['Manhã', 'Tarde', 'Noite', 'Integral', 'Não estuda'].map(o => <option key={o}>{o}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                    </section>
+
+                    <section className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 p-4">
+                      <h4 className="text-[9px] font-black uppercase text-purple-600 mb-3 tracking-widest flex items-center gap-2">
+                        <MapPin size={11}/> Endereço
+                        {buscandoCepFicha && <span className="text-[8px] font-black text-green-600 animate-pulse normal-case ml-1">Buscando CEP...</span>}
+                      </h4>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-black uppercase text-slate-400">CEP</label>
+                          <input value={fichaForm.cep || ''} placeholder="00000-000"
+                            onChange={e => { setFichaForm(p => ({ ...p, cep: e.target.value })); if (e.target.value.replace(/\D/g, '').length === 8) buscarCepFicha(e.target.value); }}
+                            onBlur={e => buscarCepFicha(e.target.value)}
+                            className="w-full border border-slate-200 dark:border-slate-600 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400 dark:bg-slate-700 dark:text-white" />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-black uppercase text-slate-400">Número</label>
+                          <input value={fichaForm.numero || ''} onChange={e => setFichaForm(p => ({ ...p, numero: e.target.value }))}
+                            className="w-full border border-slate-200 dark:border-slate-600 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400 dark:bg-slate-700 dark:text-white" />
+                        </div>
+                        {([['Logradouro', 'logradouro'], ['Complemento', 'complemento'], ['Bairro', 'bairro'], ['Cidade', 'cidade'], ['Estado (UF)', 'estado_uf']] as [string, keyof Aluno][]).map(([label, field]) => (
+                          <div key={field} className="space-y-1">
+                            <label className="text-[9px] font-black uppercase text-slate-400">{label}</label>
+                            <input value={(fichaForm[field] as string) || ''} onChange={e => setFichaForm(p => ({ ...p, [field]: e.target.value }))}
+                              className="w-full border border-slate-200 dark:border-slate-600 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400 dark:bg-slate-700 dark:text-white" />
                           </div>
                         ))}
                       </div>
                     </section>
-                  ) : (
-                    <div className="py-10 text-center text-sm text-slate-400">Nenhum registro de presença encontrado.</div>
-                  )}
 
-                  {/* Histórico Diário (outros tipos) */}
-                  {fichaAluno.historico?.filter((h: any) => h.tipo !== 'Presença').length > 0 && (
-                    <section>
-                      <h4 className="text-[9px] font-black uppercase text-purple-600 mb-2 tracking-widest">Outros Registros no Diário</h4>
-                      <div className="space-y-1.5">
-                        {fichaAluno.historico.filter((h: any) => h.tipo !== 'Presença').map((h: DiarioEntry) => (
-                          <div key={h.id} className="flex gap-2 bg-slate-50 rounded-xl p-2">
-                            <span className="px-1.5 py-0.5 rounded text-[8px] font-black bg-purple-100 text-purple-700 uppercase self-start whitespace-nowrap">{h.tipo}</span>
-                            <div>
-                              {h.titulo && <div className="text-xs font-bold text-slate-700">{h.titulo}</div>}
-                              {h.descricao && <div className="text-[10px] text-slate-500">{h.descricao}</div>}
-                              <div className="text-[9px] text-slate-400 mt-0.5">{fmtDate(h.data)} · {h.usuario_nome}</div>
+                    <section className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 p-4">
+                      <h4 className="text-[9px] font-black uppercase text-purple-600 mb-3 tracking-widest flex items-center gap-2"><Users size={11}/> Responsável</h4>
+                      <div className="grid grid-cols-2 gap-2">
+                        {([['Nome', 'nome_responsavel'], ['Parentesco', 'grau_parentesco'], ['E-mail', 'email_responsavel'], ['CPF', 'cpf_responsavel']] as [string, keyof Aluno][]).map(([label, field]) => (
+                          <div key={field} className="space-y-1">
+                            <label className="text-[9px] font-black uppercase text-slate-400">{label}</label>
+                            <input value={(fichaForm[field] as string) || ''} onChange={e => setFichaForm(p => ({ ...p, [field]: e.target.value }))}
+                              className="w-full border border-slate-200 dark:border-slate-600 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400 dark:bg-slate-700 dark:text-white" />
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+
+                    <section className="bg-white dark:bg-slate-800 rounded-2xl border border-amber-100 dark:border-amber-900/30 p-4">
+                      <h4 className="text-[9px] font-black uppercase text-amber-600 mb-3 tracking-widest flex items-center gap-2"><Heart size={11}/> Saúde / Cuidados</h4>
+                      <div className="grid grid-cols-2 gap-2">
+                        {([['Alergias', 'possui_alergias'], ['Cuidado Especial', 'cuidado_especial'], ['Medicamentos', 'uso_medicamento']] as [string, keyof Aluno][]).map(([label, field]) => (
+                          <div key={field} className="space-y-1">
+                            <label className="text-[9px] font-black uppercase text-slate-400">{label}</label>
+                            <input value={(fichaForm[field] as string) || ''} onChange={e => setFichaForm(p => ({ ...p, [field]: e.target.value }))}
+                              className="w-full border border-slate-200 dark:border-slate-600 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400 dark:bg-slate-700 dark:text-white" />
+                          </div>
+                        ))}
+                        <div className="col-span-2 space-y-1">
+                          <label className="text-[9px] font-black uppercase text-slate-400">Detalhes do Cuidado</label>
+                          <textarea rows={2} value={fichaForm.detalhes_cuidado || ''} onChange={e => setFichaForm(p => ({ ...p, detalhes_cuidado: e.target.value }))}
+                            className="w-full border border-slate-200 dark:border-slate-600 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400 resize-none dark:bg-slate-700 dark:text-white" />
+                        </div>
+                      </div>
+                    </section>
+                  </div>
+                )}
+
+                {fichaAba === 'dados' && !fichaEditando && (
+                  <div className="space-y-4">
+
+                    {/* Dados Pessoais */}
+                    <section className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 p-4">
+                      <h4 className="text-[10px] font-black uppercase text-slate-400 mb-3 tracking-widest flex items-center gap-2"><User size={12} className="text-purple-500"/> Dados Pessoais</h4>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        {([
+                          { label: 'CPF',           value: a?.cpf,              icon: BadgeCheck },
+                          { label: 'Celular',       value: a?.celular,          icon: Phone },
+                          { label: 'E-mail',        value: a?.email,            icon: Mail },
+                          { label: 'Nascimento',    value: fmtDate(a?.data_nascimento), icon: Calendar },
+                          { label: 'Sexo',          value: a?.sexo,             icon: User },
+                          { label: 'Escolaridade',  value: a?.escolaridade,     icon: BookOpen },
+                          { label: 'Turno Escolar', value: a?.turno_escolar,    icon: Clock },
+                          { label: 'Tel. Alternativo', value: a?.telefone_alternativo, icon: Phone },
+                        ]).map(({ label, value, icon: Icon }) => (
+                          <div key={label} className="space-y-0.5">
+                            <span className="flex items-center gap-1 text-[9px] font-black uppercase text-slate-400 tracking-widest">
+                              <Icon size={9} className="text-purple-400"/>{label}
+                            </span>
+                            <span className="block font-bold text-slate-800 dark:text-slate-100 text-xs truncate">{value || <span className="text-slate-300 dark:text-slate-600 font-normal">—</span>}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+
+                    {/* Turmas */}
+                    {(fichaAluno.turmasDoAluno || []).length > 0 && (
+                      <section className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 p-4">
+                        <h4 className="text-[10px] font-black uppercase text-slate-400 mb-3 tracking-widest flex items-center gap-2"><ClipboardList size={12} className="text-indigo-500"/> Turmas</h4>
+                        <div className="flex flex-wrap gap-2">
+                          {(fichaAluno.turmasDoAluno as any[]).map((t: any) => (
+                            <div key={t.id} className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-bold ${t.status === 'ativo' ? 'border-indigo-100 dark:border-indigo-900/40 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-800 dark:text-indigo-300' : 'border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-400'}`}>
+                              {t.turma_id && <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: t.turma_cor || '#6d28d9' }} />}
+                              <span>{t.turma_nome || 'Backlog'}</span>
+                              {t.turno && <span className="text-[9px] text-slate-400 font-medium">· {t.turno}</span>}
+                              <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded-full ${t.status === 'ativo' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>{t.status}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </section>
+                    )}
+
+                    {/* Responsável */}
+                    {a?.nome_responsavel && (
+                      <section className="bg-white dark:bg-slate-800 rounded-2xl border border-purple-100 dark:border-purple-900/30 p-4">
+                        <h4 className="text-[10px] font-black uppercase text-slate-400 mb-3 tracking-widest flex items-center gap-2"><Users size={12} className="text-purple-500"/> Responsável</h4>
+                        <div className="flex items-start gap-4">
+                          <div className="w-10 h-10 rounded-xl bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center shrink-0">
+                            <User size={18} className="text-purple-500"/>
+                          </div>
+                          <div className="flex-1 space-y-1">
+                            <p className="font-black text-slate-800 dark:text-slate-100 text-sm">{a.nome_responsavel}</p>
+                            {a.grau_parentesco && <p className="text-[10px] text-slate-400">{a.grau_parentesco}</p>}
+                            <div className="flex gap-2 flex-wrap mt-2">
+                              {waResp && (
+                                <a href={waResp} target="_blank" rel="noopener noreferrer"
+                                  className="flex items-center gap-1.5 px-2.5 py-1.5 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800/40 text-green-700 dark:text-green-400 rounded-lg text-[10px] font-bold">
+                                  <Smartphone size={10}/> {a.telefone_alternativo}
+                                </a>
+                              )}
+                              {a.email_responsavel && (
+                                <a href={`mailto:${a.email_responsavel}`}
+                                  className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-lg text-[10px] font-bold">
+                                  <Mail size={10}/> {a.email_responsavel}
+                                </a>
+                              )}
+                              {a.cpf_responsavel && (
+                                <span className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-500 rounded-lg text-[10px] font-mono">
+                                  CPF: {a.cpf_responsavel}
+                                </span>
+                              )}
                             </div>
                           </div>
-                        ))}
-                      </div>
-                    </section>
-                  )}
-                </>
-              )}
+                        </div>
+                      </section>
+                    )}
+
+                    {/* Endereço */}
+                    {(a?.cidade || a?.logradouro || a?.cep) && (
+                      <section className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 p-4">
+                        <h4 className="text-[10px] font-black uppercase text-slate-400 mb-3 tracking-widest flex items-center gap-2"><MapPin size={12} className="text-purple-500"/> Endereço</h4>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                          {([['Logradouro', a?.logradouro ? `${a.logradouro}${a?.numero ? ', ' + a.numero : ''}` : undefined], ['Bairro', a?.bairro], ['Cidade', a?.cidade], ['Estado', a?.estado_uf], ['CEP', a?.cep], ['Complemento', a?.complemento]] as [string, string | undefined][]).map(([k, v]) => v ? (
+                            <div key={k} className="space-y-0.5">
+                              <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest block">{k}</span>
+                              <span className="font-bold text-slate-800 dark:text-slate-100 text-xs">{v}</span>
+                            </div>
+                          ) : null)}
+                        </div>
+                      </section>
+                    )}
+
+                    {/* Saúde */}
+                    {(a?.possui_alergias || a?.cuidado_especial || a?.uso_medicamento) && (
+                      <section className="bg-amber-50 dark:bg-amber-900/10 rounded-2xl border border-amber-200 dark:border-amber-800/40 p-4">
+                        <h4 className="text-[10px] font-black uppercase text-amber-600 mb-3 tracking-widest flex items-center gap-2"><Heart size={12}/> Saúde / Cuidados</h4>
+                        <div className="space-y-2">
+                          {a?.possui_alergias && <div className="flex gap-2"><span className="text-[9px] font-black uppercase text-amber-500 w-24 shrink-0 pt-0.5">Alergias</span><span className="text-amber-800 dark:text-amber-300 text-xs font-bold">{a.possui_alergias}</span></div>}
+                          {a?.cuidado_especial && <div className="flex gap-2"><span className="text-[9px] font-black uppercase text-amber-500 w-24 shrink-0 pt-0.5">Cuidado</span><span className="text-amber-800 dark:text-amber-300 text-xs font-bold">{a.cuidado_especial}</span></div>}
+                          {a?.uso_medicamento && <div className="flex gap-2"><span className="text-[9px] font-black uppercase text-amber-500 w-24 shrink-0 pt-0.5">Medicamento</span><span className="text-amber-800 dark:text-amber-300 text-xs font-bold">{a.uso_medicamento}</span></div>}
+                          {a?.detalhes_cuidado && <div className="flex gap-2"><span className="text-[9px] font-black uppercase text-amber-500 w-24 shrink-0 pt-0.5">Detalhes</span><span className="text-amber-700 dark:text-amber-400 text-xs">{a.detalhes_cuidado}</span></div>}
+                        </div>
+                      </section>
+                    )}
+
+                    {/* Dossier link */}
+                    {fichaAluno.inscricao_id && (
+                      <button
+                        onClick={() => { api.get(`/matriculas/inscricao/${fichaAluno.inscricao_id}`).then(r => { setFichaAluno(null); setDossieCandidato(r.data); }).catch(() => alert('Não foi possível carregar o dossier.')); }}
+                        className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-purple-200 dark:border-purple-800/50 text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/10 rounded-2xl text-xs font-black uppercase tracking-widest transition-all">
+                        <FileText size={14}/> Abrir Dossier Completo & Documentos
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {fichaAba === 'presenca' && (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-3 gap-3">
+                      {[
+                        { label: 'Presenças', val: fichaAluno.totalPresencas ?? 0, cls: 'bg-green-50 dark:bg-green-900/10 border-green-100 dark:border-green-900/30 text-green-700 dark:text-green-400' },
+                        { label: 'Faltas',    val: fichaAluno.totalFaltas ?? 0,    cls: 'bg-red-50 dark:bg-red-900/10 border-red-100 dark:border-red-900/30 text-red-600 dark:text-red-400' },
+                        { label: '% Freq.',
+                          val: fichaAluno.totalPresencas + fichaAluno.totalFaltas > 0
+                            ? `${Math.round((fichaAluno.totalPresencas / (fichaAluno.totalPresencas + fichaAluno.totalFaltas)) * 100)}%`
+                            : '0%',
+                          cls: 'bg-purple-50 dark:bg-purple-900/10 border-purple-100 dark:border-purple-900/30 text-purple-700 dark:text-purple-400' },
+                      ].map(k => (
+                        <div key={k.label} className={`border rounded-2xl p-4 text-center ${k.cls}`}>
+                          <span className="text-[9px] font-black uppercase tracking-widest opacity-70 block">{k.label}</span>
+                          <span className="font-black text-2xl">{k.val}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {fichaAluno.frequencia?.length > 0 ? (
+                      <section className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 p-4">
+                        <h4 className="text-[10px] font-black uppercase text-slate-400 mb-3 tracking-widest">Registro por Aula</h4>
+                        <div className="space-y-1.5 max-h-[300px] overflow-y-auto pr-1">
+                          {fichaAluno.frequencia.map((f: any) => (
+                            <div key={f.id} className={`flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-bold ${f.descricao === 'Presente' ? 'bg-green-50 dark:bg-green-900/10 text-green-700 dark:text-green-400' : 'bg-red-50 dark:bg-red-900/10 text-red-600 dark:text-red-400'}`}>
+                              <div className={`w-2 h-2 rounded-full shrink-0 ${f.descricao === 'Presente' ? 'bg-green-500' : 'bg-red-400'}`} />
+                              <span className="flex-1 truncate">{fmtDate(f.data)}</span>
+                              <span className="shrink-0 text-[9px] uppercase font-black opacity-70">{f.descricao}</span>
+                              {f.turma_id && turmas.find((t: Turma) => t.id === f.turma_id) && (
+                                <span className="shrink-0 text-[8px] font-bold text-slate-400">{turmas.find((t: Turma) => t.id === f.turma_id)?.nome}</span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </section>
+                    ) : (
+                      <div className="py-12 text-center text-sm text-slate-400">Nenhum registro de presença encontrado.</div>
+                    )}
+
+                    {fichaAluno.historico?.filter((h: any) => h.tipo !== 'Presença').length > 0 && (
+                      <section className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 p-4">
+                        <h4 className="text-[10px] font-black uppercase text-slate-400 mb-3 tracking-widest">Outros Registros</h4>
+                        <div className="space-y-1.5">
+                          {fichaAluno.historico.filter((h: any) => h.tipo !== 'Presença').map((h: DiarioEntry) => (
+                            <div key={h.id} className="flex gap-2 bg-slate-50 dark:bg-slate-700/50 rounded-xl p-2.5">
+                              <span className="px-1.5 py-0.5 rounded text-[8px] font-black bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 uppercase self-start whitespace-nowrap">{h.tipo}</span>
+                              <div>
+                                {h.titulo && <div className="text-xs font-bold text-slate-700 dark:text-slate-200">{h.titulo}</div>}
+                                {h.descricao && <div className="text-[10px] text-slate-500">{h.descricao}</div>}
+                                <div className="text-[9px] text-slate-400 mt-0.5">{fmtDate(h.data)} · {h.usuario_nome}</div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </section>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

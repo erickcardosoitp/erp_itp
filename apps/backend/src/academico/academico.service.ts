@@ -746,6 +746,33 @@ export class AcademicoService {
     }));
   }
 
+  async criarAlunoViaChamada(dto: any) {
+    const { professor_nome, ...alunoData } = dto;
+    const aluno = await this.criarAluno(alunoData);
+    await this.notificacoes.criar({
+      tipo: 'matricula_pendente',
+      titulo: `Matrícula Pendente: ${aluno.nome_completo}`,
+      mensagem: `${professor_nome || 'Professor'} cadastrou "${aluno.nome_completo}" via Portal de Chamada. Pendente de matrícula formal.`,
+      referencia_id: aluno.id,
+      referencia_tipo: 'aluno',
+      cargo_minimo: 8,
+    }).catch(() => {});
+    return aluno;
+  }
+
+  async listarAlunosPendentes() {
+    return this.dataSource.query(`
+      SELECT DISTINCT a.id, a.nome_completo, a.numero_matricula,
+             a.celular, a.data_nascimento, a.nome_responsavel,
+             a."createdAt" AS criado_em
+      FROM alunos a
+      INNER JOIN turma_alunos ta ON ta.aluno_id::text = a.id::text AND ta.status = 'backlog'
+      WHERE (a.ativo IS NOT FALSE)
+      ORDER BY a."createdAt" DESC
+      LIMIT 60
+    `);
+  }
+
   async listarAlertasCandidatos() {
     const registros = await this.dataSource.query(`
       SELECT d.inscricao_id, COALESCE(d.pessoa_nome, i.nome_completo, 'Candidato') AS candidato_nome,
