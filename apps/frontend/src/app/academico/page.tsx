@@ -1702,7 +1702,7 @@ function TurmasTab({ cursos, professores, alunos }: { cursos: Curso[]; professor
       <div className="flex flex-wrap justify-between items-center gap-2">
         <h2 className="text-lg font-black uppercase tracking-tight text-slate-800">Turmas</h2>
         <div className="flex gap-2">
-          <button onClick={abrirIncluir} className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2.5 rounded-xl font-black text-[10px] uppercase hover:bg-indigo-700">
+          <button onClick={() => abrirIncluir()} className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2.5 rounded-xl font-black text-[10px] uppercase hover:bg-indigo-700">
             <UserPlus size={14}/> Incluir Aluno em Turma
           </button>
           <button onClick={() => abrir()} className="flex items-center gap-2 bg-purple-600 text-white px-5 py-2.5 rounded-xl font-black text-[10px] uppercase hover:bg-purple-700">
