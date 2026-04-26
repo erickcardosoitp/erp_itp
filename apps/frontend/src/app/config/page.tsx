@@ -662,7 +662,7 @@ interface TIData {
     conexoes_ativas: number;
     conexoes_totais: number;
     max_conexoes: number;
-    tabelas: { nome: string; tamanho: string; linhas: number }[];
+    tabelas: { nome: string; tamanho: string; tamanho_bytes: number; linhas: number }[];
   };
   timestamp: string;
 }
@@ -801,10 +801,37 @@ function MonitoramentoTITab() {
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-1.5">
               <Database size={11} /> Banco de Dados (PostgreSQL · Neon)
             </p>
+
+            {/* Armazenamento em destaque */}
+            {banco!.tamanho_bytes > 0 && (() => {
+              const LIMITE_MB = 512; // Neon free tier ~512 MB
+              const usadoMB   = +(banco!.tamanho_bytes / 1024 / 1024).toFixed(1);
+              const pctLimite = Math.min(100, (usadoMB / LIMITE_MB) * 100);
+              const corBarra  = pctLimite > 80 ? 'bg-rose-500' : pctLimite > 60 ? 'bg-amber-500' : 'bg-blue-500';
+              return (
+                <div className="bg-blue-950 rounded-2xl p-5 mb-4 text-white">
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-blue-300 flex items-center gap-1.5">
+                      <HardDrive size={11} /> Armazenamento Total Usado
+                    </p>
+                    <span className="text-[9px] font-black text-blue-300">{pctLimite.toFixed(1)}% do plano</span>
+                  </div>
+                  <p className="text-3xl font-black mb-3">{banco!.tamanho}</p>
+                  <div className="w-full bg-blue-900 rounded-full h-2.5 overflow-hidden mb-2">
+                    <div className={`h-2.5 rounded-full transition-all ${corBarra}`} style={{ width: `${pctLimite}%` }} />
+                  </div>
+                  <div className="flex justify-between text-[9px] font-bold text-blue-400">
+                    <span>{usadoMB} MB usados</span>
+                    <span>limite aprox. {LIMITE_MB} MB (free tier)</span>
+                  </div>
+                </div>
+              );
+            })()}
+
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
               <KpiCard icon={Wifi}     label="Latência"   value={`${banco!.latencia_ms} ms`}
                 color={banco!.latencia_ms < 50 ? 'bg-emerald-500' : banco!.latencia_ms < 200 ? 'bg-amber-500' : 'bg-rose-500'} />
-              <KpiCard icon={Database} label="Tamanho DB" value={banco!.tamanho}               color="bg-blue-500" />
+              <KpiCard icon={Database} label="Tamanho DB" value={banco!.tamanho} color="bg-blue-500" />
               <KpiCard icon={Zap}      label="Cache Hit"  value={banco!.cache_hit_pct != null ? `${banco!.cache_hit_pct}%` : '–'} color="bg-teal-500"
                 sub={banco!.cache_hit_pct != null ? (banco!.cache_hit_pct > 95 ? 'Excelente' : banco!.cache_hit_pct > 80 ? 'Bom' : 'Verificar') : undefined} />
               <KpiCard icon={Activity} label="Conexões"   value={`${banco!.conexoes_ativas} / ${banco!.conexoes_totais}`} color="bg-violet-500"
@@ -825,17 +852,24 @@ function MonitoramentoTITab() {
             {/* Tabelas */}
             {banco!.tabelas.length > 0 && (
               <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden">
-                <div className="px-4 py-3 bg-slate-50 border-b border-slate-100">
+                <div className="px-4 py-3 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
                   <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Tabelas (por tamanho)</p>
+                  <p className="text-[9px] font-black text-slate-400">{banco!.tabelas.length} tabelas</p>
                 </div>
                 <div className="divide-y divide-slate-50">
                   {banco!.tabelas.map((t, i) => {
-                    const maxBytes = banco!.tabelas[0]?.tamanho ? 1 : 0;
+                    const maxB = banco!.tabelas.reduce((m, x) => Math.max(m, x.tamanho_bytes), 1);
+                    const pct  = Math.round((t.tamanho_bytes / maxB) * 100);
                     return (
-                      <div key={t.nome} className="flex items-center gap-3 px-4 py-2 hover:bg-slate-50/50">
+                      <div key={t.nome} className="flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50/50">
                         <span className="text-[9px] font-black text-slate-300 w-5 shrink-0">{i + 1}</span>
-                        <span className="flex-1 text-xs font-bold text-slate-700 font-mono truncate">{t.nome}</span>
-                        <span className="text-[10px] font-black text-slate-500 shrink-0">{t.linhas.toLocaleString('pt-BR')} linhas</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold text-slate-700 font-mono truncate">{t.nome}</p>
+                          <div className="mt-1 h-1 bg-slate-100 rounded-full overflow-hidden w-full">
+                            <div className="h-1 bg-purple-400 rounded-full" style={{ width: `${pct}%` }} />
+                          </div>
+                        </div>
+                        <span className="text-[10px] font-black text-slate-400 shrink-0">{t.linhas.toLocaleString('pt-BR')} linhas</span>
                         <span className="text-[10px] font-black text-purple-600 shrink-0 min-w-[60px] text-right">{t.tamanho}</span>
                       </div>
                     );
