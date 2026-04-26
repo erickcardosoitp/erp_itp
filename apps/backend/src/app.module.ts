@@ -393,6 +393,20 @@ export class AppModule implements OnModuleInit {
       `);
       this.logger.log('✅ Colunas turma_alunos (inscricao_id, nome_candidato, tipo_vinculo) aplicadas (IF NOT EXISTS)');
 
+      // ── turma_alunos: permitir múltiplas turmas por aluno ─────────────────
+      // A constraint UNIQUE(aluno_id) impedia um aluno de estar em mais de 1 turma.
+      // Substituir por UNIQUE(aluno_id, turma_id) parcial (exclui backlog com turma_id NULL).
+      await this.dataSource.query(`
+        ALTER TABLE IF EXISTS turma_alunos
+          DROP CONSTRAINT IF EXISTS turma_alunos_aluno_id_key
+      `);
+      await this.dataSource.query(`
+        CREATE UNIQUE INDEX IF NOT EXISTS turma_alunos_aluno_turma_uq
+          ON turma_alunos (aluno_id, turma_id)
+          WHERE turma_id IS NOT NULL
+      `);
+      this.logger.log('✅ turma_alunos: constraint multi-turma aplicada');
+
       // ── Colunas faltantes em diario_academico (schema drift) ──────────────
       await this.dataSource.query(`
         ALTER TABLE IF EXISTS diario_academico

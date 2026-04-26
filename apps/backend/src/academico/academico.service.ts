@@ -488,11 +488,11 @@ export class AcademicoService {
     const turma = await this.turmaRepo.findOneBy({ id: turmaId });
     if (!turma) throw new NotFoundException('Turma não encontrada');
 
-    const registro = await this.turmaAlunoRepo.findOne({ where: { aluno_id: alunoId } });
-    if (registro) {
-      registro.turma_id = turmaId;
-      registro.status = 'ativo';
-      return this.turmaAlunoRepo.save(registro);
+    // Check if already linked to THIS specific turma (any status)
+    const existente = await this.turmaAlunoRepo.findOne({ where: { aluno_id: alunoId, turma_id: turmaId } });
+    if (existente) {
+      existente.status = 'ativo';
+      return this.turmaAlunoRepo.save(existente);
     }
     return this.turmaAlunoRepo.save(
       this.turmaAlunoRepo.create({ aluno_id: alunoId, turma_id: turmaId, status: 'ativo' })

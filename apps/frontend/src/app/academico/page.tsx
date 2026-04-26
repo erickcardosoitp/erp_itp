@@ -644,8 +644,6 @@ function KpisTurmas({ alunos, turmas }: { alunos: Aluno[]; turmas: Turma[] }) {
       {open && (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
           {stats.map(({ total, turma }) => {
-            const maxV  = turma.max_alunos || 30;
-            const ocup  = Math.round(100 * total / maxV);
             const pct   = presencaMap[turma.id] ?? null;
             const cor   = turma.cor || '#6d28d9';
             const presColor = pct === null ? 'text-slate-400' : pct >= 75 ? 'text-green-600' : pct >= 50 ? 'text-amber-600' : 'text-red-500';
@@ -658,16 +656,15 @@ function KpisTurmas({ alunos, turmas }: { alunos: Aluno[]; turmas: Turma[] }) {
                 </div>
                 {turma.turno && <span className="text-[9px] text-slate-400 -mt-1">{turma.turno}</span>}
 
-                {/* Barra de alunos relativa ao máximo */}
+                {/* Barra de alunos relativa ao maior valor entre turmas */}
                 <div>
                   <div className="flex justify-between items-center mb-1">
-                    <span className="text-[9px] text-slate-400">Alunos ativos</span>
+                    <span className="text-[9px] text-slate-400">Alunos</span>
                     <span className="text-[11px] font-black text-slate-700">{total}</span>
                   </div>
                   <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
                     <div className="h-full rounded-full" style={{ width: `${barW}%`, backgroundColor: cor }} />
                   </div>
-                  <span className="text-[9px] text-slate-400">{ocup}% de {maxV} vagas</span>
                 </div>
 
                 {/* % presença (quando disponível) */}
@@ -1925,15 +1922,7 @@ function TurmasTab({ cursos, professores, alunos }: { cursos: Curso[]; professor
                 ))}
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <FieldInput label="Ano" value={form.ano} onChange={v => setForm(p => ({ ...p, ano: v }))} />
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black uppercase text-slate-500">Máx. Vagas</label>
-                <input type="number" min={1} max={200} value={form.max_alunos ?? 30}
-                  onChange={e => setForm(p => ({ ...p, max_alunos: parseInt(e.target.value) || 30 }))}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-400" />
-              </div>
-            </div>
+            <FieldInput label="Ano" value={form.ano} onChange={v => setForm(p => ({ ...p, ano: v }))} />
             <div className="space-y-1.5">
               <label className="text-[10px] font-black uppercase text-slate-500">Cor da Turma</label>
               <div className="flex items-center gap-3">
