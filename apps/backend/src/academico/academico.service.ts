@@ -739,7 +739,7 @@ export class AcademicoService {
     const turmas = await this.dataSource.query(
       `SELECT t.id, t.nome, t.cor, t.turno, t.ano, c.nome AS curso_nome
        FROM turmas t
-       LEFT JOIN cursos c ON c.id::text = t.curso_id
+       LEFT JOIN cursos c ON c.id::text = t.curso_id::text
        WHERE t.professor_id::text = $1 AND t.ativo = true
        ORDER BY t.nome ASC`,
       [professor.id],

@@ -63,8 +63,9 @@ export function middleware(request: NextRequest) {
   }
 
   // ── Rotas sempre públicas ─────────────────────────────────────────────────
-  if (pathname.startsWith('/ponto'))           return NextResponse.next();
-  if (pathname.startsWith('/estoque/coletor')) return NextResponse.next();
+  if (pathname.startsWith('/ponto'))               return NextResponse.next();
+  if (pathname.startsWith('/chamada-professor'))   return NextResponse.next();
+  if (pathname.startsWith('/estoque/coletor'))     return NextResponse.next();
   if (pathname.startsWith('/esqueci-senha'))   return NextResponse.next();
   if (pathname.startsWith('/reset-senha'))     return NextResponse.next();
   if (pathname.startsWith('/lgpd'))            return NextResponse.next();

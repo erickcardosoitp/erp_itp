@@ -267,7 +267,7 @@ export default function LaunchPad() {
                 )}
                 {podeChamada && (
                   <a
-                    href="/academico/chamada-professor"
+                    href="/chamada-professor"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="w-full flex items-center gap-4 bg-indigo-900/30 hover:bg-indigo-800/40 border border-indigo-700/30 rounded-2xl px-4 py-4 text-left transition-all group"
