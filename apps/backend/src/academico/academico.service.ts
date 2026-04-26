@@ -248,6 +248,21 @@ export class AcademicoService {
 
   // ── ALUNOS ────────────────────────────────────────────────────────────────
 
+  async statsAlunos() {
+    const rows = await this.dataSource.query(
+      `SELECT COUNT(*) FILTER (WHERE ativo = true)  AS ativos,
+              COUNT(*) FILTER (WHERE ativo = false) AS inativos,
+              COUNT(*)                               AS total
+       FROM alunos`
+    );
+    const r = rows[0];
+    return {
+      ativos:   Number(r.ativos),
+      inativos: Number(r.inativos),
+      total:    Number(r.total),
+    };
+  }
+
   async listarAlunos(filtros: any) {
     this.logger.log(`Listando alunos filtros=${JSON.stringify(filtros)}`);
     let qb = this.alunoRepo.createQueryBuilder('a');

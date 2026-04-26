@@ -28,6 +28,7 @@ function ultimos6Meses() {
 export default function DashboardEstrategico() {
   const [isMounted, setIsMounted] = useState(false);
   const [alunos,       setAlunos]       = useState<any[]>([]);
+  const [alunosStats, setAlunosStats]  = useState<{ ativos: number; inativos: number; total: number } | null>(null);
   const [cursos,       setCursos]       = useState<any[]>([]);
   const [movimentacoes, setMovimentacoes] = useState<any[]>([]);
   const [alertasCandidatos, setAlertasCandidatos] = useState<any[]>([]);
@@ -37,14 +38,16 @@ export default function DashboardEstrategico() {
   const carregar = useCallback(async () => {
     setCarregando(true);
     try {
-      const [ra, rc, rm, rca, rnps] = await Promise.allSettled([
+      const [ra, rst, rc, rm, rca, rnps] = await Promise.allSettled([
         api.get('/academico/alunos'),
+        api.get('/academico/alunos/stats'),
         api.get('/academico/cursos'),
         api.get('/financeiro/movimentacoes'),
         api.get('/academico/presenca/alertas-candidatos'),
         api.get('/pesquisas/nps'),
       ]);
       if (ra.status === 'fulfilled') setAlunos(ra.value.data ?? []);
+      if (rst.status === 'fulfilled') setAlunosStats(rst.value.data);
       if (rc.status === 'fulfilled') setCursos(rc.value.data ?? []);
       if (rm.status === 'fulfilled') setMovimentacoes(rm.value.data ?? []);
       if (rca.status === 'fulfilled') setAlertasCandidatos(rca.value.data ?? []);
@@ -103,10 +106,11 @@ export default function DashboardEstrategico() {
       .map(([nome, alunos]) => ({ nome, alunos }));
   }, [alunos]);
 
-  const alunosAtivos  = useMemo(() => alunos.filter(a => a.ativo !== false).length, [alunos]);
+  const alunosAtivos  = useMemo(() => alunosStats?.ativos  ?? alunos.length, [alunosStats, alunos]);
+  const alunosInativos= useMemo(() => alunosStats?.inativos ?? 0,            [alunosStats]);
+  const totalAlunos   = useMemo(() => alunosStats?.total   ?? alunos.length, [alunosStats, alunos]);
   const cursosAtivos  = useMemo(() => cursos.filter(c => /ativo/i.test(c.status ?? '')).length || cursos.length, [cursos]);
-  const alunosInativos= useMemo(() => alunos.filter(a => a.ativo === false).length, [alunos]);
-  const taxaEvasao    = useMemo(() => alunos.length ? ((alunosInativos / alunos.length) * 100).toFixed(1) + '%' : '–', [alunos, alunosInativos]);
+  const taxaEvasao    = useMemo(() => totalAlunos ? ((alunosInativos / totalAlunos) * 100).toFixed(1) + '%' : '–', [totalAlunos, alunosInativos]);
 
   const saldoMesAtual = useMemo(() => {
     const hoje = new Date();
@@ -158,13 +162,13 @@ export default function DashboardEstrategico() {
           <div className="flex gap-4 bg-white p-3 rounded-3xl shadow-sm border border-slate-100">
             <HeaderStat label="NPS Comunitário" value={nps?.nps != null ? String(nps.nps) : '–'} icon={Heart} color="text-rose-500" />
             <div className="w-[1px] bg-slate-100 h-10 self-center" />
-            <HeaderStat label="Taxa de Retenção" value={alunos.length ? (100 - parseFloat(taxaEvasao)).toFixed(1) + '%' : '–'} icon={ShieldCheck} color="text-emerald-500" />
+            <HeaderStat label="Taxa de Retenção" value={totalAlunos ? (100 - parseFloat(taxaEvasao)).toFixed(1) + '%' : '–'} icon={ShieldCheck} color="text-emerald-500" />
           </div>
         </header>
 
         {/* LINHA 1: KPIs DE IMPACTO */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-          <KpiCard title="Alunos Ativos" value={carregando ? '...' : String(alunosAtivos)} trend={alunos.length ? `${alunosAtivos} de ${alunos.length}` : '–'} icon={Users} color="bg-purple-900" />
+          <KpiCard title="Alunos Ativos" value={carregando ? '...' : String(alunosAtivos)} trend={totalAlunos ? `${alunosAtivos} de ${totalAlunos}` : '–'} icon={Users} color="bg-purple-900" />
           <KpiCard title="Evasão" value={carregando ? '...' : taxaEvasao} trend={alunosInativos ? `-${alunosInativos} alunos` : 'Estável'} icon={TrendingDown} color="bg-rose-600" isNegative />
           <KpiCard title="Cursos Ativos" value={carregando ? '...' : String(cursosAtivos || '–')} trend="Estável" icon={GraduationCap} color="bg-amber-500" />
           <KpiCard title="Saldo do Mês" value={carregando ? '...' : (saldoMesAtual?.label ?? (movimentacoes.length ? 'R$ 0' : '–'))} trend={saldoMesAtual?.positivo ? 'Superávit' : (saldoMesAtual ? 'Déficit' : 'Sem dados')} icon={DollarSign} color="bg-emerald-600" isNegative={!saldoMesAtual?.positivo} />
