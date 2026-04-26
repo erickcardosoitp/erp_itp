@@ -2896,6 +2896,8 @@ interface AcervoAluno {
   docs_presentes: string[];
   docs_faltando: string[];
   completo: boolean;
+  lgpd_aceito: boolean;
+  data_assinatura_lgpd: string | null;
 }
 
 async function exportarAcervoXLSX(alunos: AcervoAluno[]) {
@@ -2912,6 +2914,8 @@ async function exportarAcervoXLSX(alunos: AcervoAluno[]) {
     Certidao_Nasc:      a.docs_presentes.includes('certidao_nascimento') ? 'SIM' : 'NÃO',
     Ident_Responsavel:  a.docs_presentes.includes('identidade_responsavel') ? 'SIM' : 'NÃO',
     Situacao:           a.completo ? 'COMPLETO' : `FALTANDO: ${a.docs_faltando.map(d => DOCS_LABELS[d] || d).join(', ')}`,
+    LGPD_Assinado:      a.lgpd_aceito ? 'SIM' : 'NÃO',
+    Data_LGPD:          a.data_assinatura_lgpd ? new Date(a.data_assinatura_lgpd).toLocaleDateString('pt-BR') : '',
   }));
 
   const XLSX = await import('xlsx');
@@ -2931,7 +2935,7 @@ function whatsappLink(tel: string | null) {
 function AcervoTab() {
   const [dados, setDados] = useState<AcervoAluno[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filtro, setFiltro] = useState<'todos' | 'completos' | 'incompletos'>('todos');
+  const [filtro, setFiltro] = useState<'todos' | 'completos' | 'incompletos' | 'lgpd_pendente'>('todos');
   const [busca, setBusca] = useState('');
   const [letraAtiva, setLetraAtiva] = useState<string | null>(null);
 
@@ -2950,6 +2954,7 @@ function AcervoTab() {
     return dados.filter(a => {
       if (filtro === 'completos' && !a.completo) return false;
       if (filtro === 'incompletos' && a.completo) return false;
+      if (filtro === 'lgpd_pendente' && a.lgpd_aceito) return false;
       if (busca && !a.nome_completo.toLowerCase().includes(busca.toLowerCase())) return false;
       if (letraAtiva) {
         const primeira = a.nome_completo.trim()[0]?.toUpperCase() || '#';
@@ -2978,20 +2983,22 @@ function AcervoTab() {
     total: dados.length,
     completos: dados.filter(a => a.completo).length,
     incompletos: dados.filter(a => !a.completo).length,
+    lgpd_pendente: dados.filter(a => !a.lgpd_aceito).length,
   }), [dados]);
 
   return (
     <div className="space-y-5">
       {/* KPIs */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: 'Total de Alunos', val: stats.total, color: 'bg-purple-600' },
-          { label: 'Dossiê Completo', val: stats.completos, color: 'bg-green-600' },
-          { label: 'Docs Faltando',   val: stats.incompletos, color: 'bg-red-500' },
+          { label: 'Total de Alunos', val: stats.total,         cls: 'text-purple-600' },
+          { label: 'Dossiê Completo', val: stats.completos,     cls: 'text-green-600' },
+          { label: 'Docs Faltando',   val: stats.incompletos,   cls: 'text-red-500' },
+          { label: 'LGPD Pendente',   val: stats.lgpd_pendente, cls: stats.lgpd_pendente > 0 ? 'text-orange-500' : 'text-green-600' },
         ].map(k => (
           <div key={k.label} className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-100 dark:border-slate-800 shadow-sm">
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">{k.label}</p>
-            <p className={`text-3xl font-black ${k.color === 'bg-purple-600' ? 'text-purple-600' : k.color === 'bg-green-600' ? 'text-green-600' : 'text-red-500'}`}>{k.val}</p>
+            <p className={`text-3xl font-black ${k.cls}`}>{k.val}</p>
           </div>
         ))}
       </div>
@@ -3007,11 +3014,13 @@ function AcervoTab() {
           />
         </div>
         <div className="flex gap-1">
-          {(['todos','completos','incompletos'] as const).map(f => (
+          {(['todos','completos','incompletos','lgpd_pendente'] as const).map(f => (
             <button key={f} onClick={() => setFiltro(f)}
               className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all
-                ${filtro === f ? 'bg-purple-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-500 hover:text-slate-800'}`}>
-              {f === 'todos' ? 'Todos' : f === 'completos' ? 'Completos' : 'Incompletos'}
+                ${filtro === f
+                  ? f === 'lgpd_pendente' ? 'bg-orange-500 text-white' : 'bg-purple-600 text-white'
+                  : 'bg-slate-100 dark:bg-slate-700 text-slate-500 hover:text-slate-800'}`}>
+              {f === 'todos' ? 'Todos' : f === 'completos' ? 'Completos' : f === 'incompletos' ? 'Incompletos' : '⚠ LGPD Pendente'}
             </button>
           ))}
         </div>
@@ -3107,13 +3116,23 @@ function AcervoTab() {
                         })}
                       </div>
 
-                      {/* Badge status */}
-                      <div className="self-center">
+                      {/* Badge status + LGPD */}
+                      <div className="self-center flex flex-col gap-1.5 items-end">
                         <span className={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest
                           ${a.completo
                             ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
                             : 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'}`}>
                           {a.completo ? 'Completo' : `${a.docs_faltando.length} faltando`}
+                        </span>
+                        <span
+                          title={a.lgpd_aceito && a.data_assinatura_lgpd
+                            ? `Assinado em ${new Date(a.data_assinatura_lgpd).toLocaleDateString('pt-BR')}`
+                            : 'Termo LGPD não assinado pelo responsável'}
+                          className={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest
+                            ${a.lgpd_aceito
+                              ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                              : 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400 animate-pulse'}`}>
+                          {a.lgpd_aceito ? '✓ LGPD' : '⚠ LGPD Pendente'}
                         </span>
                       </div>
                     </div>

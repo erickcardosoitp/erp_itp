@@ -865,6 +865,8 @@ export class AcademicoService {
         a.nome_responsavel,
         a.email_responsavel,
         COALESCE(a.inscricao_id::text, i.id::text) AS inscricao_id,
+        COALESCE(a.lgpd_aceito, i.lgpd_aceito, FALSE) AS lgpd_aceito,
+        COALESCE(i.data_assinatura_lgpd::text, NULL)   AS data_assinatura_lgpd,
         COALESCE(
           json_agg(DISTINCT d.tipo) FILTER (WHERE d.tipo IS NOT NULL),
           '[]'
@@ -880,7 +882,8 @@ export class AcademicoService {
       LEFT JOIN turmas t            ON t.id::text = ta.turma_id::text
       WHERE (a.ativo IS NOT FALSE)
       GROUP BY a.id, a.nome_completo, a.celular, a.telefone_alternativo,
-               a.nome_responsavel, a.email_responsavel, a.inscricao_id, i.id
+               a.nome_responsavel, a.email_responsavel, a.inscricao_id,
+               i.id, i.lgpd_aceito, i.data_assinatura_lgpd
       ORDER BY a.nome_completo ASC
     `);
 
@@ -888,17 +891,19 @@ export class AcademicoService {
       const docs: string[] = Array.isArray(r.docs_presentes) ? r.docs_presentes : JSON.parse(r.docs_presentes || '[]');
       const faltando = OBRIGATORIOS.filter(d => !docs.includes(d));
       return {
-        aluno_id:            r.aluno_id,
-        nome_completo:       r.nome_completo,
-        inscricao_id:        r.inscricao_id,
-        celular:             r.celular,
+        aluno_id:             r.aluno_id,
+        nome_completo:        r.nome_completo,
+        inscricao_id:         r.inscricao_id,
+        celular:              r.celular,
         telefone_alternativo: r.telefone_alternativo,
-        nome_responsavel:    r.nome_responsavel,
-        email_responsavel:   r.email_responsavel,
-        turmas:              Array.isArray(r.turmas) ? r.turmas : JSON.parse(r.turmas || '[]'),
-        docs_presentes:      docs,
-        docs_faltando:       faltando,
-        completo:            faltando.length === 0,
+        nome_responsavel:     r.nome_responsavel,
+        email_responsavel:    r.email_responsavel,
+        turmas:               Array.isArray(r.turmas) ? r.turmas : JSON.parse(r.turmas || '[]'),
+        docs_presentes:       docs,
+        docs_faltando:        faltando,
+        completo:             faltando.length === 0,
+        lgpd_aceito:          r.lgpd_aceito === true || r.lgpd_aceito === 'true',
+        data_assinatura_lgpd: r.data_assinatura_lgpd ?? null,
       };
     });
   }
