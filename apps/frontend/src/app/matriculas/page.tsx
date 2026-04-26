@@ -24,6 +24,19 @@ import dynamic from 'next/dynamic';
 // Carregado sob demanda: só compila quando o modal é aberto pela 1ª vez
 const DossieCandidato = dynamic(() => import('@/components/DossieCandidato'), { ssr: false });
 
+const OPCOES_CUIDADO_ESPECIAL = [
+  'Não',
+  'PCD – Pessoa com Deficiência',
+  'Transtorno do Espectro Autista (TEA)',
+  'TDAH – Déficit de Atenção e Hiperatividade',
+  'Deficiência Visual',
+  'Deficiência Auditiva',
+  'Deficiência Física / Motora',
+  'Deficiência Intelectual',
+  'Altas Habilidades / Superdotação',
+  'Outro',
+];
+
 export default function GestaoMatriculas() {
   const [matriculas, setMatriculas] = useState<any[]>([]);
   const [candidatoSelecionado, setCandidatoSelecionado] = useState<any>(null);
@@ -876,10 +889,10 @@ export default function GestaoMatriculas() {
                         </select>
                       </div>
                       <div>
-                        <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Cuidado Especial?</label>
+                        <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Necessidade de Cuidado Especial?</label>
                         <select value={formDireto.cuidado_especial} onChange={e => setFormDireto(p => ({ ...p, cuidado_especial: e.target.value }))}
                           className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400 bg-white">
-                          <option>Não</option><option>Sim</option>
+                          {OPCOES_CUIDADO_ESPECIAL.map(o => <option key={o}>{o}</option>)}
                         </select>
                       </div>
                       <div>
@@ -890,7 +903,7 @@ export default function GestaoMatriculas() {
                         </select>
                       </div>
                     </div>
-                    {(formDireto.possui_alergias === 'Sim' || formDireto.cuidado_especial === 'Sim' || formDireto.uso_medicamento === 'Sim') && (
+                    {(formDireto.possui_alergias === 'Sim' || (formDireto.cuidado_especial && formDireto.cuidado_especial !== 'Não') || formDireto.uso_medicamento === 'Sim') && (
                       <div>
                         <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Detalhes (alergias, cuidados, medicamentos)</label>
                         <textarea value={formDireto.detalhes_cuidado} onChange={e => setFormDireto(p => ({ ...p, detalhes_cuidado: e.target.value }))}

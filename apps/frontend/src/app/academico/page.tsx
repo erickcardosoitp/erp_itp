@@ -75,6 +75,31 @@ const CORES_CARD = [
 
 const TIPOS_DIARIO = ['Avaliação', 'Presença', 'Incidente', 'Observação', 'Comunicado'];
 
+const OPCOES_CUIDADO_ESPECIAL = [
+  'Não',
+  'PCD – Pessoa com Deficiência',
+  'Transtorno do Espectro Autista (TEA)',
+  'TDAH – Déficit de Atenção e Hiperatividade',
+  'Deficiência Visual',
+  'Deficiência Auditiva',
+  'Deficiência Física / Motora',
+  'Deficiência Intelectual',
+  'Altas Habilidades / Superdotação',
+  'Outro',
+];
+
+const CUIDADO_BADGE: Record<string, { label: string; color: string }> = {
+  'PCD – Pessoa com Deficiência':               { label: 'PCD',        color: 'bg-blue-100 text-blue-700 border-blue-200' },
+  'Transtorno do Espectro Autista (TEA)':        { label: 'TEA',        color: 'bg-purple-100 text-purple-700 border-purple-200' },
+  'TDAH – Déficit de Atenção e Hiperatividade':  { label: 'TDAH',       color: 'bg-orange-100 text-orange-700 border-orange-200' },
+  'Deficiência Visual':                          { label: 'Def. Visual',    color: 'bg-slate-100 text-slate-700 border-slate-200' },
+  'Deficiência Auditiva':                        { label: 'Def. Auditiva',  color: 'bg-slate-100 text-slate-700 border-slate-200' },
+  'Deficiência Física / Motora':                 { label: 'Def. Física',    color: 'bg-cyan-100 text-cyan-700 border-cyan-200' },
+  'Deficiência Intelectual':                     { label: 'Def. Intelectual', color: 'bg-indigo-100 text-indigo-700 border-indigo-200' },
+  'Altas Habilidades / Superdotação':            { label: 'Superdotação', color: 'bg-yellow-100 text-yellow-700 border-yellow-200' },
+  'Outro':                                       { label: 'Cuidado Espec.', color: 'bg-pink-100 text-pink-700 border-pink-200' },
+};
+
 function fmtDate(v?: string | null) {
   if (!v) return '---';
   if (/^\d{2}\/\d{2}\/\d{4}$/.test(v)) return v;
@@ -1045,7 +1070,13 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
                             </div>
                         }
                         <div>
-                          <div className="font-bold text-slate-800">{a.nome_completo}</div>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-bold text-slate-800">{a.nome_completo}</span>
+                            {a.cuidado_especial && a.cuidado_especial !== 'Não' && (() => {
+                              const b = CUIDADO_BADGE[a.cuidado_especial] || { label: 'Cuidado Espec.', color: 'bg-pink-100 text-pink-700 border-pink-200' };
+                              return <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded-full border ${b.color}`}>{b.label}</span>;
+                            })()}
+                          </div>
                           <div className="text-[9px] text-slate-400">{a.celular || a.email || '–'}</div>
                         </div>
                       </div>
@@ -1398,13 +1429,20 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
                     <section className="bg-white dark:bg-slate-800 rounded-2xl border border-amber-100 dark:border-amber-900/30 p-4">
                       <h4 className="text-[9px] font-black uppercase text-amber-600 mb-3 tracking-widest flex items-center gap-2"><Heart size={11}/> Saúde / Cuidados</h4>
                       <div className="grid grid-cols-2 gap-2">
-                        {([['Alergias', 'possui_alergias'], ['Cuidado Especial', 'cuidado_especial'], ['Medicamentos', 'uso_medicamento']] as [string, keyof Aluno][]).map(([label, field]) => (
+                        {([['Alergias', 'possui_alergias'], ['Medicamentos', 'uso_medicamento']] as [string, keyof Aluno][]).map(([label, field]) => (
                           <div key={field} className="space-y-1">
                             <label className="text-[9px] font-black uppercase text-slate-400">{label}</label>
                             <input value={(fichaForm[field] as string) || ''} onChange={e => setFichaForm(p => ({ ...p, [field]: e.target.value }))}
                               className="w-full border border-slate-200 dark:border-slate-600 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400 dark:bg-slate-700 dark:text-white" />
                           </div>
                         ))}
+                        <div className="col-span-2 space-y-1">
+                          <label className="text-[9px] font-black uppercase text-slate-400">Necessidade de Cuidado Especial</label>
+                          <select value={fichaForm.cuidado_especial || 'Não'} onChange={e => setFichaForm(p => ({ ...p, cuidado_especial: e.target.value }))}
+                            className="w-full border border-slate-200 dark:border-slate-600 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white dark:bg-slate-700 dark:text-white">
+                            {OPCOES_CUIDADO_ESPECIAL.map(o => <option key={o}>{o}</option>)}
+                          </select>
+                        </div>
                         <div className="col-span-2 space-y-1">
                           <label className="text-[9px] font-black uppercase text-slate-400">Detalhes do Cuidado</label>
                           <textarea rows={2} value={fichaForm.detalhes_cuidado || ''} onChange={e => setFichaForm(p => ({ ...p, detalhes_cuidado: e.target.value }))}
@@ -1510,12 +1548,21 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
                     )}
 
                     {/* Saúde */}
-                    {(a?.possui_alergias || a?.cuidado_especial || a?.uso_medicamento) && (
+                    {(a?.possui_alergias || (a?.cuidado_especial && a.cuidado_especial !== 'Não') || a?.uso_medicamento) && (
                       <section className="bg-amber-50 dark:bg-amber-900/10 rounded-2xl border border-amber-200 dark:border-amber-800/40 p-4">
                         <h4 className="text-[10px] font-black uppercase text-amber-600 mb-3 tracking-widest flex items-center gap-2"><Heart size={12}/> Saúde / Cuidados</h4>
-                        <div className="space-y-2">
+                        <div className="space-y-2.5">
+                          {a?.cuidado_especial && a.cuidado_especial !== 'Não' && (() => {
+                            const b = CUIDADO_BADGE[a.cuidado_especial] || { label: a.cuidado_especial, color: 'bg-pink-100 text-pink-700 border-pink-200' };
+                            return (
+                              <div className="flex items-center gap-2">
+                                <span className="text-[9px] font-black uppercase text-amber-500 w-24 shrink-0">Cuidado</span>
+                                <span className={`text-[10px] font-black px-2.5 py-1 rounded-full border ${b.color}`}>{b.label}</span>
+                                <span className="text-xs text-amber-700 dark:text-amber-300 font-medium hidden sm:block">{a.cuidado_especial}</span>
+                              </div>
+                            );
+                          })()}
                           {a?.possui_alergias && <div className="flex gap-2"><span className="text-[9px] font-black uppercase text-amber-500 w-24 shrink-0 pt-0.5">Alergias</span><span className="text-amber-800 dark:text-amber-300 text-xs font-bold">{a.possui_alergias}</span></div>}
-                          {a?.cuidado_especial && <div className="flex gap-2"><span className="text-[9px] font-black uppercase text-amber-500 w-24 shrink-0 pt-0.5">Cuidado</span><span className="text-amber-800 dark:text-amber-300 text-xs font-bold">{a.cuidado_especial}</span></div>}
                           {a?.uso_medicamento && <div className="flex gap-2"><span className="text-[9px] font-black uppercase text-amber-500 w-24 shrink-0 pt-0.5">Medicamento</span><span className="text-amber-800 dark:text-amber-300 text-xs font-bold">{a.uso_medicamento}</span></div>}
                           {a?.detalhes_cuidado && <div className="flex gap-2"><span className="text-[9px] font-black uppercase text-amber-500 w-24 shrink-0 pt-0.5">Detalhes</span><span className="text-amber-700 dark:text-amber-400 text-xs">{a.detalhes_cuidado}</span></div>}
                         </div>
@@ -2978,6 +3025,7 @@ interface AcervoAluno {
   telefone_alternativo: string | null;
   nome_responsavel: string | null;
   email_responsavel: string | null;
+  cuidado_especial: string | null;
   turmas: string[];
   docs_presentes: string[];
   docs_faltando: string[];
@@ -3168,6 +3216,10 @@ function AcervoTab() {
                               {t}
                             </span>
                           ))}
+                          {a.cuidado_especial && a.cuidado_especial !== 'Não' && (() => {
+                            const b = CUIDADO_BADGE[a.cuidado_especial] || { label: 'Cuidado Espec.', color: 'bg-pink-100 text-pink-700 border-pink-200' };
+                            return <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${b.color}`}>{b.label}</span>;
+                          })()}
                         </div>
                         {a.nome_responsavel && (
                           <p className="text-[10px] text-slate-400 mt-0.5">Resp.: <span className="text-slate-600 dark:text-slate-300">{a.nome_responsavel}</span></p>
