@@ -798,14 +798,25 @@ export class AcademicoService {
     );
     const professor = prof || func || usuario;
     if (!professor) throw new NotFoundException('Professor não encontrado com este CPF');
-    const turmas = await this.dataSource.query(
-      `SELECT t.id, t.nome, t.cor, t.turno, c.nome AS curso_nome
-       FROM turmas t
-       LEFT JOIN cursos c ON c.id::text = t.curso_id::text
-       WHERE t.professor_id::text = $1 AND t.ativo = true
-       ORDER BY t.nome ASC`,
-      [professor.id],
-    );
+    this.logger.log(`[Chamada] professor encontrado id=${professor.id} nome=${professor.nome}`);
+    let turmas: any[] = [];
+    try {
+      turmas = await this.dataSource.query(
+        `SELECT t.id, t.nome,
+                COALESCE(t.cor, '#6d28d9') AS cor,
+                t.turno,
+                c.nome AS curso_nome
+         FROM turmas t
+         LEFT JOIN cursos c ON c.id::text = t.curso_id::text
+         WHERE t.professor_id::text = $1
+           AND (t.ativo IS NOT FALSE)
+         ORDER BY t.nome ASC`,
+        [professor.id],
+      );
+    } catch (e: any) {
+      this.logger.error(`[Chamada] turmas query falhou: ${e?.message}`);
+      throw new InternalServerErrorException(`Erro ao buscar turmas do professor: ${e?.message}`);
+    }
     return { professor: { id: professor.id, nome: professor.nome }, turmas };
   }
 

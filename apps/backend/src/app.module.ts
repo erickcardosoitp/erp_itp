@@ -374,6 +374,16 @@ export class AppModule implements OnModuleInit {
       `);
       this.logger.log('✅ Colunas email_responsavel aplicadas (IF NOT EXISTS)');
 
+      // ── Colunas faltantes em turmas (schema drift) ───────────────────────
+      await this.dataSource.query(`
+        ALTER TABLE IF EXISTS turmas
+          ADD COLUMN IF NOT EXISTS cor       VARCHAR DEFAULT '#7c3aed',
+          ADD COLUMN IF NOT EXISTS turno     VARCHAR,
+          ADD COLUMN IF NOT EXISTS max_alunos INT DEFAULT 30,
+          ADD COLUMN IF NOT EXISTS codigo    VARCHAR
+      `);
+      this.logger.log('✅ Colunas turmas (cor, turno, max_alunos, codigo) aplicadas (IF NOT EXISTS)');
+
       // ── Colunas faltantes em turma_alunos (schema drift) ─────────────────
       await this.dataSource.query(`
         ALTER TABLE IF EXISTS turma_alunos
