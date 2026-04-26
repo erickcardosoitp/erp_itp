@@ -273,19 +273,19 @@ export class AcademicoService {
       const alunoIds = alunos.map(a => `'${a.id}'`).join(',');
       const [turmaRows, fotoRows]: [any[], any[]] = await Promise.all([
         this.dataSource.query(
-          `SELECT ta.aluno_id,
-              json_agg(json_build_object('id', ta.turma_id, 'nome', t.nome, 'cor', t.cor, 'status', ta.status)
+          `SELECT ta.aluno_id::text,
+              json_agg(json_build_object('id', ta.turma_id::text, 'nome', t.nome, 'cor', t.cor, 'status', ta.status)
                        ORDER BY ta.created_at) FILTER (WHERE ta.turma_id IS NOT NULL) AS turmas
            FROM turma_alunos ta
-           LEFT JOIN turmas t ON ta.turma_id IS NOT NULL AND t.id::text = ta.turma_id
-           WHERE ta.aluno_id IN (${alunoIds})
+           LEFT JOIN turmas t ON ta.turma_id IS NOT NULL AND t.id = ta.turma_id
+           WHERE ta.aluno_id::text IN (${alunoIds})
            GROUP BY ta.aluno_id`
         ),
         this.dataSource.query(
-          `SELECT DISTINCT ON (a.id) a.id AS aluno_id, d.url_arquivo AS foto_url
+          `SELECT DISTINCT ON (a.id) a.id::text AS aluno_id, d.url_arquivo AS foto_url
            FROM alunos a
            JOIN documentos_inscricao d ON d.inscricao_id = a.inscricao_id AND d.tipo = 'foto_aluno'
-           WHERE a.id IN (${alunoIds})
+           WHERE a.id::text IN (${alunoIds})
            ORDER BY a.id, d."createdAt" DESC`
         ),
       ]);
@@ -321,10 +321,10 @@ export class AcademicoService {
       this.diarioRepo.find({ where: { aluno_id: id, tipo: 'Presença' }, order: { data: 'DESC' } }),
       this.diarioRepo.find({ where: { aluno_id: id }, order: { created_at: 'DESC' } }),
       this.dataSource.query(
-        `SELECT ta.id, ta.turma_id, ta.status, t.nome AS turma_nome, t.cor AS turma_cor, t.turno
+        `SELECT ta.id::text, ta.turma_id::text, ta.status, t.nome AS turma_nome, t.cor AS turma_cor, t.turno
          FROM turma_alunos ta
-         LEFT JOIN turmas t ON ta.turma_id IS NOT NULL AND t.id::text = ta.turma_id
-         WHERE ta.aluno_id = $1
+         LEFT JOIN turmas t ON ta.turma_id IS NOT NULL AND t.id = ta.turma_id
+         WHERE ta.aluno_id::text = $1
          ORDER BY ta.status DESC, t.nome ASC`, [id]
       ),
     ]);
@@ -442,18 +442,18 @@ export class AcademicoService {
   async listarAlunosDaTurma(turmaId: string) {
     this.logger.log(`Listando alunos da turma id=${turmaId}`);
     return this.dataSource.query(
-      `SELECT ta.id AS vinculo_id, ta.status AS vinculo_status, ta.created_at AS vinculado_em,
-              a.id, a.nome_completo, a.cpf, a.celular, a.email,
+      `SELECT ta.id::text AS vinculo_id, ta.status AS vinculo_status, ta.created_at AS vinculado_em,
+              a.id::text AS id, a.nome_completo, a.cpf, a.celular, a.email,
               a.data_nascimento, a.ativo, a.numero_matricula,
               d.url_arquivo AS foto_url
        FROM turma_alunos ta
-       JOIN alunos a ON a.id::text = ta.aluno_id
+       JOIN alunos a ON a.id = ta.aluno_id
        LEFT JOIN LATERAL (
          SELECT url_arquivo FROM documentos_inscricao
          WHERE inscricao_id = a.inscricao_id AND tipo = 'foto_aluno'
          ORDER BY "createdAt" DESC LIMIT 1
        ) d ON true
-       WHERE ta.turma_id = $1 AND ta.status = 'ativo'
+       WHERE ta.turma_id::text = $1 AND ta.status = 'ativo'
        ORDER BY a.nome_completo ASC`,
       [turmaId],
     );
