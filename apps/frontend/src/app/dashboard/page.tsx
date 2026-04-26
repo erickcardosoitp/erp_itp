@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { 
-  Users, GraduationCap, TrendingDown, DollarSign, 
+import { useRouter } from 'next/navigation';
+import {
+  Users, GraduationCap, TrendingDown, DollarSign,
   MapPin, Heart, TrendingUp, ShieldCheck,
   AlertTriangle, ArrowUpRight, Calendar, RefreshCw
 } from 'lucide-react';
@@ -26,25 +27,28 @@ function ultimos6Meses() {
 }
 
 export default function DashboardEstrategico() {
+  const router = useRouter();
   const [isMounted, setIsMounted] = useState(false);
   const [alunos,       setAlunos]       = useState<any[]>([]);
   const [alunosStats, setAlunosStats]  = useState<{ ativos: number; inativos: number; total: number } | null>(null);
   const [cursos,       setCursos]       = useState<any[]>([]);
   const [movimentacoes, setMovimentacoes] = useState<any[]>([]);
   const [alertasCandidatos, setAlertasCandidatos] = useState<any[]>([]);
+  const [faltasRecentes, setFaltasRecentes] = useState<any[]>([]);
   const [nps, setNps] = useState<{ nps: number | null; total_respostas: number; pesquisa_titulo?: string } | null>(null);
   const [carregando,   setCarregando]   = useState(false);
 
   const carregar = useCallback(async () => {
     setCarregando(true);
     try {
-      const [ra, rst, rc, rm, rca, rnps] = await Promise.allSettled([
+      const [ra, rst, rc, rm, rca, rnps, rfc] = await Promise.allSettled([
         api.get('/academico/alunos'),
         api.get('/academico/alunos/stats'),
         api.get('/academico/cursos'),
         api.get('/financeiro/movimentacoes'),
         api.get('/academico/presenca/alertas-candidatos'),
         api.get('/pesquisas/nps'),
+        api.get('/academico/presenca/faltas-recentes', { params: { limite: 5 } }),
       ]);
       if (ra.status === 'fulfilled') setAlunos(ra.value.data ?? []);
       if (rst.status === 'fulfilled') setAlunosStats(rst.value.data);
@@ -52,6 +56,7 @@ export default function DashboardEstrategico() {
       if (rm.status === 'fulfilled') setMovimentacoes(rm.value.data ?? []);
       if (rca.status === 'fulfilled') setAlertasCandidatos(rca.value.data ?? []);
       if (rnps.status === 'fulfilled') setNps(rnps.value.data);
+      if (rfc.status === 'fulfilled') setFaltasRecentes(rfc.value.data ?? []);
     } catch { /* silencioso */ }
     setCarregando(false);
   }, []);
@@ -307,39 +312,49 @@ export default function DashboardEstrategico() {
             </div>
             
             <div className="space-y-4">
+              {faltasRecentes.map((a: any) => (
+                <AlertItem
+                  key={a.aluno_id}
+                  name={a.nome_completo}
+                  bairro={a.turma_nome || 'Sem turma'}
+                  msg={`${a.total_faltas} falta${a.total_faltas > 1 ? 's' : ''} nos últimos 30 dias. Frequência: ${a.pct_presenca != null ? Number(a.pct_presenca).toFixed(0) + '%' : '–'}`}
+                />
+              ))}
               {alunosInativos > 0 && (
-                <AlertItem 
+                <AlertItem
                   name={`${alunosInativos} aluno${alunosInativos > 1 ? 's' : ''} inativo${alunosInativos > 1 ? 's' : ''}`}
-                  bairro="Status"
-                  msg={`Taxa de evasão: ${taxaEvasao}. Verifique os alunos e entre em contato com as famílias.`} 
+                  bairro="Evasão"
+                  msg={`Taxa de evasão: ${taxaEvasao}. Verifique os alunos e entre em contato com as famílias.`}
                 />
               )}
-              {alunos.filter(a => a.cuidado_especial && a.cuidado_especial !== 'Não').slice(0, 2).map((a: any) => (
-                <AlertItem 
+              {alunos.filter((a: any) => a.cuidado_especial && a.cuidado_especial !== 'Não' && a.cuidado_especial !== 'null').slice(0, 2).map((a: any) => (
+                <AlertItem
                   key={a.id}
                   name={a.nome_completo}
                   bairro={a.bairro || '–'}
                   msg={a.detalhes_cuidado || `Requer atenção especial: ${a.cuidado_especial}.`}
                 />
               ))}
-              {alertasCandidatos.slice(0, 3).map((a: any) => (
-                <AlertItem 
+              {alertasCandidatos.slice(0, 2).map((a: any) => (
+                <AlertItem
                   key={a.inscricao_id}
                   name={a.pessoa_nome || `Candidato #${a.inscricao_id}`}
                   bairro="Candidato"
                   msg={`Presente em "${a.tema_aula || 'aula'}" em ${a.data ? new Date(a.data + 'T12:00:00').toLocaleDateString('pt-BR') : '–'}. ${a.turma_nome ? 'Turma: ' + a.turma_nome : ''}`}
                 />
               ))}
-              {alunosInativos === 0 && alunos.filter(a => a.cuidado_especial && a.cuidado_especial !== 'Não').length === 0 && alertasCandidatos.length === 0 && (
+              {faltasRecentes.length === 0 && alunosInativos === 0 && alunos.filter((a: any) => a.cuidado_especial && a.cuidado_especial !== 'Não' && a.cuidado_especial !== 'null').length === 0 && alertasCandidatos.length === 0 && (
                 <div className="bg-white/5 border border-white/10 p-4 rounded-3xl text-center">
                   <p className="text-sm text-slate-300 font-bold">Nenhum alerta no momento.</p>
-                  <p className="text-[11px] text-slate-400 mt-1">Todos os alunos estão ativos.</p>
+                  <p className="text-[11px] text-slate-400 mt-1">Todos os alunos estão ativos e presentes.</p>
                 </div>
               )}
             </div>
-            
-            <button className="w-full mt-6 py-4 bg-purple-600 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-purple-500 transition-colors">
-              Ver todos os relatórios sociais
+
+            <button
+              onClick={() => router.push('/academico')}
+              className="w-full mt-6 py-4 bg-purple-600 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-purple-500 transition-colors">
+              Ver Monitoramento Acadêmico
             </button>
           </section>
         </div>

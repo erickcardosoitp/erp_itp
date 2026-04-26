@@ -8,6 +8,7 @@ import { TurmaAluno } from './entities/turma-aluno.entity';
 import { GradeHoraria } from './entities/grade-horaria.entity';
 import { DiarioAcademico } from './entities/diario.entity';
 import { PresencaSessao } from './entities/presenca-sessao.entity';
+import { ChamadoAcademico } from './entities/chamado.entity';
 import { Aluno } from '../alunos/aluno.entity';
 import { NotificacoesService } from '../notificacoes/notificacoes.service';
 import { InjectDataSource } from '@nestjs/typeorm';
@@ -17,16 +18,17 @@ export class AcademicoService {
   private readonly logger = new Logger(AcademicoService.name);
 
   constructor(
-    @InjectRepository(Curso)           private cursoRepo: Repository<Curso>,
-    @InjectRepository(Professor)       private professorRepo: Repository<Professor>,
-    @InjectRepository(Turma)           private turmaRepo: Repository<Turma>,
-    @InjectRepository(GradeHoraria)    private gradeRepo: Repository<GradeHoraria>,
-    @InjectRepository(DiarioAcademico) private diarioRepo: Repository<DiarioAcademico>,
-    @InjectRepository(PresencaSessao)  private sessaoRepo: Repository<PresencaSessao>,
-    @InjectRepository(Aluno)           private alunoRepo: Repository<Aluno>,
-    @InjectRepository(TurmaAluno)      private turmaAlunoRepo: Repository<TurmaAluno>,
+    @InjectRepository(Curso)              private cursoRepo: Repository<Curso>,
+    @InjectRepository(Professor)          private professorRepo: Repository<Professor>,
+    @InjectRepository(Turma)              private turmaRepo: Repository<Turma>,
+    @InjectRepository(GradeHoraria)       private gradeRepo: Repository<GradeHoraria>,
+    @InjectRepository(DiarioAcademico)    private diarioRepo: Repository<DiarioAcademico>,
+    @InjectRepository(PresencaSessao)     private sessaoRepo: Repository<PresencaSessao>,
+    @InjectRepository(ChamadoAcademico)   private chamadoRepo: Repository<ChamadoAcademico>,
+    @InjectRepository(Aluno)              private alunoRepo: Repository<Aluno>,
+    @InjectRepository(TurmaAluno)         private turmaAlunoRepo: Repository<TurmaAluno>,
     private readonly notificacoes: NotificacoesService,
-    @InjectDataSource()                private readonly dataSource: DataSource,
+    @InjectDataSource()                   private readonly dataSource: DataSource,
   ) {}
 
   // ── UTILITÁRIOS ───────────────────────────────────────────────────────────
@@ -679,6 +681,25 @@ export class AcademicoService {
     await this.diarioRepo.save(entries);
     this.logger.log(`Presença por sessão registrada: ${entries.length} alunos`);
 
+    const totalIsentos      = dto.registros.filter(r => r.isento).length;
+    const totalJustificados = dto.registros.filter(r => r.justificada).length;
+    const partes = [
+      `${totalPresentes} presente${totalPresentes !== 1 ? 's' : ''}`,
+      `${totalAusentes} ausente${totalAusentes !== 1 ? 's' : ''}`,
+      ...(totalJustificados ? [`${totalJustificados} justificada${totalJustificados !== 1 ? 's' : ''}`] : []),
+      ...(totalIsentos      ? [`${totalIsentos} isento${totalIsentos !== 1 ? 's' : ''}`]                : []),
+    ];
+    await this.diarioRepo.save(this.diarioRepo.create({
+      tipo:         'Lista de Chamada',
+      titulo:       `${turma.nome}${dto.tema_aula ? ' — ' + dto.tema_aula : ''}`,
+      descricao:    partes.join(' · '),
+      turma_id:     dto.turma_id,
+      data:         dto.data,
+      sessao_id:    sessao.id,
+      usuario_id:   usuarioId,
+      usuario_nome: usuarioNome,
+    }));
+
     return { sessao, registrados: entries.length };
   }
 
@@ -837,7 +858,7 @@ export class AcademicoService {
           LIMIT 20
         `),
 
-        // ── Presença por turma (ordenado por maior taxa de falta) ────────
+        // ── Presença por turma — últimos 90 dias ─────────────────────────
         this.dataSource.query(`
           SELECT
             t.id::text AS turma_id,
@@ -846,11 +867,14 @@ export class AcademicoService {
             COUNT(DISTINCT ta.aluno_id) FILTER (WHERE ta.status = 'ativo' AND a.ativo = true) AS total_alunos,
             COUNT(d.id) FILTER (WHERE d.descricao = 'Presente') AS presencas,
             COUNT(d.id) FILTER (WHERE d.descricao = 'Falta' AND d.isento = false AND d.justificada = false) AS faltas,
-            COUNT(d.id) FILTER (WHERE d.tipo = 'Presença' AND d.isento = false AND d.justificada = false) AS total_computados
+            COUNT(d.id) FILTER (WHERE d.tipo = 'Presença' AND d.isento = false AND d.justificada = false) AS total_computados,
+            COUNT(DISTINCT d.sessao_id) AS total_sessoes
           FROM turmas t
           LEFT JOIN turma_alunos ta ON ta.turma_id::text = t.id::text
           LEFT JOIN alunos a ON a.id::text = ta.aluno_id::text AND a.ativo = true
-          LEFT JOIN diario_academico d ON d.turma_id::text = t.id::text AND d.tipo = 'Presença'
+          LEFT JOIN diario_academico d ON d.turma_id::text = t.id::text
+            AND d.tipo = 'Presença'
+            AND d.data >= NOW() - INTERVAL '90 days'
           WHERE t.ativo IS NOT FALSE
           GROUP BY t.id, t.nome, t.cor
           HAVING COUNT(d.id) > 0
@@ -865,6 +889,10 @@ export class AcademicoService {
             a.nome_completo,
             a.numero_matricula,
             a.celular,
+            (SELECT t.nome FROM turmas t
+              JOIN turma_alunos ta ON ta.turma_id = t.id
+              WHERE ta.aluno_id::text = a.id::text AND ta.status = 'ativo'
+              LIMIT 1) AS turma_nome,
             COUNT(*) FILTER (WHERE d.descricao = 'Falta' AND d.isento = false AND d.justificada = false) AS faltas_recentes,
             MAX(d.data) AS ultima_falta
           FROM alunos a
@@ -875,7 +903,6 @@ export class AcademicoService {
           GROUP BY a.id, a.nome_completo, a.numero_matricula, a.celular
           HAVING COUNT(*) FILTER (WHERE d.descricao = 'Falta' AND d.isento = false AND d.justificada = false) >= 2
           ORDER BY faltas_recentes DESC
-          LIMIT 10
         `),
 
         // ── Registros diário por tipo ─────────────────────────────────────
@@ -904,8 +931,8 @@ export class AcademicoService {
       top_faltas:        topFaltas.map((x: any) => ({ ...x, faltas: Number(x.faltas), presencas: Number(x.presencas), faltas_recentes: Number(x.faltas_recentes) })),
       top_presencas:     topPresencas.map((x: any) => ({ ...x, presencas: Number(x.presencas), faltas: Number(x.faltas), pct_presenca: Number(x.pct_presenca) })),
       por_bairro:        porBairro.map((x: any) => ({ bairro: x.bairro, total: Number(x.total) })),
-      turmas_presenca:   turmasEvasao.map((x: any) => ({ ...x, total_alunos: Number(x.total_alunos), presencas: Number(x.presencas), faltas: Number(x.faltas), total_computados: Number(x.total_computados) })),
-      faltas_frequentes: faltasRecentes.map((x: any) => ({ ...x, faltas_recentes: Number(x.faltas_recentes) })),
+      turmas_presenca:   turmasEvasao.map((x: any) => ({ ...x, total_alunos: Number(x.total_alunos), presencas: Number(x.presencas), faltas: Number(x.faltas), total_computados: Number(x.total_computados), total_sessoes: Number(x.total_sessoes) })),
+      faltas_frequentes: faltasRecentes.map((x: any) => ({ ...x, faltas_recentes: Number(x.faltas_recentes), turma_nome: x.turma_nome ?? null })),
       diario_por_tipo:   diarioResumo.map((x: any) => ({ tipo: x.tipo, total: Number(x.total) })),
     };
   }
@@ -1177,5 +1204,113 @@ export class AcademicoService {
 
     lista.sort((a: any, b: any) => a.nome_completo.localeCompare(b.nome_completo));
     return { turma, alunos: lista };
+  }
+
+  // ── FALTAS RECENTES (dashboard social) ───────────────────────────────────
+
+  async listarFaltasRecentes(limite = 8) {
+    return this.dataSource.query(`
+      SELECT
+        a.id::text AS aluno_id,
+        a.nome_completo,
+        a.numero_matricula,
+        a.celular,
+        (SELECT t.nome FROM turmas t
+          JOIN turma_alunos ta ON ta.turma_id = t.id
+          WHERE ta.aluno_id::text = a.id::text AND ta.status = 'ativo'
+          LIMIT 1) AS turma_nome,
+        COUNT(*) FILTER (WHERE d.descricao = 'Falta' AND d.isento = false AND d.justificada = false) AS total_faltas,
+        COUNT(*) AS total_registros,
+        ROUND(
+          100.0 * COUNT(*) FILTER (WHERE d.descricao = 'Presente') / NULLIF(COUNT(*) FILTER (WHERE d.isento = false), 0)
+        , 1) AS pct_presenca,
+        MAX(d.data) AS ultima_falta
+      FROM alunos a
+      JOIN diario_academico d ON d.aluno_id::text = a.id::text
+        AND d.tipo = 'Presença'
+        AND d.data >= NOW() - INTERVAL '30 days'
+      WHERE a.ativo = true
+      GROUP BY a.id, a.nome_completo, a.numero_matricula, a.celular
+      HAVING COUNT(*) FILTER (WHERE d.descricao = 'Falta' AND d.isento = false AND d.justificada = false) >= 2
+      ORDER BY total_faltas DESC
+      LIMIT $1
+    `, [limite]);
+  }
+
+  async turmasSemSessaoRecente(diasSemSessao = 7) {
+    return this.dataSource.query(`
+      SELECT
+        t.id::text AS turma_id,
+        t.nome AS turma_nome,
+        t.turno,
+        MAX(ps.data) AS ultima_sessao,
+        NOW()::date - MAX(ps.data) AS dias_sem_sessao
+      FROM turmas t
+      LEFT JOIN presenca_sessoes ps ON ps.turma_id::text = t.id::text
+      WHERE t.ativo IS NOT FALSE
+      GROUP BY t.id, t.nome, t.turno
+      HAVING MAX(ps.data) IS NULL OR MAX(ps.data) < NOW() - INTERVAL '${diasSemSessao} days'
+      ORDER BY dias_sem_sessao DESC NULLS FIRST
+    `);
+  }
+
+  // ── CHAMADOS ACADÊMICOS ───────────────────────────────────────────────────
+
+  async listarChamados(filtros: { status?: string; tipo?: string; aluno_id?: string; prioridade?: string } = {}) {
+    let qb = this.chamadoRepo.createQueryBuilder('c').orderBy('c.created_at', 'DESC');
+    if (filtros.status)    qb = qb.andWhere('c.status = :s',     { s: filtros.status });
+    if (filtros.tipo)      qb = qb.andWhere('c.tipo = :t',       { t: filtros.tipo });
+    if (filtros.aluno_id)  qb = qb.andWhere('c.aluno_id = :a',   { a: filtros.aluno_id });
+    if (filtros.prioridade) qb = qb.andWhere('c.prioridade = :p', { p: filtros.prioridade });
+    return qb.getMany();
+  }
+
+  async criarChamado(dto: Partial<ChamadoAcademico>, usuarioNome?: string) {
+    if (!dto.titulo?.trim()) throw new BadRequestException('Título é obrigatório');
+    const chamado = this.chamadoRepo.create({ ...dto, criado_por_nome: usuarioNome ?? dto.criado_por_nome });
+    const salvo = await this.chamadoRepo.save(chamado);
+    await this.notificacoes.criar({
+      tipo: 'novo_chamado',
+      titulo: `Novo chamado: ${salvo.titulo}`,
+      mensagem: `${salvo.tipo} · ${salvo.prioridade.toUpperCase()} · ${salvo.aluno_nome ? 'Aluno: ' + salvo.aluno_nome : 'Chamado geral'} · Por: ${salvo.criado_por_nome || '–'}`,
+      referencia_id:   salvo.id,
+      referencia_tipo: 'chamado',
+      cargo_minimo:    5, // adjunto e acima
+    }).catch(() => {});
+    return salvo;
+  }
+
+  async editarChamado(id: string, dto: Partial<ChamadoAcademico>) {
+    const chamado = await this.chamadoRepo.findOneBy({ id });
+    if (!chamado) throw new NotFoundException('Chamado não encontrado');
+    const antigo_status = chamado.status;
+    Object.assign(chamado, dto);
+    if (dto.status === 'resolvido' && antigo_status !== 'resolvido' && !chamado.data_resolucao) {
+      chamado.data_resolucao = new Date().toISOString().slice(0, 10);
+    }
+    return this.chamadoRepo.save(chamado);
+  }
+
+  async deletarChamado(id: string) {
+    await this.chamadoRepo.delete(id);
+    return { ok: true };
+  }
+
+  async statsChamados() {
+    const rows = await this.dataSource.query(`
+      SELECT
+        COUNT(*) FILTER (WHERE status = 'aberto')        AS abertos,
+        COUNT(*) FILTER (WHERE status = 'em_andamento')  AS em_andamento,
+        COUNT(*) FILTER (WHERE status = 'resolvido')     AS resolvidos,
+        COUNT(*) FILTER (WHERE prioridade = 'urgente' AND status != 'resolvido') AS urgentes
+      FROM chamados_academicos
+    `);
+    const r = rows[0];
+    return {
+      abertos:      Number(r.abertos),
+      em_andamento: Number(r.em_andamento),
+      resolvidos:   Number(r.resolvidos),
+      urgentes:     Number(r.urgentes),
+    };
   }
 }

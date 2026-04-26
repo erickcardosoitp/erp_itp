@@ -310,4 +310,44 @@ export class AcademicoController {
   registrarPresenca(@Body() dto: any, @Req() req: any) {
     return this.svc.registrarPresenca(dto, req.user?.userId, req.user?.email);
   }
+
+  // ── FALTAS / TURMAS SEM SESSÃO ────────────────────────────────────────────
+
+  @Get('presenca/faltas-recentes')
+  @ModuloPerm('academico', 'visualizar')
+  faltasRecentes(@Query('limite') limite?: string) {
+    return this.svc.listarFaltasRecentes(limite ? parseInt(limite) : 8);
+  }
+
+  @Get('presenca/turmas-sem-sessao')
+  @ModuloPerm('academico', 'visualizar')
+  turmasSemSessao(@Query('dias') dias?: string) {
+    return this.svc.turmasSemSessaoRecente(dias ? parseInt(dias) : 7);
+  }
+
+  // ── CHAMADOS ──────────────────────────────────────────────────────────────
+
+  @Get('chamados/stats')
+  @ModuloPerm('academico', 'visualizar')
+  statsChamados() { return this.svc.statsChamados(); }
+
+  @Get('chamados')
+  @ModuloPerm('academico', 'visualizar')
+  listarChamados(@Query() q: any) { return this.svc.listarChamados(q); }
+
+  @Post('chamados')
+  @ModuloPerm('academico', 'incluir')
+  criarChamado(@Body() dto: any, @Req() req: any) {
+    return this.svc.criarChamado(dto, req.user?.email);
+  }
+
+  @Patch('chamados/:id')
+  @ModuloPerm('academico', 'editar')
+  editarChamado(@Param('id') id: string, @Body() dto: any) {
+    return this.svc.editarChamado(id, dto);
+  }
+
+  @Delete('chamados/:id')
+  @ModuloPerm('academico', 'excluir')
+  deletarChamado(@Param('id') id: string) { return this.svc.deletarChamado(id); }
 }

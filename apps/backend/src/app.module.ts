@@ -752,6 +752,56 @@ export class AppModule implements OnModuleInit {
       `);
       this.logger.log('✅ alunos.cpf: dados TEMP limpos, constraint substituída por índice parcial');
 
+      // ── Tabela de Chamados Acadêmicos ─────────────────────────────────────
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS chamados_academicos (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          titulo VARCHAR NOT NULL,
+          descricao TEXT,
+          tipo VARCHAR NOT NULL DEFAULT 'Social',
+          status VARCHAR NOT NULL DEFAULT 'aberto',
+          prioridade VARCHAR NOT NULL DEFAULT 'normal',
+          aluno_id UUID,
+          aluno_nome VARCHAR,
+          turma_id UUID,
+          turma_nome VARCHAR,
+          responsavel_nome VARCHAR,
+          criado_por_nome VARCHAR,
+          observacoes TEXT,
+          data_resolucao DATE,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `);
+      this.logger.log('✅ Tabela chamados_academicos criada (IF NOT EXISTS)');
+
+      // ── Retroativo: criar entradas 'Lista de Chamada' para sessões antigas ──
+      // Sessões criadas antes dessa funcionalidade não tinham entrada no diário.
+      // Idempotente: a subquery NOT EXISTS garante que não duplica.
+      await this.dataSource.query(`
+        INSERT INTO diario_academico (id, tipo, titulo, descricao, turma_id, data, sessao_id, usuario_id, usuario_nome, created_at)
+        SELECT
+          gen_random_uuid(),
+          'Lista de Chamada',
+          COALESCE(ps.turma_nome, 'Turma') || CASE WHEN ps.tema_aula IS NOT NULL AND ps.tema_aula <> '' THEN ' — ' || ps.tema_aula ELSE '' END,
+          CONCAT(
+            ps.total_presentes, ' presente', CASE WHEN ps.total_presentes != 1 THEN 's' ELSE '' END,
+            ' · ', ps.total_ausentes, ' ausente', CASE WHEN ps.total_ausentes != 1 THEN 's' ELSE '' END
+          ),
+          ps.turma_id,
+          ps.data,
+          ps.id::text,
+          ps.usuario_id,
+          ps.usuario_nome,
+          ps.created_at
+        FROM presenca_sessoes ps
+        WHERE NOT EXISTS (
+          SELECT 1 FROM diario_academico d
+          WHERE d.sessao_id = ps.id::text AND d.tipo = 'Lista de Chamada'
+        )
+      `);
+      this.logger.log('✅ Entradas retroativas "Lista de Chamada" criadas para sessões sem registro no diário');
+
     } catch (err: any) {
       this.logger.error(`❌ Erro nas migrations automáticas: ${err.message}`);
     }
