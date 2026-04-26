@@ -867,15 +867,25 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
                     <td className="px-4 py-3 max-w-[220px]">
                       {(a.turmas && a.turmas.length > 0) ? (
                         <div className="flex flex-wrap gap-1">
-                          {a.turmas.filter(t => t.status === 'ativo').map(t => (
-                            <span key={t.id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black text-white shadow-sm"
-                              style={{ backgroundColor: t.cor || '#6d28d9' }}>
-                              {t.nome}
-                            </span>
-                          ))}
-                          {a.turmas.filter(t => t.status !== 'ativo').length > 0 && a.turmas.filter(t => t.status === 'ativo').length === 0 && (
-                            <span className="px-2 py-0.5 rounded-full text-[8px] font-black uppercase bg-amber-100 text-amber-700">Backlog</span>
-                          )}
+                          {(() => {
+                            const ativas = a.turmas.filter((t: any) => t.status === 'ativo');
+                            const visiveis = ativas.slice(0, 3);
+                            const extras = ativas.length - 3;
+                            return (<>
+                              {visiveis.map((t: any) => (
+                                <span key={t.id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black text-white shadow-sm"
+                                  style={{ backgroundColor: t.cor || '#6d28d9' }}>
+                                  {t.nome}
+                                </span>
+                              ))}
+                              {extras > 0 && (
+                                <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-slate-100 text-slate-500">+{extras}</span>
+                              )}
+                              {ativas.length === 0 && (
+                                <span className="px-2 py-0.5 rounded-full text-[8px] font-black uppercase bg-amber-100 text-amber-700">Backlog</span>
+                              )}
+                            </>);
+                          })()}
                         </div>
                       ) : (
                         <span className="text-slate-300 text-[10px]">Sem turma</span>
