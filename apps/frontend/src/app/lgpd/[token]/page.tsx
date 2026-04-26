@@ -22,6 +22,9 @@ interface DadosInscricao {
   nome_completo: string;
   cpf: string;
   email: string;
+  maior_18_anos: boolean;
+  nome_responsavel?: string;
+  cpf_responsavel?: string;
 }
 
 export default function LGPDSignPage() {
@@ -52,9 +55,12 @@ export default function LGPDSignPage() {
         }
         const json = await res.json();
         setDados(json);
-        setNomeDigitado(json.nome_completo || '');
-        // CPF mascarado apenas para exibição
-        const cpf = json.cpf?.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4') || '';
+        // Menor de 18: quem assina é o responsável
+        const menor = json.maior_18_anos === false;
+        const nomeAssina = menor && json.nome_responsavel ? json.nome_responsavel : json.nome_completo;
+        const cpfAssina  = menor && json.cpf_responsavel  ? json.cpf_responsavel  : json.cpf;
+        setNomeDigitado(nomeAssina || '');
+        const cpf = (cpfAssina || '').replace(/\D/g, '').replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4');
         setCpfDigitado(cpf);
         setEstado('pronto');
       })
@@ -191,10 +197,18 @@ export default function LGPDSignPage() {
 
         <div className="bg-white shadow-lg rounded-b-2xl overflow-hidden">
           
-          {/* Candidato */}
-          <div className="bg-blue-50 border-b border-blue-100 px-8 py-4">
-            <p className="text-sm text-slate-500">Candidato(a)</p>
-            <p className="text-lg font-semibold text-slate-800">{dados?.nome_completo}</p>
+          {/* Candidato / Responsável */}
+          <div className="bg-blue-50 border-b border-blue-100 px-8 py-4 space-y-1">
+            <div>
+              <p className="text-xs text-slate-500">Candidato(a)</p>
+              <p className="text-lg font-semibold text-slate-800">{dados?.nome_completo}</p>
+            </div>
+            {dados?.maior_18_anos === false && dados.nome_responsavel && (
+              <div>
+                <p className="text-xs text-slate-500 mt-2">Responsável (assina pelo menor)</p>
+                <p className="text-base font-semibold text-slate-700">{dados.nome_responsavel}</p>
+              </div>
+            )}
           </div>
 
           <div className="px-8 py-6 space-y-6 text-slate-700 text-sm leading-relaxed">
@@ -263,8 +277,10 @@ export default function LGPDSignPage() {
           <div className="border-t border-slate-200 px-8 py-6">
             <h3 className="font-semibold text-slate-800 mb-1">Assinatura Eletrônica</h3>
             <p className="text-xs text-slate-500 mb-5">
-              Ao digitar seu nome abaixo e clicar em &quot;Assinar&quot;, você confirma que leu e concorda com todos os itens deste termo.
-              Sua assinatura será registrada com data, hora e endereço IP, conforme a Lei nº 14.063/2020.
+              {dados?.maior_18_anos === false
+                ? 'O responsável deve digitar seu nome e CPF abaixo para assinar em nome do menor. A assinatura será registrada com data, hora e endereço IP, conforme a Lei nº 14.063/2020.'
+                : 'Ao digitar seu nome abaixo e clicar em "Assinar", você confirma que leu e concorda com todos os itens deste termo. Sua assinatura será registrada com data, hora e endereço IP, conforme a Lei nº 14.063/2020.'
+              }
             </p>
 
             <div className="grid gap-4 sm:grid-cols-2">

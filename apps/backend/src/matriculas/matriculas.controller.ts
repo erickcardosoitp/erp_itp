@@ -182,6 +182,9 @@ export class MatriculasController {
       nome_completo: inscricao.nome_completo,
       cpf: inscricao.cpf,
       email: inscricao.email,
+      maior_18_anos: inscricao.maior_18_anos,
+      nome_responsavel: inscricao.nome_responsavel,
+      cpf_responsavel: inscricao.cpf_responsavel,
     };
   }
 
