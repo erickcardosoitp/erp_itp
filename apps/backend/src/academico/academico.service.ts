@@ -789,19 +789,27 @@ export class AcademicoService {
   async listarTurmasPorCPFProfessor(cpf: string) {
     const cpfLimpo = cpf.replace(/\D/g, '');
     if (cpfLimpo.length < 11) throw new BadRequestException('CPF inválido');
-    // Busca em professores, funcionarios e usuarios (qualquer um pode ser atribuído a turmas)
-    const [prof] = await this.dataSource.query(
-      `SELECT id, nome FROM professores WHERE replace(replace(cpf,'.',''),'-','') = $1 LIMIT 1`, [cpfLimpo]
-    );
-    const [func] = prof ? [] : await this.dataSource.query(
-      `SELECT id, nome FROM funcionarios WHERE replace(replace(cpf,'.',''),'-','') = $1 AND ativo = true LIMIT 1`, [cpfLimpo]
-    );
-    const [usuario] = (prof || func) ? [] : await this.dataSource.query(
-      `SELECT id, nome FROM usuarios WHERE replace(replace(replace(cpf,'.',''),'-',''),'/','') = $1 LIMIT 1`, [cpfLimpo]
-    );
-    const professor = prof || func || usuario;
+
+    // Search all tables in parallel — turmas may reference id from any of them
+    const [profRows, funcRows, userRows] = await Promise.all([
+      this.dataSource.query(
+        `SELECT id::text, nome FROM professores WHERE replace(replace(cpf,'.',''),'-','') = $1 LIMIT 1`, [cpfLimpo]
+      ),
+      this.dataSource.query(
+        `SELECT id::text, nome FROM funcionarios WHERE replace(replace(cpf,'.',''),'-','') = $1 AND (ativo IS NOT FALSE) LIMIT 1`, [cpfLimpo]
+      ),
+      this.dataSource.query(
+        `SELECT id::text, nome FROM usuarios WHERE replace(replace(replace(cpf,'.',''),'-',''),'/','') = $1 LIMIT 1`, [cpfLimpo]
+      ),
+    ]);
+
+    const professor = profRows[0] || funcRows[0] || userRows[0];
     if (!professor) throw new NotFoundException('Professor não encontrado com este CPF');
-    this.logger.log(`[Chamada] professor encontrado id=${professor.id} nome=${professor.nome}`);
+
+    // Collect all candidate IDs — turmas.professor_id may reference any table
+    const candidateIds = [...new Set([profRows[0]?.id, funcRows[0]?.id, userRows[0]?.id].filter(Boolean))];
+    this.logger.log(`[Chamada] professor=${professor.nome} candidateIds=${JSON.stringify(candidateIds)}`);
+
     let turmas: any[] = [];
     try {
       turmas = await this.dataSource.query(
@@ -811,10 +819,10 @@ export class AcademicoService {
                 c.nome AS curso_nome
          FROM turmas t
          LEFT JOIN materias c ON c.id::text = t.curso_id::text
-         WHERE t.professor_id::text = $1
+         WHERE t.professor_id::text = ANY($1)
            AND (t.ativo IS NOT FALSE)
          ORDER BY t.nome ASC`,
-        [professor.id],
+        [candidateIds],
       );
     } catch (e: any) {
       this.logger.error(`[Chamada] turmas query falhou: ${e?.message}`);
@@ -849,7 +857,19 @@ export class AcademicoService {
         };
       }
       const a = alunoMap[v.aluno_id];
-      return a ? { id: a.id, inscricao_id: null, nome_completo: a.nome_completo, numero_matricula: a.numero_matricula, is_candidato: false } : null;
+      return a ? {
+        id: a.id,
+        inscricao_id: null,
+        nome_completo: a.nome_completo,
+        numero_matricula: a.numero_matricula,
+        celular: a.celular ?? null,
+        telefone_alternativo: a.telefone_alternativo ?? null,
+        nome_responsavel: a.nome_responsavel ?? null,
+        email_responsavel: a.email_responsavel ?? null,
+        cpf_responsavel: a.cpf_responsavel ?? null,
+        data_nascimento: a.data_nascimento ?? null,
+        is_candidato: false,
+      } : null;
     }).filter(Boolean);
 
     lista.sort((a: any, b: any) => a.nome_completo.localeCompare(b.nome_completo));

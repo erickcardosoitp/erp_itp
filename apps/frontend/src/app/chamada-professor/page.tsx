@@ -1,18 +1,38 @@
 'use client';
 
 import React, { useState, useCallback } from 'react';
-import { GraduationCap, Search, ChevronRight, Check, X, RefreshCw, ClipboardCheck, Users, ArrowLeft } from 'lucide-react';
+import { GraduationCap, Search, ChevronRight, Check, X, RefreshCw, ClipboardCheck, Users, ArrowLeft, Phone, UserCircle, ChevronDown } from 'lucide-react';
 
 // Chama o backend diretamente — sem passar pelo proxy do Next.js
 const BACKEND = (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001/api');
 const TOKEN   = process.env.NEXT_PUBLIC_CHAMADA_TOKEN || 'itp-chamada-2026';
 
 type Step = 'login' | 'turmas' | 'chamada' | 'sucesso';
+type ChamadaTab = 'chamada' | 'fichas';
 
 interface Turma   { id: string; nome: string; cor?: string; turno?: string; curso_nome?: string; }
 interface Professor { id: string; nome: string; }
-interface AlunoRow  { id: string; nome_completo: string; celular?: string; foto_url?: string; }
+interface AlunoRow  {
+  id: string;
+  nome_completo: string;
+  celular?: string | null;
+  telefone_alternativo?: string | null;
+  nome_responsavel?: string | null;
+  email_responsavel?: string | null;
+  cpf_responsavel?: string | null;
+  data_nascimento?: string | null;
+}
 interface Registro  { aluno_id: string; presente: boolean; }
+
+function calcIdade(dataNasc?: string | null) {
+  if (!dataNasc) return null;
+  const hoje = new Date();
+  const nasc = new Date(dataNasc + (dataNasc.length === 10 ? 'T12:00:00' : ''));
+  let idade = hoje.getFullYear() - nasc.getFullYear();
+  const m = hoje.getMonth() - nasc.getMonth();
+  if (m < 0 || (m === 0 && hoje.getDate() < nasc.getDate())) idade--;
+  return idade;
+}
 
 function fmtCPF(v: string) {
   const d = v.replace(/\D/g, '').slice(0, 11);
@@ -40,6 +60,8 @@ export default function ChamadaProfessorPage() {
   const [loadingAlunos, setLoadingAlunos] = useState(false);
   const [salvando, setSalvando]       = useState(false);
   const [erroSalvar, setErroSalvar]   = useState<string | null>(null);
+  const [chamadaTab, setChamadaTab]   = useState<ChamadaTab>('chamada');
+  const [fichaAberta, setFichaAberta] = useState<string | null>(null);
 
   const buscarProfessor = useCallback(async () => {
     const cpfLimpo = cpf.replace(/\D/g, '');
@@ -65,6 +87,8 @@ export default function ChamadaProfessorPage() {
   const escolherTurma = useCallback(async (t: Turma) => {
     setTurmaEscolhida(t);
     setAlunos([]);
+    setFichaAberta(null);
+    setChamadaTab('chamada');
     setLoadingAlunos(true);
     setStep('chamada');
     try {
@@ -201,6 +225,7 @@ export default function ChamadaProfessorPage() {
         {/* ── STEP: Chamada ── */}
         {step === 'chamada' && turmaEscolhida && professor && (
           <div className="bg-white/5 backdrop-blur border border-white/10 rounded-3xl overflow-hidden">
+            {/* Header */}
             <div className="px-6 pt-5 pb-4 border-b border-white/10 flex items-start justify-between gap-3">
               <div>
                 <div className="flex items-center gap-2 mb-1">
@@ -221,72 +246,164 @@ export default function ChamadaProfessorPage() {
               </div>
             </div>
 
-            <div className="px-6 py-4 space-y-3 border-b border-white/10">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black uppercase text-slate-400">Data</label>
-                  <input type="date" value={data} onChange={e => setData(e.target.value)}
-                    className="w-full bg-white/10 border border-white/20 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"/>
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black uppercase text-slate-400">Tema da Aula *</label>
-                  <input value={tema} onChange={e => setTema(e.target.value)} placeholder="Ex: Introdução..."
-                    className="w-full bg-white/10 border border-white/20 text-white placeholder-slate-500 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"/>
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black uppercase text-slate-400">Conteúdo Abordado</label>
-                <textarea value={conteudo} onChange={e => setConteudo(e.target.value)} rows={2} placeholder="Descreva o conteúdo da aula..."
-                  className="w-full bg-white/10 border border-white/20 text-white placeholder-slate-500 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"/>
-              </div>
+            {/* Tabs */}
+            <div className="flex border-b border-white/10">
+              {(['chamada', 'fichas'] as ChamadaTab[]).map(tab => (
+                <button key={tab} onClick={() => setChamadaTab(tab)}
+                  className={`flex-1 py-3 text-xs font-black uppercase tracking-widest transition-colors ${chamadaTab === tab ? 'text-purple-400 border-b-2 border-purple-400' : 'text-slate-500 hover:text-slate-300'}`}>
+                  {tab === 'chamada' ? <span className="flex items-center justify-center gap-1.5"><ClipboardCheck size={13}/> Chamada</span>
+                                    : <span className="flex items-center justify-center gap-1.5"><Users size={13}/> Fichas</span>}
+                </button>
+              ))}
             </div>
 
-            <div className="max-h-64 overflow-y-auto">
-              {loadingAlunos ? (
-                <div className="py-10 text-center text-slate-400 text-sm">Carregando alunos...</div>
-              ) : alunos.length === 0 ? (
-                <div className="py-10 text-center text-slate-400 text-sm">Nenhum aluno encontrado nesta turma.</div>
-              ) : (
-                <div className="divide-y divide-white/5">
-                  {alunos.map(a => {
-                    const reg = registros.find(r => r.aluno_id === a.id);
-                    const presente = reg?.presente ?? true;
-                    return (
-                      <button key={a.id} onClick={() => togglePresenca(a.id)}
-                        className={`w-full flex items-center gap-3 px-6 py-3 transition-colors text-left ${presente ? 'hover:bg-green-500/5' : 'hover:bg-red-500/5 opacity-60'}`}>
-                        {a.foto_url
-                          ? <img src={a.foto_url} alt="" className="w-8 h-8 rounded-full object-cover shrink-0 border border-white/20"/>
-                          : <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center shrink-0 text-xs font-black text-white/60">{(a.nome_completo[0] || '?').toUpperCase()}</div>}
-                        <div className="flex-1 min-w-0">
-                          <div className="text-white text-sm font-bold truncate">{a.nome_completo}</div>
-                          {a.celular && <div className="text-slate-500 text-xs">{a.celular}</div>}
-                        </div>
-                        <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 border-2 transition-all ${presente ? 'bg-green-500 border-green-500' : 'bg-transparent border-slate-600'}`}>
-                          {presente && <Check size={13} className="text-white"/>}
-                        </div>
-                      </button>
-                    );
-                  })}
+            {/* Tab: Chamada */}
+            {chamadaTab === 'chamada' && (
+              <>
+                <div className="px-6 py-4 space-y-3 border-b border-white/10">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black uppercase text-slate-400">Data</label>
+                      <input type="date" value={data} onChange={e => setData(e.target.value)}
+                        className="w-full bg-white/10 border border-white/20 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"/>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black uppercase text-slate-400">Tema da Aula *</label>
+                      <input value={tema} onChange={e => setTema(e.target.value)} placeholder="Ex: Introdução..."
+                        className="w-full bg-white/10 border border-white/20 text-white placeholder-slate-500 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"/>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black uppercase text-slate-400">Conteúdo Abordado</label>
+                    <textarea value={conteudo} onChange={e => setConteudo(e.target.value)} rows={2} placeholder="Descreva o conteúdo da aula..."
+                      className="w-full bg-white/10 border border-white/20 text-white placeholder-slate-500 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"/>
+                  </div>
                 </div>
-              )}
-            </div>
+                <div className="max-h-64 overflow-y-auto">
+                  {loadingAlunos ? (
+                    <div className="py-10 text-center text-slate-400 text-sm">Carregando alunos...</div>
+                  ) : alunos.length === 0 ? (
+                    <div className="py-10 text-center text-slate-400 text-sm">Nenhum aluno encontrado nesta turma.</div>
+                  ) : (
+                    <div className="divide-y divide-white/5">
+                      {alunos.map(a => {
+                        const reg = registros.find(r => r.aluno_id === a.id);
+                        const presente = reg?.presente ?? true;
+                        return (
+                          <button key={a.id} onClick={() => togglePresenca(a.id)}
+                            className={`w-full flex items-center gap-3 px-6 py-3 transition-colors text-left ${presente ? 'hover:bg-green-500/5' : 'hover:bg-red-500/5 opacity-60'}`}>
+                            <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center shrink-0 text-xs font-black text-white/60">{(a.nome_completo[0] || '?').toUpperCase()}</div>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-white text-sm font-bold truncate">{a.nome_completo}</div>
+                              {a.celular && <div className="text-slate-500 text-xs">{a.celular}</div>}
+                            </div>
+                            <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 border-2 transition-all ${presente ? 'bg-green-500 border-green-500' : 'bg-transparent border-slate-600'}`}>
+                              {presente && <Check size={13} className="text-white"/>}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+                <div className="px-6 py-4 border-t border-white/10 space-y-3">
+                  {erroSalvar && (
+                    <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold rounded-xl px-4 py-3">
+                      <X size={12} className="shrink-0 mt-0.5"/>{erroSalvar}
+                    </div>
+                  )}
+                  <div className="flex gap-3">
+                    <button onClick={() => setStep('turmas')} className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-white/20 text-slate-400 hover:text-white text-xs font-black uppercase">
+                      <ArrowLeft size={12}/> Voltar
+                    </button>
+                    <button onClick={salvar} disabled={salvando || alunos.length === 0}
+                      className="flex-1 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white font-black py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all active:scale-95">
+                      {salvando ? <><RefreshCw size={13} className="animate-spin"/> Salvando...</> : <><ClipboardCheck size={13}/> Salvar Chamada</>}
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
 
-            <div className="px-6 py-4 border-t border-white/10 space-y-3">
-              {erroSalvar && (
-                <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold rounded-xl px-4 py-3">
-                  <X size={12} className="shrink-0 mt-0.5"/>{erroSalvar}
+            {/* Tab: Fichas */}
+            {chamadaTab === 'fichas' && (
+              <div className="max-h-[70vh] overflow-y-auto">
+                {loadingAlunos ? (
+                  <div className="py-10 text-center text-slate-400 text-sm">Carregando...</div>
+                ) : alunos.length === 0 ? (
+                  <div className="py-10 text-center text-slate-400 text-sm">Nenhum aluno nesta turma.</div>
+                ) : (
+                  <div className="divide-y divide-white/5">
+                    {alunos.map(a => {
+                      const idade = calcIdade(a.data_nascimento);
+                      const aberta = fichaAberta === a.id;
+                      return (
+                        <div key={a.id}>
+                          <button onClick={() => setFichaAberta(aberta ? null : a.id)}
+                            className="w-full flex items-center gap-3 px-6 py-3.5 hover:bg-white/5 transition-colors text-left">
+                            <div className="w-9 h-9 rounded-full bg-purple-600/20 border border-purple-500/30 flex items-center justify-center shrink-0 text-sm font-black text-purple-300">
+                              {(a.nome_completo[0] || '?').toUpperCase()}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-white text-sm font-bold truncate">{a.nome_completo}</div>
+                              <div className="text-slate-500 text-xs flex items-center gap-2 mt-0.5">
+                                {idade !== null && <span>{idade} anos</span>}
+                                {a.celular && <span className="flex items-center gap-1"><Phone size={9}/>{a.celular}</span>}
+                              </div>
+                            </div>
+                            <ChevronDown size={14} className={`text-slate-500 transition-transform shrink-0 ${aberta ? 'rotate-180' : ''}`}/>
+                          </button>
+                          {aberta && (
+                            <div className="px-6 pb-4 space-y-2.5 bg-white/5">
+                              <div className="grid grid-cols-2 gap-x-4 gap-y-2 pt-2">
+                                {a.celular && (
+                                  <div>
+                                    <p className="text-[9px] font-black uppercase text-slate-500 tracking-widest">Celular</p>
+                                    <p className="text-slate-200 text-xs font-semibold">{a.celular}</p>
+                                  </div>
+                                )}
+                                {a.telefone_alternativo && (
+                                  <div>
+                                    <p className="text-[9px] font-black uppercase text-slate-500 tracking-widest">Tel. Alternativo</p>
+                                    <p className="text-slate-200 text-xs font-semibold">{a.telefone_alternativo}</p>
+                                  </div>
+                                )}
+                                {a.data_nascimento && (
+                                  <div>
+                                    <p className="text-[9px] font-black uppercase text-slate-500 tracking-widest">Nascimento</p>
+                                    <p className="text-slate-200 text-xs font-semibold">
+                                      {new Date(a.data_nascimento + 'T12:00:00').toLocaleDateString('pt-BR')}
+                                      {idade !== null && <span className="text-slate-400 ml-1">({idade} anos)</span>}
+                                    </p>
+                                  </div>
+                                )}
+                              </div>
+                              {a.nome_responsavel && (
+                                <div className="mt-2 bg-purple-500/10 border border-purple-500/20 rounded-xl px-3 py-2.5">
+                                  <p className="text-[9px] font-black uppercase text-purple-400 tracking-widest mb-1.5 flex items-center gap-1">
+                                    <UserCircle size={10}/> Responsável
+                                  </p>
+                                  <p className="text-white text-xs font-bold">{a.nome_responsavel}</p>
+                                  {a.email_responsavel && <p className="text-slate-400 text-xs mt-0.5">{a.email_responsavel}</p>}
+                                </div>
+                              )}
+                              {!a.celular && !a.telefone_alternativo && !a.nome_responsavel && (
+                                <p className="text-slate-600 text-xs italic">Sem contatos cadastrados.</p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                <div className="px-6 py-4 border-t border-white/10">
+                  <button onClick={() => setStep('turmas')} className="text-slate-400 text-xs hover:text-white flex items-center gap-1.5">
+                    <ArrowLeft size={12}/> Voltar às turmas
+                  </button>
                 </div>
-              )}
-              <div className="flex gap-3">
-                <button onClick={() => setStep('turmas')} className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-white/20 text-slate-400 hover:text-white text-xs font-black uppercase">
-                  <ArrowLeft size={12}/> Voltar
-                </button>
-                <button onClick={salvar} disabled={salvando || alunos.length === 0}
-                  className="flex-1 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white font-black py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all active:scale-95">
-                  {salvando ? <><RefreshCw size={13} className="animate-spin"/> Salvando...</> : <><ClipboardCheck size={13}/> Salvar Chamada</>}
-                </button>
               </div>
-            </div>
+            )}
           </div>
         )}
 
