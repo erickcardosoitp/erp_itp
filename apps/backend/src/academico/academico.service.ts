@@ -790,24 +790,41 @@ export class AcademicoService {
     const cpfLimpo = cpf.replace(/\D/g, '');
     if (cpfLimpo.length < 11) throw new BadRequestException('CPF inválido');
 
-    // Search all tables in parallel — turmas may reference id from any of them
-    const [profRows, funcRows, userRows] = await Promise.all([
-      this.dataSource.query(
-        `SELECT id::text, nome FROM professores WHERE replace(replace(cpf,'.',''),'-','') = $1 LIMIT 1`, [cpfLimpo]
-      ),
-      this.dataSource.query(
-        `SELECT id::text, nome FROM funcionarios WHERE replace(replace(cpf,'.',''),'-','') = $1 AND (ativo IS NOT FALSE) LIMIT 1`, [cpfLimpo]
-      ),
-      this.dataSource.query(
-        `SELECT id::text, nome FROM usuarios WHERE replace(replace(replace(cpf,'.',''),'-',''),'/','') = $1 LIMIT 1`, [cpfLimpo]
-      ),
-    ]);
+    // usuarios table has no CPF column — only search professores and funcionarios
+    let funcRows: any[] = [];
+    let profRows: any[] = [];
+    try {
+      [funcRows, profRows] = await Promise.all([
+        this.dataSource.query(
+          // Also fetch usuario_id so we can match turmas assigned to the linked user account
+          `SELECT id::text, nome, COALESCE(usuario_id::text, '') AS usuario_id
+           FROM funcionarios
+           WHERE replace(replace(cpf,'.',''),'-','') = $1
+             AND (ativo IS NOT FALSE)
+           LIMIT 1`,
+          [cpfLimpo],
+        ),
+        this.dataSource.query(
+          `SELECT id::text, nome FROM professores
+           WHERE replace(replace(cpf,'.',''),'-','') = $1 LIMIT 1`,
+          [cpfLimpo],
+        ),
+      ]);
+    } catch (e: any) {
+      this.logger.error(`[Chamada] CPF lookup falhou: ${e?.message}`);
+      throw new InternalServerErrorException(`Erro ao buscar professor: ${e?.message}`);
+    }
 
-    const professor = profRows[0] || funcRows[0] || userRows[0];
+    const professor = funcRows[0] || profRows[0];
     if (!professor) throw new NotFoundException('Professor não encontrado com este CPF');
 
-    // Collect all candidate IDs — turmas.professor_id may reference any table
-    const candidateIds = [...new Set([profRows[0]?.id, funcRows[0]?.id, userRows[0]?.id].filter(Boolean))];
+    // Collect all IDs that turmas.professor_id might store for this person:
+    // funcionarios.id, funcionarios.usuario_id (linked user account), professores.id
+    const candidateIds = [...new Set([
+      funcRows[0]?.id,
+      funcRows[0]?.usuario_id || null,
+      profRows[0]?.id,
+    ].filter(Boolean))];
     this.logger.log(`[Chamada] professor=${professor.nome} candidateIds=${JSON.stringify(candidateIds)}`);
 
     let turmas: any[] = [];
@@ -819,7 +836,7 @@ export class AcademicoService {
                 c.nome AS curso_nome
          FROM turmas t
          LEFT JOIN materias c ON c.id::text = t.curso_id::text
-         WHERE t.professor_id::text = ANY($1)
+         WHERE t.professor_id::text = ANY($1::text[])
            AND (t.ativo IS NOT FALSE)
          ORDER BY t.nome ASC`,
         [candidateIds],

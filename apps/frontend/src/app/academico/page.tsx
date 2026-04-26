@@ -973,21 +973,18 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
                       {(a.turmas && a.turmas.length > 0) ? (
                         <div className="flex flex-wrap gap-1">
                           {(() => {
-                            const ativas = a.turmas.filter((t: any) => t.status === 'ativo');
-                            const visiveis = ativas.slice(0, 3);
-                            const extras = ativas.length - 3;
+                            const todas = a.turmas;
+                            const visiveis = todas.slice(0, 3);
+                            const extras = todas.length - 3;
                             return (<>
                               {visiveis.map((t: any) => (
                                 <span key={t.id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black text-white shadow-sm"
-                                  style={{ backgroundColor: t.cor || '#6d28d9' }}>
+                                  style={{ backgroundColor: t.cor || '#6d28d9', opacity: t.status !== 'ativo' ? 0.6 : 1 }}>
                                   {t.nome}
                                 </span>
                               ))}
                               {extras > 0 && (
                                 <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-slate-100 text-slate-500">+{extras}</span>
-                              )}
-                              {ativas.length === 0 && (
-                                <span className="px-2 py-0.5 rounded-full text-[8px] font-black uppercase bg-amber-100 text-amber-700">Backlog</span>
                               )}
                             </>);
                           })()}
@@ -1904,9 +1901,15 @@ function TurmasTab({ cursos, professores, alunos }: { cursos: Curso[]; professor
                 options={cursos.filter(c => c.status === 'Ativo' || !c.status).map(c => ({ value: c.id, label: `${c.sigla} – ${c.nome}` }))} />
             )}
             <FieldInput label="Nome da Turma *" value={form.nome} onChange={v => setForm(p => ({ ...p, nome: v }))} required />
-            {professores.length > 0 && (
-              <FieldSelect label="Professor" value={form.professor_id ?? ''} onChange={v => setForm(p => ({ ...p, professor_id: v }))}
-                options={professores.filter(p => p.ativo !== false).map(p => ({ value: p.id, label: p.nome }))} />
+            {opcoesProf.length > 0 && (
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black uppercase text-slate-500">Professor / Responsável</label>
+                <select value={form.professor_id ?? ''} onChange={e => setForm(p => ({ ...p, professor_id: e.target.value || undefined }))}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white">
+                  <option value="">— Sem professor —</option>
+                  {opcoesProf.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+                </select>
+              </div>
             )}
             <div className="space-y-1">
               <label className="text-[10px] font-black uppercase text-slate-500">Turno</label>
@@ -1922,7 +1925,15 @@ function TurmasTab({ cursos, professores, alunos }: { cursos: Curso[]; professor
                 ))}
               </div>
             </div>
-            <FieldInput label="Ano" value={form.ano} onChange={v => setForm(p => ({ ...p, ano: v }))} />
+            <div className="grid grid-cols-2 gap-3">
+              <FieldInput label="Ano" value={form.ano} onChange={v => setForm(p => ({ ...p, ano: v }))} />
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black uppercase text-slate-500">Máx. Vagas</label>
+                <input type="number" min={1} max={200} value={form.max_alunos ?? 30}
+                  onChange={e => setForm(p => ({ ...p, max_alunos: parseInt(e.target.value) || 30 }))}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-400" />
+              </div>
+            </div>
             <div className="space-y-1.5">
               <label className="text-[10px] font-black uppercase text-slate-500">Cor da Turma</label>
               <div className="flex items-center gap-3">
