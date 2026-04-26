@@ -8,8 +8,11 @@ import {
   Edit3, Coffee, UserPlus, RefreshCw, ClipboardCheck, CheckSquare, Square,
   ChevronDown, ChevronUp, FileText, Eye, Smartphone, Copy, Check, Save,
   Clock, User, Calendar, MapPin, Mail, Shield, ShieldCheck, AlertTriangle,
-  Heart, Phone, BadgeCheck,
+  Heart, Phone, BadgeCheck, Activity, TrendingDown, TrendingUp, Star, Zap,
 } from 'lucide-react';
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
+} from 'recharts';
 import api from '@/services/api';
 import { useAuth } from '@/context/auth-context';
 import { usePermissions } from '@/hooks/use-permissions';
@@ -3046,6 +3049,358 @@ function PresencaTab({ turmas, podeEditar }: { turmas: Turma[]; podeEditar: bool
   );
 }
 
+// ─── Monitoramento ────────────────────────────────────────────────────────────
+
+// Bairros da região de Madureira com posições relativas (x%, y%) no mapa
+const MADUREIRA_BAIRROS: Record<string, { x: number; y: number }> = {
+  'Madureira':          { x: 50, y: 50 },
+  'Cascadura':          { x: 34, y: 40 },
+  'Campinho':           { x: 42, y: 44 },
+  'Oswaldo Cruz':       { x: 60, y: 47 },
+  'Honório Gurgel':     { x: 66, y: 36 },
+  'Turiaçu':            { x: 30, y: 34 },
+  'Bento Ribeiro':      { x: 22, y: 28 },
+  'Vaz Lobo':           { x: 70, y: 56 },
+  'Rocha Miranda':      { x: 74, y: 44 },
+  'Coelho Neto':        { x: 62, y: 28 },
+  'Méier':              { x: 46, y: 67 },
+  'Quintino Bocaiúva':  { x: 36, y: 64 },
+  'Engenho de Dentro':  { x: 52, y: 75 },
+  'Riachuelo':          { x: 56, y: 80 },
+  'Irajá':              { x: 76, y: 32 },
+  'Vista Alegre':       { x: 56, y: 38 },
+  'Inhaúma':            { x: 68, y: 65 },
+  'Del Castilho':       { x: 58, y: 62 },
+  'Engenha Nova':       { x: 44, y: 56 },
+  'Lins de Vasconcelos':{ x: 36, y: 55 },
+};
+
+function MapaBairros({ porBairro }: { porBairro: { bairro: string; total: number }[] }) {
+  const max = Math.max(...porBairro.map(b => b.total), 1);
+  const bairroMap = Object.fromEntries(porBairro.map(b => [b.bairro, b.total]));
+
+  const pontos = Object.entries(MADUREIRA_BAIRROS).map(([nome, pos]) => ({
+    nome,
+    ...pos,
+    total: bairroMap[nome] ?? 0,
+  }));
+  const outros = porBairro.filter(b => !MADUREIRA_BAIRROS[b.bairro]).slice(0, 5);
+
+  return (
+    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm p-5">
+      <div className="flex items-center gap-2 mb-4">
+        <MapPin size={14} className="text-purple-600" />
+        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Distribuição Geográfica — Região de Madureira</p>
+      </div>
+      <div className="relative w-full bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-slate-800 dark:to-slate-700 rounded-xl overflow-hidden border border-emerald-100 dark:border-slate-600" style={{ paddingBottom: '56%' }}>
+        {/* Grade decorativa */}
+        <svg className="absolute inset-0 w-full h-full opacity-10" viewBox="0 0 100 56">
+          {[10,20,30,40,50,60,70,80,90].map(x => <line key={`v${x}`} x1={x} y1={0} x2={x} y2={56} stroke="#6d28d9" strokeWidth="0.3"/>)}
+          {[10,20,30,40,50].map(y => <line key={`h${y}`} x1={0} y1={y} x2={100} y2={y} stroke="#6d28d9" strokeWidth="0.3"/>)}
+        </svg>
+        {/* Label da região */}
+        <div className="absolute top-2 left-3 text-[8px] font-black uppercase tracking-widest text-purple-400 opacity-60">Zona Norte · Rio de Janeiro</div>
+        {/* Bolhas dos bairros */}
+        {pontos.map(p => {
+          const r = p.total > 0 ? Math.max(14, Math.min(42, 14 + (p.total / max) * 28)) : 10;
+          const alpha = p.total > 0 ? 0.15 + (p.total / max) * 0.65 : 0.05;
+          const isMad = p.nome === 'Madureira';
+          return (
+            <div
+              key={p.nome}
+              className="absolute flex items-center justify-center group cursor-default"
+              style={{ left: `${p.x}%`, top: `${p.y}%`, transform: 'translate(-50%, -50%)' }}
+            >
+              <div
+                className={`rounded-full flex items-center justify-center transition-all ${isMad ? 'ring-2 ring-purple-500' : ''}`}
+                style={{
+                  width: r * 2, height: r * 2,
+                  background: `rgba(${isMad ? '124,58,237' : '14,165,233'}, ${alpha})`,
+                  border: `1.5px solid rgba(${isMad ? '124,58,237' : '14,165,233'}, ${alpha + 0.2})`,
+                }}
+              >
+                {p.total > 0 && <span className="text-[8px] font-black text-slate-700 dark:text-slate-200">{p.total}</span>}
+              </div>
+              {/* Tooltip */}
+              <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[8px] px-2 py-1 rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none z-10 transition-opacity">
+                {p.nome}: {p.total} aluno{p.total !== 1 ? 's' : ''}
+              </div>
+              {/* Label sempre visível para bairros com alunos */}
+              {(p.total > 0 || isMad) && (
+                <span className="absolute top-full mt-0.5 text-[7px] font-bold text-slate-600 dark:text-slate-300 whitespace-nowrap leading-none">
+                  {p.nome.split(' ')[0]}
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      {outros.length > 0 && (
+        <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
+          <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2">Outros bairros</p>
+          <div className="flex flex-wrap gap-2">
+            {outros.map(b => (
+              <span key={b.bairro} className="text-[9px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold">
+                {b.bairro} ({b.total})
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MonitoramentoTab() {
+  const [dados, setDados] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await api.get('/academico/monitoramento');
+      setDados(r.data);
+    } catch {}
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  if (loading) return (
+    <div className="flex flex-col items-center justify-center py-24 gap-3 text-slate-400">
+      <Activity size={32} className="animate-pulse text-purple-400" />
+      <p className="text-sm font-bold">Carregando monitoramento...</p>
+    </div>
+  );
+
+  if (!dados) return (
+    <div className="flex justify-center py-16 text-slate-400 text-sm">Erro ao carregar dados.</div>
+  );
+
+  const { resumo, top_faltas, top_presencas, por_bairro, turmas_evasao, faltas_frequentes, diario_por_tipo } = dados;
+
+  const kpis = [
+    { label: 'Alunos Ativos',    value: resumo.total_alunos,   icon: Users,         color: 'bg-purple-600',  text: 'text-purple-600' },
+    { label: 'Taxa de Presença', value: resumo.taxa_presenca != null ? `${resumo.taxa_presenca}%` : '–', icon: TrendingUp, color: 'bg-emerald-600', text: 'text-emerald-600' },
+    { label: 'Total de Faltas',  value: resumo.total_faltas,   icon: TrendingDown,  color: 'bg-rose-600',    text: 'text-rose-600' },
+    { label: 'Sessões Registradas', value: resumo.total_sessoes, icon: ClipboardCheck, color: 'bg-blue-600', text: 'text-blue-600' },
+    { label: 'Registros Diário', value: resumo.total_diario,   icon: History,       color: 'bg-amber-600',   text: 'text-amber-600' },
+    { label: 'Justificadas',     value: resumo.total_justificadas, icon: ShieldCheck, color: 'bg-teal-600',  text: 'text-teal-600' },
+  ];
+
+  return (
+    <div className="space-y-6">
+
+      {/* KPIs */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        {kpis.map(k => (
+          <div key={k.label} className="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-100 dark:border-slate-800 shadow-sm">
+            <div className={`w-8 h-8 rounded-xl ${k.color} flex items-center justify-center mb-3`}>
+              <k.icon size={15} className="text-white" />
+            </div>
+            <p className={`text-2xl font-black ${k.text}`}>{String(k.value)}</p>
+            <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mt-0.5">{k.label}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Alerta faltas frequentes */}
+      {faltas_frequentes.length > 0 && (
+        <div className="bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 rounded-2xl p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <AlertTriangle size={15} className="text-rose-600" />
+            <p className="text-[10px] font-black uppercase tracking-widest text-rose-600">
+              Alunos com Faltas Frequentes — últimos 30 dias
+            </p>
+          </div>
+          <div className="space-y-2">
+            {faltas_frequentes.map((a: any) => (
+              <div key={a.aluno_id} className="flex items-center justify-between bg-white dark:bg-slate-900 rounded-xl px-4 py-2.5 border border-rose-100 dark:border-rose-900">
+                <div>
+                  <p className="text-xs font-bold text-slate-800 dark:text-slate-100">{a.nome_completo}</p>
+                  <p className="text-[9px] text-slate-400">{a.numero_matricula || '–'}</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  {a.celular && (
+                    <a href={`https://wa.me/55${a.celular.replace(/\D/g,'')}`} target="_blank" rel="noopener noreferrer"
+                      className="text-[9px] font-black uppercase px-2 py-1 rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors">
+                      WhatsApp
+                    </a>
+                  )}
+                  <span className="bg-rose-100 text-rose-700 text-[10px] font-black px-2.5 py-1 rounded-full">
+                    {a.faltas_recentes} falta{a.faltas_recentes !== 1 ? 's' : ''}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Mapa + Diário por tipo */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2">
+          <MapaBairros porBairro={por_bairro} />
+        </div>
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm p-5 space-y-3">
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-2">
+            <History size={13} className="text-purple-600"/> Registros no Diário
+          </p>
+          {diario_por_tipo.length === 0 && <p className="text-xs text-slate-400">Sem registros.</p>}
+          {diario_por_tipo.map((d: any) => {
+            const colors: Record<string, string> = {
+              'Avaliação': 'bg-blue-500', 'Incidente': 'bg-rose-500',
+              'Observação': 'bg-amber-500', 'Comunicado': 'bg-teal-500',
+            };
+            const total = diario_por_tipo.reduce((s: number, x: any) => s + x.total, 0) || 1;
+            const pct = Math.round(100 * d.total / total);
+            return (
+              <div key={d.tipo}>
+                <div className="flex justify-between text-xs mb-1">
+                  <span className="font-bold text-slate-700 dark:text-slate-300">{d.tipo}</span>
+                  <span className="font-black text-slate-500">{d.total}</span>
+                </div>
+                <div className="h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                  <div className={`h-full rounded-full ${colors[d.tipo] || 'bg-purple-500'}`} style={{ width: `${pct}%` }} />
+                </div>
+              </div>
+            );
+          })}
+          <div className="pt-3 border-t border-slate-100 dark:border-slate-700 space-y-1">
+            <div className="flex justify-between text-[9px]">
+              <span className="text-slate-400 uppercase font-black">Presenças</span>
+              <span className="font-black text-green-600">{resumo.total_presentes}</span>
+            </div>
+            <div className="flex justify-between text-[9px]">
+              <span className="text-slate-400 uppercase font-black">Faltas</span>
+              <span className="font-black text-red-500">{resumo.total_faltas}</span>
+            </div>
+            <div className="flex justify-between text-[9px]">
+              <span className="text-slate-400 uppercase font-black">Justificadas</span>
+              <span className="font-black text-amber-500">{resumo.total_justificadas}</span>
+            </div>
+            <div className="flex justify-between text-[9px]">
+              <span className="text-slate-400 uppercase font-black">Isentos</span>
+              <span className="font-black text-slate-500">{resumo.total_isentos}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Top faltas + Top presença */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Top faltas */}
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm p-5">
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4 flex items-center gap-2">
+            <TrendingDown size={13} className="text-rose-500"/> Top 10 — Mais Faltas
+          </p>
+          {top_faltas.length === 0 ? (
+            <p className="text-xs text-slate-400 py-4 text-center">Nenhuma falta registrada.</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={top_faltas.slice(0,8)} layout="vertical" margin={{ left: 0, right: 24, top: 0, bottom: 0 }}>
+                <XAxis type="number" tick={{ fontSize: 9 }} />
+                <YAxis type="category" dataKey="nome_completo" width={110} tick={{ fontSize: 9 }}
+                  tickFormatter={(v: string) => v.split(' ').slice(0,2).join(' ')} />
+                <Tooltip formatter={(v: any) => [`${v} faltas`, '']} labelFormatter={(l: string) => l} />
+                <Bar dataKey="faltas" radius={[0,4,4,0]}>
+                  {top_faltas.slice(0,8).map((_: any, i: number) => (
+                    <Cell key={i} fill={i === 0 ? '#e11d48' : i < 3 ? '#f97316' : '#94a3b8'} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
+        {/* Top presença */}
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm p-5">
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4 flex items-center gap-2">
+            <Star size={13} className="text-emerald-500"/> Top 10 — Maior Presença
+          </p>
+          {top_presencas.length === 0 ? (
+            <p className="text-xs text-slate-400 py-4 text-center">Nenhuma presença registrada.</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={top_presencas.slice(0,8)} layout="vertical" margin={{ left: 0, right: 32, top: 0, bottom: 0 }}>
+                <XAxis type="number" domain={[0,100]} tick={{ fontSize: 9 }} unit="%" />
+                <YAxis type="category" dataKey="nome_completo" width={110} tick={{ fontSize: 9 }}
+                  tickFormatter={(v: string) => v.split(' ').slice(0,2).join(' ')} />
+                <Tooltip formatter={(v: any) => [`${v}%`, 'Presença']} />
+                <Bar dataKey="pct_presenca" radius={[0,4,4,0]}>
+                  {top_presencas.slice(0,8).map((_: any, i: number) => (
+                    <Cell key={i} fill={i === 0 ? '#10b981' : i < 3 ? '#34d399' : '#6ee7b7'} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+      </div>
+
+      {/* Turmas com evasão */}
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm p-5">
+        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4 flex items-center gap-2">
+          <Zap size={13} className="text-amber-500"/> Índice de Evasão por Turma
+        </p>
+        {turmas_evasao.length === 0 ? (
+          <p className="text-xs text-slate-400 text-center py-4">Sem dados de evasão.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-slate-100 dark:border-slate-700">
+                  <th className="text-left py-2 pr-4 text-[9px] font-black uppercase text-slate-400">Turma</th>
+                  <th className="text-center py-2 px-2 text-[9px] font-black uppercase text-slate-400">Total</th>
+                  <th className="text-center py-2 px-2 text-[9px] font-black uppercase text-slate-400">Ativos</th>
+                  <th className="text-center py-2 px-2 text-[9px] font-black uppercase text-slate-400">Inativos</th>
+                  <th className="text-left py-2 pl-4 text-[9px] font-black uppercase text-slate-400">Taxa Evasão</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
+                {turmas_evasao.map((t: any) => {
+                  const pct = t.total_matriculados > 0 ? Math.round(100 * t.inativos / t.total_matriculados) : 0;
+                  return (
+                    <tr key={t.turma_id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                      <td className="py-2.5 pr-4">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: t.turma_cor || '#6d28d9' }} />
+                          <span className="font-bold text-slate-800 dark:text-slate-200">{t.turma_nome}</span>
+                        </div>
+                      </td>
+                      <td className="text-center py-2.5 px-2 text-slate-600 dark:text-slate-400">{t.total_matriculados}</td>
+                      <td className="text-center py-2.5 px-2 text-emerald-600 font-bold">{t.ativos}</td>
+                      <td className="text-center py-2.5 px-2 text-rose-500 font-bold">{t.inativos}</td>
+                      <td className="py-2.5 pl-4">
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden max-w-[80px]">
+                            <div className={`h-full rounded-full ${pct > 30 ? 'bg-rose-500' : pct > 15 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                              style={{ width: `${pct}%` }} />
+                          </div>
+                          <span className={`font-black text-[10px] ${pct > 30 ? 'text-rose-500' : pct > 15 ? 'text-amber-500' : 'text-emerald-600'}`}>
+                            {pct}%
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Botão atualizar */}
+      <div className="flex justify-end">
+        <button onClick={load} className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-[10px] font-black uppercase text-slate-500 hover:text-purple-600 hover:border-purple-300 transition-all">
+          <RefreshCw size={12} className={loading ? 'animate-spin' : ''} /> Atualizar dados
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Acervo de Documentos ─────────────────────────────────────────────────────
 
 const DOCS_LABELS: Record<string, string> = {
@@ -3368,8 +3723,9 @@ export default function AcademicoPage() {
     { id: 'presenca', label: 'Presença', Icon: ClipboardCheck },
     { id: 'cursos',   label: 'Cursos',   Icon: BookOpen },
     { id: 'turmas',   label: 'Turmas',   Icon: ClipboardList },
-    { id: 'diario',   label: 'Diário',   Icon: History },
-    { id: 'acervo',   label: 'Acervo',   Icon: FileText },
+    { id: 'diario',        label: 'Diário',        Icon: History },
+    { id: 'acervo',        label: 'Acervo',        Icon: FileText },
+    { id: 'monitoramento', label: 'Monitoramento', Icon: Activity },
   ];
 
   return (
@@ -3410,7 +3766,8 @@ export default function AcademicoPage() {
           {activeTab === 'cursos'   && <CursosTab />}
           {activeTab === 'turmas'   && <TurmasTab cursos={cursos} professores={professores} alunos={alunos} />}
           {activeTab === 'diario'   && <DiarioTab turmas={turmas} alunos={alunos} />}
-          {activeTab === 'acervo'   && <AcervoTab />}
+          {activeTab === 'acervo'        && <AcervoTab />}
+          {activeTab === 'monitoramento' && <MonitoramentoTab />}
         </main>
       </div>
     </div>

@@ -204,6 +204,10 @@ export class AcademicoController {
   @ModuloPerm('academico', 'visualizar')
   getStatsAlunos() { return this.svc.statsAlunos(); }
 
+  @Get('monitoramento')
+  @ModuloPerm('academico', 'visualizar')
+  getMonitoramento() { return this.svc.monitoramento(); }
+
   @Get('alunos/kpis')
   @ModuloPerm('academico', 'visualizar')
   getKpisTurmas() { return this.svc.kpisTurmas(); }

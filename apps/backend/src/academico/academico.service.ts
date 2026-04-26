@@ -768,6 +768,144 @@ export class AcademicoService {
     }));
   }
 
+  async monitoramento() {
+    const [resumo, topFaltas, topPresencas, porBairro, turmasEvasao, faltasRecentes, diarioResumo] =
+      await Promise.all([
+
+        // ── Resumo geral ─────────────────────────────────────────────────────
+        this.dataSource.query(`
+          SELECT
+            (SELECT COUNT(*) FROM alunos WHERE ativo = true)           AS total_alunos,
+            (SELECT COUNT(*) FROM presenca_sessoes)                     AS total_sessoes,
+            (SELECT COUNT(*) FROM diario_academico WHERE tipo = 'Presença') AS total_registros_presenca,
+            (SELECT COUNT(*) FROM diario_academico)                     AS total_diario,
+            (SELECT COUNT(*) FROM diario_academico WHERE tipo = 'Presença' AND descricao = 'Presente') AS total_presentes,
+            (SELECT COUNT(*) FROM diario_academico WHERE tipo = 'Presença' AND descricao = 'Falta')    AS total_faltas,
+            (SELECT COUNT(*) FROM diario_academico WHERE tipo = 'Presença' AND isento = true)          AS total_isentos,
+            (SELECT COUNT(*) FROM diario_academico WHERE tipo = 'Presença' AND justificada = true)     AS total_justificadas
+        `),
+
+        // ── Top 10 alunos com mais faltas ─────────────────────────────────
+        this.dataSource.query(`
+          SELECT
+            a.id::text AS aluno_id,
+            a.nome_completo,
+            a.numero_matricula,
+            COUNT(*) FILTER (WHERE d.descricao = 'Falta' AND d.isento = false AND d.justificada = false) AS faltas,
+            COUNT(*) FILTER (WHERE d.descricao = 'Presente') AS presencas,
+            COUNT(*) FILTER (WHERE d.descricao = 'Falta' AND d.isento = false AND d.justificada = false
+              AND d.data >= NOW() - INTERVAL '30 days') AS faltas_recentes
+          FROM alunos a
+          JOIN diario_academico d ON d.aluno_id::text = a.id::text AND d.tipo = 'Presença'
+          WHERE a.ativo = true
+          GROUP BY a.id, a.nome_completo, a.numero_matricula
+          HAVING COUNT(*) FILTER (WHERE d.descricao = 'Falta' AND d.isento = false AND d.justificada = false) > 0
+          ORDER BY faltas DESC
+          LIMIT 10
+        `),
+
+        // ── Top 10 alunos com maior presença ─────────────────────────────
+        this.dataSource.query(`
+          SELECT
+            a.id::text AS aluno_id,
+            a.nome_completo,
+            a.numero_matricula,
+            COUNT(*) FILTER (WHERE d.descricao = 'Presente') AS presencas,
+            COUNT(*) FILTER (WHERE d.descricao = 'Falta' AND d.isento = false AND d.justificada = false) AS faltas,
+            ROUND(100.0 * COUNT(*) FILTER (WHERE d.descricao = 'Presente')
+              / NULLIF(COUNT(*) FILTER (WHERE d.descricao IN ('Presente','Falta') AND d.isento = false AND d.justificada = false), 0), 1) AS pct_presenca
+          FROM alunos a
+          JOIN diario_academico d ON d.aluno_id::text = a.id::text AND d.tipo = 'Presença'
+          WHERE a.ativo = true
+          GROUP BY a.id, a.nome_completo, a.numero_matricula
+          HAVING COUNT(*) FILTER (WHERE d.descricao = 'Presente') > 0
+          ORDER BY pct_presenca DESC NULLS LAST, presencas DESC
+          LIMIT 10
+        `),
+
+        // ── Alunos por bairro ─────────────────────────────────────────────
+        this.dataSource.query(`
+          SELECT
+            COALESCE(NULLIF(TRIM(a.bairro), ''), 'Não informado') AS bairro,
+            COUNT(*) AS total
+          FROM alunos a
+          WHERE a.ativo = true
+          GROUP BY bairro
+          ORDER BY total DESC
+          LIMIT 20
+        `),
+
+        // ── Turmas com maior evasão ───────────────────────────────────────
+        this.dataSource.query(`
+          SELECT
+            t.id::text AS turma_id,
+            t.nome AS turma_nome,
+            t.cor AS turma_cor,
+            COUNT(ta.id) FILTER (WHERE a.ativo = true)  AS ativos,
+            COUNT(ta.id) FILTER (WHERE a.ativo = false) AS inativos,
+            COUNT(ta.id) AS total_matriculados
+          FROM turmas t
+          LEFT JOIN turma_alunos ta ON ta.turma_id::text = t.id::text AND ta.status != 'backlog'
+          LEFT JOIN alunos a ON a.id::text = ta.aluno_id::text
+          WHERE t.ativo IS NOT FALSE
+          GROUP BY t.id, t.nome, t.cor
+          HAVING COUNT(ta.id) > 0
+          ORDER BY inativos DESC, total_matriculados DESC
+          LIMIT 10
+        `),
+
+        // ── Alunos com faltas frequentes (últimos 30 dias) ────────────────
+        this.dataSource.query(`
+          SELECT
+            a.id::text AS aluno_id,
+            a.nome_completo,
+            a.numero_matricula,
+            a.celular,
+            COUNT(*) FILTER (WHERE d.descricao = 'Falta' AND d.isento = false AND d.justificada = false) AS faltas_recentes,
+            MAX(d.data) AS ultima_falta
+          FROM alunos a
+          JOIN diario_academico d ON d.aluno_id::text = a.id::text
+            AND d.tipo = 'Presença'
+            AND d.data >= NOW() - INTERVAL '30 days'
+          WHERE a.ativo = true
+          GROUP BY a.id, a.nome_completo, a.numero_matricula, a.celular
+          HAVING COUNT(*) FILTER (WHERE d.descricao = 'Falta' AND d.isento = false AND d.justificada = false) >= 2
+          ORDER BY faltas_recentes DESC
+          LIMIT 10
+        `),
+
+        // ── Registros diário por tipo ─────────────────────────────────────
+        this.dataSource.query(`
+          SELECT tipo, COUNT(*) AS total
+          FROM diario_academico
+          WHERE tipo != 'Presença'
+          GROUP BY tipo
+          ORDER BY total DESC
+        `),
+      ]);
+
+    const r = resumo[0];
+    const totalPres = Number(r.total_presentes) + Number(r.total_faltas);
+    return {
+      resumo: {
+        total_alunos:      Number(r.total_alunos),
+        total_sessoes:     Number(r.total_sessoes),
+        total_diario:      Number(r.total_diario),
+        taxa_presenca:     totalPres > 0 ? Math.round(100 * Number(r.total_presentes) / totalPres) : null,
+        total_presentes:   Number(r.total_presentes),
+        total_faltas:      Number(r.total_faltas),
+        total_justificadas: Number(r.total_justificadas),
+        total_isentos:     Number(r.total_isentos),
+      },
+      top_faltas:        topFaltas.map((x: any) => ({ ...x, faltas: Number(x.faltas), presencas: Number(x.presencas), faltas_recentes: Number(x.faltas_recentes) })),
+      top_presencas:     topPresencas.map((x: any) => ({ ...x, presencas: Number(x.presencas), faltas: Number(x.faltas), pct_presenca: Number(x.pct_presenca) })),
+      por_bairro:        porBairro.map((x: any) => ({ bairro: x.bairro, total: Number(x.total) })),
+      turmas_evasao:     turmasEvasao.map((x: any) => ({ ...x, ativos: Number(x.ativos), inativos: Number(x.inativos), total_matriculados: Number(x.total_matriculados) })),
+      faltas_frequentes: faltasRecentes.map((x: any) => ({ ...x, faltas_recentes: Number(x.faltas_recentes) })),
+      diario_por_tipo:   diarioResumo.map((x: any) => ({ tipo: x.tipo, total: Number(x.total) })),
+    };
+  }
+
   async criarAlunoViaChamada(dto: any) {
     const { professor_nome, ...alunoData } = dto;
     const aluno = await this.criarAluno(alunoData);
