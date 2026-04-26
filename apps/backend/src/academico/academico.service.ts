@@ -275,8 +275,8 @@ export class AcademicoService {
     try {
       const turmaRows = await this.dataSource.query(
         `SELECT ta.aluno_id::text AS aluno_id,
-            json_agg(json_build_object('id', ta.turma_id::text, 'nome', t.nome, 'cor', t.cor, 'status', ta.status)
-                     ORDER BY ta.created_at) FILTER (WHERE ta.turma_id IS NOT NULL) AS turmas
+            json_agg(json_build_object('id', ta.turma_id::text, 'nome', t.nome, 'cor', t.cor, 'status', ta.status))
+            FILTER (WHERE ta.turma_id IS NOT NULL) AS turmas
          FROM turma_alunos ta
          LEFT JOIN turmas t ON ta.turma_id IS NOT NULL AND t.id::text = ta.turma_id::text
          WHERE ta.aluno_id::text IN (${alunoIds})
@@ -677,6 +677,65 @@ export class AcademicoService {
       ORDER BY u.nome ASC
     `);
     return rows;
+  }
+
+  async kpisTurmas() {
+    // Total de alunos ativos por turma + % presença últimas 4 semanas
+    const turmaStats = await this.dataSource.query(`
+      SELECT
+        t.id::text       AS turma_id,
+        t.nome           AS turma_nome,
+        t.cor            AS turma_cor,
+        t.turno          AS turno,
+        t.max_alunos     AS max_alunos,
+        COUNT(DISTINCT ta.aluno_id) FILTER (WHERE ta.status = 'ativo' AND ta.aluno_id IS NOT NULL) AS total_alunos,
+        COUNT(d.id) FILTER (WHERE d.data >= NOW() - INTERVAL '28 days')                            AS total_registros,
+        COUNT(d.id) FILTER (WHERE d.data >= NOW() - INTERVAL '28 days' AND d.descricao = 'Presente') AS total_presentes
+      FROM turmas t
+      LEFT JOIN turma_alunos ta ON ta.turma_id::text = t.id::text
+      LEFT JOIN diario_academico d ON d.turma_id::text = t.id::text AND d.tipo = 'Presença'
+      WHERE t.ativo = true
+      GROUP BY t.id, t.nome, t.cor, t.turno, t.max_alunos
+      ORDER BY t.nome ASC
+    `);
+
+    // Últimas 5 sessões por turma
+    const sessoes = await this.dataSource.query(`
+      SELECT
+        turma_id::text,
+        data,
+        total_presentes,
+        total_registros
+      FROM presenca_sessoes
+      WHERE turma_id IS NOT NULL
+        AND data >= NOW() - INTERVAL '60 days'
+      ORDER BY data DESC
+    `);
+
+    const sessoesPorTurma: Record<string, any[]> = {};
+    for (const s of sessoes) {
+      if (!sessoesPorTurma[s.turma_id]) sessoesPorTurma[s.turma_id] = [];
+      if (sessoesPorTurma[s.turma_id].length < 6) {
+        sessoesPorTurma[s.turma_id].push({
+          data: s.data,
+          presentes: Number(s.total_presentes),
+          total: Number(s.total_registros),
+        });
+      }
+    }
+
+    return turmaStats.map((t: any) => ({
+      turma_id:      t.turma_id,
+      turma_nome:    t.turma_nome,
+      turma_cor:     t.turma_cor || '#6d28d9',
+      turno:         t.turno,
+      max_alunos:    Number(t.max_alunos) || 30,
+      total_alunos:  Number(t.total_alunos),
+      presenca_pct:  t.total_registros > 0
+        ? Math.round(100 * t.total_presentes / t.total_registros)
+        : null,
+      ultimas_sessoes: (sessoesPorTurma[t.turma_id] || []).reverse(),
+    }));
   }
 
   async listarAlertasCandidatos() {

@@ -587,6 +587,118 @@ function calcularIdade(dataNasc: string): number {
   return idade;
 }
 
+interface KpiTurma {
+  turma_id: string; turma_nome: string; turma_cor: string; turno: string | null;
+  max_alunos: number; total_alunos: number; presenca_pct: number | null;
+  ultimas_sessoes: { data: string; presentes: number; total: number }[];
+}
+
+function KpisTurmas() {
+  const [kpis, setKpis] = useState<KpiTurma[]>([]);
+  const [open, setOpen] = useState(true);
+
+  useEffect(() => {
+    api.get('/academico/alunos/kpis').then(r => setKpis(r.data)).catch(() => {});
+  }, []);
+
+  if (!kpis.length) return null;
+
+  const totalAlunos = kpis.reduce((s, k) => s + k.total_alunos, 0);
+  const mediaPresenca = (() => {
+    const c = kpis.filter(k => k.presenca_pct !== null);
+    return c.length ? Math.round(c.reduce((s, k) => s + (k.presenca_pct ?? 0), 0) / c.length) : null;
+  })();
+  const maxAlunos = Math.max(...kpis.map(k => k.total_alunos), 1);
+
+  return (
+    <div className="mb-4">
+      {/* Header colapsável */}
+      <button onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-4 py-2.5 bg-white border border-slate-100 rounded-2xl shadow-sm hover:bg-slate-50 transition-colors mb-2">
+        <div className="flex items-center gap-3">
+          <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Visão por Turma</span>
+          <span className="px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 text-[10px] font-black">{kpis.length} turmas · {totalAlunos} alunos</span>
+          {mediaPresenca !== null && (
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${mediaPresenca >= 75 ? 'bg-green-50 text-green-700' : mediaPresenca >= 50 ? 'bg-amber-50 text-amber-700' : 'bg-red-50 text-red-600'}`}>
+              {mediaPresenca}% presença média
+            </span>
+          )}
+        </div>
+        <span className="text-slate-400 text-xs">{open ? '▲' : '▼'}</span>
+      </button>
+
+      {open && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+          {kpis.map(k => {
+            const ocup = k.max_alunos > 0 ? Math.round(100 * k.total_alunos / k.max_alunos) : 0;
+            const pct  = k.presenca_pct;
+            const presColor = pct === null ? 'text-slate-400' : pct >= 75 ? 'text-green-600' : pct >= 50 ? 'text-amber-600' : 'text-red-500';
+            const barW = Math.round(100 * k.total_alunos / maxAlunos);
+            return (
+              <div key={k.turma_id} className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm flex flex-col gap-3 min-w-0">
+                {/* Header turma */}
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: k.turma_cor }} />
+                  <span className="font-black text-slate-800 text-[11px] truncate">{k.turma_nome}</span>
+                  {k.turno && <span className="text-[9px] text-slate-400 shrink-0">{k.turno}</span>}
+                </div>
+
+                {/* Alunos + ocupação */}
+                <div>
+                  <div className="flex justify-between items-end mb-1">
+                    <span className="text-[10px] text-slate-400 font-semibold">Alunos</span>
+                    <span className="text-[11px] font-black text-slate-700">{k.total_alunos}<span className="text-slate-300 font-normal">/{k.max_alunos}</span></span>
+                  </div>
+                  <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                    <div className="h-full rounded-full transition-all" style={{ width: `${ocup}%`, backgroundColor: k.turma_cor }} />
+                  </div>
+                  <span className="text-[9px] text-slate-400">{ocup}% ocupação</span>
+                </div>
+
+                {/* % presença */}
+                <div>
+                  <div className="flex justify-between items-end mb-1">
+                    <span className="text-[10px] text-slate-400 font-semibold">Presença (28d)</span>
+                    <span className={`text-[11px] font-black ${presColor}`}>{pct !== null ? `${pct}%` : '—'}</span>
+                  </div>
+                  {pct !== null && (
+                    <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full transition-all"
+                        style={{ width: `${pct}%`, backgroundColor: pct >= 75 ? '#22c55e' : pct >= 50 ? '#f59e0b' : '#ef4444' }} />
+                    </div>
+                  )}
+                </div>
+
+                {/* Spark: últimas sessões */}
+                {k.ultimas_sessoes.length > 0 && (
+                  <div>
+                    <span className="text-[9px] text-slate-400 font-semibold uppercase tracking-widest">Últimas aulas</span>
+                    <div className="flex items-end gap-1 mt-1.5 h-8">
+                      {k.ultimas_sessoes.map((s, i) => {
+                        const h = s.total > 0 ? Math.round(100 * s.presentes / s.total) : 0;
+                        return (
+                          <div key={i} className="flex-1 flex flex-col items-center gap-0.5 group relative">
+                            <div className="w-full rounded-sm transition-all"
+                              style={{ height: `${Math.max(4, Math.round(28 * h / 100))}px`,
+                                       backgroundColor: h >= 75 ? '#22c55e' : h >= 50 ? '#f59e0b' : '#ef4444' }} />
+                            <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[9px] px-1.5 py-0.5 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                              {new Date(s.data).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} · {s.presentes}/{s.total}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Turma[]; podeEditar: boolean }) {
   const [alunos, setAlunos] = useState<Aluno[]>([]);
   const [loading, setLoading] = useState(true);
@@ -746,6 +858,7 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
 
   return (
     <div className="space-y-4">
+      <KpisTurmas />
       <div className="flex flex-wrap gap-3 items-end bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
         <div className="flex-1 min-w-[180px]">
           <label className="text-[9px] font-black uppercase text-slate-400 mb-1 block">Nome</label>
