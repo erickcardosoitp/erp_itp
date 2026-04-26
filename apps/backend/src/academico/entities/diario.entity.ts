@@ -41,6 +41,10 @@ export class DiarioAcademico {
   @Column({ name: 'pessoa_nome', type: 'varchar', nullable: true })
   pessoa_nome: string | null;
 
+  /** Aluno isento: ainda não era matriculado nessa data — não conta como falta */
+  @Column({ type: 'boolean', nullable: true, default: false })
+  isento: boolean;
+
   @CreateDateColumn({ name: 'created_at' })
   created_at: Date;
 }
