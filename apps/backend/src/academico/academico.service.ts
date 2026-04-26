@@ -320,9 +320,14 @@ export class AcademicoService {
     const aluno = await this.alunoRepo.findOneBy({ id });
     if (!aluno) throw new NotFoundException('Aluno não encontrado');
 
-    // Busca inscricao_id via SQL direto (JoinColumn não é coluna decorada)
+    // Busca inscricao_id: direto na coluna OU via inscricoes.aluno_id (cobre alunos criados sem workflow)
     const [row] = await this.dataSource.query(
-      `SELECT inscricao_id FROM alunos WHERE id = $1`, [id],
+      `SELECT COALESCE(a.inscricao_id, i.id) AS inscricao_id
+       FROM alunos a
+       LEFT JOIN inscricoes i ON i.aluno_id::text = a.id::text
+       WHERE a.id = $1
+       LIMIT 1`,
+      [id],
     );
     const inscricao_id: number | null = row?.inscricao_id ?? null;
 

@@ -831,6 +831,49 @@ export class MatriculasService {
         );
       }
 
+      // Cria inscricao vinculada — habilita dossier completo e upload de documentos na ficha
+      const inscricao = queryRunner.manager.create(Inscricao, {
+        nome_completo:        alunoSalvo.nome_completo,
+        cpf:                  alunoSalvo.cpf       ?? undefined,
+        email:                alunoSalvo.email      ?? undefined,
+        celular:              alunoSalvo.celular    ?? undefined,
+        data_nascimento:      alunoSalvo.data_nascimento ?? undefined,
+        sexo:                 alunoSalvo.sexo       ?? undefined,
+        escolaridade:         alunoSalvo.escolaridade ?? undefined,
+        turno_escolar:        alunoSalvo.turno_escolar ?? undefined,
+        logradouro:           alunoSalvo.logradouro ?? undefined,
+        numero:               alunoSalvo.numero     ?? undefined,
+        complemento:          alunoSalvo.complemento ?? undefined,
+        cidade:               alunoSalvo.cidade     ?? undefined,
+        bairro:               alunoSalvo.bairro     ?? undefined,
+        estado_uf:            alunoSalvo.estado_uf  ?? undefined,
+        cep:                  alunoSalvo.cep        ?? undefined,
+        maior_18_anos:        alunoSalvo.maior_18_anos ?? true,
+        nome_responsavel:     alunoSalvo.nome_responsavel   ?? undefined,
+        email_responsavel:    alunoSalvo.email_responsavel  ?? undefined,
+        grau_parentesco:      alunoSalvo.grau_parentesco    ?? undefined,
+        cpf_responsavel:      alunoSalvo.cpf_responsavel    ?? undefined,
+        telefone_alternativo: alunoSalvo.telefone_alternativo ?? undefined,
+        possui_alergias:      alunoSalvo.possui_alergias   ?? undefined,
+        cuidado_especial:     alunoSalvo.cuidado_especial  ?? undefined,
+        detalhes_cuidado:     alunoSalvo.detalhes_cuidado  ?? undefined,
+        uso_medicamento:      alunoSalvo.uso_medicamento   ?? undefined,
+        cursos_desejados:     descricaoCursos,
+        lgpd_aceito:          alunoSalvo.lgpd_aceito,
+        autoriza_imagem:      alunoSalvo.autoriza_imagem,
+        status_matricula:     StatusMatricula.MATRICULADO,
+        origem_inscricao:     'Direto',
+        data_inscricao:       hoje,
+        aluno:                { id: alunoSalvo.id } as any,
+      });
+      const inscricaoSalva = await queryRunner.manager.save(Inscricao, inscricao);
+      // Vincula inscricao_id de volta ao aluno (permite lookup direto na ficha)
+      await queryRunner.manager.query(
+        `UPDATE alunos SET inscricao_id = $1 WHERE id = $2`,
+        [inscricaoSalva.id, alunoSalvo.id],
+      );
+      this.logger.log(`✅ [criarAlunoDireto] Inscricao ${inscricaoSalva.id} criada e vinculada ao aluno ${alunoSalvo.id}`);
+
       this.logger.log(`⏳ [criarAlunoDireto] Iniciando commitTransaction para aluno=${alunoSalvo.id}`);
       await queryRunner.commitTransaction();
       this.logger.log(`✅ [criarAlunoDireto] commitTransaction concluído para aluno=${alunoSalvo.id}`);
