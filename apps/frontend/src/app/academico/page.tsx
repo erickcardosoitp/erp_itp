@@ -594,14 +594,17 @@ interface KpiTurma {
 }
 
 function KpisTurmas() {
-  const [kpis, setKpis] = useState<KpiTurma[]>([]);
+  const [kpis, setKpis] = useState<KpiTurma[] | null>(null);
   const [open, setOpen] = useState(true);
 
   useEffect(() => {
-    api.get('/academico/alunos/kpis').then(r => setKpis(r.data)).catch(() => {});
+    api.get('/academico/alunos/kpis')
+      .then(r => setKpis(Array.isArray(r.data) ? r.data : []))
+      .catch(() => setKpis([]));
   }, []);
 
-  if (!kpis.length) return null;
+  if (kpis === null) return null; // ainda carregando
+  if (!kpis.length) return null;  // sem turmas ativas
 
   const totalAlunos = kpis.reduce((s, k) => s + k.total_alunos, 0);
   const mediaPresenca = (() => {

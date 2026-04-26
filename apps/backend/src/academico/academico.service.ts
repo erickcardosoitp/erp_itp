@@ -275,14 +275,17 @@ export class AcademicoService {
     try {
       const turmaRows = await this.dataSource.query(
         `SELECT ta.aluno_id::text AS aluno_id,
-            json_agg(json_build_object('id', ta.turma_id::text, 'nome', t.nome, 'cor', t.cor, 'status', ta.status))
+            jsonb_agg(jsonb_build_object('id', ta.turma_id::text, 'nome', t.nome, 'cor', COALESCE(t.cor,'#6d28d9'), 'status', ta.status))
             FILTER (WHERE ta.turma_id IS NOT NULL) AS turmas
          FROM turma_alunos ta
          LEFT JOIN turmas t ON ta.turma_id IS NOT NULL AND t.id::text = ta.turma_id::text
          WHERE ta.aluno_id::text IN (${alunoIds})
          GROUP BY ta.aluno_id`,
       );
-      turmaRows.forEach((r: any) => { turmaMap[r.aluno_id] = r.turmas ?? []; });
+      turmaRows.forEach((r: any) => {
+        const parsed = typeof r.turmas === 'string' ? JSON.parse(r.turmas) : (r.turmas ?? []);
+        turmaMap[r.aluno_id] = Array.isArray(parsed) ? parsed : [];
+      });
     } catch (e: any) {
       this.logger.warn(`[listarAlunos] turmas falhou: ${e?.message}`);
     }
@@ -694,7 +697,7 @@ export class AcademicoService {
       FROM turmas t
       LEFT JOIN turma_alunos ta ON ta.turma_id::text = t.id::text
       LEFT JOIN diario_academico d ON d.turma_id::text = t.id::text AND d.tipo = 'Presença'
-      WHERE t.ativo = true
+      WHERE (t.ativo IS NOT FALSE)
       GROUP BY t.id, t.nome, t.cor, t.turno, t.max_alunos
       ORDER BY t.nome ASC
     `);
@@ -807,7 +810,7 @@ export class AcademicoService {
                 t.turno,
                 c.nome AS curso_nome
          FROM turmas t
-         LEFT JOIN cursos c ON c.id::text = t.curso_id::text
+         LEFT JOIN materias c ON c.id::text = t.curso_id::text
          WHERE t.professor_id::text = $1
            AND (t.ativo IS NOT FALSE)
          ORDER BY t.nome ASC`,
