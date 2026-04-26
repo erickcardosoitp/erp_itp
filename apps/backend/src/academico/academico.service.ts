@@ -732,23 +732,32 @@ export class AcademicoService {
   }
 
   async kpisTurmas() {
-    // Total de alunos ativos por turma + % presença últimas 4 semanas
+    // Subqueries isoladas para evitar produto cartesiano (turma_alunos × diario)
     const turmaStats = await this.dataSource.query(`
       SELECT
-        t.id::text       AS turma_id,
-        t.nome           AS turma_nome,
-        t.cor            AS turma_cor,
-        t.turno          AS turno,
-        t.max_alunos     AS max_alunos,
-        COUNT(DISTINCT ta.aluno_id) FILTER (WHERE ta.status = 'ativo' AND ta.aluno_id IS NOT NULL AND aluno_ativo.ativo = true) AS total_alunos,
-        COUNT(d.id) FILTER (WHERE d.data >= NOW() - INTERVAL '28 days')                            AS total_registros,
-        COUNT(d.id) FILTER (WHERE d.data >= NOW() - INTERVAL '28 days' AND d.descricao = 'Presente') AS total_presentes
+        t.id::text   AS turma_id,
+        t.nome       AS turma_nome,
+        t.cor        AS turma_cor,
+        t.turno      AS turno,
+        t.max_alunos AS max_alunos,
+        (SELECT COUNT(DISTINCT ta.aluno_id)
+           FROM turma_alunos ta
+           JOIN alunos a ON a.id::text = ta.aluno_id::text AND a.ativo = true
+          WHERE ta.turma_id::text = t.id::text AND ta.status = 'ativo') AS total_alunos,
+        (SELECT COUNT(*)
+           FROM diario_academico d
+          WHERE d.turma_id::text = t.id::text
+            AND d.tipo = 'Presença'
+            AND d.data >= CURRENT_DATE - 28
+            AND d.isento = false) AS total_registros,
+        (SELECT COUNT(*)
+           FROM diario_academico d
+          WHERE d.turma_id::text = t.id::text
+            AND d.tipo = 'Presença'
+            AND d.data >= CURRENT_DATE - 28
+            AND d.descricao = 'Presente') AS total_presentes
       FROM turmas t
-      LEFT JOIN turma_alunos ta ON ta.turma_id::text = t.id::text
-      LEFT JOIN alunos aluno_ativo ON aluno_ativo.id::text = ta.aluno_id::text
-      LEFT JOIN diario_academico d ON d.turma_id::text = t.id::text AND d.tipo = 'Presença'
-      WHERE (t.ativo IS NOT FALSE)
-      GROUP BY t.id, t.nome, t.cor, t.turno, t.max_alunos
+      WHERE t.ativo IS NOT FALSE
       ORDER BY t.nome ASC
     `);
 
@@ -1207,6 +1216,17 @@ export class AcademicoService {
   }
 
   // ── FALTAS RECENTES (dashboard social) ───────────────────────────────────
+
+  async listarFeriados(ano?: number) {
+    const year = ano ?? new Date().getFullYear();
+    return this.dataSource.query(
+      `SELECT id, data::text AS data, descricao, tipo
+       FROM gente_feriados
+       WHERE EXTRACT(YEAR FROM data) = $1
+       ORDER BY data ASC`,
+      [year],
+    );
+  }
 
   async listarFaltasRecentes(limite = 8) {
     return this.dataSource.query(`

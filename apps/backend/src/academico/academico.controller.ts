@@ -311,6 +311,14 @@ export class AcademicoController {
     return this.svc.registrarPresenca(dto, req.user?.userId, req.user?.email);
   }
 
+  // ── FERIADOS (leitura compartilhada de gente_feriados) ───────────────────
+
+  @Get('feriados')
+  @ModuloPerm('academico', 'visualizar')
+  listarFeriados(@Query('ano') ano?: string) {
+    return this.svc.listarFeriados(ano ? parseInt(ano) : undefined);
+  }
+
   // ── FALTAS / TURMAS SEM SESSÃO ────────────────────────────────────────────
 
   @Get('presenca/faltas-recentes')

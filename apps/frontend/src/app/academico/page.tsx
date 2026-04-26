@@ -2655,8 +2655,20 @@ function PresencaTab({ turmas, podeEditar }: { turmas: Turma[]; podeEditar: bool
   const [salvando, setSalvando] = useState(false);
   const [erroModal, setErroModal] = useState<string | null>(null);
 
-  // ─── FIX #1: estado linkCopiado declarado corretamente ──────────────────
   const [linkCopiado, setLinkCopiado] = useState(false);
+
+  // ─── Feriados ────────────────────────────────────────────────────────────
+  const [feriados, setFeriados] = useState<Record<string, string>>({});
+  useEffect(() => {
+    const ano = new Date().getFullYear();
+    api.get('/academico/feriados', { params: { ano } })
+      .then(r => {
+        const map: Record<string, string> = {};
+        (r.data ?? []).forEach((f: any) => { map[f.data] = f.descricao; });
+        setFeriados(map);
+      })
+      .catch(() => {});
+  }, []);
 
   const carregarHistorico = useCallback(async () => {
     setCarregandoHist(true);
@@ -2987,7 +2999,13 @@ function PresencaTab({ turmas, podeEditar }: { turmas: Turma[]; podeEditar: bool
                     <div className="space-y-1">
                       <label className="text-[10px] font-black uppercase text-slate-500">Data da Aula *</label>
                       <input type="date" value={formSessao.data} onChange={e => setFormSessao(p => ({ ...p, data: e.target.value }))}
-                        className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400" />
+                        className={`w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 ${feriados[formSessao.data] ? 'border-amber-400 focus:ring-amber-400 bg-amber-50' : 'border-slate-200 focus:ring-purple-400'}`} />
+                      {feriados[formSessao.data] && (
+                        <p className="text-[10px] font-black text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5 flex items-center gap-1.5 mt-1">
+                          <AlertTriangle size={11} className="shrink-0" />
+                          Feriado: {feriados[formSessao.data]} — Confirme se houve aula neste dia.
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div className="space-y-1">
@@ -3352,6 +3370,19 @@ function MonitoramentoTab() {
 
   useEffect(() => { load(); }, [load]);
 
+  // useMemo deve vir antes de qualquer early return para não violar rules-of-hooks
+  const turmasPresencaKpis = useMemo(() => {
+    const tps: any[] = dados?.turmas_presenca ?? [];
+    if (!tps.length) return null;
+    const comDados = tps.filter((t: any) => t.total_computados > 0);
+    if (!comDados.length) return null;
+    const medias = comDados.map((t: any) => Math.round(100 * t.presencas / t.total_computados));
+    const media = Math.round(medias.reduce((s: number, v: number) => s + v, 0) / medias.length);
+    const baixa = comDados.filter((t: any) => Math.round(100 * t.presencas / t.total_computados) < 75).length;
+    const melhor = comDados.reduce((a: any, b: any) => (b.presencas / b.total_computados > a.presencas / a.total_computados ? b : a));
+    return { media, baixa, totalTurmas: tps.length, melhor };
+  }, [dados]);
+
   if (loading) return (
     <div className="flex flex-col items-center justify-center py-24 gap-3 text-slate-400">
       <Activity size={32} className="animate-pulse text-purple-400" />
@@ -3373,18 +3404,6 @@ function MonitoramentoTab() {
     { label: 'Registros Diário', value: resumo.total_diario,   icon: History,       color: 'bg-amber-600',   text: 'text-amber-600' },
     { label: 'Justificadas',     value: resumo.total_justificadas, icon: ShieldCheck, color: 'bg-teal-600',  text: 'text-teal-600' },
   ];
-
-  const turmasPresencaKpis = useMemo(() => {
-    if (!dados?.turmas_presenca?.length) return null;
-    const tps: any[] = dados.turmas_presenca;
-    const comDados = tps.filter(t => t.total_computados > 0);
-    if (!comDados.length) return null;
-    const medias = comDados.map(t => Math.round(100 * t.presencas / t.total_computados));
-    const media = Math.round(medias.reduce((s, v) => s + v, 0) / medias.length);
-    const baixa = comDados.filter(t => Math.round(100 * t.presencas / t.total_computados) < 75).length;
-    const melhor = comDados.reduce((a, b) => (b.presencas / b.total_computados > a.presencas / a.total_computados ? b : a));
-    return { media, baixa, totalTurmas: tps.length, melhor };
-  }, [dados]);
 
   return (
     <div className="space-y-6">
