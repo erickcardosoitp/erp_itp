@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useSearchParams } from 'next/navigation';
 import DossieCandidato from '@/components/DossieCandidato';
 import {
   GraduationCap, Users, BookOpen, LayoutGrid, History,
@@ -4312,10 +4311,10 @@ function ChamadosTab({ alunos, turmas, podeEditar }: { alunos: Aluno[]; turmas: 
 // ─── Página principal ─────────────────────────────────────────────────────────
 
 export default function AcademicoPage() {
-  const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState(() => {
+    if (typeof window === 'undefined') return 'grade';
     const VALID = ['grade','alunos','presenca','cursos','turmas','diario','acervo','chamados','monitoramento'];
-    const tab = searchParams.get('tab') ?? 'grade';
+    const tab = new URLSearchParams(window.location.search).get('tab') ?? 'grade';
     return VALID.includes(tab) ? tab : 'grade';
   });
   const [cursos, setCursos] = useState<Curso[]>([]);
