@@ -612,7 +612,7 @@ export class AcademicoService {
       hora_fim?: string;
       tema_aula?: string;
       conteudo_abordado?: string;
-      registros: { aluno_id?: string; inscricao_id?: number; pessoa_nome?: string; presente: boolean; isento?: boolean }[];
+      registros: { aluno_id?: string; inscricao_id?: number; pessoa_nome?: string; presente: boolean; isento?: boolean; justificada?: boolean }[];
     },
     usuarioId?: string,
     usuarioNome?: string,
@@ -626,8 +626,8 @@ export class AcademicoService {
     const turma = await this.turmaRepo.findOneBy({ id: dto.turma_id });
     if (!turma) throw new NotFoundException('Turma não encontrada');
 
-    const totalPresentes = dto.registros.filter(r => r.presente && !r.isento).length;
-    const totalAusentes  = dto.registros.filter(r => !r.presente && !r.isento).length;
+    const totalPresentes = dto.registros.filter(r => r.presente && !r.isento && !r.justificada).length;
+    const totalAusentes  = dto.registros.filter(r => !r.presente && !r.isento && !r.justificada).length;
 
     const sessao = await this.sessaoRepo.save(this.sessaoRepo.create({
       turma_id:          dto.turma_id,
@@ -651,8 +651,9 @@ export class AcademicoService {
         pessoa_nome:  r.pessoa_nome  || undefined,
         turma_id:     dto.turma_id,
         data:         dto.data,
-        descricao:    r.isento ? 'Isento' : (r.presente ? 'Presente' : 'Falta'),
+        descricao:    r.isento ? 'Isento' : r.justificada ? 'Falta Justificada' : (r.presente ? 'Presente' : 'Falta'),
         isento:       r.isento ?? false,
+        justificada:  r.justificada ?? false,
         sessao_id:    sessao.id,
         usuario_id:   usuarioId,
         usuario_nome: usuarioNome,

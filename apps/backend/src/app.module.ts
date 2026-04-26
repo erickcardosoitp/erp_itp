@@ -303,7 +303,8 @@ export class AppModule implements OnModuleInit {
           ADD COLUMN IF NOT EXISTS aluno_nome TEXT,
           ADD COLUMN IF NOT EXISTS inscricao_id INT,
           ADD COLUMN IF NOT EXISTS pessoa_nome TEXT,
-          ADD COLUMN IF NOT EXISTS isento BOOLEAN NOT NULL DEFAULT false
+          ADD COLUMN IF NOT EXISTS isento BOOLEAN NOT NULL DEFAULT false,
+          ADD COLUMN IF NOT EXISTS justificada BOOLEAN NOT NULL DEFAULT false
       `);
       this.logger.log('✅ Tabelas acadêmicas criadas/verificadas (IF NOT EXISTS)');
       this.logger.log('✅ Tabelas de estoque criadas (IF NOT EXISTS)');

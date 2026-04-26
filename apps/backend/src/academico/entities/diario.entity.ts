@@ -45,6 +45,10 @@ export class DiarioAcademico {
   @Column({ type: 'boolean', nullable: true, default: false })
   isento: boolean;
 
+  /** Falta justificada — ausência com justificativa */
+  @Column({ type: 'boolean', nullable: true, default: false })
+  justificada: boolean;
+
   @CreateDateColumn({ name: 'created_at' })
   created_at: Date;
 }

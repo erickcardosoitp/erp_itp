@@ -2638,6 +2638,7 @@ function PresencaTab({ turmas, podeEditar }: { turmas: Turma[]; podeEditar: bool
   const [alunosSessao, setAlunosSessao] = useState<Aluno[]>([]);
   const [presenca, setPresenca] = useState<Record<string, boolean>>({});
   const [isento, setIsento] = useState<Record<string, boolean>>({});
+  const [justificada, setJustificada] = useState<Record<string, boolean>>({});
   const [carregandoAlunos, setCarregandoAlunos] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [erroModal, setErroModal] = useState<string | null>(null);
@@ -2673,7 +2674,7 @@ function PresencaTab({ turmas, podeEditar }: { turmas: Turma[]; podeEditar: bool
 
   const abrirNovaLista = () => {
     setFormSessao({ turma_id: '', data: new Date().toISOString().slice(0, 10), tema_aula: '', conteudo_abordado: '' });
-    setAlunosSessao([]); setPresenca({}); setIsento({}); setErroModal(null); setEtapa(1);
+    setAlunosSessao([]); setPresenca({}); setIsento({}); setJustificada({}); setErroModal(null); setEtapa(1);
     setShowModal(true);
   };
 
@@ -2716,7 +2717,7 @@ function PresencaTab({ turmas, podeEditar }: { turmas: Turma[]; podeEditar: bool
         data:              formSessao.data,
         tema_aula:         formSessao.tema_aula,
         conteudo_abordado: formSessao.conteudo_abordado,
-        registros: alunosSessao.map(a => ({ aluno_id: a.id, presente: presenca[a.id] ?? true, isento: isento[a.id] ?? false })),
+        registros: alunosSessao.map(a => ({ aluno_id: a.id, presente: presenca[a.id] ?? true, isento: isento[a.id] ?? false, justificada: justificada[a.id] ?? false })),
       });
       setShowModal(false);
       carregarHistorico();
@@ -2727,9 +2728,10 @@ function PresencaTab({ turmas, podeEditar }: { turmas: Turma[]; podeEditar: bool
     setSalvando(false);
   };
 
-  const presentes = alunosSessao.filter(a => !isento[a.id] && presenca[a.id]).length;
-  const ausentes  = alunosSessao.filter(a => !isento[a.id] && !presenca[a.id]).length;
-  const isentos   = alunosSessao.filter(a => isento[a.id]).length;
+  const presentes    = alunosSessao.filter(a => !isento[a.id] && !justificada[a.id] && presenca[a.id]).length;
+  const ausentes     = alunosSessao.filter(a => !isento[a.id] && !justificada[a.id] && !presenca[a.id]).length;
+  const isentos      = alunosSessao.filter(a => isento[a.id]).length;
+  const justificados = alunosSessao.filter(a => justificada[a.id]).length;
 
   const fmtData = (v: string) => {
     if (!v) return '–';
@@ -2951,6 +2953,7 @@ function PresencaTab({ turmas, podeEditar }: { turmas: Turma[]; podeEditar: bool
                     <div className="flex gap-2">
                       <span className="bg-green-100 text-green-700 text-[9px] font-black px-2 py-0.5 rounded-full uppercase">{presentes} pres.</span>
                       <span className="bg-red-100 text-red-600 text-[9px] font-black px-2 py-0.5 rounded-full uppercase">{ausentes} aus.</span>
+                      {justificados > 0 && <span className="bg-amber-100 text-amber-600 text-[9px] font-black px-2 py-0.5 rounded-full uppercase">{justificados} justif.</span>}
                       {isentos > 0 && <span className="bg-slate-100 text-slate-500 text-[9px] font-black px-2 py-0.5 rounded-full uppercase">{isentos} isentos</span>}
                     </div>
                     <div className="flex gap-2">
@@ -2969,18 +2972,20 @@ function PresencaTab({ turmas, podeEditar }: { turmas: Turma[]; podeEditar: bool
                   <div className="border border-slate-100 rounded-2xl overflow-hidden divide-y divide-slate-50">
                     {alunosSessao.map((a, i) => {
                       const exempto = isento[a.id] ?? false;
+                      const justif  = justificada[a.id] ?? false;
                       const presente = presenca[a.id] ?? true;
+                      const especial = exempto || justif;
                       return (
                         <div key={a.id}
-                          className={`w-full flex items-center gap-3 px-4 py-2.5 transition-colors ${i % 2 === 0 ? '' : 'bg-slate-50/30'} ${exempto ? 'opacity-50' : ''}`}>
-                          {/* Toggle presença — clicável apenas se não isento */}
-                          <button type="button" disabled={exempto}
+                          className={`w-full flex items-center gap-2 px-4 py-2.5 transition-colors ${i % 2 === 0 ? '' : 'bg-slate-50/30'} ${especial ? 'opacity-60' : ''}`}>
+                          {/* Toggle presença — desabilitado se isento ou justificada */}
+                          <button type="button" disabled={especial}
                             onClick={() => setPresenca(p => ({ ...p, [a.id]: !p[a.id] }))}
                             className={`shrink-0 w-7 h-7 rounded-lg border-2 flex items-center justify-center transition-all ${
-                              exempto ? 'bg-slate-100 border-slate-200' :
+                              especial ? 'bg-slate-100 border-slate-200' :
                               presente ? 'bg-green-500 border-green-500 text-white' : 'bg-white border-slate-300'
                             }`}>
-                            {!exempto && presente && <CheckSquare size={13}/>}
+                            {!especial && presente && <CheckSquare size={13}/>}
                           </button>
                           <div className="flex-1 min-w-0">
                             <p className="text-xs font-bold text-slate-800 truncate">{a.nome_completo}</p>
@@ -2988,20 +2993,32 @@ function PresencaTab({ turmas, podeEditar }: { turmas: Turma[]; podeEditar: bool
                           </div>
                           {/* Badge de status */}
                           <span className={`shrink-0 text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
-                            exempto ? 'bg-slate-100 text-slate-400' :
+                            exempto  ? 'bg-slate-100 text-slate-400' :
+                            justif   ? 'bg-amber-100 text-amber-600' :
                             presente ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
                           }`}>
-                            {exempto ? 'Isento' : presente ? 'Presente' : 'Ausente'}
+                            {exempto ? 'Isento' : justif ? 'Justificada' : presente ? 'Presente' : 'Ausente'}
                           </span>
+                          {/* Botão falta justificada */}
+                          <button type="button"
+                            onClick={() => { setJustificada(p => ({ ...p, [a.id]: !p[a.id] })); if (!justif) setIsento(p => ({ ...p, [a.id]: false })); }}
+                            className={`shrink-0 text-[8px] font-black uppercase px-2 py-0.5 rounded-full border transition-all ${
+                              justif
+                                ? 'bg-amber-200 border-amber-300 text-amber-700'
+                                : 'border-slate-200 text-slate-400 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-600'
+                            }`}
+                            title="Falta com justificativa">
+                            {justif ? '✕ justif.' : 'justif.'}
+                          </button>
                           {/* Botão isento */}
                           <button type="button"
-                            onClick={() => setIsento(p => ({ ...p, [a.id]: !p[a.id] }))}
+                            onClick={() => { setIsento(p => ({ ...p, [a.id]: !p[a.id] })); if (!exempto) setJustificada(p => ({ ...p, [a.id]: false })); }}
                             className={`shrink-0 text-[8px] font-black uppercase px-2 py-0.5 rounded-full border transition-all ${
                               exempto
                                 ? 'bg-slate-200 border-slate-300 text-slate-600'
-                                : 'border-slate-200 text-slate-400 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-600'
+                                : 'border-slate-200 text-slate-400 hover:border-slate-400 hover:bg-slate-50 hover:text-slate-600'
                             }`}
-                            title="Marcar como isento (aluno ainda não era matriculado nesta data)">
+                            title="Isento — aluno ainda não era matriculado nesta data">
                             {exempto ? '✕ isento' : 'isento'}
                           </button>
                         </div>
