@@ -911,19 +911,34 @@ export class AcademicoService {
   async mapaAlunos() {
     const rows = await this.dataSource.query(`
       SELECT
-        COALESCE(NULLIF(TRIM(logradouro), ''), '')         AS logradouro,
-        COALESCE(NULLIF(TRIM(bairro), ''), 'Não informado') AS bairro,
-        COALESCE(NULLIF(TRIM(cidade), ''), 'Rio de Janeiro') AS cidade,
-        COUNT(*)                                            AS total,
-        json_agg(nome_completo ORDER BY nome_completo)      AS nomes
-      FROM alunos
-      WHERE ativo = true
-        AND (TRIM(logradouro) != '' OR TRIM(bairro) != '')
-      GROUP BY TRIM(logradouro), TRIM(bairro), TRIM(cidade)
+        COALESCE(NULLIF(TRIM(a.logradouro), ''), '')          AS logradouro,
+        COALESCE(NULLIF(TRIM(a.bairro), ''), 'Não informado') AS bairro,
+        COALESCE(NULLIF(TRIM(a.cidade), ''), 'Rio de Janeiro') AS cidade,
+        COUNT(*)                                               AS total,
+        json_agg(json_build_object(
+          'id',       a.id::text,
+          'nome',     a.nome_completo,
+          'foto_url', doc.url_arquivo
+        ) ORDER BY a.nome_completo)                            AS alunos
+      FROM alunos a
+      LEFT JOIN LATERAL (
+        SELECT d.url_arquivo
+        FROM inscricoes i
+        JOIN documentos_inscricao d ON d.inscricao_id = i.id AND d.tipo = 'foto_aluno'
+        WHERE i.aluno_id::text = a.id::text
+        LIMIT 1
+      ) doc ON true
+      WHERE a.ativo = true
+        AND (TRIM(a.logradouro) != '' OR TRIM(a.bairro) != '')
+      GROUP BY TRIM(a.logradouro), TRIM(a.bairro), TRIM(a.cidade)
       ORDER BY total DESC
       LIMIT 120
     `);
-    return rows.map((r: any) => ({ ...r, total: Number(r.total) }));
+    return rows.map((r: any) => ({
+      ...r,
+      total:  Number(r.total),
+      alunos: typeof r.alunos === 'string' ? JSON.parse(r.alunos) : (r.alunos ?? []),
+    }));
   }
 
   async criarAlunoViaChamada(dto: any) {

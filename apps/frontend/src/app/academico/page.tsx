@@ -3052,7 +3052,8 @@ function PresencaTab({ turmas, podeEditar }: { turmas: Turma[]; podeEditar: bool
 // ─── Monitoramento ────────────────────────────────────────────────────────────
 
 // Bairros da região de Madureira com posições relativas (x%, y%) no mapa
-interface EnderecoGrupo { logradouro: string; bairro: string; cidade: string; total: number; nomes: string[]; }
+interface AlunoMapa { id: string; nome: string; foto_url: string | null; }
+interface EnderecoGrupo { logradouro: string; bairro: string; cidade: string; total: number; alunos: AlunoMapa[]; }
 
 function MapaLeaflet({ enderecos }: { enderecos: EnderecoGrupo[] }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -3063,80 +3064,155 @@ function MapaLeaflet({ enderecos }: { enderecos: EnderecoGrupo[] }) {
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
-    // Inject Leaflet CSS
+    // Leaflet CSS
     if (!document.querySelector('#leaflet-css')) {
       const link = document.createElement('link');
-      link.id   = 'leaflet-css';
-      link.rel  = 'stylesheet';
+      link.id = 'leaflet-css'; link.rel = 'stylesheet';
       link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
       document.head.appendChild(link);
     }
 
+    // Custom styles
+    if (!document.querySelector('#itp-map-css')) {
+      const s = document.createElement('style'); s.id = 'itp-map-css';
+      s.innerHTML = `
+        .itp-label { background:#7c3aed;color:#fff;font-size:11px;font-weight:900;
+          padding:2px 7px;border-radius:20px;white-space:nowrap;
+          box-shadow:0 2px 6px rgba(124,58,237,.4);border:1.5px solid #5b21b6;pointer-events:none; }
+        .itp-popup .leaflet-popup-content-wrapper { border-radius:12px;padding:0;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,.15); }
+        .itp-popup .leaflet-popup-content { margin:0; }
+        .itp-popup .leaflet-popup-tip-container { display:none; }
+        .itp-av { width:38px;height:38px;border-radius:50%;object-fit:cover;border:2px solid #e2e8f0;flex-shrink:0; }
+        .itp-ini { width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#4f46e5);
+          display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:900;flex-shrink:0; }
+      `;
+      document.head.appendChild(s);
+    }
+
     import('leaflet').then((L: any) => {
-      // Fix broken default icons
       delete L.Icon.Default.prototype._getIconUrl;
-      L.Icon.Default.mergeOptions({
-        iconUrl:       'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-        iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-        shadowUrl:     'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-      });
 
       const map = L.map(containerRef.current!, { center: [-22.8783, -43.3364], zoom: 14 });
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-        maxZoom: 19,
+        attribution: '© OpenStreetMap contributors', maxZoom: 19,
       }).addTo(map);
-      mapRef.current = { map, L, markers: [] as any[] };
+      mapRef.current = { map, L };
 
-      const CACHE_KEY = 'itp_geo_v1';
-      let cache: Record<string, [number, number]> = {};
+      const CACHE_KEY = 'itp_geo_v3'; // bump version — new geojson format
+      let cache: Record<string, any> = {};
       try { cache = JSON.parse(localStorage.getItem(CACHE_KEY) || '{}'); } catch {}
-
       const saveCache = () => { try { localStorage.setItem(CACHE_KEY, JSON.stringify(cache)); } catch {} };
-      const maxTotal  = Math.max(...enderecos.map(e => e.total), 1);
 
-      const addMarker = (e: EnderecoGrupo, lat: number, lng: number) => {
-        const r = 8 + (e.total / maxTotal) * 22;
-        const nomes = (Array.isArray(e.nomes) ? e.nomes : []).slice(0, 5).join('<br>');
-        L.circleMarker([lat, lng], {
-          radius: r, fillColor: '#7c3aed', color: '#4c1d95',
-          weight: 1.5, fillOpacity: 0.55 + (e.total / maxTotal) * 0.35,
-        })
-          .bindPopup(
-            `<div style="font-size:11px;min-width:140px">
-              <b style="font-size:12px">${e.logradouro || e.bairro}</b><br>
-              <span style="color:#6b7280">${e.bairro}${e.cidade !== 'Rio de Janeiro' ? ' · ' + e.cidade : ''}</span><br>
-              <b style="color:#7c3aed">${e.total} aluno${e.total > 1 ? 's' : ''}</b>
-              ${nomes ? `<hr style="margin:4px 0"><small>${nomes}${e.total > 5 ? '<br>...' : ''}</small>` : ''}
-            </div>`
-          )
-          .addTo(map);
+      const API_BASE = (typeof window !== 'undefined' ? (window as any).__NEXT_PUBLIC_API_BASE_URL : '') || '';
+
+      const buildPopupHtml = (e: EnderecoGrupo) => {
+        const lista = (e.alunos || []).slice(0, 8);
+        const resto = (e.alunos || []).slice(8);
+        const avatares = lista.map(a => {
+          const src = a.foto_url ? (a.foto_url.startsWith('http') ? a.foto_url : `${API_BASE}${a.foto_url}`) : null;
+          const ini = (a.nome || '?').trim()[0].toUpperCase();
+          return src
+            ? `<img class="itp-av" src="${src}" alt="${a.nome}" title="${a.nome}" onerror="this.outerHTML='<div class=itp-ini title=\'${a.nome}\'>${ini}</div>'">`
+            : `<div class="itp-ini" title="${a.nome}">${ini}</div>`;
+        }).join('');
+        return `
+          <div style="font-family:system-ui,sans-serif;padding:14px 16px;min-width:200px;max-width:280px">
+            <div style="font-size:12px;font-weight:900;color:#1e293b;margin-bottom:2px">${e.logradouro || e.bairro}</div>
+            <div style="font-size:10px;color:#64748b;margin-bottom:10px">${e.bairro}${e.cidade !== 'Rio de Janeiro' ? ' · ' + e.cidade : ''}</div>
+            <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px">${avatares}</div>
+            ${resto.length ? `<div style="font-size:9px;color:#94a3b8;margin-top:4px">+${resto.length} mais: ${resto.map(a => a.nome.split(' ')[0]).join(', ')}</div>` : ''}
+            <div style="margin-top:8px;padding-top:6px;border-top:1px solid #f1f5f9;font-size:11px;font-weight:900;color:#7c3aed">${e.total} aluno${e.total > 1 ? 's' : ''} nesta rua</div>
+          </div>`;
+      };
+
+      const midOfLine = (coords: number[][]): [number, number] => {
+        const flat = coords.flat(2);
+        // coords is [[lng,lat], [lng,lat], ...]
+        const pts: [number,number][] = [];
+        for (let i = 0; i < coords.length; i++) {
+          const c = coords[i];
+          if (typeof c[0] === 'number') pts.push(c as [number,number]);
+          else (c as number[][]).forEach(p => pts.push(p as [number,number]));
+        }
+        const mid = pts[Math.floor(pts.length / 2)] || [0, 0];
+        return [mid[1], mid[0]]; // [lat, lng]
+      };
+
+      const drawLine = (e: EnderecoGrupo, geom: any) => {
+        const weight = 5 + Math.min(e.total - 1, 8);
+        const popup  = L.popup({ className: 'itp-popup', closeButton: true, autoPan: true }).setContent(buildPopupHtml(e));
+        const layer  = L.geoJSON(geom, {
+          style: { color: '#7c3aed', weight, opacity: 0.75, lineCap: 'round', lineJoin: 'round' },
+        }).addTo(map);
+
+        layer.on('mouseover', (ev: any) => {
+          layer.setStyle({ color: '#4f46e5', weight: weight + 3 });
+          popup.setLatLng(ev.latlng).openOn(map);
+        });
+        layer.on('mouseout', () => { layer.setStyle({ color: '#7c3aed', weight }); map.closePopup(); });
+        layer.on('click',     (ev: any) => { popup.setLatLng(ev.latlng).openOn(map); });
+
+        // Count label at midpoint
+        const coords = geom.type === 'MultiLineString' ? geom.coordinates.flat(1) : geom.coordinates;
+        const mid = midOfLine(coords);
+        L.marker(mid, {
+          icon: L.divIcon({ html: `<div class="itp-label">${e.total}</div>`, className: '', iconAnchor: [0, 0] }),
+          interactive: false,
+        }).addTo(map);
+      };
+
+      const drawCircle = (e: EnderecoGrupo, lat: number, lng: number) => {
+        const popup = L.popup({ className: 'itp-popup', closeButton: true }).setContent(buildPopupHtml(e));
+        const c = L.circleMarker([lat, lng], {
+          radius: 10 + Math.min(e.total * 2, 18),
+          fillColor: '#7c3aed', color: '#4c1d95', weight: 2, fillOpacity: 0.7,
+        }).addTo(map);
+        c.on('mouseover', (ev: any) => { popup.setLatLng(ev.latlng).openOn(map); });
+        c.on('mouseout',  ()         => { map.closePopup(); });
+        c.on('click',     (ev: any) => { popup.setLatLng(ev.latlng).openOn(map); });
+        L.marker([lat, lng], {
+          icon: L.divIcon({ html: `<div class="itp-label">${e.total}</div>`, className: '', iconAnchor: [-4, 20] }),
+          interactive: false,
+        }).addTo(map);
       };
 
       let queued = 0;
-      enderecos.forEach((e, idx) => {
+      enderecos.forEach(e => {
         const key = `${e.logradouro}|${e.bairro}|${e.cidade}`;
-        if (cache[key]) {
-          addMarker(e, cache[key][0], cache[key][1]);
+        const hit = cache[key];
+        if (hit) {
+          if (hit.type === 'line') drawLine(e, hit.geom);
+          else drawCircle(e, hit.lat, hit.lng);
           setGeocodedCount(c => c + 1);
           return;
         }
         queued++;
-        const delay = queued * 1200; // Nominatim: 1 req/s
         setTimeout(async () => {
           const q = [e.logradouro, e.bairro, e.cidade, 'RJ', 'Brasil'].filter(Boolean).join(', ');
           try {
-            const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`);
-            const data = await r.json();
-            if (data[0]) {
-              const lat = parseFloat(data[0].lat), lng = parseFloat(data[0].lon);
-              cache[key] = [lat, lng];
-              saveCache();
-              addMarker(e, lat, lng);
+            const resp = await fetch(
+              `https://nominatim.openstreetmap.org/search?format=geojson&polygon_geojson=1&limit=1&q=${encodeURIComponent(q)}`
+            );
+            const data = await resp.json();
+            const feat = data.features?.[0];
+            if (feat) {
+              const geom = feat.geometry;
+              if (geom?.type === 'LineString' || geom?.type === 'MultiLineString') {
+                cache[key] = { type: 'line', geom };
+                saveCache();
+                drawLine(e, geom);
+              } else {
+                // Use bbox centroid
+                const bb = feat.bbox || [0, 0, 0, 0];
+                const lat = (bb[1] + bb[3]) / 2, lng = (bb[0] + bb[2]) / 2;
+                cache[key] = { type: 'circle', lat, lng };
+                saveCache();
+                drawCircle(e, lat, lng);
+              }
             }
           } catch {}
           setGeocodedCount(c => c + 1);
-        }, delay);
+        }, queued * 1200);
       });
     });
 
@@ -3151,19 +3227,21 @@ function MapaLeaflet({ enderecos }: { enderecos: EnderecoGrupo[] }) {
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <MapPin size={14} className="text-purple-600" />
-          <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Distribuição por Rua — OpenStreetMap</p>
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+            Alunos por Rua — hover para ver os rostos
+          </p>
         </div>
         {pct < 100 && (
           <div className="flex items-center gap-2">
-            <div className="w-24 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+            <div className="w-28 h-1.5 bg-slate-100 rounded-full overflow-hidden">
               <div className="h-full bg-purple-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
             </div>
-            <span className="text-[9px] text-slate-400 font-bold">geocodificando {pct}%</span>
+            <span className="text-[9px] text-slate-400 font-bold">{pct}% geocodificado</span>
           </div>
         )}
       </div>
-      <div ref={containerRef} style={{ height: 440, borderRadius: 12, overflow: 'hidden', zIndex: 0 }} />
-      <p className="text-[9px] text-slate-400 mt-2 text-right">© OpenStreetMap contributors · Nominatim geocoding</p>
+      <div ref={containerRef} style={{ height: 480, borderRadius: 12, overflow: 'hidden', zIndex: 0 }} />
+      <p className="text-[9px] text-slate-400 mt-2 text-right">© OpenStreetMap · Nominatim · Pinte a rua, hover para alunos</p>
     </div>
   );
 }
