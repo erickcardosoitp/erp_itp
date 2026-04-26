@@ -710,6 +710,27 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
   const [fichaForm, setFichaForm] = useState<Partial<Aluno>>({});
   const [fichaEditSalvando, setFichaEditSalvando] = useState(false);
   const [fichaEditErro, setFichaEditErro] = useState<string | null>(null);
+  const [buscandoCepFicha, setBuscandoCepFicha] = useState(false);
+
+  const buscarCepFicha = useCallback(async (cep: string) => {
+    const limpo = cep.replace(/\D/g, '');
+    if (limpo.length !== 8) return;
+    setBuscandoCepFicha(true);
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${limpo}/json/`);
+      const data = await res.json();
+      if (!data.erro) {
+        setFichaForm(p => ({
+          ...p,
+          logradouro: data.logradouro || p.logradouro,
+          bairro:     data.bairro     || p.bairro,
+          cidade:     data.localidade || p.cidade,
+          estado_uf:  data.uf         || p.estado_uf,
+        }));
+      }
+    } catch { /* silencia erros de rede */ }
+    finally { setBuscandoCepFicha(false); }
+  }, []);
 
   // ── Cadastro Rápido ───────────────────────────────────────────────────────
   const [showCadastroRapido, setShowCadastroRapido] = useState(false);
@@ -1221,11 +1242,33 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
                   </section>
                   {/* Endereço */}
                   <section>
-                    <h4 className="text-[9px] font-black uppercase text-purple-600 mb-2 tracking-widest border-b border-purple-100 pb-1">Endereço</h4>
+                    <h4 className="text-[9px] font-black uppercase text-purple-600 mb-2 tracking-widest border-b border-purple-100 pb-1 flex items-center gap-2">
+                      Endereço
+                      {buscandoCepFicha && <span className="text-[8px] font-black text-green-600 animate-pulse normal-case">Buscando CEP...</span>}
+                    </h4>
                     <div className="grid grid-cols-2 gap-2">
+                      {/* CEP primeiro — aciona lookup automático */}
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-black uppercase text-slate-400">CEP</label>
+                        <input
+                          value={fichaForm.cep || ''}
+                          onChange={e => {
+                            setFichaForm(p => ({ ...p, cep: e.target.value }));
+                            if (e.target.value.replace(/\D/g, '').length === 8) buscarCepFicha(e.target.value);
+                          }}
+                          onBlur={e => buscarCepFicha(e.target.value)}
+                          placeholder="00000-000"
+                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-black uppercase text-slate-400">Número</label>
+                        <input value={fichaForm.numero || ''} onChange={e => setFichaForm(p => ({ ...p, numero: e.target.value }))}
+                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400" />
+                      </div>
                       {([
-                        ['Logradouro', 'logradouro'], ['Número', 'numero'], ['Complemento', 'complemento'],
-                        ['Bairro', 'bairro'], ['Cidade', 'cidade'], ['CEP', 'cep'],
+                        ['Logradouro', 'logradouro'], ['Complemento', 'complemento'],
+                        ['Bairro', 'bairro'], ['Cidade', 'cidade'], ['Estado (UF)', 'estado_uf'],
                       ] as [string, keyof Aluno][]).map(([label, field]) => (
                         <div key={field} className="space-y-1">
                           <label className="text-[9px] font-black uppercase text-slate-400">{label}</label>
