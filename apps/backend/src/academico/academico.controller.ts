@@ -208,6 +208,10 @@ export class AcademicoController {
   @ModuloPerm('academico', 'visualizar')
   getMonitoramento() { return this.svc.monitoramento(); }
 
+  @Get('monitoramento/mapa')
+  @ModuloPerm('academico', 'visualizar')
+  getMapaAlunos() { return this.svc.mapaAlunos(); }
+
   @Get('alunos/kpis')
   @ModuloPerm('academico', 'visualizar')
   getKpisTurmas() { return this.svc.kpisTurmas(); }

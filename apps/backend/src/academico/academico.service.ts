@@ -835,22 +835,24 @@ export class AcademicoService {
           LIMIT 20
         `),
 
-        // ── Turmas com maior evasão ───────────────────────────────────────
+        // ── Presença por turma (ordenado por maior taxa de falta) ────────
         this.dataSource.query(`
           SELECT
             t.id::text AS turma_id,
             t.nome AS turma_nome,
             t.cor AS turma_cor,
-            COUNT(ta.id) FILTER (WHERE a.ativo = true)  AS ativos,
-            COUNT(ta.id) FILTER (WHERE a.ativo = false) AS inativos,
-            COUNT(ta.id) AS total_matriculados
+            COUNT(DISTINCT ta.aluno_id) FILTER (WHERE ta.status = 'ativo' AND a.ativo = true) AS total_alunos,
+            COUNT(d.id) FILTER (WHERE d.descricao = 'Presente') AS presencas,
+            COUNT(d.id) FILTER (WHERE d.descricao = 'Falta' AND d.isento = false AND d.justificada = false) AS faltas,
+            COUNT(d.id) FILTER (WHERE d.tipo = 'Presença' AND d.isento = false AND d.justificada = false) AS total_computados
           FROM turmas t
-          LEFT JOIN turma_alunos ta ON ta.turma_id::text = t.id::text AND ta.status != 'backlog'
-          LEFT JOIN alunos a ON a.id::text = ta.aluno_id::text
+          LEFT JOIN turma_alunos ta ON ta.turma_id::text = t.id::text
+          LEFT JOIN alunos a ON a.id::text = ta.aluno_id::text AND a.ativo = true
+          LEFT JOIN diario_academico d ON d.turma_id::text = t.id::text AND d.tipo = 'Presença'
           WHERE t.ativo IS NOT FALSE
           GROUP BY t.id, t.nome, t.cor
-          HAVING COUNT(ta.id) > 0
-          ORDER BY inativos DESC, total_matriculados DESC
+          HAVING COUNT(d.id) > 0
+          ORDER BY faltas DESC, total_computados DESC
           LIMIT 10
         `),
 
@@ -900,10 +902,28 @@ export class AcademicoService {
       top_faltas:        topFaltas.map((x: any) => ({ ...x, faltas: Number(x.faltas), presencas: Number(x.presencas), faltas_recentes: Number(x.faltas_recentes) })),
       top_presencas:     topPresencas.map((x: any) => ({ ...x, presencas: Number(x.presencas), faltas: Number(x.faltas), pct_presenca: Number(x.pct_presenca) })),
       por_bairro:        porBairro.map((x: any) => ({ bairro: x.bairro, total: Number(x.total) })),
-      turmas_evasao:     turmasEvasao.map((x: any) => ({ ...x, ativos: Number(x.ativos), inativos: Number(x.inativos), total_matriculados: Number(x.total_matriculados) })),
+      turmas_presenca:   turmasEvasao.map((x: any) => ({ ...x, total_alunos: Number(x.total_alunos), presencas: Number(x.presencas), faltas: Number(x.faltas), total_computados: Number(x.total_computados) })),
       faltas_frequentes: faltasRecentes.map((x: any) => ({ ...x, faltas_recentes: Number(x.faltas_recentes) })),
       diario_por_tipo:   diarioResumo.map((x: any) => ({ tipo: x.tipo, total: Number(x.total) })),
     };
+  }
+
+  async mapaAlunos() {
+    const rows = await this.dataSource.query(`
+      SELECT
+        COALESCE(NULLIF(TRIM(logradouro), ''), '')         AS logradouro,
+        COALESCE(NULLIF(TRIM(bairro), ''), 'Não informado') AS bairro,
+        COALESCE(NULLIF(TRIM(cidade), ''), 'Rio de Janeiro') AS cidade,
+        COUNT(*)                                            AS total,
+        json_agg(nome_completo ORDER BY nome_completo)      AS nomes
+      FROM alunos
+      WHERE ativo = true
+        AND (TRIM(logradouro) != '' OR TRIM(bairro) != '')
+      GROUP BY TRIM(logradouro), TRIM(bairro), TRIM(cidade)
+      ORDER BY total DESC
+      LIMIT 120
+    `);
+    return rows.map((r: any) => ({ ...r, total: Number(r.total) }));
   }
 
   async criarAlunoViaChamada(dto: any) {

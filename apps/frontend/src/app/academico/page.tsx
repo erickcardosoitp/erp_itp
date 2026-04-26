@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import DossieCandidato from '@/components/DossieCandidato';
 import {
   GraduationCap, Users, BookOpen, LayoutGrid, History,
@@ -3052,114 +3052,136 @@ function PresencaTab({ turmas, podeEditar }: { turmas: Turma[]; podeEditar: bool
 // ─── Monitoramento ────────────────────────────────────────────────────────────
 
 // Bairros da região de Madureira com posições relativas (x%, y%) no mapa
-const MADUREIRA_BAIRROS: Record<string, { x: number; y: number }> = {
-  'Madureira':          { x: 50, y: 50 },
-  'Cascadura':          { x: 34, y: 40 },
-  'Campinho':           { x: 42, y: 44 },
-  'Oswaldo Cruz':       { x: 60, y: 47 },
-  'Honório Gurgel':     { x: 66, y: 36 },
-  'Turiaçu':            { x: 30, y: 34 },
-  'Bento Ribeiro':      { x: 22, y: 28 },
-  'Vaz Lobo':           { x: 70, y: 56 },
-  'Rocha Miranda':      { x: 74, y: 44 },
-  'Coelho Neto':        { x: 62, y: 28 },
-  'Méier':              { x: 46, y: 67 },
-  'Quintino Bocaiúva':  { x: 36, y: 64 },
-  'Engenho de Dentro':  { x: 52, y: 75 },
-  'Riachuelo':          { x: 56, y: 80 },
-  'Irajá':              { x: 76, y: 32 },
-  'Vista Alegre':       { x: 56, y: 38 },
-  'Inhaúma':            { x: 68, y: 65 },
-  'Del Castilho':       { x: 58, y: 62 },
-  'Engenha Nova':       { x: 44, y: 56 },
-  'Lins de Vasconcelos':{ x: 36, y: 55 },
-};
+interface EnderecoGrupo { logradouro: string; bairro: string; cidade: string; total: number; nomes: string[]; }
 
-function MapaBairros({ porBairro }: { porBairro: { bairro: string; total: number }[] }) {
-  const max = Math.max(...porBairro.map(b => b.total), 1);
-  const bairroMap = Object.fromEntries(porBairro.map(b => [b.bairro, b.total]));
+function MapaLeaflet({ enderecos }: { enderecos: EnderecoGrupo[] }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const mapRef       = useRef<any>(null);
+  const [geocodedCount, setGeocodedCount] = useState(0);
+  const totalToGeocode = enderecos.length;
 
-  const pontos = Object.entries(MADUREIRA_BAIRROS).map(([nome, pos]) => ({
-    nome,
-    ...pos,
-    total: bairroMap[nome] ?? 0,
-  }));
-  const outros = porBairro.filter(b => !MADUREIRA_BAIRROS[b.bairro]).slice(0, 5);
+  useEffect(() => {
+    if (!containerRef.current || mapRef.current) return;
+
+    // Inject Leaflet CSS
+    if (!document.querySelector('#leaflet-css')) {
+      const link = document.createElement('link');
+      link.id   = 'leaflet-css';
+      link.rel  = 'stylesheet';
+      link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+      document.head.appendChild(link);
+    }
+
+    import('leaflet').then((L: any) => {
+      // Fix broken default icons
+      delete L.Icon.Default.prototype._getIconUrl;
+      L.Icon.Default.mergeOptions({
+        iconUrl:       'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+        iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+        shadowUrl:     'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+      });
+
+      const map = L.map(containerRef.current!, { center: [-22.8783, -43.3364], zoom: 14 });
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        maxZoom: 19,
+      }).addTo(map);
+      mapRef.current = { map, L, markers: [] as any[] };
+
+      const CACHE_KEY = 'itp_geo_v1';
+      let cache: Record<string, [number, number]> = {};
+      try { cache = JSON.parse(localStorage.getItem(CACHE_KEY) || '{}'); } catch {}
+
+      const saveCache = () => { try { localStorage.setItem(CACHE_KEY, JSON.stringify(cache)); } catch {} };
+      const maxTotal  = Math.max(...enderecos.map(e => e.total), 1);
+
+      const addMarker = (e: EnderecoGrupo, lat: number, lng: number) => {
+        const r = 8 + (e.total / maxTotal) * 22;
+        const nomes = (Array.isArray(e.nomes) ? e.nomes : []).slice(0, 5).join('<br>');
+        L.circleMarker([lat, lng], {
+          radius: r, fillColor: '#7c3aed', color: '#4c1d95',
+          weight: 1.5, fillOpacity: 0.55 + (e.total / maxTotal) * 0.35,
+        })
+          .bindPopup(
+            `<div style="font-size:11px;min-width:140px">
+              <b style="font-size:12px">${e.logradouro || e.bairro}</b><br>
+              <span style="color:#6b7280">${e.bairro}${e.cidade !== 'Rio de Janeiro' ? ' · ' + e.cidade : ''}</span><br>
+              <b style="color:#7c3aed">${e.total} aluno${e.total > 1 ? 's' : ''}</b>
+              ${nomes ? `<hr style="margin:4px 0"><small>${nomes}${e.total > 5 ? '<br>...' : ''}</small>` : ''}
+            </div>`
+          )
+          .addTo(map);
+      };
+
+      let queued = 0;
+      enderecos.forEach((e, idx) => {
+        const key = `${e.logradouro}|${e.bairro}|${e.cidade}`;
+        if (cache[key]) {
+          addMarker(e, cache[key][0], cache[key][1]);
+          setGeocodedCount(c => c + 1);
+          return;
+        }
+        queued++;
+        const delay = queued * 1200; // Nominatim: 1 req/s
+        setTimeout(async () => {
+          const q = [e.logradouro, e.bairro, e.cidade, 'RJ', 'Brasil'].filter(Boolean).join(', ');
+          try {
+            const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`);
+            const data = await r.json();
+            if (data[0]) {
+              const lat = parseFloat(data[0].lat), lng = parseFloat(data[0].lon);
+              cache[key] = [lat, lng];
+              saveCache();
+              addMarker(e, lat, lng);
+            }
+          } catch {}
+          setGeocodedCount(c => c + 1);
+        }, delay);
+      });
+    });
+
+    return () => { if (mapRef.current) { mapRef.current.map.remove(); mapRef.current = null; } };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const pct = totalToGeocode > 0 ? Math.round((geocodedCount / totalToGeocode) * 100) : 100;
 
   return (
     <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm p-5">
-      <div className="flex items-center gap-2 mb-4">
-        <MapPin size={14} className="text-purple-600" />
-        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Distribuição Geográfica — Região de Madureira</p>
-      </div>
-      <div className="relative w-full bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-slate-800 dark:to-slate-700 rounded-xl overflow-hidden border border-emerald-100 dark:border-slate-600" style={{ paddingBottom: '56%' }}>
-        {/* Grade decorativa */}
-        <svg className="absolute inset-0 w-full h-full opacity-10" viewBox="0 0 100 56">
-          {[10,20,30,40,50,60,70,80,90].map(x => <line key={`v${x}`} x1={x} y1={0} x2={x} y2={56} stroke="#6d28d9" strokeWidth="0.3"/>)}
-          {[10,20,30,40,50].map(y => <line key={`h${y}`} x1={0} y1={y} x2={100} y2={y} stroke="#6d28d9" strokeWidth="0.3"/>)}
-        </svg>
-        {/* Label da região */}
-        <div className="absolute top-2 left-3 text-[8px] font-black uppercase tracking-widest text-purple-400 opacity-60">Zona Norte · Rio de Janeiro</div>
-        {/* Bolhas dos bairros */}
-        {pontos.map(p => {
-          const r = p.total > 0 ? Math.max(14, Math.min(42, 14 + (p.total / max) * 28)) : 10;
-          const alpha = p.total > 0 ? 0.15 + (p.total / max) * 0.65 : 0.05;
-          const isMad = p.nome === 'Madureira';
-          return (
-            <div
-              key={p.nome}
-              className="absolute flex items-center justify-center group cursor-default"
-              style={{ left: `${p.x}%`, top: `${p.y}%`, transform: 'translate(-50%, -50%)' }}
-            >
-              <div
-                className={`rounded-full flex items-center justify-center transition-all ${isMad ? 'ring-2 ring-purple-500' : ''}`}
-                style={{
-                  width: r * 2, height: r * 2,
-                  background: `rgba(${isMad ? '124,58,237' : '14,165,233'}, ${alpha})`,
-                  border: `1.5px solid rgba(${isMad ? '124,58,237' : '14,165,233'}, ${alpha + 0.2})`,
-                }}
-              >
-                {p.total > 0 && <span className="text-[8px] font-black text-slate-700 dark:text-slate-200">{p.total}</span>}
-              </div>
-              {/* Tooltip */}
-              <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[8px] px-2 py-1 rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none z-10 transition-opacity">
-                {p.nome}: {p.total} aluno{p.total !== 1 ? 's' : ''}
-              </div>
-              {/* Label sempre visível para bairros com alunos */}
-              {(p.total > 0 || isMad) && (
-                <span className="absolute top-full mt-0.5 text-[7px] font-bold text-slate-600 dark:text-slate-300 whitespace-nowrap leading-none">
-                  {p.nome.split(' ')[0]}
-                </span>
-              )}
-            </div>
-          );
-        })}
-      </div>
-      {outros.length > 0 && (
-        <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
-          <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2">Outros bairros</p>
-          <div className="flex flex-wrap gap-2">
-            {outros.map(b => (
-              <span key={b.bairro} className="text-[9px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold">
-                {b.bairro} ({b.total})
-              </span>
-            ))}
-          </div>
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <MapPin size={14} className="text-purple-600" />
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Distribuição por Rua — OpenStreetMap</p>
         </div>
-      )}
+        {pct < 100 && (
+          <div className="flex items-center gap-2">
+            <div className="w-24 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+              <div className="h-full bg-purple-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
+            </div>
+            <span className="text-[9px] text-slate-400 font-bold">geocodificando {pct}%</span>
+          </div>
+        )}
+      </div>
+      <div ref={containerRef} style={{ height: 440, borderRadius: 12, overflow: 'hidden', zIndex: 0 }} />
+      <p className="text-[9px] text-slate-400 mt-2 text-right">© OpenStreetMap contributors · Nominatim geocoding</p>
     </div>
   );
 }
 
 function MonitoramentoTab() {
   const [dados, setDados] = useState<any>(null);
+  const [mapa, setMapa] = useState<EnderecoGrupo[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const r = await api.get('/academico/monitoramento');
-      setDados(r.data);
+      const [r, rm] = await Promise.allSettled([
+        api.get('/academico/monitoramento'),
+        api.get('/academico/monitoramento/mapa'),
+      ]);
+      if (r.status === 'fulfilled') setDados(r.value.data);
+      if (rm.status === 'fulfilled') setMapa(rm.value.data ?? []);
     } catch {}
     setLoading(false);
   }, []);
@@ -3177,7 +3199,7 @@ function MonitoramentoTab() {
     <div className="flex justify-center py-16 text-slate-400 text-sm">Erro ao carregar dados.</div>
   );
 
-  const { resumo, top_faltas, top_presencas, por_bairro, turmas_evasao, faltas_frequentes, diario_por_tipo } = dados;
+  const { resumo, top_faltas, top_presencas, turmas_presenca, faltas_frequentes, diario_por_tipo } = dados;
 
   const kpis = [
     { label: 'Alunos Ativos',    value: resumo.total_alunos,   icon: Users,         color: 'bg-purple-600',  text: 'text-purple-600' },
@@ -3240,7 +3262,7 @@ function MonitoramentoTab() {
       {/* Mapa + Diário por tipo */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
-          <MapaBairros porBairro={por_bairro} />
+          <MapaLeaflet enderecos={mapa} />
         </div>
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm p-5 space-y-3">
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-2">
@@ -3292,74 +3314,88 @@ function MonitoramentoTab() {
         {/* Top faltas */}
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm p-5">
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4 flex items-center gap-2">
-            <TrendingDown size={13} className="text-rose-500"/> Top 10 — Mais Faltas
+            <TrendingDown size={13} className="text-rose-500"/> Top Alunos — Mais Faltas
           </p>
           {top_faltas.length === 0 ? (
-            <p className="text-xs text-slate-400 py-4 text-center">Nenhuma falta registrada.</p>
+            <p className="text-xs text-slate-400 py-4 text-center">Nenhuma falta registrada ainda.</p>
           ) : (
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={top_faltas.slice(0,8)} layout="vertical" margin={{ left: 0, right: 24, top: 0, bottom: 0 }}>
-                <XAxis type="number" tick={{ fontSize: 9 }} />
-                <YAxis type="category" dataKey="nome_completo" width={110} tick={{ fontSize: 9 }}
-                  tickFormatter={(v: string) => v.split(' ').slice(0,2).join(' ')} />
-                <Tooltip formatter={(v: any) => [`${v} faltas`, '']} labelFormatter={(l: string) => l} />
-                <Bar dataKey="faltas" radius={[0,4,4,0]}>
-                  {top_faltas.slice(0,8).map((_: any, i: number) => (
-                    <Cell key={i} fill={i === 0 ? '#e11d48' : i < 3 ? '#f97316' : '#94a3b8'} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+            <div className="space-y-2">
+              {top_faltas.slice(0, 8).map((a: any, i: number) => (
+                <div key={a.aluno_id} className="flex items-center gap-3">
+                  <span className={`shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-black text-white ${i === 0 ? 'bg-rose-500' : i < 3 ? 'bg-orange-400' : 'bg-slate-400'}`}>{i + 1}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">{a.nome_completo}</p>
+                    <div className="flex items-center gap-1 mt-0.5">
+                      <div className="flex-1 h-1.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                        <div className={`h-full rounded-full ${i === 0 ? 'bg-rose-500' : i < 3 ? 'bg-orange-400' : 'bg-slate-400'}`}
+                          style={{ width: `${Math.round(100 * a.faltas / (top_faltas[0]?.faltas || 1))}%` }} />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <span className="text-xs font-black text-rose-600">{a.faltas}</span>
+                    <span className="text-[9px] text-slate-400 ml-0.5">falta{a.faltas !== 1 ? 's' : ''}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </div>
 
         {/* Top presença */}
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm p-5">
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4 flex items-center gap-2">
-            <Star size={13} className="text-emerald-500"/> Top 10 — Maior Presença
+            <Star size={13} className="text-emerald-500"/> Top Alunos — Maior Presença
           </p>
           {top_presencas.length === 0 ? (
-            <p className="text-xs text-slate-400 py-4 text-center">Nenhuma presença registrada.</p>
+            <p className="text-xs text-slate-400 py-4 text-center">Nenhuma presença registrada ainda.</p>
           ) : (
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={top_presencas.slice(0,8)} layout="vertical" margin={{ left: 0, right: 32, top: 0, bottom: 0 }}>
-                <XAxis type="number" domain={[0,100]} tick={{ fontSize: 9 }} unit="%" />
-                <YAxis type="category" dataKey="nome_completo" width={110} tick={{ fontSize: 9 }}
-                  tickFormatter={(v: string) => v.split(' ').slice(0,2).join(' ')} />
-                <Tooltip formatter={(v: any) => [`${v}%`, 'Presença']} />
-                <Bar dataKey="pct_presenca" radius={[0,4,4,0]}>
-                  {top_presencas.slice(0,8).map((_: any, i: number) => (
-                    <Cell key={i} fill={i === 0 ? '#10b981' : i < 3 ? '#34d399' : '#6ee7b7'} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+            <div className="space-y-2">
+              {top_presencas.slice(0, 8).map((a: any, i: number) => (
+                <div key={a.aluno_id} className="flex items-center gap-3">
+                  <span className={`shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-black text-white ${i === 0 ? 'bg-emerald-500' : i < 3 ? 'bg-teal-400' : 'bg-slate-400'}`}>{i + 1}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">{a.nome_completo}</p>
+                    <div className="flex items-center gap-1 mt-0.5">
+                      <div className="flex-1 h-1.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                        <div className={`h-full rounded-full ${i === 0 ? 'bg-emerald-500' : i < 3 ? 'bg-teal-400' : 'bg-slate-400'}`}
+                          style={{ width: `${a.pct_presenca}%` }} />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <span className="text-xs font-black text-emerald-600">{a.pct_presenca}%</span>
+                    <span className="text-[9px] text-slate-400 ml-0.5">({a.presencas})</span>
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       </div>
 
-      {/* Turmas com evasão */}
+      {/* Presença por turma */}
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm p-5">
         <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4 flex items-center gap-2">
-          <Zap size={13} className="text-amber-500"/> Índice de Evasão por Turma
+          <Zap size={13} className="text-amber-500"/> Presença por Turma
         </p>
-        {turmas_evasao.length === 0 ? (
-          <p className="text-xs text-slate-400 text-center py-4">Sem dados de evasão.</p>
+        {turmas_presenca.length === 0 ? (
+          <p className="text-xs text-slate-400 text-center py-4">Nenhuma chamada registrada ainda.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-slate-100 dark:border-slate-700">
                   <th className="text-left py-2 pr-4 text-[9px] font-black uppercase text-slate-400">Turma</th>
-                  <th className="text-center py-2 px-2 text-[9px] font-black uppercase text-slate-400">Total</th>
-                  <th className="text-center py-2 px-2 text-[9px] font-black uppercase text-slate-400">Ativos</th>
-                  <th className="text-center py-2 px-2 text-[9px] font-black uppercase text-slate-400">Inativos</th>
-                  <th className="text-left py-2 pl-4 text-[9px] font-black uppercase text-slate-400">Taxa Evasão</th>
+                  <th className="text-center py-2 px-2 text-[9px] font-black uppercase text-slate-400">Alunos</th>
+                  <th className="text-center py-2 px-2 text-[9px] font-black uppercase text-green-600">Presenças</th>
+                  <th className="text-center py-2 px-2 text-[9px] font-black uppercase text-rose-500">Faltas</th>
+                  <th className="text-left py-2 pl-4 text-[9px] font-black uppercase text-slate-400">Taxa Presença</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
-                {turmas_evasao.map((t: any) => {
-                  const pct = t.total_matriculados > 0 ? Math.round(100 * t.inativos / t.total_matriculados) : 0;
+                {turmas_presenca.map((t: any) => {
+                  const pct = t.total_computados > 0 ? Math.round(100 * t.presencas / t.total_computados) : null;
                   return (
                     <tr key={t.turma_id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
                       <td className="py-2.5 pr-4">
@@ -3368,19 +3404,21 @@ function MonitoramentoTab() {
                           <span className="font-bold text-slate-800 dark:text-slate-200">{t.turma_nome}</span>
                         </div>
                       </td>
-                      <td className="text-center py-2.5 px-2 text-slate-600 dark:text-slate-400">{t.total_matriculados}</td>
-                      <td className="text-center py-2.5 px-2 text-emerald-600 font-bold">{t.ativos}</td>
-                      <td className="text-center py-2.5 px-2 text-rose-500 font-bold">{t.inativos}</td>
+                      <td className="text-center py-2.5 px-2 text-slate-500">{t.total_alunos}</td>
+                      <td className="text-center py-2.5 px-2 text-emerald-600 font-bold">{t.presencas}</td>
+                      <td className="text-center py-2.5 px-2 text-rose-500 font-bold">{t.faltas}</td>
                       <td className="py-2.5 pl-4">
-                        <div className="flex items-center gap-2">
-                          <div className="flex-1 h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden max-w-[80px]">
-                            <div className={`h-full rounded-full ${pct > 30 ? 'bg-rose-500' : pct > 15 ? 'bg-amber-500' : 'bg-emerald-500'}`}
-                              style={{ width: `${pct}%` }} />
+                        {pct === null ? <span className="text-slate-400 text-[10px]">–</span> : (
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden max-w-[80px]">
+                              <div className={`h-full rounded-full ${pct >= 75 ? 'bg-emerald-500' : pct >= 50 ? 'bg-amber-500' : 'bg-rose-500'}`}
+                                style={{ width: `${pct}%` }} />
+                            </div>
+                            <span className={`font-black text-[10px] ${pct >= 75 ? 'text-emerald-600' : pct >= 50 ? 'text-amber-500' : 'text-rose-500'}`}>
+                              {pct}%
+                            </span>
                           </div>
-                          <span className={`font-black text-[10px] ${pct > 30 ? 'text-rose-500' : pct > 15 ? 'text-amber-500' : 'text-emerald-600'}`}>
-                            {pct}%
-                          </span>
-                        </div>
+                        )}
                       </td>
                     </tr>
                   );
