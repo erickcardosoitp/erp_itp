@@ -20,12 +20,6 @@ export class PresencaSessao {
   @Column({ name: 'conteudo_abordado', type: 'text', nullable: true })
   conteudo_abordado: string;
 
-  @Column({ name: 'hora_inicio', type: 'time', nullable: true })
-  hora_inicio: string;
-
-  @Column({ name: 'hora_fim', type: 'time', nullable: true })
-  hora_fim: string;
-
   @Column({ name: 'ip_address', type: 'varchar', nullable: true })
   ip_address: string;
 

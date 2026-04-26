@@ -261,7 +261,7 @@ export class AcademicoService {
     if (filtros.curso)    qb = qb.andWhere('LOWER(a.cursos_matriculados) LIKE :curso', { curso: `%${filtros.curso.toLowerCase()}%` });
     if (filtros.turma_id) {
       qb = qb
-        .innerJoin('turma_alunos', 'ta', 'ta.aluno_id = a.id::text')
+        .innerJoin('turma_alunos', 'ta', 'ta.aluno_id::text = a.id::text')
         .andWhere('ta.turma_id = :turmaId', { turmaId: filtros.turma_id })
         .andWhere('ta.status = :taStatus', { taStatus: 'ativo' });
     }
@@ -898,6 +898,7 @@ export class AcademicoService {
         a.telefone_alternativo,
         a.nome_responsavel,
         a.email_responsavel,
+        a.cuidado_especial,
         COALESCE(a.inscricao_id::text, i.id::text) AS inscricao_id,
         COALESCE(a.lgpd_aceito, i.lgpd_aceito, FALSE) AS lgpd_aceito,
         COALESCE(i.data_assinatura_lgpd::text, NULL)   AS data_assinatura_lgpd,
@@ -916,8 +917,8 @@ export class AcademicoService {
       LEFT JOIN turmas t            ON t.id::text = ta.turma_id::text
       WHERE (a.ativo IS NOT FALSE)
       GROUP BY a.id, a.nome_completo, a.celular, a.telefone_alternativo,
-               a.nome_responsavel, a.email_responsavel, a.inscricao_id,
-               i.id, i.lgpd_aceito, i.data_assinatura_lgpd
+               a.nome_responsavel, a.email_responsavel, a.cuidado_especial,
+               a.inscricao_id, i.id, i.lgpd_aceito, i.data_assinatura_lgpd
       ORDER BY a.nome_completo ASC
     `);
 
@@ -932,6 +933,7 @@ export class AcademicoService {
         telefone_alternativo: r.telefone_alternativo,
         nome_responsavel:     r.nome_responsavel,
         email_responsavel:    r.email_responsavel,
+        cuidado_especial:     r.cuidado_especial ?? null,
         turmas:               Array.isArray(r.turmas) ? r.turmas : JSON.parse(r.turmas || '[]'),
         docs_presentes:       docs,
         docs_faltando:        faltando,
