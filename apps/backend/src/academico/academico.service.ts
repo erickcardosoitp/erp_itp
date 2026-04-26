@@ -289,11 +289,13 @@ export class AcademicoService {
 
     let fotoMap: Record<string, string> = {};
     try {
+      // Usa inscricoes.aluno_id para cobrir alunos onde alunos.inscricao_id ainda é NULL (registros antigos)
       const fotoRows = await this.dataSource.query(
         `SELECT DISTINCT ON (a.id) a.id::text AS aluno_id, d.url_arquivo AS foto_url
          FROM alunos a
-         JOIN documentos_inscricao d ON d.inscricao_id = a.inscricao_id AND d.tipo = 'foto_aluno'
-         WHERE a.id::text IN (${alunoIds}) AND a.inscricao_id IS NOT NULL
+         JOIN inscricoes i ON i.aluno_id::text = a.id::text
+         JOIN documentos_inscricao d ON d.inscricao_id = i.id AND d.tipo = 'foto_aluno'
+         WHERE a.id::text IN (${alunoIds})
          ORDER BY a.id, d.created_at DESC`,
       );
       fotoRows.forEach((r: any) => { fotoMap[r.aluno_id] = r.foto_url; });
@@ -341,15 +343,17 @@ export class AcademicoService {
     const totalFaltas    = frequencia.filter(f => f.descricao?.toLowerCase().includes('falta') || !f.descricao?.toLowerCase().includes('presente')).length;
 
     let foto_url: string | null = null;
-    if (inscricao_id) {
-      try {
-        const [fotoRow] = await this.dataSource.query(
-          `SELECT url_arquivo FROM documentos_inscricao WHERE inscricao_id = $1 AND tipo = 'foto_aluno' ORDER BY created_at DESC LIMIT 1`,
-          [inscricao_id],
-        );
-        foto_url = fotoRow?.url_arquivo ?? null;
-      } catch { /* sem foto */ }
-    }
+    try {
+      // Tenta via inscricao_id direto ou via inscricoes.aluno_id (cobre registros antigos)
+      const [fotoRow] = await this.dataSource.query(
+        `SELECT url_arquivo FROM documentos_inscricao
+         WHERE inscricao_id = COALESCE($1, (SELECT id FROM inscricoes WHERE aluno_id::text = $2 LIMIT 1))
+           AND tipo = 'foto_aluno'
+         ORDER BY created_at DESC LIMIT 1`,
+        [inscricao_id, id],
+      );
+      foto_url = fotoRow?.url_arquivo ?? null;
+    } catch { /* sem foto */ }
 
     this.logger.log(`Ficha do aluno ${aluno.nome_completo}: ${historico.length} registros no diário, inscricao_id=${inscricao_id}`);
     return { aluno, inscricao_id, frequencia, historico, turmaInfo, turmasDoAluno, totalPresencas, totalFaltas, foto_url };
