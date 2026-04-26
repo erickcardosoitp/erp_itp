@@ -727,17 +727,20 @@ export class AcademicoService {
   async listarTurmasPorCPFProfessor(cpf: string) {
     const cpfLimpo = cpf.replace(/\D/g, '');
     if (cpfLimpo.length < 11) throw new BadRequestException('CPF inválido');
-    // Busca primeiro na tabela de professores, depois em usuários
+    // Busca em professores, funcionarios e usuarios (qualquer um pode ser atribuído a turmas)
     const [prof] = await this.dataSource.query(
-      `SELECT id, nome FROM professores WHERE cpf = $1 LIMIT 1`, [cpfLimpo]
+      `SELECT id, nome FROM professores WHERE replace(replace(cpf,'.',''),'-','') = $1 LIMIT 1`, [cpfLimpo]
     );
-    const [usuario] = prof ? [] : await this.dataSource.query(
-      `SELECT id, nome, email FROM usuarios WHERE cpf = $1 OR replace(replace(replace(cpf,'.',''),'-',''),'/','') = $1 LIMIT 1`, [cpfLimpo]
+    const [func] = prof ? [] : await this.dataSource.query(
+      `SELECT id, nome FROM funcionarios WHERE replace(replace(cpf,'.',''),'-','') = $1 AND ativo = true LIMIT 1`, [cpfLimpo]
     );
-    const professor = prof || usuario;
+    const [usuario] = (prof || func) ? [] : await this.dataSource.query(
+      `SELECT id, nome FROM usuarios WHERE replace(replace(replace(cpf,'.',''),'-',''),'/','') = $1 LIMIT 1`, [cpfLimpo]
+    );
+    const professor = prof || func || usuario;
     if (!professor) throw new NotFoundException('Professor não encontrado com este CPF');
     const turmas = await this.dataSource.query(
-      `SELECT t.id, t.nome, t.cor, t.turno, t.ano, c.nome AS curso_nome
+      `SELECT t.id, t.nome, t.cor, t.turno, c.nome AS curso_nome
        FROM turmas t
        LEFT JOIN cursos c ON c.id::text = t.curso_id::text
        WHERE t.professor_id::text = $1 AND t.ativo = true
