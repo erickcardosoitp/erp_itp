@@ -710,6 +710,36 @@ export class AcademicoService {
     return this.sessaoRepo.save(sessao);
   }
 
+  async editarRegistroPresenca(diarioId: string, dto: { descricao: 'Presente' | 'Falta' | 'Isento' | 'Falta Justificada' }) {
+    const reg = await this.diarioRepo.findOneBy({ id: diarioId });
+    if (!reg || reg.tipo !== 'Presença') throw new NotFoundException('Registro não encontrado');
+    reg.descricao  = dto.descricao;
+    reg.isento     = dto.descricao === 'Isento';
+    reg.justificada = dto.descricao === 'Falta Justificada';
+    const salvo = await this.diarioRepo.save(reg);
+    // Recalcula totais da sessão
+    if (reg.sessao_id) {
+      const todos = await this.diarioRepo.find({ where: { sessao_id: reg.sessao_id, tipo: 'Presença' } });
+      const presentes = todos.filter(r => r.descricao === 'Presente').length;
+      const ausentes  = todos.filter(r => r.descricao === 'Falta' && !r.isento && !r.justificada).length;
+      await this.sessaoRepo.update(reg.sessao_id, { total_presentes: presentes, total_ausentes: ausentes });
+      // Atualiza o resumo da entrada Lista de Chamada
+      const isentos    = todos.filter(r => r.isento).length;
+      const justifs    = todos.filter(r => r.justificada).length;
+      const partes = [
+        `${presentes} presente${presentes !== 1 ? 's' : ''}`,
+        `${ausentes} ausente${ausentes !== 1 ? 's' : ''}`,
+        ...(justifs ? [`${justifs} justificada${justifs !== 1 ? 's' : ''}`] : []),
+        ...(isentos  ? [`${isentos} isento${isentos !== 1 ? 's' : ''}`] : []),
+      ];
+      await this.dataSource.query(
+        `UPDATE diario_academico SET descricao = $1 WHERE sessao_id = $2 AND tipo = 'Lista de Chamada'`,
+        [partes.join(' · '), reg.sessao_id],
+      );
+    }
+    return salvo;
+  }
+
   async estornarSessao(id: string) {
     const sessao = await this.sessaoRepo.findOneBy({ id });
     if (!sessao) throw new NotFoundException('Sessão não encontrada');
@@ -851,7 +881,7 @@ export class AcademicoService {
           WHERE a.ativo = true
           GROUP BY a.id, a.nome_completo, a.numero_matricula
           HAVING COUNT(*) FILTER (WHERE d.descricao = 'Presente') > 0
-          ORDER BY pct_presenca DESC NULLS LAST, presencas DESC
+          ORDER BY presencas DESC, pct_presenca DESC NULLS LAST
           LIMIT 10
         `),
 
@@ -867,31 +897,42 @@ export class AcademicoService {
           LIMIT 20
         `),
 
-        // ── Presença por turma — últimos 90 dias ─────────────────────────
+        // ── Presença por turma — últimos 90 dias (subqueries, sem cartesian) ─
         this.dataSource.query(`
           SELECT
             t.id::text AS turma_id,
-            t.nome AS turma_nome,
-            t.cor AS turma_cor,
-            COUNT(DISTINCT ta.aluno_id) FILTER (WHERE ta.status = 'ativo' AND a.ativo = true) AS total_alunos,
-            COUNT(d.id) FILTER (WHERE d.descricao = 'Presente') AS presencas,
-            COUNT(d.id) FILTER (WHERE d.descricao = 'Falta' AND d.isento = false AND d.justificada = false) AS faltas,
-            COUNT(d.id) FILTER (WHERE d.tipo = 'Presença' AND d.isento = false AND d.justificada = false) AS total_computados,
-            COUNT(DISTINCT d.sessao_id) AS total_sessoes
+            t.nome     AS turma_nome,
+            t.cor      AS turma_cor,
+            (SELECT COUNT(DISTINCT ta.aluno_id)
+               FROM turma_alunos ta
+               JOIN alunos a ON a.id::text = ta.aluno_id::text AND a.ativo = true
+              WHERE ta.turma_id::text = t.id::text AND ta.status = 'ativo') AS total_alunos,
+            (SELECT COUNT(*) FROM diario_academico d
+              WHERE d.turma_id::text = t.id::text AND d.tipo = 'Presença'
+                AND d.data >= CURRENT_DATE - 90 AND d.descricao = 'Presente') AS presencas,
+            (SELECT COUNT(*) FROM diario_academico d
+              WHERE d.turma_id::text = t.id::text AND d.tipo = 'Presença'
+                AND d.data >= CURRENT_DATE - 90
+                AND d.descricao = 'Falta' AND d.isento = false AND d.justificada = false) AS faltas,
+            (SELECT COUNT(*) FROM diario_academico d
+              WHERE d.turma_id::text = t.id::text AND d.tipo = 'Presença'
+                AND d.data >= CURRENT_DATE - 90 AND d.isento = false) AS total_computados,
+            (SELECT COUNT(DISTINCT ps.id) FROM presenca_sessoes ps
+              WHERE ps.turma_id::text = t.id::text
+                AND ps.data >= CURRENT_DATE - 90) AS total_sessoes
           FROM turmas t
-          LEFT JOIN turma_alunos ta ON ta.turma_id::text = t.id::text
-          LEFT JOIN alunos a ON a.id::text = ta.aluno_id::text AND a.ativo = true
-          LEFT JOIN diario_academico d ON d.turma_id::text = t.id::text
-            AND d.tipo = 'Presença'
-            AND d.data >= NOW() - INTERVAL '90 days'
           WHERE t.ativo IS NOT FALSE
-          GROUP BY t.id, t.nome, t.cor
-          HAVING COUNT(d.id) > 0
-          ORDER BY faltas DESC, total_computados DESC
+            AND EXISTS (SELECT 1 FROM presenca_sessoes ps
+                         WHERE ps.turma_id::text = t.id::text
+                           AND ps.data >= CURRENT_DATE - 90)
+          ORDER BY (SELECT COUNT(*) FROM diario_academico d
+                     WHERE d.turma_id::text = t.id::text AND d.tipo = 'Presença'
+                       AND d.data >= CURRENT_DATE - 90
+                       AND d.descricao = 'Falta' AND d.isento = false) DESC
           LIMIT 10
         `),
 
-        // ── Alunos com faltas frequentes (últimos 30 dias) ────────────────
+        // ── Alunos com faltas frequentes (últimos 60 dias) ────────────────
         this.dataSource.query(`
           SELECT
             a.id::text AS aluno_id,
@@ -903,14 +944,15 @@ export class AcademicoService {
               WHERE ta.aluno_id::text = a.id::text AND ta.status = 'ativo'
               LIMIT 1) AS turma_nome,
             COUNT(*) FILTER (WHERE d.descricao = 'Falta' AND d.isento = false AND d.justificada = false) AS faltas_recentes,
+            COUNT(DISTINCT d.sessao_id) AS total_aulas,
             MAX(d.data) AS ultima_falta
           FROM alunos a
           JOIN diario_academico d ON d.aluno_id::text = a.id::text
             AND d.tipo = 'Presença'
-            AND d.data >= NOW() - INTERVAL '30 days'
+            AND d.data >= CURRENT_DATE - 60
           WHERE a.ativo = true
           GROUP BY a.id, a.nome_completo, a.numero_matricula, a.celular
-          HAVING COUNT(*) FILTER (WHERE d.descricao = 'Falta' AND d.isento = false AND d.justificada = false) >= 2
+          HAVING COUNT(*) FILTER (WHERE d.descricao = 'Falta' AND d.isento = false AND d.justificada = false) >= 1
           ORDER BY faltas_recentes DESC
         `),
 
@@ -941,7 +983,7 @@ export class AcademicoService {
       top_presencas:     topPresencas.map((x: any) => ({ ...x, presencas: Number(x.presencas), faltas: Number(x.faltas), pct_presenca: Number(x.pct_presenca) })),
       por_bairro:        porBairro.map((x: any) => ({ bairro: x.bairro, total: Number(x.total) })),
       turmas_presenca:   turmasEvasao.map((x: any) => ({ ...x, total_alunos: Number(x.total_alunos), presencas: Number(x.presencas), faltas: Number(x.faltas), total_computados: Number(x.total_computados), total_sessoes: Number(x.total_sessoes) })),
-      faltas_frequentes: faltasRecentes.map((x: any) => ({ ...x, faltas_recentes: Number(x.faltas_recentes), turma_nome: x.turma_nome ?? null })),
+      faltas_frequentes: faltasRecentes.map((x: any) => ({ ...x, faltas_recentes: Number(x.faltas_recentes), total_aulas: Number(x.total_aulas), turma_nome: x.turma_nome ?? null })),
       diario_por_tipo:   diarioResumo.map((x: any) => ({ tipo: x.tipo, total: Number(x.total) })),
     };
   }

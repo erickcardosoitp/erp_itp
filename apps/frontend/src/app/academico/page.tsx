@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
 import DossieCandidato from '@/components/DossieCandidato';
 import {
   GraduationCap, Users, BookOpen, LayoutGrid, History,
@@ -2635,6 +2636,20 @@ function PresencaTab({ turmas, podeEditar }: { turmas: Turma[]; podeEditar: bool
   const [sessaoExpandida, setSessaoExpandida] = useState<string | null>(null);
   const [detalhesSessao, setDetalhesSessao] = useState<Record<string, any[]>>({});
 
+  // ─── Edição de registro individual ──────────────────────────────────────
+  const [salvandoRegistro, setSalvandoRegistro] = useState<string | null>(null);
+
+  const editarRegistro = async (sessaoId: string, registroId: string, descricao: string) => {
+    setSalvandoRegistro(registroId);
+    try {
+      await api.patch(`/academico/presenca/registros/${registroId}`, { descricao });
+      const r = await api.get(`/academico/presenca/sessoes/${sessaoId}/registros`);
+      setDetalhesSessao(p => ({ ...p, [sessaoId]: r.data }));
+      await carregarHistorico();
+    } catch {}
+    setSalvandoRegistro(null);
+  };
+
   // ─── Modal editar sessão ─────────────────────────────────────────────────
   const [sessaoEditando, setSessaoEditando] = useState<PresencaSessao | null>(null);
   const [formEdicao, setFormEdicao] = useState<{ data: string; tema_aula: string; conteudo_abordado: string }>({ data: '', tema_aula: '', conteudo_abordado: '' });
@@ -2889,15 +2904,38 @@ function PresencaTab({ turmas, podeEditar }: { turmas: Turma[]; podeEditar: bool
                       <p className="text-xs text-slate-400">Nenhum registro encontrado.</p>
                     ) : (
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5">
-                        {detalhesSessao[s.id].map((r: any) => (
-                          <div key={r.id} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold ${
-                            r.descricao === 'Presente' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'
-                          }`}>
-                            <div className={`w-2 h-2 rounded-full shrink-0 ${r.descricao === 'Presente' ? 'bg-green-500' : 'bg-red-400'}`} />
-                            <span className="truncate">{r.aluno_nome || r.aluno_id}</span>
-                            <span className="shrink-0 text-[9px] uppercase">{r.descricao}</span>
-                          </div>
-                        ))}
+                        {detalhesSessao[s.id].map((r: any) => {
+                          const cor = r.descricao === 'Presente' ? 'bg-green-50 text-green-700 border-green-100'
+                            : r.isento ? 'bg-slate-50 text-slate-500 border-slate-200'
+                            : r.justificada ? 'bg-amber-50 text-amber-700 border-amber-100'
+                            : 'bg-red-50 text-red-600 border-red-100';
+                          const dot = r.descricao === 'Presente' ? 'bg-green-500'
+                            : r.isento ? 'bg-slate-400'
+                            : r.justificada ? 'bg-amber-400'
+                            : 'bg-red-400';
+                          const isSaving = salvandoRegistro === r.id;
+                          return (
+                            <div key={r.id} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold border ${cor} ${isSaving ? 'opacity-60' : ''}`}>
+                              <div className={`w-2 h-2 rounded-full shrink-0 ${dot}`} />
+                              <span className="truncate flex-1">{r.aluno_nome || r.aluno_id}</span>
+                              {podeEditarSessao ? (
+                                <select
+                                  value={r.descricao}
+                                  disabled={isSaving}
+                                  onChange={e => editarRegistro(s.id, r.id, e.target.value)}
+                                  className="text-[9px] font-black uppercase bg-transparent border-0 focus:outline-none cursor-pointer shrink-0 pr-0"
+                                >
+                                  <option value="Presente">Presente</option>
+                                  <option value="Falta">Falta</option>
+                                  <option value="Falta Justificada">Justificada</option>
+                                  <option value="Isento">Isento</option>
+                                </select>
+                              ) : (
+                                <span className="shrink-0 text-[9px] uppercase">{r.descricao}</span>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -3491,7 +3529,7 @@ function MonitoramentoTab() {
                     </a>
                   )}
                   <span className="bg-rose-100 text-rose-700 text-[10px] font-black px-2.5 py-1 rounded-full">
-                    {a.faltas_recentes} falta{a.faltas_recentes !== 1 ? 's' : ''}
+                    {a.faltas_recentes}/{a.total_aulas ?? '?'} aulas
                   </span>
                 </div>
               </div>
@@ -4274,7 +4312,12 @@ function ChamadosTab({ alunos, turmas, podeEditar }: { alunos: Aluno[]; turmas: 
 // ─── Página principal ─────────────────────────────────────────────────────────
 
 export default function AcademicoPage() {
-  const [activeTab, setActiveTab] = useState('grade');
+  const searchParams = useSearchParams();
+  const [activeTab, setActiveTab] = useState(() => {
+    const VALID = ['grade','alunos','presenca','cursos','turmas','diario','acervo','chamados','monitoramento'];
+    const tab = searchParams.get('tab') ?? 'grade';
+    return VALID.includes(tab) ? tab : 'grade';
+  });
   const [cursos, setCursos] = useState<Curso[]>([]);
   const [professores, setProfessores] = useState<Professor[]>([]);
   const [turmas, setTurmas] = useState<Turma[]>([]);

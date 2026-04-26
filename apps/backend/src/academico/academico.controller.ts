@@ -289,6 +289,12 @@ export class AcademicoController {
   @ModuloPerm('academico', 'excluir')
   estornarSessao(@Param('id') id: string) { return this.svc.estornarSessao(id); }
 
+  @Patch('presenca/registros/:id')
+  @ModuloPerm('academico', 'editar')
+  editarRegistroPresenca(@Param('id') id: string, @Body() dto: any) {
+    return this.svc.editarRegistroPresenca(id, dto);
+  }
+
   @Get('presenca/alertas-candidatos')
   @ModuloPerm('academico', 'visualizar')
   alertasCandidatos() { return this.svc.listarAlertasCandidatos(); }

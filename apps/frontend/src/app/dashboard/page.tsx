@@ -352,7 +352,7 @@ export default function DashboardEstrategico() {
             </div>
 
             <button
-              onClick={() => router.push('/academico')}
+              onClick={() => router.push('/academico?tab=monitoramento')}
               className="w-full mt-6 py-4 bg-purple-600 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-purple-500 transition-colors">
               Ver Monitoramento Acadêmico
             </button>
