@@ -3,7 +3,7 @@
 import React, { useState, useCallback } from 'react';
 import { GraduationCap, Search, ChevronRight, Check, X, RefreshCw, ClipboardCheck, Users, ArrowLeft } from 'lucide-react';
 
-const API = process.env.NEXT_PUBLIC_API_BASE_URL || '';
+const API = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001/api';
 
 type Step = 'login' | 'turmas' | 'chamada' | 'sucesso';
 
@@ -48,7 +48,7 @@ export default function ChamadaProfessorPage() {
     if (cpfLimpo.length < 11) { setErroLogin('Digite um CPF válido (11 dígitos).'); return; }
     setBuscando(true); setErroLogin(null);
     try {
-      const res = await fetch(`${API}/api/academico/chamada/professor-turmas?cpf=${cpfLimpo}`);
+      const res = await fetch(`${API}/academico/chamada/professor-turmas?cpf=${cpfLimpo}`);
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.message || 'Professor não encontrado com este CPF.');
@@ -70,7 +70,7 @@ export default function ChamadaProfessorPage() {
     setLoadingAlunos(true);
     setStep('chamada');
     try {
-      const res = await fetch(`${API}/api/academico/chamada/alunos?token=${TOKEN}&turma_id=${t.id}`);
+      const res = await fetch(`${API}/academico/chamada/alunos?token=${TOKEN}&turma_id=${t.id}`);
       const d = await res.json();
       const lista: AlunoRow[] = Array.isArray(d.alunos) ? d.alunos : [];
       setAlunos(lista);
@@ -91,7 +91,7 @@ export default function ChamadaProfessorPage() {
     if (!tema.trim()) { setErroSalvar('Informe o tema da aula.'); return; }
     setSalvando(true); setErroSalvar(null);
     try {
-      const res = await fetch(`${API}/api/academico/chamada`, {
+      const res = await fetch(`${API}/academico/chamada`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
