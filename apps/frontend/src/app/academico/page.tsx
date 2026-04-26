@@ -3125,15 +3125,13 @@ function MapaLeaflet({ enderecos }: { enderecos: EnderecoGrupo[] }) {
           </div>`;
       };
 
-      const midOfLine = (coords: number[][]): [number, number] => {
-        const flat = coords.flat(2);
-        // coords is [[lng,lat], [lng,lat], ...]
+      const midOfLine = (coords: any[]): [number, number] => {
         const pts: [number,number][] = [];
-        for (let i = 0; i < coords.length; i++) {
-          const c = coords[i];
+        const collect = (c: any) => {
           if (typeof c[0] === 'number') pts.push(c as [number,number]);
-          else (c as number[][]).forEach(p => pts.push(p as [number,number]));
-        }
+          else c.forEach(collect);
+        };
+        coords.forEach(collect);
         const mid = pts[Math.floor(pts.length / 2)] || [0, 0];
         return [mid[1], mid[0]]; // [lat, lng]
       };
