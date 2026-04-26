@@ -1491,6 +1491,8 @@ function TurmasTab({ cursos, professores, alunos }: { cursos: Curso[]; professor
 
   // ── Usuários com grupo Professor ─────────────────────────────────────────────
   const [usuariosProfessores, setUsuariosProfessores] = useState<UsuarioProf[]>([]);
+  // ── Funcionários cadastrados ──────────────────────────────────────────────────
+  const [funcionarios, setFuncionarios] = useState<{ id: string; nome: string; cargo?: string }[]>([]);
   // ── Atribuir professor a turma (inline) ──────────────────────────────────────
   const [showAtribuirProf, setShowAtribuirProf] = useState(false);
   const [turmaAtribuir, setTurmaAtribuir] = useState<Turma | null>(null);
@@ -1517,6 +1519,9 @@ function TurmasTab({ cursos, professores, alunos }: { cursos: Curso[]; professor
   useEffect(() => {
     api.get('/academico/usuarios-professores')
       .then(r => setUsuariosProfessores(Array.isArray(r.data) ? r.data : []))
+      .catch(() => {});
+    api.get('/funcionarios')
+      .then(r => setFuncionarios(Array.isArray(r.data) ? r.data : []))
       .catch(() => {});
   }, []);
   useEffect(() => { load(); }, [load]);
@@ -1632,8 +1637,18 @@ function TurmasTab({ cursos, professores, alunos }: { cursos: Curso[]; professor
     if (!id) return '–';
     return professores.find(p => p.id === id)?.nome
       || usuariosProfessores.find(u => u.id === id)?.nome
+      || funcionarios.find(f => f.id === id)?.nome
       || '–';
   };
+
+  // Lista unificada para o select de professor (sem duplicatas por ID)
+  const opcoesProf = (() => {
+    const mapa = new Map<string, string>();
+    funcionarios.forEach(f => mapa.set(f.id, f.nome + (f.cargo ? ` — ${f.cargo}` : '')));
+    professores.filter(p => p.ativo !== false).forEach(p => { if (!mapa.has(p.id)) mapa.set(p.id, p.nome); });
+    usuariosProfessores.forEach(u => { if (!mapa.has(u.id)) mapa.set(u.id, u.nome + (u.email ? ` (${u.email})` : '')); });
+    return Array.from(mapa.entries()).map(([id, label]) => ({ id, label })).sort((a, b) => a.label.localeCompare(b.label));
+  })();
 
   const abrirAtribuirProf = (t: Turma) => {
     setTurmaAtribuir(t);
@@ -2107,17 +2122,17 @@ function TurmasTab({ cursos, professores, alunos }: { cursos: Curso[]; professor
       {showAtribuirProf && turmaAtribuir && (
         <Modal title={`Atribuir Professor — ${turmaAtribuir.nome}`} onClose={() => setShowAtribuirProf(false)}>
           <div className="space-y-4">
-            {usuariosProfessores.length === 0 ? (
-              <p className="text-sm text-slate-400 text-center py-4">Nenhum professor encontrado.<br/>Cadastre usuários com o grupo &quot;Professor&quot; no sistema.</p>
+            {opcoesProf.length === 0 ? (
+              <p className="text-sm text-slate-400 text-center py-4">Nenhum funcionário ou professor encontrado.</p>
             ) : (
               <>
                 <div className="space-y-1">
-                  <label className="text-[10px] font-black uppercase text-slate-500">Professor</label>
+                  <label className="text-[10px] font-black uppercase text-slate-500">Professor / Funcionário</label>
                   <select value={profSelecionadoId} onChange={e => setProfSelecionadoId(e.target.value)}
                     className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white">
                     <option value="">— Nenhum —</option>
-                    {usuariosProfessores.map(u => (
-                      <option key={u.id} value={u.id}>{u.nome}{u.email ? ` (${u.email})` : ''}</option>
+                    {opcoesProf.map(o => (
+                      <option key={o.id} value={o.id}>{o.label}</option>
                     ))}
                   </select>
                 </div>
