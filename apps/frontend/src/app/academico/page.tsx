@@ -949,9 +949,7 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
           <label className="text-[9px] font-black uppercase text-slate-400 mb-1 block">Status</label>
           <select value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)}
             className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white">
-            <option value="">Todos</option>
-            <option value="ativo">Ativos</option>
-            <option value="inativo">Inativos</option>
+            <option value="">Ativos</option>
           </select>
         </div>
         <div className="min-w-[140px]">
@@ -1037,7 +1035,7 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
               </thead>
               <tbody>
                 {alunos.map((a, i) => (
-                  <tr key={a.id} className={`border-b border-slate-50 hover:bg-purple-50/30 transition-colors ${!a.ativo ? 'opacity-60' : ''} ${i % 2 === 0 ? '' : 'bg-slate-50/30'}`}>
+                  <tr key={a.id} className={`border-b border-slate-50 hover:bg-purple-50/30 transition-colors ${i % 2 === 0 ? '' : 'bg-slate-50/30'}`}>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         {a.foto_url
@@ -1095,20 +1093,11 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
                         <div className="flex items-center justify-center gap-1">
                           <button
                             onClick={() => inativarAluno(a)}
-                            disabled={inativandoId === a.id || excluindoId === a.id}
-                            title={a.ativo ? 'Inativar aluno' : 'Reativar aluno'}
-                            className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase transition-colors disabled:opacity-50 ${a.ativo ? 'bg-red-50 text-red-500 hover:bg-red-100' : 'bg-green-50 text-green-600 hover:bg-green-100'}`}>
-                            {inativandoId === a.id ? '...' : a.ativo ? 'Inativar' : 'Reativar'}
+                            disabled={inativandoId === a.id}
+                            title="Inativar aluno"
+                            className="px-3 py-1 rounded-lg text-[9px] font-black uppercase transition-colors disabled:opacity-50 bg-red-50 text-red-500 hover:bg-red-100">
+                            {inativandoId === a.id ? '...' : 'Inativar'}
                           </button>
-                          {!a.ativo && (
-                            <button
-                              onClick={() => excluirAlunoPermanente(a)}
-                              disabled={excluindoId === a.id || inativandoId === a.id}
-                              title="Excluir permanentemente"
-                              className="px-2 py-1 rounded-lg text-[9px] font-black uppercase bg-red-100 text-red-700 hover:bg-red-200 transition-colors disabled:opacity-50">
-                              {excluindoId === a.id ? '...' : <Trash2 size={10} />}
-                            </button>
-                          )}
                         </div>
                       </td>
                     )}

@@ -251,9 +251,8 @@ export class AcademicoService {
   async listarAlunos(filtros: any) {
     this.logger.log(`Listando alunos filtros=${JSON.stringify(filtros)}`);
     let qb = this.alunoRepo.createQueryBuilder('a');
-    // Filtro de status: 'ativo' | 'inativo' | ausente = todos
-    if (filtros.status === 'ativo')   qb = qb.where('a.ativo = true');
-    else if (filtros.status === 'inativo') qb = qb.where('a.ativo = false');
+    // Alunos inativos nunca aparecem em listagens
+    qb = qb.where('a.ativo = true');
     if (filtros.nome)     qb = qb.andWhere('LOWER(a.nome_completo) LIKE :nome', { nome: `%${filtros.nome.toLowerCase()}%` });
     if (filtros.cpf)      qb = qb.andWhere('a.cpf LIKE :cpf', { cpf: `%${filtros.cpf.replace(/\D/g, '')}%` });
     if (filtros.cidade)   qb = qb.andWhere('LOWER(a.cidade) LIKE :cidade', { cidade: `%${filtros.cidade.toLowerCase()}%` });
@@ -461,9 +460,16 @@ export class AcademicoService {
 
   // ── TURMA ALUNOS / BACKLOG ─────────────────────────────────────────────────
 
-  listarBacklog() {
+  async listarBacklog() {
     this.logger.log('Listando backlog de alunos');
-    return this.turmaAlunoRepo.find({ where: { status: 'backlog' }, order: { created_at: 'ASC' } });
+    return this.dataSource.query(`
+      SELECT ta.id::text, ta.aluno_id::text, ta.status, ta.created_at,
+             a.nome_completo, a.numero_matricula, a.celular
+      FROM turma_alunos ta
+      JOIN alunos a ON a.id::text = ta.aluno_id::text
+      WHERE ta.status = 'backlog' AND a.ativo = true
+      ORDER BY ta.created_at ASC
+    `);
   }
 
   async listarAlunosDaTurma(turmaId: string) {
@@ -480,7 +486,7 @@ export class AcademicoService {
          WHERE inscricao_id = a.inscricao_id AND tipo = 'foto_aluno'
          ORDER BY created_at DESC LIMIT 1
        ) d ON true
-       WHERE ta.turma_id::text = $1 AND ta.status = 'ativo'
+       WHERE ta.turma_id::text = $1 AND ta.status = 'ativo' AND a.ativo = true
        ORDER BY a.nome_completo ASC`,
       [turmaId],
     );
@@ -696,11 +702,12 @@ export class AcademicoService {
         t.cor            AS turma_cor,
         t.turno          AS turno,
         t.max_alunos     AS max_alunos,
-        COUNT(DISTINCT ta.aluno_id) FILTER (WHERE ta.status = 'ativo' AND ta.aluno_id IS NOT NULL) AS total_alunos,
+        COUNT(DISTINCT ta.aluno_id) FILTER (WHERE ta.status = 'ativo' AND ta.aluno_id IS NOT NULL AND aluno_ativo.ativo = true) AS total_alunos,
         COUNT(d.id) FILTER (WHERE d.data >= NOW() - INTERVAL '28 days')                            AS total_registros,
         COUNT(d.id) FILTER (WHERE d.data >= NOW() - INTERVAL '28 days' AND d.descricao = 'Presente') AS total_presentes
       FROM turmas t
       LEFT JOIN turma_alunos ta ON ta.turma_id::text = t.id::text
+      LEFT JOIN alunos aluno_ativo ON aluno_ativo.id::text = ta.aluno_id::text
       LEFT JOIN diario_academico d ON d.turma_id::text = t.id::text AND d.tipo = 'Presença'
       WHERE (t.ativo IS NOT FALSE)
       GROUP BY t.id, t.nome, t.cor, t.turno, t.max_alunos
@@ -947,7 +954,7 @@ export class AcademicoService {
     );
 
     const alunoIds = vinculos.filter((v: any) => v.aluno_id).map((v: any) => v.aluno_id);
-    const alunos = alunoIds.length ? await this.alunoRepo.findBy({ id: In(alunoIds) }) : [];
+    const alunos = alunoIds.length ? await this.alunoRepo.findBy({ id: In(alunoIds), ativo: true }) : [];
     const alunoMap = Object.fromEntries(alunos.map(a => [a.id, a]));
 
     const lista = vinculos.map((v: any) => {
