@@ -51,7 +51,9 @@ export class GenteService {
   ) {}
 
   async onModuleInit() {
-    await this.dataSource.query(`
+    const run = async (sql: string) => { try { await this.dataSource.query(sql); } catch { /* idempotente */ } };
+
+    await run(`
       CREATE TABLE IF NOT EXISTS gente_colaborador_documentos (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         colaborador_id UUID NOT NULL,
@@ -62,16 +64,18 @@ export class GenteService {
         criado_por_id TEXT,
         criado_por_nome TEXT,
         created_at TIMESTAMPTZ DEFAULT NOW()
-      );
-      ALTER TABLE gente_colaborador_documentos ADD COLUMN IF NOT EXISTS categoria TEXT DEFAULT 'pessoal';
-      ALTER TABLE gente_vales ADD COLUMN IF NOT EXISTS ficha_url TEXT;
+      )
+    `);
+    await run(`ALTER TABLE gente_colaborador_documentos ADD COLUMN IF NOT EXISTS categoria TEXT DEFAULT 'pessoal'`);
+    await run(`ALTER TABLE IF EXISTS gente_vales ADD COLUMN IF NOT EXISTS ficha_url TEXT`);
+    await run(`
       CREATE TABLE IF NOT EXISTS gente_feriados (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         data DATE NOT NULL UNIQUE,
         descricao TEXT NOT NULL,
         tipo TEXT NOT NULL DEFAULT 'institucional',
         created_at TIMESTAMPTZ DEFAULT NOW()
-      );
+      )
     `);
   }
 
