@@ -633,8 +633,6 @@ export class AcademicoService {
       turma_id:          dto.turma_id,
       turma_nome:        turma.nome,
       data:              dto.data,
-      hora_inicio:       dto.hora_inicio,
-      hora_fim:          dto.hora_fim,
       tema_aula:         dto.tema_aula,
       conteudo_abordado: dto.conteudo_abordado,
       usuario_id:        usuarioId,
@@ -665,7 +663,7 @@ export class AcademicoService {
     return { sessao, registrados: entries.length };
   }
 
-  async editarSessao(id: string, dto: { tema_aula?: string; hora_inicio?: string; hora_fim?: string; conteudo_abordado?: string }) {
+  async editarSessao(id: string, dto: { tema_aula?: string; conteudo_abordado?: string }) {
     const sessao = await this.sessaoRepo.findOneBy({ id });
     if (!sessao) throw new NotFoundException('Sessão não encontrada');
     Object.assign(sessao, dto);
