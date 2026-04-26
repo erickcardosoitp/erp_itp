@@ -542,7 +542,9 @@ export class AcademicoService {
 
   listarDiario(filtros: any) {
     this.logger.log(`Listando diário filtros=${JSON.stringify(filtros)}`);
-    let qb = this.diarioRepo.createQueryBuilder('d').orderBy('d.created_at', 'DESC');
+    let qb = this.diarioRepo.createQueryBuilder('d')
+      .where('d.tipo != :pres', { pres: 'Presença' })
+      .orderBy('d.created_at', 'DESC');
     if (filtros.tipo)     qb = qb.andWhere('d.tipo = :tipo', { tipo: filtros.tipo });
     if (filtros.aluno_id) qb = qb.andWhere('d.aluno_id = :a', { a: filtros.aluno_id });
     if (filtros.turma_id) qb = qb.andWhere('d.turma_id = :t', { t: filtros.turma_id });
@@ -680,7 +682,7 @@ export class AcademicoService {
     return { sessao, registrados: entries.length };
   }
 
-  async editarSessao(id: string, dto: { tema_aula?: string; conteudo_abordado?: string }) {
+  async editarSessao(id: string, dto: { data?: string; tema_aula?: string; conteudo_abordado?: string }) {
     const sessao = await this.sessaoRepo.findOneBy({ id });
     if (!sessao) throw new NotFoundException('Sessão não encontrada');
     Object.assign(sessao, dto);

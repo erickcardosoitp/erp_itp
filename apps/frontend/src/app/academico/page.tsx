@@ -2623,6 +2623,9 @@ function DiarioTab({ turmas, alunos }: { turmas: Turma[]; alunos: Aluno[] }) {
 // ─── Tab: Presença ───────────────────────────────────────────────────────────
 
 function PresencaTab({ turmas, podeEditar }: { turmas: Turma[]; podeEditar: boolean }) {
+  const { user } = useAuth();
+  const podeEditarSessao = ['admin', 'prt'].includes(user?.role ?? '');
+
   // ─── Filtros do histórico ───────────────────────────────────────────────
   const [filtroTurma, setFiltroTurma] = useState('');
   const [filtroDataIni, setFiltroDataIni] = useState('');
@@ -2631,6 +2634,12 @@ function PresencaTab({ turmas, podeEditar }: { turmas: Turma[]; podeEditar: bool
   const [carregandoHist, setCarregandoHist] = useState(false);
   const [sessaoExpandida, setSessaoExpandida] = useState<string | null>(null);
   const [detalhesSessao, setDetalhesSessao] = useState<Record<string, any[]>>({});
+
+  // ─── Modal editar sessão ─────────────────────────────────────────────────
+  const [sessaoEditando, setSessaoEditando] = useState<PresencaSessao | null>(null);
+  const [formEdicao, setFormEdicao] = useState<{ data: string; tema_aula: string; conteudo_abordado: string }>({ data: '', tema_aula: '', conteudo_abordado: '' });
+  const [salvandoEdicao, setSalvandoEdicao] = useState(false);
+  const [erroEdicao, setErroEdicao] = useState<string | null>(null);
 
   // ─── Modal nova lista ────────────────────────────────────────────────────
   const [etapa, setEtapa] = useState<1 | 2>(1);
@@ -2731,6 +2740,28 @@ function PresencaTab({ turmas, podeEditar }: { turmas: Turma[]; podeEditar: bool
     setSalvando(false);
   };
 
+  const abrirEdicao = (s: PresencaSessao) => {
+    setFormEdicao({ data: s.data, tema_aula: s.tema_aula ?? '', conteudo_abordado: s.conteudo_abordado ?? '' });
+    setErroEdicao(null);
+    setSessaoEditando(s);
+  };
+
+  const salvarEdicao = async () => {
+    if (!sessaoEditando) return;
+    if (!formEdicao.data) { setErroEdicao('Informe a data da aula.'); return; }
+    if (!formEdicao.tema_aula.trim()) { setErroEdicao('Informe o tema da aula.'); return; }
+    setSalvandoEdicao(true); setErroEdicao(null);
+    try {
+      await api.patch(`/academico/presenca/sessoes/${sessaoEditando.id}`, formEdicao);
+      setSessaoEditando(null);
+      carregarHistorico();
+    } catch (e: any) {
+      const msg = e?.response?.data?.message || e?.message || 'Erro ao salvar.';
+      setErroEdicao(Array.isArray(msg) ? msg.join(', ') : msg);
+    }
+    setSalvandoEdicao(false);
+  };
+
   const presentes    = alunosSessao.filter(a => !isento[a.id] && !justificada[a.id] && presenca[a.id]).length;
   const ausentes     = alunosSessao.filter(a => !isento[a.id] && !justificada[a.id] && !presenca[a.id]).length;
   const isentos      = alunosSessao.filter(a => isento[a.id]).length;
@@ -2823,6 +2854,13 @@ function PresencaTab({ turmas, podeEditar }: { turmas: Turma[]; podeEditar: bool
                       <Eye size={10}/> {sessaoExpandida === s.id ? 'Fechar' : 'Ver Chamada'}
                       {sessaoExpandida === s.id ? <ChevronUp size={10}/> : <ChevronDown size={10}/>}
                     </button>
+                    {podeEditarSessao && (
+                      <button onClick={() => abrirEdicao(s)}
+                        title="Editar data / tema"
+                        className="flex items-center gap-1 text-[9px] font-black uppercase text-slate-400 hover:text-amber-600 border border-slate-200 hover:border-amber-300 hover:bg-amber-50 px-2.5 py-1 rounded-lg transition-colors">
+                        <Edit3 size={10}/> Editar
+                      </button>
+                    )}
                   </div>
                 </div>
                 {sessaoExpandida === s.id && (
@@ -2859,6 +2897,53 @@ function PresencaTab({ turmas, podeEditar }: { turmas: Turma[]; podeEditar: bool
       </div>
 
       {/* ─── Modal Nova Lista de Presença ───────────────────────────────────── */}
+      {/* ─── Modal Editar Sessão ────────────────────────────────────────────── */}
+      {sessaoEditando && (
+        <div className="fixed inset-0 z-[300] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div className="flex justify-between items-center p-5 border-b">
+              <div>
+                <h3 className="font-black text-sm uppercase tracking-tight text-slate-800">Editar Lista de Presença</h3>
+                <p className="text-[9px] font-black text-slate-400 uppercase mt-0.5">{sessaoEditando.turma_nome || '–'}</p>
+              </div>
+              <button onClick={() => setSessaoEditando(null)} className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-400"><X size={16}/></button>
+            </div>
+            <div className="p-5 space-y-3">
+              {erroEdicao && (
+                <div className="bg-red-50 border border-red-200 text-red-700 text-[11px] font-bold rounded-xl px-4 py-2.5 uppercase tracking-wide">
+                  ⚠ {erroEdicao}
+                </div>
+              )}
+              <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase text-slate-500">Data da Aula *</label>
+                <input type="date" value={formEdicao.data} onChange={e => setFormEdicao(p => ({ ...p, data: e.target.value }))}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase text-slate-500">Tema da Aula *</label>
+                <input type="text" value={formEdicao.tema_aula} onChange={e => setFormEdicao(p => ({ ...p, tema_aula: e.target.value }))}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase text-slate-500">Conteúdo Abordado</label>
+                <textarea value={formEdicao.conteudo_abordado} onChange={e => setFormEdicao(p => ({ ...p, conteudo_abordado: e.target.value }))}
+                  rows={3} className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none" />
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button onClick={() => setSessaoEditando(null)}
+                  className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-black text-xs uppercase hover:bg-slate-50">
+                  Cancelar
+                </button>
+                <button onClick={salvarEdicao} disabled={salvandoEdicao}
+                  className="flex-1 bg-amber-500 text-white py-2.5 rounded-xl font-black text-xs uppercase hover:bg-amber-600 disabled:opacity-50">
+                  {salvandoEdicao ? 'Salvando...' : 'Salvar Alterações'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showModal && (
         <div className="fixed inset-0 z-[300] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden max-h-[90vh] flex flex-col">
