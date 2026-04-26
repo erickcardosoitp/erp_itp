@@ -1,13 +1,14 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import { toast } from 'sonner';
 import {
   User, Camera, Save, Loader2, Settings2,
   Palette, ShieldCheck, Moon, Sun,
-  UserCog, ChevronDown, Check, Lock
+  ChevronDown, Check, Lock,
+  Server, Database, Cpu, Activity, RefreshCw, Wifi, HardDrive, Zap,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 
@@ -35,7 +36,7 @@ const ROLE_LABELS: Record<string, { label: string; color: string }> = {
 };
 
 // --- TIPOS ---
-type TabId = 'perfil' | 'acessibilidade' | 'gestao';
+type TabId = 'perfil' | 'acessibilidade' | 'gestao' | 'monitoramento-ti';
 
 // ─────────────────────────────────────────────────────────────
 // ABA: MEU PERFIL
@@ -641,6 +642,219 @@ function GestaoAcessoTab() {
 }
 
 // ─────────────────────────────────────────────────────────────
+// ABA: MONITORAMENTO TI
+// ─────────────────────────────────────────────────────────────
+interface TIData {
+  servidor: {
+    uptime_segundos: number;
+    node_version: string;
+    ambiente: string;
+    plataforma: string;
+    arquitetura: string;
+    memoria: { heap_usado_mb: number; heap_total_mb: number; rss_mb: number; externo_mb: number; percentual: number };
+    cpu: { usuario_ms: number; sistema_ms: number };
+  };
+  banco: {
+    latencia_ms: number;
+    tamanho: string;
+    tamanho_bytes: number;
+    cache_hit_pct: number | null;
+    conexoes_ativas: number;
+    conexoes_totais: number;
+    max_conexoes: number;
+    tabelas: { nome: string; tamanho: string; linhas: number }[];
+  };
+  timestamp: string;
+}
+
+function fmtUptime(s: number) {
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  return h > 0 ? `${h}h ${m}m ${sec}s` : m > 0 ? `${m}m ${sec}s` : `${sec}s`;
+}
+
+function ProgressBar({ value, max, color = 'bg-purple-500' }: { value: number; max: number; color?: string }) {
+  const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;
+  const danger = pct > 85;
+  return (
+    <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+      <div
+        className={`h-2 rounded-full transition-all ${danger ? 'bg-rose-500' : color}`}
+        style={{ width: `${pct}%` }}
+      />
+    </div>
+  );
+}
+
+function KpiCard({ icon: Icon, label, value, sub, color }: { icon: React.ElementType; label: string; value: string | number; sub?: string; color: string }) {
+  return (
+    <div className="bg-white rounded-2xl border border-slate-100 p-4 flex items-start gap-3">
+      <div className={`p-2.5 rounded-xl ${color}`}>
+        <Icon size={16} className="text-white" />
+      </div>
+      <div className="min-w-0">
+        <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">{label}</p>
+        <p className="text-lg font-black text-slate-900 leading-tight">{value}</p>
+        {sub && <p className="text-[9px] text-slate-400 font-semibold mt-0.5">{sub}</p>}
+      </div>
+    </div>
+  );
+}
+
+function MonitoramentoTITab() {
+  const [data, setData] = useState<TIData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [ultimaAtualizacao, setUltimaAtualizacao] = useState('');
+
+  const carregar = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await api.get('/sistema/monitoramento-ti');
+      setData(r.data);
+      setUltimaAtualizacao(new Date().toLocaleTimeString('pt-BR'));
+    } catch { /* silencioso */ }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    carregar();
+    const id = setInterval(carregar, 30_000);
+    return () => clearInterval(id);
+  }, [carregar]);
+
+  const srv = data?.servidor;
+  const banco = data?.banco;
+
+  const latColor =
+    !banco ? '' :
+    banco.latencia_ms < 50  ? 'text-emerald-600' :
+    banco.latencia_ms < 200 ? 'text-amber-600'   : 'text-rose-600';
+
+  return (
+    <div className="space-y-8">
+      {/* Header */}
+      <div className="flex items-center justify-between pb-6 border-b border-slate-100">
+        <div className="flex items-center gap-3">
+          <div className="bg-purple-600 p-2.5 rounded-xl shadow-lg shadow-purple-500/20">
+            <Server size={20} className="text-white" />
+          </div>
+          <div>
+            <h2 className="text-sm font-black uppercase tracking-tighter text-slate-900">Monitoramento TI</h2>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+              {ultimaAtualizacao ? `Atualizado às ${ultimaAtualizacao} · refresh automático 30s` : 'Carregando...'}
+            </p>
+          </div>
+        </div>
+        <button onClick={carregar} disabled={loading}
+          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-black uppercase disabled:opacity-50 transition-colors">
+          <RefreshCw size={12} className={loading ? 'animate-spin' : ''} /> Atualizar
+        </button>
+      </div>
+
+      {loading && !data ? (
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="animate-spin text-purple-600" size={36} />
+        </div>
+      ) : !data ? (
+        <div className="py-16 text-center">
+          <Server size={40} className="mx-auto mb-3 text-slate-200" />
+          <p className="text-sm font-black text-slate-400 uppercase">Não foi possível carregar os dados</p>
+        </div>
+      ) : (
+        <div className="space-y-8">
+
+          {/* ── Servidor ── */}
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-1.5">
+              <Server size={11} /> Servidor
+            </p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+              <KpiCard icon={Activity}  label="Uptime"      value={fmtUptime(srv!.uptime_segundos)}  color="bg-emerald-500" />
+              <KpiCard icon={Cpu}       label="Node.js"     value={srv!.node_version}                color="bg-blue-500"    sub={`${srv!.plataforma} ${srv!.arquitetura}`} />
+              <KpiCard icon={Zap}       label="Ambiente"    value={srv!.ambiente.toUpperCase()}       color="bg-amber-500"   />
+              <KpiCard icon={Server}    label="CPU (total)" value={`${srv!.cpu.usuario_ms + srv!.cpu.sistema_ms} ms`} color="bg-violet-500" sub={`usr ${srv!.cpu.usuario_ms}ms · sys ${srv!.cpu.sistema_ms}ms`} />
+            </div>
+
+            {/* Memória */}
+            <div className="bg-slate-50 rounded-2xl border border-slate-100 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-1.5">
+                  <HardDrive size={11} /> Memória
+                </p>
+                <span className={`text-xs font-black ${srv!.memoria.percentual > 85 ? 'text-rose-600' : 'text-slate-700'}`}>
+                  {srv!.memoria.percentual}% heap
+                </span>
+              </div>
+              <ProgressBar value={srv!.memoria.heap_usado_mb} max={srv!.memoria.heap_total_mb} color="bg-purple-500" />
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px] font-bold text-slate-600">
+                <div><span className="text-slate-400">Heap usado</span><br />{srv!.memoria.heap_usado_mb} MB</div>
+                <div><span className="text-slate-400">Heap total</span><br />{srv!.memoria.heap_total_mb} MB</div>
+                <div><span className="text-slate-400">RSS</span><br />{srv!.memoria.rss_mb} MB</div>
+                <div><span className="text-slate-400">Externo</span><br />{srv!.memoria.externo_mb} MB</div>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Banco de Dados ── */}
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-1.5">
+              <Database size={11} /> Banco de Dados (PostgreSQL · Neon)
+            </p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+              <KpiCard icon={Wifi}     label="Latência"   value={`${banco!.latencia_ms} ms`}
+                color={banco!.latencia_ms < 50 ? 'bg-emerald-500' : banco!.latencia_ms < 200 ? 'bg-amber-500' : 'bg-rose-500'} />
+              <KpiCard icon={Database} label="Tamanho DB" value={banco!.tamanho}               color="bg-blue-500" />
+              <KpiCard icon={Zap}      label="Cache Hit"  value={banco!.cache_hit_pct != null ? `${banco!.cache_hit_pct}%` : '–'} color="bg-teal-500"
+                sub={banco!.cache_hit_pct != null ? (banco!.cache_hit_pct > 95 ? 'Excelente' : banco!.cache_hit_pct > 80 ? 'Bom' : 'Verificar') : undefined} />
+              <KpiCard icon={Activity} label="Conexões"   value={`${banco!.conexoes_ativas} / ${banco!.conexoes_totais}`} color="bg-violet-500"
+                sub={banco!.max_conexoes ? `máx ${banco!.max_conexoes}` : undefined} />
+            </div>
+
+            {/* Conexões progress */}
+            {banco!.max_conexoes > 0 && (
+              <div className="bg-slate-50 rounded-2xl border border-slate-100 p-4 mb-4">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Uso de Conexões</p>
+                  <span className="text-[10px] font-black text-slate-600">{banco!.conexoes_totais} de {banco!.max_conexoes}</span>
+                </div>
+                <ProgressBar value={banco!.conexoes_totais} max={banco!.max_conexoes} color="bg-blue-500" />
+              </div>
+            )}
+
+            {/* Tabelas */}
+            {banco!.tabelas.length > 0 && (
+              <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden">
+                <div className="px-4 py-3 bg-slate-50 border-b border-slate-100">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Tabelas (por tamanho)</p>
+                </div>
+                <div className="divide-y divide-slate-50">
+                  {banco!.tabelas.map((t, i) => {
+                    const maxBytes = banco!.tabelas[0]?.tamanho ? 1 : 0;
+                    return (
+                      <div key={t.nome} className="flex items-center gap-3 px-4 py-2 hover:bg-slate-50/50">
+                        <span className="text-[9px] font-black text-slate-300 w-5 shrink-0">{i + 1}</span>
+                        <span className="flex-1 text-xs font-bold text-slate-700 font-mono truncate">{t.nome}</span>
+                        <span className="text-[10px] font-black text-slate-500 shrink-0">{t.linhas.toLocaleString('pt-BR')} linhas</span>
+                        <span className="text-[10px] font-black text-purple-600 shrink-0 min-w-[60px] text-right">{t.tamanho}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <p className="text-[9px] text-slate-300 text-right font-semibold">
+            Snapshot: {data.timestamp ? new Date(data.timestamp).toLocaleString('pt-BR') : '–'}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
 // COMPONENTE PRINCIPAL
 // ─────────────────────────────────────────────────────────────
 export default function ConfiguracoesPage() {
@@ -652,6 +866,7 @@ export default function ConfiguracoesPage() {
   useEffect(() => { setIsMounted(true); }, []);
 
   const { canWrite: temAcessoGestao } = usePermissions(user);
+  const ehAdminOuPrt = ['admin', 'prt'].includes(user?.role ?? '');
 
   if (!isMounted || loading) {
     return (
@@ -667,9 +882,10 @@ export default function ConfiguracoesPage() {
   }
 
   const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
-    { id: 'perfil',         label: 'Meu Perfil',     icon: User },
-    { id: 'acessibilidade', label: 'Acessibilidade', icon: Palette },
+    { id: 'perfil',           label: 'Meu Perfil',        icon: User },
+    { id: 'acessibilidade',   label: 'Acessibilidade',    icon: Palette },
     ...(temAcessoGestao ? [{ id: 'gestao' as TabId, label: 'Gestão de Acesso', icon: ShieldCheck }] : []),
+    ...(ehAdminOuPrt ? [{ id: 'monitoramento-ti' as TabId, label: 'Monitor TI', icon: Server }] : []),
   ];
 
   return (
@@ -726,9 +942,10 @@ export default function ConfiguracoesPage() {
 
         {/* ── CONTEÚDO ATIVO ── */}
         <div className="bg-white rounded-[40px] border border-slate-100 shadow-xl overflow-hidden p-6 sm:p-8 md:p-12">
-          {activeTab === 'perfil'         && <MeuPerfilTab />}
-          {activeTab === 'acessibilidade' && <AcessibilidadeTab />}
-          {activeTab === 'gestao' && temAcessoGestao && <GestaoAcessoTab />}
+          {activeTab === 'perfil'              && <MeuPerfilTab />}
+          {activeTab === 'acessibilidade'      && <AcessibilidadeTab />}
+          {activeTab === 'gestao'          && temAcessoGestao && <GestaoAcessoTab />}
+          {activeTab === 'monitoramento-ti' && ehAdminOuPrt && <MonitoramentoTITab />}
         </div>
 
       </div>

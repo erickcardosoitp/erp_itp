@@ -76,7 +76,7 @@ const CORES_CARD = [
   '#db2777', '#9333ea', '#475569', '#1e293b',
 ];
 
-const TIPOS_DIARIO = ['Avaliação', 'Presença', 'Incidente', 'Observação', 'Comunicado'];
+const TIPOS_DIARIO = ['Avaliação', 'Lista de Chamada', 'Incidente', 'Observação', 'Comunicado'];
 
 const OPCOES_CUIDADO_ESPECIAL = [
   'Não',
@@ -2547,11 +2547,11 @@ function DiarioTab({ turmas, alunos }: { turmas: Turma[]; alunos: Aluno[] }) {
   };
 
   const corTipo: Record<string, string> = {
-    'Avaliação':  'bg-blue-100 text-blue-700',
-    'Presença':   'bg-green-100 text-green-700',
-    'Incidente':  'bg-red-100 text-red-700',
-    'Observação': 'bg-amber-100 text-amber-700',
-    'Comunicado': 'bg-purple-100 text-purple-700',
+    'Avaliação':       'bg-blue-100 text-blue-700',
+    'Lista de Chamada':'bg-green-100 text-green-700',
+    'Incidente':       'bg-red-100 text-red-700',
+    'Observação':      'bg-amber-100 text-amber-700',
+    'Comunicado':      'bg-purple-100 text-purple-700',
   };
 
   return (
@@ -3434,6 +3434,7 @@ function MonitoramentoTab() {
             const colors: Record<string, string> = {
               'Avaliação': 'bg-blue-500', 'Incidente': 'bg-rose-500',
               'Observação': 'bg-amber-500', 'Comunicado': 'bg-teal-500',
+              'Lista de Chamada': 'bg-green-500',
             };
             const total = diario_por_tipo.reduce((s: number, x: any) => s + x.total, 0) || 1;
             const pct = Math.round(100 * d.total / total);
