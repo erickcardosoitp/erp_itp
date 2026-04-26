@@ -268,21 +268,41 @@ export class AcademicoService {
     }
     const alunos = await qb.orderBy('a.ativo', 'DESC').addOrderBy('a.nome_completo', 'ASC').getMany();
     if (!alunos.length) return alunos;
-    // Enriquece com turma_status (ativo | backlog | sem_turma)
+    // Enriquece com todas as turmas + foto_url
     try {
       const alunoIds = alunos.map(a => `'${a.id}'`).join(',');
-      const turmaRows: any[] = await this.dataSource.query(
-        `SELECT ta.aluno_id, ta.status, t.nome as turma_nome
-         FROM turma_alunos ta
-         LEFT JOIN turmas t ON ta.turma_id IS NOT NULL AND t.id::text = ta.turma_id
-         WHERE ta.aluno_id IN (${alunoIds})`
-      );
-      const turmaMap: Record<string, any> = {};
-      turmaRows.forEach(r => { turmaMap[r.aluno_id] = r; });
-      return alunos.map(a => ({ ...a, turma_status: turmaMap[a.id]?.status ?? 'sem_turma', turma_nome: turmaMap[a.id]?.turma_nome ?? null }));
+      const [turmaRows, fotoRows]: [any[], any[]] = await Promise.all([
+        this.dataSource.query(
+          `SELECT ta.aluno_id,
+              json_agg(json_build_object('id', ta.turma_id, 'nome', t.nome, 'cor', t.cor, 'status', ta.status)
+                       ORDER BY ta.created_at) FILTER (WHERE ta.turma_id IS NOT NULL) AS turmas
+           FROM turma_alunos ta
+           LEFT JOIN turmas t ON ta.turma_id IS NOT NULL AND t.id::text = ta.turma_id
+           WHERE ta.aluno_id IN (${alunoIds})
+           GROUP BY ta.aluno_id`
+        ),
+        this.dataSource.query(
+          `SELECT DISTINCT ON (a.id) a.id AS aluno_id, d.url_arquivo AS foto_url
+           FROM alunos a
+           JOIN documentos_inscricao d ON d.inscricao_id = a.inscricao_id AND d.tipo = 'foto_aluno'
+           WHERE a.id IN (${alunoIds})
+           ORDER BY a.id, d."createdAt" DESC`
+        ),
+      ]);
+      const turmaMap: Record<string, any[]> = {};
+      turmaRows.forEach(r => { turmaMap[r.aluno_id] = r.turmas ?? []; });
+      const fotoMap: Record<string, string> = {};
+      fotoRows.forEach(r => { fotoMap[r.aluno_id] = r.foto_url; });
+      return alunos.map(a => ({
+        ...a,
+        turmas: turmaMap[a.id] ?? [],
+        foto_url: fotoMap[a.id] ?? null,
+        turma_status: (turmaMap[a.id] ?? []).find((t: any) => t.status === 'ativo') ? 'ativo' : ((turmaMap[a.id] ?? []).length ? 'backlog' : 'sem_turma'),
+        turma_nome: (turmaMap[a.id] ?? []).find((t: any) => t.status === 'ativo')?.nome ?? null,
+      }));
     } catch (e: any) {
-      this.logger.warn(`[listarAlunos] enriquecimento falhou, retornando sem turma: ${e?.message}`);
-      return alunos.map(a => ({ ...a, turma_status: 'sem_turma', turma_nome: null }));
+      this.logger.warn(`[listarAlunos] enriquecimento falhou: ${e?.message}`);
+      return alunos.map(a => ({ ...a, turmas: [], foto_url: null, turma_status: 'sem_turma', turma_nome: null }));
     }
   }
 
@@ -297,22 +317,27 @@ export class AcademicoService {
     );
     const inscricao_id: number | null = row?.inscricao_id ?? null;
 
-    const [frequencia, historico, turmaAluno] = await Promise.all([
+    const [frequencia, historico, turmasDoAluno] = await Promise.all([
       this.diarioRepo.find({ where: { aluno_id: id, tipo: 'Presença' }, order: { data: 'DESC' } }),
       this.diarioRepo.find({ where: { aluno_id: id }, order: { created_at: 'DESC' } }),
-      this.turmaAlunoRepo.findOne({ where: { aluno_id: id, status: 'ativo' } }),
+      this.dataSource.query(
+        `SELECT ta.id, ta.turma_id, ta.status, t.nome AS turma_nome, t.cor AS turma_cor, t.turno
+         FROM turma_alunos ta
+         LEFT JOIN turmas t ON ta.turma_id IS NOT NULL AND t.id::text = ta.turma_id
+         WHERE ta.aluno_id = $1
+         ORDER BY ta.status DESC, t.nome ASC`, [id]
+      ),
     ]);
 
-    let turmaInfo: Turma | null = null;
-    if (turmaAluno?.turma_id) {
-      turmaInfo = await this.turmaRepo.findOneBy({ id: turmaAluno.turma_id });
-    }
+    const turmaInfo: Turma | null = turmasDoAluno.find((t: any) => t.status === 'ativo' && t.turma_id)
+      ? await this.turmaRepo.findOneBy({ id: turmasDoAluno.find((t: any) => t.status === 'ativo' && t.turma_id).turma_id }).catch(() => null)
+      : null;
 
     const totalPresencas = frequencia.filter(f => f.descricao?.toLowerCase().includes('presente')).length;
     const totalFaltas    = frequencia.filter(f => f.descricao?.toLowerCase().includes('falta') || !f.descricao?.toLowerCase().includes('presente')).length;
 
     this.logger.log(`Ficha do aluno ${aluno.nome_completo}: ${historico.length} registros no diário, inscricao_id=${inscricao_id}`);
-    return { aluno, inscricao_id, frequencia, historico, turmaInfo, totalPresencas, totalFaltas };
+    return { aluno, inscricao_id, frequencia, historico, turmaInfo, turmasDoAluno, totalPresencas, totalFaltas };
   }
 
   async criarAluno(dto: Partial<Aluno>) {
@@ -414,9 +439,24 @@ export class AcademicoService {
     return this.turmaAlunoRepo.find({ where: { status: 'backlog' }, order: { created_at: 'ASC' } });
   }
 
-  listarAlunosDaTurma(turmaId: string) {
+  async listarAlunosDaTurma(turmaId: string) {
     this.logger.log(`Listando alunos da turma id=${turmaId}`);
-    return this.turmaAlunoRepo.find({ where: { turma_id: turmaId, status: 'ativo' } });
+    return this.dataSource.query(
+      `SELECT ta.id AS vinculo_id, ta.status AS vinculo_status, ta.created_at AS vinculado_em,
+              a.id, a.nome_completo, a.cpf, a.celular, a.email,
+              a.data_nascimento, a.ativo, a.numero_matricula,
+              d.url_arquivo AS foto_url
+       FROM turma_alunos ta
+       JOIN alunos a ON a.id::text = ta.aluno_id
+       LEFT JOIN LATERAL (
+         SELECT url_arquivo FROM documentos_inscricao
+         WHERE inscricao_id = a.inscricao_id AND tipo = 'foto_aluno'
+         ORDER BY "createdAt" DESC LIMIT 1
+       ) d ON true
+       WHERE ta.turma_id = $1 AND ta.status = 'ativo'
+       ORDER BY a.nome_completo ASC`,
+      [turmaId],
+    );
   }
 
   async incluirAlunoNaTurma(alunoId: string, turmaId: string) {
@@ -663,6 +703,29 @@ export class AcademicoService {
     if (!token || !tokens.has(token)) {
       throw new UnauthorizedException('Token de chamada inválido.');
     }
+  }
+
+  async listarTurmasPorCPFProfessor(cpf: string) {
+    const cpfLimpo = cpf.replace(/\D/g, '');
+    if (cpfLimpo.length < 11) throw new BadRequestException('CPF inválido');
+    // Busca primeiro na tabela de professores, depois em usuários
+    const [prof] = await this.dataSource.query(
+      `SELECT id, nome FROM professores WHERE cpf = $1 LIMIT 1`, [cpfLimpo]
+    );
+    const [usuario] = prof ? [] : await this.dataSource.query(
+      `SELECT id, nome, email FROM usuarios WHERE cpf = $1 OR replace(replace(replace(cpf,'.',''),'-',''),'/','') = $1 LIMIT 1`, [cpfLimpo]
+    );
+    const professor = prof || usuario;
+    if (!professor) throw new NotFoundException('Professor não encontrado com este CPF');
+    const turmas = await this.dataSource.query(
+      `SELECT t.id, t.nome, t.cor, t.turno, t.ano, c.nome AS curso_nome
+       FROM turmas t
+       LEFT JOIN cursos c ON c.id::text = t.curso_id
+       WHERE t.professor_id::text = $1 AND t.ativo = true
+       ORDER BY t.nome ASC`,
+      [professor.id],
+    );
+    return { professor: { id: professor.id, nome: professor.nome }, turmas };
   }
 
   async listarAlunosChamada(turmaId: string) {

@@ -1,7 +1,7 @@
 import {
   Controller, Get, Post, Patch, Delete,
   Param, Body, Query, UseGuards, Req, Logger,
-  InternalServerErrorException, Headers, UnauthorizedException,
+  InternalServerErrorException, Headers, UnauthorizedException, BadRequestException,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ModuloPermGuard } from '../auth/guards/modulo-perm.guard';
@@ -16,6 +16,13 @@ export class AcademicoController {
   constructor(private readonly svc: AcademicoService) {}
 
   // ── CHAMADA PÚBLICA (via link, sem autenticação JWT) ─────────────────────
+
+  @Public()
+  @Get('chamada/professor-turmas')
+  async turmasPorCPFProfessor(@Query('cpf') cpf: string) {
+    if (!cpf) throw new BadRequestException('CPF obrigatório');
+    return this.svc.listarTurmasPorCPFProfessor(cpf);
+  }
 
   @Public()
   @Get('chamada/alunos')

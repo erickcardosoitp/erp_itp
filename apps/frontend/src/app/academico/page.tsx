@@ -21,6 +21,7 @@ interface Turma { id: string; nome: string; curso_id?: string; professor_id?: st
 interface TurmaAlunoRecord { id: string; turma_id: string | null; aluno_id: string; status: string; created_at: string; }
 interface GradeCard { id: string; dia_semana: number; horario_inicio: string; horario_fim: string; nome_turma?: string; nome_curso?: string; nome_professor?: string; turma_id?: string; sala?: string; cor?: string; }
 interface DiarioEntry { id: string; tipo: string; titulo?: string; descricao?: string; aluno_id?: string; aluno_nome?: string; turma_id?: string; data: string; usuario_nome?: string; created_at: string; }
+interface TurmaAluno { id: string; nome: string; cor?: string; status: string; }
 interface Aluno {
   id: string; nome_completo: string; numero_matricula?: string; cpf?: string; celular?: string; email?: string;
   sexo?: string; data_nascimento?: string; idade?: number; escolaridade?: string; turno_escolar?: string;
@@ -28,6 +29,7 @@ interface Aluno {
   cursos_matriculados?: string; ativo?: boolean; data_matricula?: string; lgpd_aceito?: boolean; autoriza_imagem?: boolean;
   maior_18_anos?: boolean; nome_responsavel?: string; email_responsavel?: string; grau_parentesco?: string; cpf_responsavel?: string; telefone_alternativo?: string;
   possui_alergias?: string; cuidado_especial?: string; detalhes_cuidado?: string; uso_medicamento?: string;
+  turmas?: TurmaAluno[]; foto_url?: string | null;
   turma_nome?: string | null; turma_status?: string;
 }
 interface PresencaSessao { id: string; turma_id: string; turma_nome?: string; data: string; tema_aula?: string; conteudo_abordado?: string; usuario_nome?: string; total_presentes: number; total_ausentes: number; created_at: string; }
@@ -836,9 +838,7 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
                   <th className="text-left px-4 py-3">Aluno</th>
                   <th className="text-left px-4 py-3">Matrícula</th>
                   <th className="text-left px-4 py-3">CPF</th>
-                  <th className="text-left px-4 py-3">Cursos</th>
-                  <th className="text-left px-4 py-3">Turma</th>
-                  <th className="text-left px-4 py-3">Turno</th>
+                  <th className="text-left px-4 py-3">Turmas</th>
                   <th className="text-center px-4 py-3">Status</th>
                   <th className="text-left px-4 py-3">Data Matr.</th>
                   <th className="text-center px-4 py-3">Ficha</th>
@@ -849,26 +849,44 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
                 {alunos.map((a, i) => (
                   <tr key={a.id} className={`border-b border-slate-50 hover:bg-purple-50/30 transition-colors ${!a.ativo ? 'opacity-60' : ''} ${i % 2 === 0 ? '' : 'bg-slate-50/30'}`}>
                     <td className="px-4 py-3">
-                      <div className="font-bold text-slate-800">{a.nome_completo}</div>
-                      <div className="text-[9px] text-slate-400">{a.celular || a.email || '–'}</div>
+                      <div className="flex items-center gap-3">
+                        {a.foto_url
+                          ? <img src={a.foto_url} alt="" className="w-8 h-8 rounded-full object-cover shrink-0 border border-slate-100 shadow-sm" />
+                          : <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-100 to-purple-200 flex items-center justify-center shrink-0 text-[11px] font-black text-purple-600">
+                              {(a.nome_completo[0] || '?').toUpperCase()}
+                            </div>
+                        }
+                        <div>
+                          <div className="font-bold text-slate-800">{a.nome_completo}</div>
+                          <div className="text-[9px] text-slate-400">{a.celular || a.email || '–'}</div>
+                        </div>
+                      </div>
                     </td>
-                    <td className="px-4 py-3 font-mono text-purple-700 font-bold">{a.numero_matricula || '–'}</td>
-                    <td className="px-4 py-3 text-slate-500">{a.cpf || '–'}</td>
-                    <td className="px-4 py-3 max-w-[160px] truncate text-slate-600">{a.cursos_matriculados || '–'}</td>
-                    <td className="px-4 py-3 text-slate-500">
-                      {a.turma_nome
-                        ? <span className="text-[10px] font-bold text-indigo-700">{a.turma_nome}</span>
-                        : a.turma_status === 'backlog'
-                          ? <span className="px-2 py-0.5 rounded-full text-[8px] font-black uppercase bg-amber-100 text-amber-700">Backlog</span>
-                          : <span className="text-slate-300">–</span>}
+                    <td className="px-4 py-3 font-mono text-purple-700 font-bold text-[10px]">{a.numero_matricula || '–'}</td>
+                    <td className="px-4 py-3 text-slate-500 font-mono text-[10px]">{a.cpf || '–'}</td>
+                    <td className="px-4 py-3 max-w-[220px]">
+                      {(a.turmas && a.turmas.length > 0) ? (
+                        <div className="flex flex-wrap gap-1">
+                          {a.turmas.filter(t => t.status === 'ativo').map(t => (
+                            <span key={t.id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black text-white shadow-sm"
+                              style={{ backgroundColor: t.cor || '#6d28d9' }}>
+                              {t.nome}
+                            </span>
+                          ))}
+                          {a.turmas.filter(t => t.status !== 'ativo').length > 0 && a.turmas.filter(t => t.status === 'ativo').length === 0 && (
+                            <span className="px-2 py-0.5 rounded-full text-[8px] font-black uppercase bg-amber-100 text-amber-700">Backlog</span>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-slate-300 text-[10px]">Sem turma</span>
+                      )}
                     </td>
-                    <td className="px-4 py-3 text-slate-500">{a.turno_escolar || '–'}</td>
                     <td className="px-4 py-3 text-center">
                       <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase ${a.ativo ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-500'}`}>
                         {a.ativo ? 'Ativo' : 'Inativo'}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-slate-500">{fmtDate(a.data_matricula)}</td>
+                    <td className="px-4 py-3 text-slate-500 text-[10px]">{fmtDate(a.data_matricula)}</td>
                     <td className="px-4 py-3 text-center">
                       <button onClick={() => verFicha(a.id)} disabled={fichaLoading}
                         className="bg-purple-100 text-purple-700 px-3 py-1 rounded-lg text-[9px] font-black uppercase hover:bg-purple-200 transition-colors disabled:opacity-50">
@@ -973,9 +991,11 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
                 </div>
                 <div>
                   <h2 className="font-black text-slate-800 text-base uppercase tracking-tight">{fichaAluno.aluno?.nome_completo}</h2>
-                  <div className="flex gap-2 mt-0.5 flex-wrap">
+                  <div className="flex gap-1.5 mt-0.5 flex-wrap items-center">
                     <span className="font-mono text-[10px] font-black text-purple-700 bg-purple-50 px-2 py-0.5 rounded">{fichaAluno.aluno?.numero_matricula || '–'}</span>
-                    {fichaAluno.turmaInfo && <span className="text-[10px] font-black text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded">{fichaAluno.turmaInfo.nome}</span>}
+                    {(fichaAluno.turmasDoAluno || []).filter((t: any) => t.status === 'ativo' && t.turma_id).map((t: any) => (
+                      <span key={t.id} className="text-[9px] font-black text-white px-2 py-0.5 rounded shadow-sm" style={{ backgroundColor: t.turma_cor || '#4f46e5' }}>{t.turma_nome}</span>
+                    ))}
                     <span className={`text-[10px] font-black px-2 py-0.5 rounded ${fichaAluno.aluno?.ativo ? 'bg-green-50 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
                       {fichaAluno.aluno?.ativo ? 'Ativo' : 'Inativo'}
                     </span>
@@ -1204,6 +1224,23 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
                       )}
                     </div>
                   </section>
+
+                  {/* Turmas */}
+                  {(fichaAluno.turmasDoAluno || []).length > 0 && (
+                    <section>
+                      <h4 className="text-[9px] font-black uppercase text-indigo-600 mb-2 tracking-widest">Turmas Matriculadas</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {(fichaAluno.turmasDoAluno as any[]).map((t: any) => (
+                          <div key={t.id} className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-bold ${t.status === 'ativo' ? 'border-indigo-200 bg-indigo-50 text-indigo-800' : 'border-slate-100 bg-slate-50 text-slate-500'}`}>
+                            {t.turma_id && <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: t.turma_cor || '#6d28d9' }} />}
+                            <span>{t.turma_nome || 'Backlog'}</span>
+                            {t.turno && <span className="text-[9px] text-slate-400 font-medium">{t.turno}</span>}
+                            <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded-full ${t.status === 'ativo' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>{t.status}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  )}
 
                   {/* Responsável */}
                   {fichaAluno.aluno?.nome_responsavel && (
@@ -1457,6 +1494,11 @@ function TurmasTab({ cursos, professores, alunos }: { cursos: Curso[]; professor
   const [profSelecionadoId, setProfSelecionadoId] = useState('');
   const [atribuindoProf, setAtribuindoProf] = useState(false);
   const [erroAtribuir, setErroAtribuir] = useState<string | null>(null);
+  // ── Alunos da turma ──────────────────────────────────────────────────────────
+  const [showAlunosTurma, setShowAlunosTurma] = useState(false);
+  const [turmaSelecionada, setTurmaSelecionada] = useState<Turma | null>(null);
+  const [alunosDaTurma, setAlunosDaTurma] = useState<any[]>([]);
+  const [loadingAlunosTurma, setLoadingAlunosTurma] = useState(false);
   // ── Histórico de presença por turma ──────────────────────────────────────────
   const [showHistPresenca, setShowHistPresenca] = useState(false);
   const [turmaPresenca, setTurmaPresenca] = useState<Turma | null>(null);
@@ -1556,8 +1598,8 @@ function TurmasTab({ cursos, professores, alunos }: { cursos: Curso[]; professor
     }
   };
 
-  const abrirIncluir = () => {
-    setIncluirAlunoId(''); setIncluirTurmaId('');
+  const abrirIncluir = (turmaIdPreSel?: string) => {
+    setIncluirAlunoId(''); setIncluirTurmaId(turmaIdPreSel || '');
     setIncluirErro(null); setIncluirSucesso(null);
     setBuscarAluno('');
     setShowIncluir(true);
@@ -1610,6 +1652,18 @@ function TurmasTab({ cursos, professores, alunos }: { cursos: Curso[]; professor
     } finally {
       setAtribuindoProf(false);
     }
+  };
+
+  const abrirAlunosTurma = async (t: Turma) => {
+    setTurmaSelecionada(t);
+    setAlunosDaTurma([]);
+    setLoadingAlunosTurma(true);
+    setShowAlunosTurma(true);
+    try {
+      const r = await api.get(`/academico/turma-alunos/${t.id}`);
+      setAlunosDaTurma(Array.isArray(r.data) ? r.data : []);
+    } catch { setAlunosDaTurma([]); }
+    setLoadingAlunosTurma(false);
   };
 
   const abrirHistPresenca = async (t: Turma) => {
@@ -1692,8 +1746,10 @@ function TurmasTab({ cursos, professores, alunos }: { cursos: Curso[]; professor
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex justify-center gap-1 flex-wrap">
+                      <button onClick={() => abrirAlunosTurma(t)} title="Ver Alunos da Turma"
+                        className="p-1.5 rounded-lg hover:bg-green-50 text-green-600"><Users size={12}/></button>
                       <button onClick={() => abrirHistPresenca(t)} title="Histórico de Presença"
-                        className="p-1.5 rounded-lg hover:bg-purple-50 text-purple-400" ><ClipboardCheck size={12}/></button>
+                        className="p-1.5 rounded-lg hover:bg-purple-50 text-purple-400"><ClipboardCheck size={12}/></button>
                       <button onClick={() => abrirAtribuirProf(t)} title="Atribuir Professor"
                         className="p-1.5 rounded-lg hover:bg-indigo-50 text-indigo-400"><UserPlus size={12}/></button>
                       <button onClick={() => abrir(t)} title="Editar" className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><Edit3 size={12}/></button>
@@ -1966,6 +2022,79 @@ function TurmasTab({ cursos, professores, alunos }: { cursos: Curso[]; professor
                   <><UserPlus size={13}/> Confirmar Inclusão</>
                 )}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal: Alunos da Turma ──────────── */}
+      {showAlunosTurma && turmaSelecionada && (
+        <div className="fixed inset-0 z-[300] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowAlunosTurma(false)}>
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[85vh]" onClick={e => e.stopPropagation()}>
+            <div className="px-6 pt-5 pb-4 border-b border-slate-100 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <span className="w-4 h-4 rounded-full" style={{ backgroundColor: turmaSelecionada.cor || '#7c3aed' }} />
+                <div>
+                  <h2 className="font-black text-slate-800 text-base">{turmaSelecionada.nome}</h2>
+                  <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wide">
+                    {loadingAlunosTurma ? 'Carregando...' : `${alunosDaTurma.length} aluno(s) matriculado(s)`}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => { setShowAlunosTurma(false); setIncluirTurmaId(turmaSelecionada.id); setIncluirAlunoId(''); setIncluirErro(null); setIncluirSucesso(null); setBuscarAluno(''); setShowIncluir(true); }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white rounded-xl text-[9px] font-black uppercase hover:bg-indigo-700">
+                  <UserPlus size={11}/> Adicionar Aluno
+                </button>
+                <button onClick={() => setShowAlunosTurma(false)} className="p-1.5 rounded-xl text-slate-400 hover:bg-slate-100"><X size={16}/></button>
+              </div>
+            </div>
+            <div className="overflow-y-auto flex-1">
+              {loadingAlunosTurma ? (
+                <div className="py-16 text-center text-sm text-slate-400">Carregando alunos...</div>
+              ) : alunosDaTurma.length === 0 ? (
+                <div className="py-16 text-center space-y-3">
+                  <div className="w-14 h-14 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto"><Users size={22} className="text-slate-300"/></div>
+                  <p className="text-sm font-bold text-slate-400">Nenhum aluno matriculado nesta turma.</p>
+                  <button
+                    onClick={() => { setShowAlunosTurma(false); setIncluirTurmaId(turmaSelecionada.id); setIncluirAlunoId(''); setIncluirErro(null); setIncluirSucesso(null); setBuscarAluno(''); setShowIncluir(true); }}
+                    className="text-xs font-black text-indigo-600 underline">Adicionar primeiro aluno</button>
+                </div>
+              ) : (
+                <table className="w-full text-[11px]">
+                  <thead className="bg-slate-50 border-b border-slate-100 sticky top-0">
+                    <tr className="text-[9px] font-black uppercase text-slate-400">
+                      <th className="text-left px-5 py-3">Aluno</th>
+                      <th className="text-left px-4 py-3">Matrícula</th>
+                      <th className="text-left px-4 py-3">CPF</th>
+                      <th className="text-left px-4 py-3">Contato</th>
+                      <th className="text-left px-4 py-3">Vinculado em</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {alunosDaTurma.map((a: any, i: number) => (
+                      <tr key={a.vinculo_id || a.id} className={`border-b border-slate-50 hover:bg-indigo-50/30 ${i % 2 === 0 ? '' : 'bg-slate-50/20'}`}>
+                        <td className="px-5 py-3">
+                          <div className="flex items-center gap-2.5">
+                            {a.foto_url
+                              ? <img src={a.foto_url} alt="" className="w-7 h-7 rounded-full object-cover shrink-0 border border-slate-100"/>
+                              : <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center shrink-0 text-[10px] font-black text-indigo-600">{(a.nome_completo?.[0] || '?').toUpperCase()}</div>}
+                            <div>
+                              <div className="font-bold text-slate-800">{a.nome_completo}</div>
+                              <div className={`text-[8px] font-black uppercase ${a.ativo ? 'text-green-600' : 'text-red-400'}`}>{a.ativo ? 'Ativo' : 'Inativo'}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 font-mono text-purple-700 font-bold text-[10px]">{a.numero_matricula || '–'}</td>
+                        <td className="px-4 py-3 text-slate-500 font-mono text-[10px]">{a.cpf || '–'}</td>
+                        <td className="px-4 py-3 text-slate-500 text-[10px]">{a.celular || a.email || '–'}</td>
+                        <td className="px-4 py-3 text-slate-400 text-[10px]">{a.vinculado_em ? new Date(a.vinculado_em).toLocaleDateString('pt-BR') : '–'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
           </div>
         </div>
