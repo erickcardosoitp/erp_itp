@@ -853,6 +853,56 @@ export class AcademicoService {
     return { professor: { id: professor.id, nome: professor.nome }, turmas };
   }
 
+  async acervoDocumentos() {
+    const OBRIGATORIOS = ['foto_aluno', 'identidade', 'comprovante_residencia', 'certidao_nascimento', 'identidade_responsavel'];
+
+    const rows = await this.dataSource.query(`
+      SELECT
+        a.id                       AS aluno_id,
+        a.nome_completo,
+        a.celular,
+        a.telefone_alternativo,
+        a.nome_responsavel,
+        a.email_responsavel,
+        COALESCE(a.inscricao_id::text, i.id::text) AS inscricao_id,
+        COALESCE(
+          json_agg(DISTINCT d.tipo) FILTER (WHERE d.tipo IS NOT NULL),
+          '[]'
+        )                          AS docs_presentes,
+        COALESCE(
+          json_agg(DISTINCT t.nome) FILTER (WHERE t.nome IS NOT NULL),
+          '[]'
+        )                          AS turmas
+      FROM alunos a
+      LEFT JOIN inscricoes i        ON i.aluno_id::text = a.id::text
+      LEFT JOIN documentos_inscricao d ON d.inscricao_id = COALESCE(a.inscricao_id, i.id)
+      LEFT JOIN turma_alunos ta     ON ta.aluno_id::text = a.id::text AND ta.status = 'ativo'
+      LEFT JOIN turmas t            ON t.id::text = ta.turma_id::text
+      WHERE (a.ativo IS NOT FALSE)
+      GROUP BY a.id, a.nome_completo, a.celular, a.telefone_alternativo,
+               a.nome_responsavel, a.email_responsavel, a.inscricao_id, i.id
+      ORDER BY a.nome_completo ASC
+    `);
+
+    return rows.map((r: any) => {
+      const docs: string[] = Array.isArray(r.docs_presentes) ? r.docs_presentes : JSON.parse(r.docs_presentes || '[]');
+      const faltando = OBRIGATORIOS.filter(d => !docs.includes(d));
+      return {
+        aluno_id:            r.aluno_id,
+        nome_completo:       r.nome_completo,
+        inscricao_id:        r.inscricao_id,
+        celular:             r.celular,
+        telefone_alternativo: r.telefone_alternativo,
+        nome_responsavel:    r.nome_responsavel,
+        email_responsavel:   r.email_responsavel,
+        turmas:              Array.isArray(r.turmas) ? r.turmas : JSON.parse(r.turmas || '[]'),
+        docs_presentes:      docs,
+        docs_faltando:       faltando,
+        completo:            faltando.length === 0,
+      };
+    });
+  }
+
   async listarAlunosChamada(turmaId: string) {
     this.logger.log(`[Chamada] Listando alunos turma=${turmaId}`);
     const turma = await this.turmaRepo.findOneBy({ id: turmaId });

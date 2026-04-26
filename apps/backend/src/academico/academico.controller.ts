@@ -204,6 +204,10 @@ export class AcademicoController {
   @ModuloPerm('academico', 'visualizar')
   getKpisTurmas() { return this.svc.kpisTurmas(); }
 
+  @Get('documentos/acervo')
+  @ModuloPerm('academico', 'visualizar')
+  acervoDocumentos() { return this.svc.acervoDocumentos(); }
+
   @Get('alunos')
   @ModuloPerm('academico', 'visualizar')
   getAlunos(@Query() q: any) { return this.svc.listarAlunos(q); }
