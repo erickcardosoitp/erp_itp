@@ -64,6 +64,23 @@ export class AcademicoController {
     }
   }
 
+  @Public()
+  @Get('chamada/buscar-alunos')
+  async buscarAlunosChamada(
+    @Query('token') token: string,
+    @Query('nome') nome: string,
+  ) {
+    this.svc.validarTokenChamada(token);
+    return this.svc.buscarAlunosChamada(nome);
+  }
+
+  @Public()
+  @Post('chamada/incluir-aluno')
+  async incluirAlunoNaTurma(@Body() dto: any) {
+    this.svc.validarTokenChamada(dto.token);
+    return this.svc.incluirAlunoNaTurma(dto.aluno_id, dto.turma_id);
+  }
+
   // ── CURSOS ────────────────────────────────────────────────────────────────
 
   @Get('cursos')

@@ -516,15 +516,44 @@ export class AcademicoService {
     const turma = await this.turmaRepo.findOneBy({ id: turmaId });
     if (!turma) throw new NotFoundException('Turma não encontrada');
 
-    // Check if already linked to THIS specific turma (any status)
+    const aluno = await this.alunoRepo.findOneBy({ id: alunoId, ativo: true });
+    if (!aluno) throw new NotFoundException('Aluno não encontrado');
+
     const existente = await this.turmaAlunoRepo.findOne({ where: { aluno_id: alunoId, turma_id: turmaId } });
     if (existente) {
+      if (existente.status === 'ativo') throw new ConflictException('Aluno já está nesta turma');
       existente.status = 'ativo';
-      return this.turmaAlunoRepo.save(existente);
+      await this.turmaAlunoRepo.save(existente);
+    } else {
+      await this.turmaAlunoRepo.save(
+        this.turmaAlunoRepo.create({ aluno_id: alunoId, turma_id: turmaId, status: 'ativo' })
+      );
     }
-    return this.turmaAlunoRepo.save(
-      this.turmaAlunoRepo.create({ aluno_id: alunoId, turma_id: turmaId, status: 'ativo' })
+
+    const sessoesAnteriores = await this.dataSource.query(
+      `SELECT id::text AS id, data::text AS data FROM presenca_sessoes
+       WHERE turma_id = $1 AND data < NOW()
+       ORDER BY data ASC`,
+      [turmaId],
     );
+
+    for (const sessao of sessoesAnteriores) {
+      await this.dataSource.query(
+        `INSERT INTO diario_academico (aluno_id, turma_id, data, tipo, descricao, isento, sessao_id, created_at, updated_at)
+         VALUES ($1, $2, $3, 'Presença', 'Isento', true, $4, NOW(), NOW())
+         ON CONFLICT DO NOTHING`,
+        [alunoId, turmaId, sessao.data, sessao.id],
+      );
+    }
+
+    this.logger.log(`Aluno ${aluno.nome_completo} incluído na turma ${turma.nome} com ${sessoesAnteriores.length} isenções retroativas`);
+
+    return {
+      ok: true,
+      aluno: { id: aluno.id, nome_completo: aluno.nome_completo },
+      turma: { id: turma.id, nome: turma.nome },
+      isencoes_retroativas: sessoesAnteriores.length,
+    };
   }
 
   async removerAlunoDaTurma(id: string) {
@@ -1452,6 +1481,21 @@ export class AcademicoService {
       tendencia_mensal: meses.reverse(),
     };
   }
+
+  async buscarAlunosChamada(nome: string) {
+    if (!nome || nome.trim().length < 2) return { alunos: [] };
+    const rows = await this.dataSource.query(
+      `SELECT id::text AS id, nome_completo, numero_matricula, data_nascimento::text AS data_nascimento, celular
+       FROM alunos
+       WHERE nome_completo ILIKE $1 AND (ativo IS NOT FALSE)
+       ORDER BY nome_completo ASC
+       LIMIT 20`,
+      [`%${nome.trim()}%`],
+    );
+    return { alunos: rows };
+  }
+
+
 
   async statsChamados() {
     const rows = await this.dataSource.query(`

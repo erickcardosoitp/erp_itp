@@ -1,20 +1,24 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
-import { GraduationCap, Search, ChevronRight, Check, X, RefreshCw, ClipboardCheck, Users, ArrowLeft, Phone, UserCircle, ChevronDown, UserPlus } from 'lucide-react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+import {
+  GraduationCap, Search, ChevronRight, Check, X, RefreshCw,
+  ClipboardCheck, Users, ArrowLeft, Phone, UserCircle, ChevronDown,
+  UserPlus, BookOpen, AlertCircle, Loader2, CheckCircle2,
+} from 'lucide-react';
 
-// Chama o backend diretamente — sem passar pelo proxy do Next.js
 const BACKEND = (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001/api');
 const TOKEN   = process.env.NEXT_PUBLIC_CHAMADA_TOKEN || 'itp-chamada-2026';
 
 type Step = 'login' | 'turmas' | 'chamada' | 'sucesso';
-type ChamadaTab = 'chamada' | 'fichas' | 'novo_aluno';
+type ChamadaTab = 'chamada' | 'fichas' | 'incluir_aluno';
 
-interface Turma   { id: string; nome: string; cor?: string; turno?: string; curso_nome?: string; }
+interface Turma    { id: string; nome: string; cor?: string; turno?: string; curso_nome?: string; }
 interface Professor { id: string; nome: string; }
-interface AlunoRow  {
+interface AlunoRow {
   id: string;
   nome_completo: string;
+  numero_matricula?: string | null;
   celular?: string | null;
   telefone_alternativo?: string | null;
   nome_responsavel?: string | null;
@@ -22,7 +26,14 @@ interface AlunoRow  {
   cpf_responsavel?: string | null;
   data_nascimento?: string | null;
 }
-interface Registro  { aluno_id: string; presente: boolean; }
+interface AlunoSearchResult {
+  id: string;
+  nome_completo: string;
+  numero_matricula?: string | null;
+  celular?: string | null;
+  data_nascimento?: string | null;
+}
+interface Registro { aluno_id: string; presente: boolean; }
 
 function calcIdade(dataNasc?: string | null) {
   if (!dataNasc) return null;
@@ -44,28 +55,43 @@ function fmtCPF(v: string) {
 
 function today() { return new Date().toISOString().split('T')[0]; }
 
+function Avatar({ nome, size = 'md' }: { nome: string; size?: 'sm' | 'md' | 'lg' }) {
+  const szClass = size === 'sm' ? 'w-8 h-8 text-xs' : size === 'lg' ? 'w-12 h-12 text-base' : 'w-10 h-10 text-sm';
+  return (
+    <div className={`${szClass} rounded-full bg-purple-600/30 border border-purple-500/30 flex items-center justify-center shrink-0 font-black text-purple-300 uppercase`}>
+      {nome[0] || '?'}
+    </div>
+  );
+}
+
 export default function ChamadaProfessorPage() {
-  const [step, setStep]               = useState<Step>('login');
-  const [cpf, setCpf]                 = useState('');
-  const [buscando, setBuscando]       = useState(false);
-  const [erroLogin, setErroLogin]     = useState<string | null>(null);
-  const [professor, setProfessor]     = useState<Professor | null>(null);
-  const [turmas, setTurmas]           = useState<Turma[]>([]);
+  const [step, setStep]                     = useState<Step>('login');
+  const [cpf, setCpf]                       = useState('');
+  const [buscando, setBuscando]             = useState(false);
+  const [erroLogin, setErroLogin]           = useState<string | null>(null);
+  const [professor, setProfessor]           = useState<Professor | null>(null);
+  const [turmas, setTurmas]                 = useState<Turma[]>([]);
   const [turmaEscolhida, setTurmaEscolhida] = useState<Turma | null>(null);
-  const [data, setData]               = useState(today());
-  const [tema, setTema]               = useState('');
-  const [conteudo, setConteudo]       = useState('');
-  const [alunos, setAlunos]           = useState<AlunoRow[]>([]);
-  const [registros, setRegistros]     = useState<Registro[]>([]);
-  const [loadingAlunos, setLoadingAlunos] = useState(false);
-  const [salvando, setSalvando]       = useState(false);
-  const [erroSalvar, setErroSalvar]   = useState<string | null>(null);
-  const [chamadaTab, setChamadaTab]   = useState<ChamadaTab>('chamada');
-  const [fichaAberta, setFichaAberta] = useState<string | null>(null);
-  const [novoAluno, setNovoAluno]     = useState({ nome_completo: '', data_nascimento: '', celular: '' });
-  const [salvandoNovo, setSalvandoNovo] = useState(false);
-  const [erroNovo, setErroNovo]       = useState<string | null>(null);
-  const [sucessoNovo, setSucessoNovo] = useState<string | null>(null);
+  const [data, setData]                     = useState(today());
+  const [tema, setTema]                     = useState('');
+  const [conteudo, setConteudo]             = useState('');
+  const [alunos, setAlunos]                 = useState<AlunoRow[]>([]);
+  const [registros, setRegistros]           = useState<Registro[]>([]);
+  const [loadingAlunos, setLoadingAlunos]   = useState(false);
+  const [salvando, setSalvando]             = useState(false);
+  const [erroSalvar, setErroSalvar]         = useState<string | null>(null);
+  const [chamadaTab, setChamadaTab]         = useState<ChamadaTab>('chamada');
+  const [fichaAberta, setFichaAberta]       = useState<string | null>(null);
+
+  // Incluir Aluno
+  const [incluirNome, setIncluirNome]                   = useState('');
+  const [incluirResultados, setIncluirResultados]       = useState<AlunoSearchResult[]>([]);
+  const [incluirBuscando, setIncluirBuscando]           = useState(false);
+  const [incluirSelecionado, setIncluirSelecionado]     = useState<AlunoSearchResult | null>(null);
+  const [incluirConfirmando, setIncluirConfirmando]     = useState(false);
+  const [incluirErro, setIncluirErro]                   = useState<string | null>(null);
+  const [incluirSucesso, setIncluirSucesso]             = useState<{ nome: string; isencoes: number } | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const buscarProfessor = useCallback(async () => {
     const cpfLimpo = cpf.replace(/\D/g, '');
@@ -88,13 +114,36 @@ export default function ChamadaProfessorPage() {
     }
   }, [cpf]);
 
+  const recarregarAlunos = useCallback(async (turmaId: string) => {
+    setLoadingAlunos(true);
+    try {
+      const res = await fetch(`${BACKEND}/academico/chamada/alunos?token=${TOKEN}&turma_id=${turmaId}`);
+      const body = await res.json();
+      const lista: AlunoRow[] = Array.isArray(body.alunos) ? body.alunos : [];
+      setAlunos(lista);
+      setRegistros(prev => {
+        const prevMap = Object.fromEntries(prev.map(r => [r.aluno_id, r.presente]));
+        return lista.map(a => ({ aluno_id: a.id, presente: prevMap[a.id] ?? true }));
+      });
+    } catch {
+      setAlunos([]);
+    } finally {
+      setLoadingAlunos(false);
+    }
+  }, []);
+
   const escolherTurma = useCallback(async (t: Turma) => {
     setTurmaEscolhida(t);
     setAlunos([]);
     setFichaAberta(null);
     setChamadaTab('chamada');
-    setLoadingAlunos(true);
+    setIncluirNome('');
+    setIncluirResultados([]);
+    setIncluirSelecionado(null);
+    setIncluirSucesso(null);
+    setIncluirErro(null);
     setStep('chamada');
+    setLoadingAlunos(true);
     try {
       const res = await fetch(`${BACKEND}/academico/chamada/alunos?token=${TOKEN}&turma_id=${t.id}`);
       const body = await res.json();
@@ -111,33 +160,6 @@ export default function ChamadaProfessorPage() {
   const togglePresenca = (alunoId: string) => {
     setRegistros(prev => prev.map(r => r.aluno_id === alunoId ? { ...r, presente: !r.presente } : r));
   };
-
-  const criarAlunoRapido = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!novoAluno.nome_completo.trim()) { setErroNovo('Nome completo é obrigatório.'); return; }
-    setSalvandoNovo(true); setErroNovo(null); setSucessoNovo(null);
-    try {
-      const res = await fetch(`${BACKEND}/academico/chamada/aluno-rapido`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          token: TOKEN,
-          nome_completo: novoAluno.nome_completo.trim(),
-          data_nascimento: novoAluno.data_nascimento || undefined,
-          celular: novoAluno.celular.trim() || undefined,
-          professor_nome: professor?.nome,
-        }),
-      });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.message || 'Erro ao cadastrar.');
-      setSucessoNovo(`"${body.nome_completo}" cadastrado! Matrícula: ${body.numero_matricula}`);
-      setNovoAluno({ nome_completo: '', data_nascimento: '', celular: '' });
-    } catch (err: any) {
-      setErroNovo(err.message || 'Erro ao cadastrar aluno.');
-    } finally {
-      setSalvandoNovo(false);
-    }
-  }, [novoAluno, professor]);
 
   const salvar = useCallback(async () => {
     if (!turmaEscolhida || !professor) return;
@@ -165,131 +187,184 @@ export default function ChamadaProfessorPage() {
     }
   }, [turmaEscolhida, professor, tema, conteudo, data, registros]);
 
+  // Busca de alunos existentes (debounced)
+  const onIncluirNomeChange = (v: string) => {
+    setIncluirNome(v);
+    setIncluirSelecionado(null);
+    setIncluirSucesso(null);
+    setIncluirErro(null);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (v.trim().length < 2) { setIncluirResultados([]); return; }
+    debounceRef.current = setTimeout(async () => {
+      setIncluirBuscando(true);
+      try {
+        const res = await fetch(`${BACKEND}/academico/chamada/buscar-alunos?token=${TOKEN}&nome=${encodeURIComponent(v.trim())}`);
+        const body = await res.json();
+        setIncluirResultados(Array.isArray(body.alunos) ? body.alunos : []);
+      } catch {
+        setIncluirResultados([]);
+      } finally {
+        setIncluirBuscando(false);
+      }
+    }, 350);
+  };
+
+  const confirmarInclusao = useCallback(async () => {
+    if (!incluirSelecionado || !turmaEscolhida) return;
+    setIncluirConfirmando(true); setIncluirErro(null);
+    try {
+      const res = await fetch(`${BACKEND}/academico/chamada/incluir-aluno`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: TOKEN, turma_id: turmaEscolhida.id, aluno_id: incluirSelecionado.id }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.message || 'Erro ao incluir aluno.');
+      setIncluirSucesso({ nome: incluirSelecionado.nome_completo, isencoes: body.isencoes_retroativas ?? 0 });
+      setIncluirNome('');
+      setIncluirResultados([]);
+      setIncluirSelecionado(null);
+      await recarregarAlunos(turmaEscolhida.id);
+    } catch (e: any) {
+      setIncluirErro(e.message || 'Erro ao incluir aluno.');
+    } finally {
+      setIncluirConfirmando(false);
+    }
+  }, [incluirSelecionado, turmaEscolhida, recarregarAlunos]);
+
   const presentes = registros.filter(r => r.presente).length;
   const ausentes  = registros.length - presentes;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-950 to-slate-900 flex items-center justify-center p-4">
-      <div className="w-full max-w-lg">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-950 to-slate-900 flex flex-col items-center justify-start p-4 pt-8 pb-12">
+      <div className="w-full max-w-md">
 
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-purple-600/20 border border-purple-500/30 rounded-2xl mb-4 backdrop-blur">
-            <GraduationCap className="text-purple-400" size={28} />
+        {/* Logo / Topo */}
+        <div className="text-center mb-6">
+          <div className="inline-flex items-center justify-center w-14 h-14 bg-purple-600/20 border border-purple-500/30 rounded-2xl mb-3 backdrop-blur">
+            <GraduationCap className="text-purple-400" size={26} />
           </div>
-          <h1 className="text-2xl font-black text-white tracking-tight">
+          <h1 className="text-xl font-black text-white tracking-tight">
             Chamada <span className="text-purple-400">ITP</span>
           </h1>
-          <p className="text-slate-400 text-sm mt-1">Portal do Professor</p>
+          <p className="text-slate-500 text-xs mt-0.5">Portal do Professor</p>
         </div>
 
-        {/* ── STEP: Login ── */}
+        {/* ── LOGIN ── */}
         {step === 'login' && (
-          <div className="bg-white/5 backdrop-blur border border-white/10 rounded-3xl p-8 space-y-5">
+          <div className="bg-white/5 backdrop-blur border border-white/10 rounded-3xl p-6 space-y-5">
             <div>
               <h2 className="text-white font-black text-lg">Identificação</h2>
-              <p className="text-slate-400 text-sm mt-1">Digite seu CPF para acessar suas turmas.</p>
+              <p className="text-slate-400 text-sm mt-0.5">Digite seu CPF para acessar suas turmas.</p>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">CPF do Professor</label>
               <input
                 value={cpf}
                 onChange={e => { setCpf(fmtCPF(e.target.value)); setErroLogin(null); }}
                 onKeyDown={e => e.key === 'Enter' && buscarProfessor()}
                 placeholder="000.000.000-00"
-                className="w-full bg-white/10 border border-white/20 text-white placeholder-slate-500 rounded-2xl px-4 py-3 text-base font-mono focus:outline-none focus:ring-2 focus:ring-purple-500"
+                inputMode="numeric"
+                className="w-full bg-white/10 border border-white/20 text-white placeholder-slate-500 rounded-2xl px-4 py-3.5 text-lg font-mono focus:outline-none focus:ring-2 focus:ring-purple-500"
               />
             </div>
             {erroLogin && (
-              <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/20 text-red-400 text-sm font-medium rounded-xl px-4 py-3">
-                <X size={14} className="shrink-0 mt-0.5"/>
+              <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/20 text-red-400 text-sm rounded-xl px-4 py-3">
+                <AlertCircle size={15} className="shrink-0 mt-0.5"/>
                 <span>{erroLogin}</span>
               </div>
             )}
             <button
               onClick={buscarProfessor}
               disabled={buscando || cpf.replace(/\D/g, '').length < 11}
-              className="w-full flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white font-black py-3 rounded-2xl text-sm uppercase tracking-widest transition-all active:scale-95">
-              {buscando ? <><RefreshCw size={15} className="animate-spin"/> Buscando...</> : <><Search size={15}/> Entrar</>}
+              className="w-full flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-500 active:bg-purple-700 disabled:opacity-40 text-white font-black py-4 rounded-2xl text-sm uppercase tracking-widest transition-all active:scale-[0.98]">
+              {buscando ? <><Loader2 size={16} className="animate-spin"/> Buscando...</> : <><Search size={15}/> Entrar</>}
             </button>
           </div>
         )}
 
-        {/* ── STEP: Escolher Turma ── */}
+        {/* ── TURMAS ── */}
         {step === 'turmas' && professor && (
           <div className="bg-white/5 backdrop-blur border border-white/10 rounded-3xl overflow-hidden">
-            <div className="px-6 pt-6 pb-4 border-b border-white/10">
-              <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">Professor</p>
-              <h2 className="text-white font-black text-xl">{professor.nome}</h2>
-              <p className="text-slate-400 text-sm mt-1">Selecione a turma para iniciar a chamada.</p>
+            <div className="px-5 pt-5 pb-4 border-b border-white/10">
+              <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Professor</p>
+              <h2 className="text-white font-black text-lg mt-0.5">{professor.nome}</h2>
+              <p className="text-slate-400 text-xs mt-1">Selecione a turma para iniciar a chamada.</p>
             </div>
             {turmas.length === 0 ? (
               <div className="py-16 text-center px-6 space-y-3">
                 <Users size={32} className="text-slate-600 mx-auto"/>
-                <p className="text-slate-400 text-sm font-bold">Nenhuma turma ativa vinculada a este professor.</p>
+                <p className="text-slate-400 text-sm">Nenhuma turma ativa vinculada.</p>
               </div>
             ) : (
               <div className="divide-y divide-white/5">
                 {turmas.map(t => (
                   <button key={t.id} onClick={() => escolherTurma(t)}
-                    className="w-full flex items-center gap-4 px-6 py-4 hover:bg-white/10 transition-colors text-left group">
-                    <span className="w-4 h-4 rounded-full shrink-0" style={{ backgroundColor: t.cor || '#7c3aed' }} />
+                    className="w-full flex items-center gap-4 px-5 py-4 hover:bg-white/5 active:bg-white/10 transition-colors text-left group">
+                    <span className="w-4 h-4 rounded-full shrink-0 shadow-lg" style={{ backgroundColor: t.cor || '#7c3aed' }} />
                     <div className="flex-1 min-w-0">
                       <div className="text-white font-black text-sm">{t.nome}</div>
-                      <div className="text-slate-400 text-xs mt-0.5 flex items-center gap-2">
+                      <div className="text-slate-500 text-xs mt-0.5 flex items-center gap-1.5">
                         {t.curso_nome && <span>{t.curso_nome}</span>}
-                        {t.turno && <span>· {t.turno}</span>}
+                        {t.turno && <><span>·</span><span>{t.turno}</span></>}
                       </div>
                     </div>
-                    <ChevronRight size={16} className="text-slate-500 group-hover:text-purple-400 transition-colors shrink-0"/>
+                    <ChevronRight size={16} className="text-slate-600 group-hover:text-purple-400 transition-colors shrink-0"/>
                   </button>
                 ))}
               </div>
             )}
-            <div className="px-6 pb-5 pt-3 border-t border-white/10">
-              <button onClick={() => setStep('login')} className="text-slate-400 text-xs hover:text-white flex items-center gap-1.5">
+            <div className="px-5 py-4 border-t border-white/10">
+              <button onClick={() => setStep('login')} className="text-slate-500 text-xs hover:text-white flex items-center gap-1.5 transition-colors">
                 <ArrowLeft size={12}/> Trocar CPF
               </button>
             </div>
           </div>
         )}
 
-        {/* ── STEP: Chamada ── */}
+        {/* ── CHAMADA ── */}
         {step === 'chamada' && turmaEscolhida && professor && (
           <div className="bg-white/5 backdrop-blur border border-white/10 rounded-3xl overflow-hidden">
-            {/* Header */}
-            <div className="px-6 pt-5 pb-4 border-b border-white/10 flex items-start justify-between gap-3">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="w-3 h-3 rounded-full" style={{ backgroundColor: turmaEscolhida.cor || '#7c3aed' }}/>
-                  <h2 className="text-white font-black">{turmaEscolhida.nome}</h2>
+
+            {/* Header turma */}
+            <div className="px-5 pt-5 pb-4 border-b border-white/10">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span className="w-3.5 h-3.5 rounded-full shrink-0 shadow" style={{ backgroundColor: turmaEscolhida.cor || '#7c3aed' }}/>
+                  <div className="min-w-0">
+                    <h2 className="text-white font-black text-base truncate">{turmaEscolhida.nome}</h2>
+                    <p className="text-slate-500 text-xs truncate">{professor.nome}</p>
+                  </div>
                 </div>
-                <p className="text-slate-400 text-xs">{professor.nome}</p>
-              </div>
-              <div className="flex gap-3 text-center shrink-0">
-                <div className="bg-green-500/10 border border-green-500/20 rounded-xl px-3 py-1.5">
-                  <div className="text-green-400 font-black text-lg leading-none">{presentes}</div>
-                  <div className="text-green-500/60 text-[9px] uppercase font-black mt-0.5">Pres.</div>
-                </div>
-                <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-1.5">
-                  <div className="text-red-400 font-black text-lg leading-none">{ausentes}</div>
-                  <div className="text-red-500/60 text-[9px] uppercase font-black mt-0.5">Aus.</div>
+                <div className="flex gap-2 shrink-0">
+                  <div className="bg-green-500/10 border border-green-500/20 rounded-xl px-3 py-1.5 text-center">
+                    <div className="text-green-400 font-black text-xl leading-none">{presentes}</div>
+                    <div className="text-green-600 text-[9px] uppercase font-black">Pres</div>
+                  </div>
+                  <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-1.5 text-center">
+                    <div className="text-red-400 font-black text-xl leading-none">{ausentes}</div>
+                    <div className="text-red-600 text-[9px] uppercase font-black">Aus</div>
+                  </div>
                 </div>
               </div>
             </div>
 
             {/* Tabs */}
-            <div className="flex border-b border-white/10">
+            <div className="flex border-b border-white/10 bg-white/3">
               {([
-                { id: 'chamada',    label: 'Chamada',    Icon: ClipboardCheck },
-                { id: 'fichas',     label: 'Fichas',     Icon: Users },
-                { id: 'novo_aluno', label: 'Novo Aluno', Icon: UserPlus },
+                { id: 'chamada',       label: 'Chamada',  Icon: ClipboardCheck },
+                { id: 'fichas',        label: 'Fichas',   Icon: Users },
+                { id: 'incluir_aluno', label: 'Incluir',  Icon: UserPlus },
               ] as { id: ChamadaTab; label: string; Icon: any }[]).map(({ id, label, Icon }) => (
-                <button key={id} onClick={() => { setChamadaTab(id); setErroNovo(null); setSucessoNovo(null); }}
-                  className={`flex-1 py-3 text-xs font-black uppercase tracking-widest transition-colors
+                <button key={id} onClick={() => { setChamadaTab(id); setIncluirErro(null); }}
+                  className={`flex-1 py-3.5 text-[10px] font-black uppercase tracking-wider transition-colors flex flex-col items-center gap-1
                     ${chamadaTab === id
-                      ? id === 'novo_aluno' ? 'text-green-400 border-b-2 border-green-400' : 'text-purple-400 border-b-2 border-purple-400'
+                      ? id === 'incluir_aluno'
+                        ? 'text-emerald-400 border-b-2 border-emerald-400'
+                        : 'text-purple-400 border-b-2 border-purple-400'
                       : 'text-slate-500 hover:text-slate-300'}`}>
-                  <span className="flex items-center justify-center gap-1.5"><Icon size={13}/> {label}</span>
+                  <Icon size={16}/>
+                  {label}
                 </button>
               ))}
             </div>
@@ -297,30 +372,35 @@ export default function ChamadaProfessorPage() {
             {/* Tab: Chamada */}
             {chamadaTab === 'chamada' && (
               <>
-                <div className="px-6 py-4 space-y-3 border-b border-white/10">
+                <div className="px-5 py-4 space-y-3 border-b border-white/10">
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
-                      <label className="text-[10px] font-black uppercase text-slate-400">Data</label>
+                      <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Data</label>
                       <input type="date" value={data} onChange={e => setData(e.target.value)}
-                        className="w-full bg-white/10 border border-white/20 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"/>
+                        className="w-full bg-white/10 border border-white/20 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 [color-scheme:dark]"/>
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-[10px] font-black uppercase text-slate-400">Tema da Aula *</label>
-                      <input value={tema} onChange={e => setTema(e.target.value)} placeholder="Ex: Introdução..."
-                        className="w-full bg-white/10 border border-white/20 text-white placeholder-slate-500 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"/>
+                      <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Tema *</label>
+                      <input value={tema} onChange={e => setTema(e.target.value)} placeholder="Tema da aula..."
+                        className="w-full bg-white/10 border border-white/20 text-white placeholder-slate-600 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"/>
                     </div>
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-black uppercase text-slate-400">Conteúdo Abordado</label>
+                    <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Conteúdo</label>
                     <textarea value={conteudo} onChange={e => setConteudo(e.target.value)} rows={2} placeholder="Descreva o conteúdo da aula..."
-                      className="w-full bg-white/10 border border-white/20 text-white placeholder-slate-500 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"/>
+                      className="w-full bg-white/10 border border-white/20 text-white placeholder-slate-600 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"/>
                   </div>
                 </div>
-                <div className="max-h-64 overflow-y-auto">
+
+                {/* Lista de alunos */}
+                <div className="max-h-[45vh] overflow-y-auto">
                   {loadingAlunos ? (
-                    <div className="py-10 text-center text-slate-400 text-sm">Carregando alunos...</div>
+                    <div className="py-12 flex flex-col items-center gap-3 text-slate-500">
+                      <Loader2 size={24} className="animate-spin"/>
+                      <span className="text-sm">Carregando alunos...</span>
+                    </div>
                   ) : alunos.length === 0 ? (
-                    <div className="py-10 text-center text-slate-400 text-sm">Nenhum aluno encontrado nesta turma.</div>
+                    <div className="py-12 text-center text-slate-500 text-sm">Nenhum aluno nesta turma.</div>
                   ) : (
                     <div className="divide-y divide-white/5">
                       {alunos.map(a => {
@@ -328,14 +408,21 @@ export default function ChamadaProfessorPage() {
                         const presente = reg?.presente ?? true;
                         return (
                           <button key={a.id} onClick={() => togglePresenca(a.id)}
-                            className={`w-full flex items-center gap-3 px-6 py-3 transition-colors text-left ${presente ? 'hover:bg-green-500/5' : 'hover:bg-red-500/5 opacity-60'}`}>
-                            <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center shrink-0 text-xs font-black text-white/60">{(a.nome_completo[0] || '?').toUpperCase()}</div>
-                            <div className="flex-1 min-w-0">
-                              <div className="text-white text-sm font-bold truncate">{a.nome_completo}</div>
-                              {a.celular && <div className="text-slate-500 text-xs">{a.celular}</div>}
+                            className={`w-full flex items-center gap-3 px-5 py-4 transition-all text-left active:scale-[0.98]
+                              ${presente ? 'hover:bg-green-500/5' : 'bg-red-500/5 hover:bg-red-500/8 opacity-70'}`}>
+                            <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 text-sm font-black transition-all
+                              ${presente ? 'bg-green-500/20 text-green-400' : 'bg-white/5 text-slate-500'}`}>
+                              {presente ? <Check size={16}/> : (a.nome_completo[0] || '?').toUpperCase()}
                             </div>
-                            <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 border-2 transition-all ${presente ? 'bg-green-500 border-green-500' : 'bg-transparent border-slate-600'}`}>
-                              {presente && <Check size={13} className="text-white"/>}
+                            <div className="flex-1 min-w-0">
+                              <div className={`text-sm font-bold truncate transition-colors ${presente ? 'text-white' : 'text-slate-500'}`}>
+                                {a.nome_completo}
+                              </div>
+                              {a.celular && <div className="text-slate-600 text-xs">{a.celular}</div>}
+                            </div>
+                            <div className={`w-7 h-7 rounded-full border-2 shrink-0 flex items-center justify-center transition-all
+                              ${presente ? 'bg-green-500 border-green-500' : 'bg-transparent border-slate-700'}`}>
+                              {presente && <Check size={12} className="text-white"/>}
                             </div>
                           </button>
                         );
@@ -343,101 +430,37 @@ export default function ChamadaProfessorPage() {
                     </div>
                   )}
                 </div>
-                <div className="px-6 py-4 border-t border-white/10 space-y-3">
+
+                <div className="px-5 py-4 border-t border-white/10 space-y-3">
                   {erroSalvar && (
-                    <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold rounded-xl px-4 py-3">
-                      <X size={12} className="shrink-0 mt-0.5"/>{erroSalvar}
+                    <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/20 text-red-400 text-xs rounded-xl px-4 py-3">
+                      <AlertCircle size={13} className="shrink-0 mt-0.5"/>{erroSalvar}
                     </div>
                   )}
                   <div className="flex gap-3">
-                    <button onClick={() => setStep('turmas')} className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-white/20 text-slate-400 hover:text-white text-xs font-black uppercase">
-                      <ArrowLeft size={12}/> Voltar
+                    <button onClick={() => setStep('turmas')}
+                      className="flex items-center gap-1.5 px-4 py-3 rounded-xl border border-white/20 text-slate-400 hover:text-white hover:border-white/40 text-xs font-black uppercase transition-all">
+                      <ArrowLeft size={13}/> Voltar
                     </button>
                     <button onClick={salvar} disabled={salvando || alunos.length === 0}
-                      className="flex-1 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white font-black py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all active:scale-95">
-                      {salvando ? <><RefreshCw size={13} className="animate-spin"/> Salvando...</> : <><ClipboardCheck size={13}/> Salvar Chamada</>}
+                      className="flex-1 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-500 active:bg-purple-700 disabled:opacity-40 text-white font-black py-3 rounded-xl text-xs uppercase tracking-wider transition-all active:scale-[0.98]">
+                      {salvando ? <><Loader2 size={13} className="animate-spin"/> Salvando...</> : <><ClipboardCheck size={13}/> Salvar Chamada</>}
                     </button>
                   </div>
                 </div>
               </>
             )}
 
-            {/* Tab: Novo Aluno */}
-            {chamadaTab === 'novo_aluno' && (
-              <div className="px-6 py-6 space-y-4">
-                <div className="text-center space-y-1 mb-2">
-                  <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-green-500/10 border border-green-500/20">
-                    <UserPlus size={22} className="text-green-400" />
-                  </div>
-                  <p className="text-white font-black text-sm">Cadastro Rápido</p>
-                  <p className="text-slate-400 text-xs">O aluno ficará pendente de matrícula formal no sistema.</p>
-                </div>
-
-                {sucessoNovo ? (
-                  <div className="space-y-3">
-                    <div className="bg-green-500/10 border border-green-500/20 rounded-2xl px-5 py-5 text-center space-y-2">
-                      <Check size={28} className="text-green-400 mx-auto" />
-                      <p className="text-green-400 font-black text-sm">{sucessoNovo}</p>
-                      <p className="text-slate-400 text-xs">A equipe DRT foi notificada para formalizar a matrícula.</p>
-                    </div>
-                    <button
-                      onClick={() => { setSucessoNovo(null); setNovoAluno({ nome_completo: '', data_nascimento: '', celular: '' }); }}
-                      className="w-full py-3 bg-green-600 hover:bg-green-500 text-white font-black rounded-xl text-xs uppercase tracking-wider">
-                      + Cadastrar Outro
-                    </button>
-                  </div>
-                ) : (
-                  <form onSubmit={criarAlunoRapido} className="space-y-3">
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Nome Completo *</label>
-                      <input
-                        value={novoAluno.nome_completo}
-                        onChange={e => setNovoAluno(p => ({ ...p, nome_completo: e.target.value }))}
-                        placeholder="Nome do aluno"
-                        required
-                        className="w-full bg-white/10 border border-white/20 text-white placeholder-slate-500 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Data de Nascimento</label>
-                      <input
-                        type="date"
-                        value={novoAluno.data_nascimento}
-                        onChange={e => setNovoAluno(p => ({ ...p, data_nascimento: e.target.value }))}
-                        className="w-full bg-white/10 border border-white/20 text-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 [color-scheme:dark]"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Telefone do Responsável</label>
-                      <input
-                        type="tel"
-                        value={novoAluno.celular}
-                        onChange={e => setNovoAluno(p => ({ ...p, celular: e.target.value }))}
-                        placeholder="(11) 99999-9999"
-                        className="w-full bg-white/10 border border-white/20 text-white placeholder-slate-500 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-                      />
-                    </div>
-                    {erroNovo && (
-                      <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold rounded-xl px-4 py-3">
-                        <X size={12} className="shrink-0 mt-0.5"/>{erroNovo}
-                      </div>
-                    )}
-                    <button type="submit" disabled={salvandoNovo}
-                      className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-500 disabled:opacity-40 text-white font-black py-3 rounded-xl text-xs uppercase tracking-wider transition-all active:scale-95">
-                      {salvandoNovo ? <><RefreshCw size={13} className="animate-spin"/> Cadastrando...</> : <><UserPlus size={13}/> Cadastrar Aluno</>}
-                    </button>
-                  </form>
-                )}
-              </div>
-            )}
-
             {/* Tab: Fichas */}
             {chamadaTab === 'fichas' && (
-              <div className="max-h-[70vh] overflow-y-auto">
+              <div className="max-h-[65vh] overflow-y-auto">
                 {loadingAlunos ? (
-                  <div className="py-10 text-center text-slate-400 text-sm">Carregando...</div>
+                  <div className="py-12 flex flex-col items-center gap-3 text-slate-500">
+                    <Loader2 size={24} className="animate-spin"/>
+                    <span className="text-sm">Carregando...</span>
+                  </div>
                 ) : alunos.length === 0 ? (
-                  <div className="py-10 text-center text-slate-400 text-sm">Nenhum aluno nesta turma.</div>
+                  <div className="py-12 text-center text-slate-500 text-sm">Nenhum aluno nesta turma.</div>
                 ) : (
                   <div className="divide-y divide-white/5">
                     {alunos.map(a => {
@@ -446,10 +469,8 @@ export default function ChamadaProfessorPage() {
                       return (
                         <div key={a.id}>
                           <button onClick={() => setFichaAberta(aberta ? null : a.id)}
-                            className="w-full flex items-center gap-3 px-6 py-3.5 hover:bg-white/5 transition-colors text-left">
-                            <div className="w-9 h-9 rounded-full bg-purple-600/20 border border-purple-500/30 flex items-center justify-center shrink-0 text-sm font-black text-purple-300">
-                              {(a.nome_completo[0] || '?').toUpperCase()}
-                            </div>
+                            className="w-full flex items-center gap-3 px-5 py-4 hover:bg-white/5 active:bg-white/10 transition-colors text-left">
+                            <Avatar nome={a.nome_completo} size="md"/>
                             <div className="flex-1 min-w-0">
                               <div className="text-white text-sm font-bold truncate">{a.nome_completo}</div>
                               <div className="text-slate-500 text-xs flex items-center gap-2 mt-0.5">
@@ -457,36 +478,36 @@ export default function ChamadaProfessorPage() {
                                 {a.celular && <span className="flex items-center gap-1"><Phone size={9}/>{a.celular}</span>}
                               </div>
                             </div>
-                            <ChevronDown size={14} className={`text-slate-500 transition-transform shrink-0 ${aberta ? 'rotate-180' : ''}`}/>
+                            <ChevronDown size={15} className={`text-slate-600 transition-transform shrink-0 ${aberta ? 'rotate-180' : ''}`}/>
                           </button>
                           {aberta && (
-                            <div className="px-6 pb-4 space-y-2.5 bg-white/5">
-                              <div className="grid grid-cols-2 gap-x-4 gap-y-2 pt-2">
+                            <div className="px-5 pb-5 space-y-3 bg-white/3">
+                              <div className="grid grid-cols-2 gap-3 pt-2">
                                 {a.celular && (
                                   <div>
-                                    <p className="text-[9px] font-black uppercase text-slate-500 tracking-widest">Celular</p>
-                                    <p className="text-slate-200 text-xs font-semibold">{a.celular}</p>
+                                    <p className="text-[9px] font-black uppercase text-slate-600 tracking-widest">Celular</p>
+                                    <p className="text-slate-200 text-xs font-semibold mt-0.5">{a.celular}</p>
                                   </div>
                                 )}
                                 {a.telefone_alternativo && (
                                   <div>
-                                    <p className="text-[9px] font-black uppercase text-slate-500 tracking-widest">Tel. Alternativo</p>
-                                    <p className="text-slate-200 text-xs font-semibold">{a.telefone_alternativo}</p>
+                                    <p className="text-[9px] font-black uppercase text-slate-600 tracking-widest">Alternativo</p>
+                                    <p className="text-slate-200 text-xs font-semibold mt-0.5">{a.telefone_alternativo}</p>
                                   </div>
                                 )}
                                 {a.data_nascimento && (
                                   <div>
-                                    <p className="text-[9px] font-black uppercase text-slate-500 tracking-widest">Nascimento</p>
-                                    <p className="text-slate-200 text-xs font-semibold">
+                                    <p className="text-[9px] font-black uppercase text-slate-600 tracking-widest">Nascimento</p>
+                                    <p className="text-slate-200 text-xs font-semibold mt-0.5">
                                       {new Date(a.data_nascimento + 'T12:00:00').toLocaleDateString('pt-BR')}
-                                      {idade !== null && <span className="text-slate-400 ml-1">({idade} anos)</span>}
+                                      {idade !== null && <span className="text-slate-500 ml-1">({idade} anos)</span>}
                                     </p>
                                   </div>
                                 )}
                               </div>
                               {a.nome_responsavel && (
-                                <div className="mt-2 bg-purple-500/10 border border-purple-500/20 rounded-xl px-3 py-2.5">
-                                  <p className="text-[9px] font-black uppercase text-purple-400 tracking-widest mb-1.5 flex items-center gap-1">
+                                <div className="bg-purple-500/10 border border-purple-500/20 rounded-xl px-4 py-3">
+                                  <p className="text-[9px] font-black uppercase text-purple-500 tracking-widest mb-1.5 flex items-center gap-1">
                                     <UserCircle size={10}/> Responsável
                                   </p>
                                   <p className="text-white text-xs font-bold">{a.nome_responsavel}</p>
@@ -503,36 +524,172 @@ export default function ChamadaProfessorPage() {
                     })}
                   </div>
                 )}
-                <div className="px-6 py-4 border-t border-white/10">
-                  <button onClick={() => setStep('turmas')} className="text-slate-400 text-xs hover:text-white flex items-center gap-1.5">
+                <div className="px-5 py-4 border-t border-white/10">
+                  <button onClick={() => setStep('turmas')} className="text-slate-500 text-xs hover:text-white flex items-center gap-1.5 transition-colors">
                     <ArrowLeft size={12}/> Voltar às turmas
                   </button>
                 </div>
               </div>
             )}
+
+            {/* Tab: Incluir Aluno */}
+            {chamadaTab === 'incluir_aluno' && (
+              <div className="p-5 space-y-4 max-h-[65vh] overflow-y-auto">
+                {/* Cabeçalho explicativo */}
+                <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl px-4 py-3.5 flex gap-3">
+                  <UserPlus size={18} className="text-emerald-400 shrink-0 mt-0.5"/>
+                  <div>
+                    <p className="text-emerald-400 font-black text-sm">Incluir Aluno na Turma</p>
+                    <p className="text-slate-400 text-xs mt-1 leading-relaxed">
+                      Busque um aluno já cadastrado no sistema. Chamadas anteriores serão marcadas como <strong className="text-slate-300">Isento</strong> automaticamente.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Sucesso */}
+                {incluirSucesso && (
+                  <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl px-4 py-5 text-center space-y-2">
+                    <CheckCircle2 size={32} className="text-emerald-400 mx-auto"/>
+                    <p className="text-white font-black text-sm">{incluirSucesso.nome} incluído!</p>
+                    {incluirSucesso.isencoes > 0 && (
+                      <p className="text-slate-400 text-xs">
+                        {incluirSucesso.isencoes} chamada{incluirSucesso.isencoes !== 1 ? 's' : ''} anterior{incluirSucesso.isencoes !== 1 ? 'es marcadas' : ' marcada'} como Isento.
+                      </p>
+                    )}
+                    <button
+                      onClick={() => setIncluirSucesso(null)}
+                      className="mt-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-xl text-xs uppercase tracking-wider transition-all active:scale-[0.98]">
+                      Incluir outro aluno
+                    </button>
+                  </div>
+                )}
+
+                {!incluirSucesso && (
+                  <>
+                    {/* Campo de busca */}
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Nome do Aluno</label>
+                      <div className="relative">
+                        <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none"/>
+                        <input
+                          value={incluirNome}
+                          onChange={e => onIncluirNomeChange(e.target.value)}
+                          placeholder="Digite o nome para buscar..."
+                          className="w-full bg-white/10 border border-white/20 text-white placeholder-slate-600 rounded-xl pl-10 pr-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        />
+                        {incluirBuscando && (
+                          <Loader2 size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 animate-spin"/>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Erro */}
+                    {incluirErro && (
+                      <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/20 text-red-400 text-xs rounded-xl px-4 py-3">
+                        <AlertCircle size={13} className="shrink-0 mt-0.5"/>{incluirErro}
+                      </div>
+                    )}
+
+                    {/* Aluno selecionado — confirmação */}
+                    {incluirSelecionado && (
+                      <div className="bg-white/5 border border-emerald-500/30 rounded-2xl p-4 space-y-3">
+                        <div className="flex items-center gap-3">
+                          <Avatar nome={incluirSelecionado.nome_completo} size="lg"/>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-white font-black text-sm truncate">{incluirSelecionado.nome_completo}</p>
+                            {incluirSelecionado.numero_matricula && (
+                              <p className="text-slate-500 text-xs mt-0.5">{incluirSelecionado.numero_matricula}</p>
+                            )}
+                            {incluirSelecionado.celular && (
+                              <p className="text-slate-500 text-xs flex items-center gap-1 mt-0.5">
+                                <Phone size={9}/>{incluirSelecionado.celular}
+                              </p>
+                            )}
+                          </div>
+                          <button onClick={() => setIncluirSelecionado(null)} className="text-slate-500 hover:text-white p-1 transition-colors">
+                            <X size={16}/>
+                          </button>
+                        </div>
+                        <div className="flex gap-2">
+                          <button onClick={() => setIncluirSelecionado(null)}
+                            className="flex-1 py-2.5 rounded-xl border border-white/20 text-slate-400 hover:text-white text-xs font-black uppercase transition-all">
+                            Cancelar
+                          </button>
+                          <button onClick={confirmarInclusao} disabled={incluirConfirmando}
+                            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-black uppercase transition-all active:scale-[0.98]">
+                            {incluirConfirmando ? <><Loader2 size={12} className="animate-spin"/> Incluindo...</> : <><Check size={12}/> Confirmar</>}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Resultados da busca */}
+                    {!incluirSelecionado && incluirResultados.length > 0 && (
+                      <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
+                        <p className="px-4 py-2 text-[10px] font-black uppercase text-slate-500 tracking-widest border-b border-white/10">
+                          {incluirResultados.length} resultado{incluirResultados.length !== 1 ? 's' : ''}
+                        </p>
+                        <div className="divide-y divide-white/5 max-h-64 overflow-y-auto">
+                          {incluirResultados.map(a => (
+                            <button key={a.id} onClick={() => setIncluirSelecionado(a)}
+                              className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-emerald-500/5 active:bg-emerald-500/10 transition-colors text-left">
+                              <Avatar nome={a.nome_completo} size="sm"/>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-white text-sm font-bold truncate">{a.nome_completo}</p>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                  {a.numero_matricula && <span className="text-slate-500 text-xs">{a.numero_matricula}</span>}
+                                  {a.celular && <span className="text-slate-600 text-xs flex items-center gap-0.5"><Phone size={9}/>{a.celular}</span>}
+                                  {a.data_nascimento && <span className="text-slate-600 text-xs">{calcIdade(a.data_nascimento)} anos</span>}
+                                </div>
+                              </div>
+                              <ChevronRight size={14} className="text-slate-600 shrink-0"/>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {!incluirSelecionado && !incluirBuscando && incluirNome.trim().length >= 2 && incluirResultados.length === 0 && (
+                      <div className="text-center py-6 text-slate-500 text-sm space-y-1">
+                        <BookOpen size={24} className="mx-auto text-slate-700"/>
+                        <p>Nenhum aluno encontrado.</p>
+                        <p className="text-xs">Verifique o nome ou cadastre no sistema.</p>
+                      </div>
+                    )}
+
+                    {!incluirSelecionado && incluirNome.trim().length < 2 && (
+                      <p className="text-center text-slate-600 text-xs py-4">Digite pelo menos 2 caracteres para buscar.</p>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
           </div>
         )}
 
-        {/* ── STEP: Sucesso ── */}
+        {/* ── SUCESSO ── */}
         {step === 'sucesso' && (
-          <div className="bg-white/5 backdrop-blur border border-white/10 rounded-3xl p-10 text-center space-y-5">
+          <div className="bg-white/5 backdrop-blur border border-white/10 rounded-3xl p-8 text-center space-y-5">
             <div className="w-20 h-20 bg-green-500/10 border-2 border-green-500/30 rounded-full flex items-center justify-center mx-auto">
               <Check size={36} className="text-green-400"/>
             </div>
             <div>
               <h2 className="text-white font-black text-xl">Chamada Registrada!</h2>
               <p className="text-slate-400 text-sm mt-2">
-                Turma <strong className="text-white">{turmaEscolhida?.nome}</strong> — {presentes}P / {ausentes}A
+                <strong className="text-white">{turmaEscolhida?.nome}</strong> — {presentes} presente{presentes !== 1 ? 's' : ''} / {ausentes} ausente{ausentes !== 1 ? 's' : ''}
               </p>
             </div>
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-2 pt-2">
               <button
                 onClick={() => { setTema(''); setConteudo(''); setData(today()); setRegistros([]); setStep('turmas'); }}
-                className="w-full py-3 bg-purple-600 hover:bg-purple-500 text-white font-black rounded-2xl text-sm uppercase tracking-wider">
+                className="w-full py-4 bg-purple-600 hover:bg-purple-500 active:bg-purple-700 text-white font-black rounded-2xl text-sm uppercase tracking-wider transition-all active:scale-[0.98]">
                 Nova Chamada
               </button>
               <button onClick={() => { setCpf(''); setProfessor(null); setTurmas([]); setStep('login'); }}
-                className="text-slate-500 text-xs hover:text-slate-300 py-2">Trocar professor</button>
+                className="text-slate-500 text-xs hover:text-slate-300 py-2 transition-colors">
+                Trocar professor
+              </button>
             </div>
           </div>
         )}
