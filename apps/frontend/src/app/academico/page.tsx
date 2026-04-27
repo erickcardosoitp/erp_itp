@@ -3351,6 +3351,10 @@ function PresencaTab({ turmas, podeEditar }: { turmas: Turma[]; podeEditar: bool
           <RefreshCw size={12} className={carregandoHist ? 'animate-spin' : ''} /> Atualizar
         </button>
         {/* FIX #3: botão já estava protegido por podeEditar — mantido */}
+        <a href="/chamada-professor" target="_blank" rel="noopener noreferrer"
+          className="flex items-center gap-2 border border-purple-200 text-purple-700 bg-purple-50 hover:bg-purple-100 px-4 py-2 rounded-xl font-black text-[10px] uppercase transition-colors">
+          <Smartphone size={13}/> Portal do Professor
+        </a>
         {podeEditar && (
           <button onClick={abrirNovaLista}
             className="flex items-center gap-2 bg-purple-600 text-white px-5 py-2 rounded-xl font-black text-[10px] uppercase hover:bg-purple-700 transition-colors">
