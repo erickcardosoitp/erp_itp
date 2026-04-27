@@ -71,13 +71,21 @@ async function bootstrap() {
   return app;
 }
 
-// Crie uma instância do aplicativo NestJS e exporte o handler
+// Captura rejeições não tratadas para diagnóstico
+process.on('unhandledRejection', (reason: any) => {
+  console.error('[UNHANDLED REJECTION]', reason?.stack || reason);
+});
+
 let app: NestExpressApplication;
 let bootstrapError: Error | null = null;
 
 export default async function handler(req: any, res: any) {
   if (bootstrapError) {
-    res.status(500).json({ error: 'Bootstrap failed', message: bootstrapError.message });
+    res.status(500).json({
+      error: 'Bootstrap failed',
+      message: bootstrapError.message,
+      stack: bootstrapError.stack?.split('\n').slice(0, 8).join('\n'),
+    });
     return;
   }
   if (!app) {
@@ -85,8 +93,14 @@ export default async function handler(req: any, res: any) {
       app = await bootstrap();
     } catch (err: any) {
       bootstrapError = err;
-      logger.error(`Bootstrap falhou: ${err.message}`, err.stack);
-      res.status(500).json({ error: 'Bootstrap failed', message: err.message });
+      // console.error vai para stderr → aparece como nível "error" no Vercel
+      console.error('[BOOTSTRAP ERROR]', err?.message);
+      console.error('[BOOTSTRAP STACK]', err?.stack);
+      res.status(500).json({
+        error: 'Bootstrap failed',
+        message: err?.message,
+        stack: err?.stack?.split('\n').slice(0, 10).join('\n'),
+      });
       return;
     }
   }
