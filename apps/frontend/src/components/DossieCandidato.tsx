@@ -256,7 +256,20 @@ export default function DossieCandidato({ aluno, onClose, onSuccess }: DossiePro
   };
 
   const handleFieldChange = useCallback((field: string, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData(prev => {
+      const updated = { ...prev, [field]: value };
+      if (field === 'data_nascimento' && value) {
+        const d = new Date(value + 'T12:00:00');
+        if (!isNaN(d.getTime())) {
+          const hoje = new Date();
+          let idade = hoje.getFullYear() - d.getFullYear();
+          const m = hoje.getMonth() - d.getMonth();
+          if (m < 0 || (m === 0 && hoje.getDate() < d.getDate())) idade--;
+          updated.idade = idade;
+        }
+      }
+      return updated;
+    });
   }, []);
 
   const [buscandoCep, setBuscandoCep] = useState(false);
