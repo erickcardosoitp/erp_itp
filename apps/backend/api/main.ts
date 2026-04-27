@@ -7,16 +7,13 @@ import * as cookieParser from 'cookie-parser';
 import { join } from 'path';
 import { existsSync } from 'fs';
 
-// Mova o logger para o escopo global para que possa ser usado fora de 'bootstrap'
 const logger = new Logger('Bootstrap');
 
-// A função de configuração permanece a mesma
 export const setupApp = async (app: NestExpressApplication) => {
   const cookieMiddleware = (cookieParser as any).default || cookieParser;
   app.use(cookieMiddleware());
   app.setGlobalPrefix('api');
 
-  // Apenas registra o diretório de assets se ele existir (não existe em serverless)
   const publicDir = join(__dirname, '..', '..', 'public');
   if (existsSync(publicDir)) {
     app.useStaticAssets(publicDir);
@@ -61,13 +58,28 @@ export const setupApp = async (app: NestExpressApplication) => {
   return app;
 };
 
-// Função para inicializar o app (sem o listen)
+// Tempo máximo para NestFactory.create() antes de responder 503 e deixar o Neon acordar
+const BOOTSTRAP_TIMEOUT_MS = 25000;
+
 async function bootstrap() {
   const t0 = Date.now();
   console.log('[BOOTSTRAP] NestFactory.create iniciando...');
-  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+
+  let timeoutHandle: NodeJS.Timeout | null = null;
+  const createPromise = NestFactory.create<NestExpressApplication>(AppModule, {
     logger: ['error', 'warn', 'log'],
   });
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutHandle = setTimeout(
+      () => reject(new Error('BOOTSTRAP_TIMEOUT')),
+      BOOTSTRAP_TIMEOUT_MS,
+    );
+  });
+
+  const app = await Promise.race([createPromise, timeoutPromise]).finally(() => {
+    if (timeoutHandle) clearTimeout(timeoutHandle);
+  }) as NestExpressApplication;
+
   console.log(`[BOOTSTRAP] NestFactory.create OK — ${Date.now() - t0}ms`);
   await setupApp(app);
   await app.init();
@@ -75,42 +87,61 @@ async function bootstrap() {
   return app;
 }
 
-// Captura rejeições não tratadas para diagnóstico
 process.on('unhandledRejection', (reason: any) => {
   console.error('[UNHANDLED REJECTION]', reason?.stack || reason);
 });
 
-let app: NestExpressApplication;
+let app: NestExpressApplication | null = null;
 let bootstrapError: Error | null = null;
+let bootstrapping = false;
 
 export default async function handler(req: any, res: any) {
+  // Erro permanente de bootstrap — não vai resolver com retry
   if (bootstrapError) {
-    res.status(500).json({
+    return res.status(500).json({
       error: 'Bootstrap failed',
       message: bootstrapError.message,
       stack: bootstrapError.stack?.split('\n').slice(0, 8).join('\n'),
     });
-    return;
   }
+
   if (!app) {
+    // Outro request já está inicializando — retorna 503 imediatamente
+    if (bootstrapping) {
+      return res.status(503).json({
+        error: 'Service starting',
+        message: 'Backend inicializando, tente novamente em alguns segundos',
+      });
+    }
+
+    bootstrapping = true;
     try {
       app = await bootstrap();
     } catch (err: any) {
+      bootstrapping = false;
+
+      if (err?.message === 'BOOTSTRAP_TIMEOUT') {
+        // Timeout transitório: Neon está acordando. Permite retry na próxima request.
+        console.log(`[BOOTSTRAP] Timeout ${BOOTSTRAP_TIMEOUT_MS}ms — Neon cold start em progresso`);
+        return res.status(503).json({
+          error: 'Service starting',
+          message: 'Backend inicializando (Neon cold start), tente novamente',
+        });
+      }
+
+      // Erro permanente
       bootstrapError = err;
-      // console.error vai para stderr → aparece como nível "error" no Vercel
       console.error('[BOOTSTRAP ERROR]', err?.message);
       console.error('[BOOTSTRAP STACK]', err?.stack);
-      res.status(500).json({
+      return res.status(500).json({
         error: 'Bootstrap failed',
         message: err?.message,
         stack: err?.stack?.split('\n').slice(0, 10).join('\n'),
       });
-      return;
     }
+    bootstrapping = false;
   }
+
   const server = app.getHttpAdapter().getInstance();
   return server(req, res);
 }
-
-// O antigo bootstrap() é removido para evitar que o servidor inicie diretamente
-// bootstrap();
