@@ -11,7 +11,7 @@
   "functions": {
     "api/main.ts": {
       "memory": 1024,
-      "maxDuration": 30,
+      "maxDuration": 60,
       "includeFiles": "dist/**"
     },
     "api/health.ts": {

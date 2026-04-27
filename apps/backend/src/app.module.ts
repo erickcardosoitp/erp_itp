@@ -141,6 +141,15 @@ export class AppModule implements OnModuleInit {
   constructor(@InjectDataSource() private readonly dataSource: DataSource) {}
 
   async onModuleInit() {
+    // Fire-and-forget: libera o bootstrap imediatamente, evita timeout Vercel no cold start
+    setImmediate(() => {
+      this.runMigrations().catch(e =>
+        this.logger.warn('[migrations background] erro:', e?.message),
+      );
+    });
+  }
+
+  private async runMigrations() {
     try {
       // Migrations idempotentes — executam na inicialização em produção ou dev
       await this.dataSource.query(`ALTER TABLE funcionarios ADD COLUMN IF NOT EXISTS matricula TEXT UNIQUE`);
