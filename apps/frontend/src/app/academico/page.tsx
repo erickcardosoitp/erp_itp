@@ -3139,6 +3139,7 @@ function PresencaTab({ turmas, podeEditar }: { turmas: Turma[]; podeEditar: bool
   const [carregandoHist, setCarregandoHist] = useState(false);
   const [sessaoExpandida, setSessaoExpandida] = useState<string | null>(null);
   const [detalhesSessao, setDetalhesSessao] = useState<Record<string, any[]>>({});
+  const [modoEdicaoSessao, setModoEdicaoSessao] = useState<string | null>(null);
 
   // ─── Edição de registro individual ──────────────────────────────────────
   const [salvandoRegistro, setSalvandoRegistro] = useState<string | null>(null);
@@ -3419,18 +3420,76 @@ function PresencaTab({ turmas, podeEditar }: { turmas: Turma[]; podeEditar: bool
                   </div>
                 </div>
                 {sessaoExpandida === s.id && (
-                  <div className="bg-slate-50/60 border-t border-slate-100 px-6 py-3">
+                  <div className="bg-slate-50/60 border-t border-slate-100 px-6 py-3 space-y-3">
                     {s.conteudo_abordado && (
-                      <div className="mb-3 bg-purple-50 border border-purple-100 rounded-xl p-3">
+                      <div className="bg-purple-50 border border-purple-100 rounded-xl p-3">
                         <p className="text-[9px] font-black uppercase text-purple-500 mb-1">Conteúdo Abordado</p>
                         <p className="text-xs text-slate-700">{s.conteudo_abordado}</p>
                       </div>
                     )}
+
+                    {/* Barra de edição — só admin/prt */}
+                    {podeEditarSessao && detalhesSessao[s.id]?.length > 0 && (
+                      <div className="flex items-center justify-between">
+                        <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest">
+                          {detalhesSessao[s.id].length} aluno{detalhesSessao[s.id].length !== 1 ? 's' : ''}
+                        </p>
+                        <button
+                          onClick={() => setModoEdicaoSessao(modoEdicaoSessao === s.id ? null : s.id)}
+                          className={`flex items-center gap-1.5 text-[9px] font-black uppercase px-3 py-1.5 rounded-lg border transition-all ${
+                            modoEdicaoSessao === s.id
+                              ? 'bg-amber-100 border-amber-300 text-amber-700'
+                              : 'border-slate-200 text-slate-500 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700'
+                          }`}>
+                          <Edit3 size={10}/>
+                          {modoEdicaoSessao === s.id ? 'Sair da edição' : 'Corrigir Presenças'}
+                        </button>
+                      </div>
+                    )}
+
                     {!detalhesSessao[s.id] ? (
                       <p className="text-xs text-slate-400">Carregando...</p>
                     ) : detalhesSessao[s.id].length === 0 ? (
                       <p className="text-xs text-slate-400">Nenhum registro encontrado.</p>
+                    ) : modoEdicaoSessao === s.id ? (
+                      /* ── Modo edição ── */
+                      <div className="space-y-1.5">
+                        <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 flex items-center gap-2">
+                          <Edit3 size={11} className="text-amber-600 shrink-0"/>
+                          <p className="text-[10px] font-black text-amber-700">Modo edição — clique no status para alterar. Salva automaticamente.</p>
+                        </div>
+                        {detalhesSessao[s.id].map((r: any) => {
+                          const isSaving = salvandoRegistro === r.id;
+                          const statuses = [
+                            { key: 'Presente',         label: 'Presente',    cls: 'bg-green-500 text-white border-green-500',   idle: 'border-slate-200 text-slate-400 hover:border-green-400 hover:bg-green-50 hover:text-green-700' },
+                            { key: 'Falta',            label: 'Falta',       cls: 'bg-red-500 text-white border-red-500',       idle: 'border-slate-200 text-slate-400 hover:border-red-400 hover:bg-red-50 hover:text-red-600' },
+                            { key: 'Falta Justificada',label: 'Justificada', cls: 'bg-amber-500 text-white border-amber-500',   idle: 'border-slate-200 text-slate-400 hover:border-amber-400 hover:bg-amber-50 hover:text-amber-600' },
+                            { key: 'Isento',           label: 'Isento',      cls: 'bg-slate-400 text-white border-slate-400',   idle: 'border-slate-200 text-slate-400 hover:border-slate-400 hover:bg-slate-100' },
+                          ];
+                          return (
+                            <div key={r.id} className={`flex items-center gap-2 bg-white rounded-xl px-3 py-2 border border-slate-100 shadow-sm ${isSaving ? 'opacity-50' : ''}`}>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-bold text-slate-800 truncate">{r.aluno_nome || r.aluno_id}</p>
+                              </div>
+                              <div className="flex gap-1 shrink-0 flex-wrap justify-end">
+                                {statuses.map(st => (
+                                  <button key={st.key}
+                                    disabled={isSaving || r.descricao === st.key}
+                                    onClick={() => editarRegistro(s.id, r.id, st.key)}
+                                    className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-lg border transition-all ${
+                                      r.descricao === st.key ? st.cls : st.idle
+                                    } disabled:cursor-default`}>
+                                    {st.label}
+                                  </button>
+                                ))}
+                              </div>
+                              {isSaving && <RefreshCw size={11} className="text-slate-400 animate-spin shrink-0"/>}
+                            </div>
+                          );
+                        })}
+                      </div>
                     ) : (
+                      /* ── Modo visualização ── */
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5">
                         {detalhesSessao[s.id].map((r: any) => {
                           const cor = r.descricao === 'Presente' ? 'bg-green-50 text-green-700 border-green-100'
@@ -3441,26 +3500,11 @@ function PresencaTab({ turmas, podeEditar }: { turmas: Turma[]; podeEditar: bool
                             : r.isento ? 'bg-slate-400'
                             : r.justificada ? 'bg-amber-400'
                             : 'bg-red-400';
-                          const isSaving = salvandoRegistro === r.id;
                           return (
-                            <div key={r.id} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold border ${cor} ${isSaving ? 'opacity-60' : ''}`}>
+                            <div key={r.id} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold border ${cor}`}>
                               <div className={`w-2 h-2 rounded-full shrink-0 ${dot}`} />
                               <span className="truncate flex-1">{r.aluno_nome || r.aluno_id}</span>
-                              {podeEditarSessao ? (
-                                <select
-                                  value={r.descricao}
-                                  disabled={isSaving}
-                                  onChange={e => editarRegistro(s.id, r.id, e.target.value)}
-                                  className="text-[9px] font-black uppercase bg-transparent border-0 focus:outline-none cursor-pointer shrink-0 pr-0"
-                                >
-                                  <option value="Presente">Presente</option>
-                                  <option value="Falta">Falta</option>
-                                  <option value="Falta Justificada">Justificada</option>
-                                  <option value="Isento">Isento</option>
-                                </select>
-                              ) : (
-                                <span className="shrink-0 text-[9px] uppercase">{r.descricao}</span>
-                              )}
+                              <span className="shrink-0 text-[9px] uppercase">{r.descricao}</span>
                             </div>
                           );
                         })}
