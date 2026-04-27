@@ -2863,47 +2863,48 @@ function RelatoriosPresencaSubTab({ turmas }: { turmas: Turma[] }) {
 
 // ─── Por Aluno ────────────────────────────────────────────────────────────────
 
-function PorAlunoSubTab() {
-  const [busca, setBusca]       = useState('');
-  const [sugestoes, setSugestoes] = useState<Aluno[]>([]);
-  const [alunoSel, setAlunoSel] = useState<Aluno | null>(null);
-  const [dataIni, setDataIni]   = useState('');
-  const [dataFim, setDataFim]   = useState('');
-  const [dados, setDados]       = useState<any>(null);
-  const [loading, setLoading]   = useState(false);
-  const [buscando, setBuscando] = useState(false);
-  const dropRef = useRef<HTMLDivElement>(null);
+function PorAlunoSubTab({ turmas }: { turmas: Turma[] }) {
+  const [turmaFiltro, setTurmaFiltro] = useState('');
+  const [busca, setBusca]             = useState('');
+  const [listaAlunos, setListaAlunos] = useState<Aluno[]>([]);
+  const [alunoSel, setAlunoSel]       = useState<Aluno | null>(null);
+  const [dataIni, setDataIni]         = useState('');
+  const [dataFim, setDataFim]         = useState('');
+  const [dados, setDados]             = useState<any>(null);
+  const [loadingLista, setLoadingLista] = useState(false);
+  const [loadingRelatorio, setLoadingRelatorio] = useState(false);
 
-  const buscarAlunos = useCallback(async (q: string) => {
-    if (q.trim().length < 2) { setSugestoes([]); return; }
-    setBuscando(true);
+  // Carrega lista de alunos sempre que turma ou busca mudar
+  const carregarLista = useCallback(async () => {
+    const params: any = {};
+    if (turmaFiltro) params.turma_id = turmaFiltro;
+    if (busca.trim().length >= 2) params.nome = busca.trim();
+    // Sem filtro algum → limpa lista mas não faz request
+    if (!turmaFiltro && busca.trim().length < 2) { setListaAlunos([]); return; }
+    setLoadingLista(true);
     try {
-      const r = await api.get('/academico/alunos', { params: { nome: q } });
-      setSugestoes((r.data as Aluno[]).slice(0, 10));
+      const r = await api.get('/academico/alunos', { params });
+      setListaAlunos(r.data as Aluno[]);
     } catch { /* silencioso */ }
-    setBuscando(false);
-  }, []);
+    setLoadingLista(false);
+  }, [turmaFiltro, busca]);
 
   useEffect(() => {
-    const t = setTimeout(() => buscarAlunos(busca), 300);
-    return () => clearTimeout(t);
-  }, [busca, buscarAlunos]);
+    if (turmaFiltro) {
+      // Turma selecionada → carrega imediatamente
+      carregarLista();
+    } else {
+      // Só busca por nome → debounce 300ms
+      const t = setTimeout(carregarLista, 300);
+      return () => clearTimeout(t);
+    }
+  }, [turmaFiltro, busca, carregarLista]);
 
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (dropRef.current && !dropRef.current.contains(e.target as Node)) setSugestoes([]);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
+  const selecionarAluno = (a: Aluno) => { setAlunoSel(a); setDados(null); };
 
-  const selecionarAluno = (a: Aluno) => {
-    setAlunoSel(a); setBusca(a.nome_completo); setSugestoes([]); setDados(null);
-  };
-
-  const carregar = useCallback(async () => {
+  const carregarRelatorio = useCallback(async () => {
     if (!alunoSel) return;
-    setLoading(true);
+    setLoadingRelatorio(true);
     try {
       const params: any = {};
       if (dataIni) params.data_ini = dataIni;
@@ -2911,103 +2912,156 @@ function PorAlunoSubTab() {
       const r = await api.get(`/academico/presenca/relatorio/aluno/${alunoSel.id}`, { params });
       setDados(r.data);
     } catch { /* silencioso */ }
-    setLoading(false);
+    setLoadingRelatorio(false);
   }, [alunoSel, dataIni, dataFim]);
 
-  useEffect(() => { if (alunoSel) carregar(); }, [carregar]);
+  useEffect(() => { if (alunoSel) carregarRelatorio(); }, [carregarRelatorio]);
 
   const fmtData = (v: string) => {
     if (!v) return '–';
-    const [y, m, d] = v.split('-');
-    return `${d}/${m}/${y}`;
+    const [, m, d] = v.split('-');
+    return `${d}/${m}`;
   };
 
-  const taxaColor = (v: number) => v >= 75 ? 'text-green-600 bg-green-50' : v >= 50 ? 'text-amber-600 bg-amber-50' : 'text-red-500 bg-red-50';
-  const taxaBorder = (v: number) => v >= 75 ? 'border-green-100' : v >= 50 ? 'border-amber-100' : 'border-red-100';
+  const taxaColor  = (v: number) => v >= 75 ? 'text-green-600 bg-green-50' : v >= 50 ? 'text-amber-600 bg-amber-50' : 'text-red-500 bg-red-50';
+  const taxaBorder = (v: number) => v >= 75 ? 'border-green-200' : v >= 50 ? 'border-amber-200' : 'border-red-200';
+
+  const listaBuscada = busca.trim().length >= 2 || turmaFiltro ? listaAlunos : [];
+  const semFiltro    = !turmaFiltro && busca.trim().length < 2;
 
   return (
     <div className="space-y-4">
-      {/* Seletor de aluno + filtros */}
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
+      {/* ── Filtros ── */}
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 space-y-3">
         <div className="flex flex-wrap items-end gap-3">
-          <div className="flex-1 min-w-[240px] relative" ref={dropRef}>
-            <label className="text-[9px] font-black uppercase text-slate-400 mb-1 block">Buscar Aluno</label>
+          {/* Turma */}
+          <div className="flex-1 min-w-[180px]">
+            <label className="text-[9px] font-black uppercase text-slate-400 mb-1 block">Filtrar por Turma</label>
+            <select value={turmaFiltro} onChange={e => { setTurmaFiltro(e.target.value); setAlunoSel(null); setDados(null); }}
+              className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white">
+              <option value="">Todas as turmas</option>
+              {turmas.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
+            </select>
+          </div>
+          {/* Busca por nome */}
+          <div className="flex-1 min-w-[200px]">
+            <label className="text-[9px] font-black uppercase text-slate-400 mb-1 block">Buscar por Nome</label>
             <div className="relative">
               <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text" value={busca}
+              <input type="text" value={busca}
                 onChange={e => { setBusca(e.target.value); setAlunoSel(null); setDados(null); }}
-                placeholder="Digite o nome do aluno..."
+                placeholder="Nome do aluno..."
                 className="w-full pl-8 pr-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-400"
               />
-              {buscando && <RefreshCw size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 animate-spin" />}
+              {loadingLista && <RefreshCw size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 animate-spin" />}
             </div>
-            {sugestoes.length > 0 && (
-              <div className="absolute top-full left-0 right-0 z-50 bg-white border border-slate-200 rounded-xl shadow-xl mt-1 max-h-52 overflow-y-auto">
-                {sugestoes.map(a => (
+          </div>
+        </div>
+
+        {/* Filtros de período — só mostram quando um aluno está selecionado */}
+        {alunoSel && (
+          <div className="flex flex-wrap items-end gap-3 pt-1 border-t border-slate-100">
+            <div>
+              <label className="text-[9px] font-black uppercase text-slate-400 mb-1 block">Período — De</label>
+              <input type="date" value={dataIni} onChange={e => setDataIni(e.target.value)}
+                className="px-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-400" />
+            </div>
+            <div>
+              <label className="text-[9px] font-black uppercase text-slate-400 mb-1 block">Até</label>
+              <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)}
+                className="px-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-400" />
+            </div>
+            <button onClick={carregarRelatorio} disabled={loadingRelatorio}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-black uppercase disabled:opacity-40">
+              <RefreshCw size={12} className={loadingRelatorio ? 'animate-spin' : ''} /> Atualizar
+            </button>
+            <button onClick={() => { setAlunoSel(null); setDados(null); }}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl border border-slate-200 text-slate-500 text-[10px] font-black uppercase hover:bg-slate-50">
+              <X size={12} /> Trocar aluno
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* ── Lista de alunos (quando nenhum selecionado) ── */}
+      {!alunoSel && (
+        <>
+          {semFiltro && (
+            <div className="py-14 text-center">
+              <Users size={40} className="mx-auto mb-3 text-slate-200" />
+              <p className="text-sm font-bold text-slate-400">Selecione uma turma ou busque por nome.</p>
+              <p className="text-xs text-slate-300 mt-1">Depois clique no aluno para ver o relatório de presença.</p>
+            </div>
+          )}
+
+          {!semFiltro && loadingLista && (
+            <div className="py-10 text-center text-sm text-slate-400">
+              <RefreshCw size={22} className="animate-spin mx-auto mb-2 text-slate-300" /> Carregando alunos...
+            </div>
+          )}
+
+          {!semFiltro && !loadingLista && listaBuscada.length === 0 && (
+            <div className="py-10 text-center text-sm text-slate-400">Nenhum aluno encontrado.</div>
+          )}
+
+          {!semFiltro && !loadingLista && listaBuscada.length > 0 && (
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+              <div className="px-5 py-3 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+                <h3 className="text-[10px] font-black uppercase text-slate-500 tracking-widest">
+                  {turmaFiltro ? turmas.find(t => t.id === turmaFiltro)?.nome ?? 'Turma' : 'Resultados da Busca'}
+                </h3>
+                <span className="text-[9px] text-slate-400">{listaBuscada.length} aluno{listaBuscada.length !== 1 ? 's' : ''}</span>
+              </div>
+              <div className="divide-y divide-slate-50 max-h-[480px] overflow-y-auto">
+                {listaBuscada.map(a => (
                   <button key={a.id} onClick={() => selecionarAluno(a)}
-                    className="w-full text-left px-3.5 py-2.5 text-xs hover:bg-purple-50 hover:text-purple-700 font-bold border-b border-slate-50 last:border-0 flex items-center gap-2">
-                    <User size={11} className="text-slate-400 shrink-0" />
-                    <span className="flex-1 truncate">{a.nome_completo}</span>
-                    {a.turma_nome && <span className="text-[9px] text-slate-400 font-normal shrink-0">{a.turma_nome}</span>}
+                    className="w-full flex items-center gap-3 px-5 py-3 hover:bg-purple-50/60 transition-colors text-left group">
+                    <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center font-black text-purple-600 text-xs shrink-0 group-hover:bg-purple-200 transition-colors">
+                      {(a.nome_completo || '?')[0].toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold text-slate-800 truncate group-hover:text-purple-700">{a.nome_completo}</p>
+                      {a.turma_nome && <p className="text-[9px] text-slate-400">{a.turma_nome}</p>}
+                    </div>
+                    <ChevronDown size={13} className="text-slate-300 group-hover:text-purple-400 rotate-[-90deg] shrink-0" />
                   </button>
                 ))}
               </div>
-            )}
-          </div>
-          <div>
-            <label className="text-[9px] font-black uppercase text-slate-400 mb-1 block">De</label>
-            <input type="date" value={dataIni} onChange={e => setDataIni(e.target.value)}
-              className="px-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-400" />
-          </div>
-          <div>
-            <label className="text-[9px] font-black uppercase text-slate-400 mb-1 block">Até</label>
-            <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)}
-              className="px-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-400" />
-          </div>
-          <button onClick={carregar} disabled={!alunoSel || loading}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-black uppercase disabled:opacity-40">
-            <RefreshCw size={12} className={loading ? 'animate-spin' : ''} /> Atualizar
-          </button>
-        </div>
-      </div>
-
-      {!alunoSel && (
-        <div className="py-16 text-center">
-          <User size={40} className="mx-auto mb-3 text-slate-200" />
-          <p className="text-sm font-bold text-slate-400">Busque um aluno para ver seu histórico de presença.</p>
-        </div>
+            </div>
+          )}
+        </>
       )}
 
-      {alunoSel && loading && (
+      {/* ── Relatório do aluno selecionado ── */}
+      {alunoSel && loadingRelatorio && (
         <div className="py-12 text-center text-sm text-slate-400">
           <RefreshCw size={24} className="animate-spin mx-auto mb-3 text-slate-300" /> Carregando...
         </div>
       )}
 
-      {alunoSel && dados && !loading && (
+      {alunoSel && dados && !loadingRelatorio && (
         <>
-          {/* Cabeçalho do aluno */}
+          {/* Cabeçalho */}
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm px-5 py-4 flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center font-black text-purple-600 text-sm shrink-0">
               {alunoSel.nome_completo[0].toUpperCase()}
             </div>
-            <div>
-              <p className="font-black text-slate-800 text-sm">{alunoSel.nome_completo}</p>
-              <p className="text-[10px] text-slate-400">{alunoSel.turma_nome || 'Sem turma'}</p>
+            <div className="flex-1 min-w-0">
+              <p className="font-black text-slate-800 text-sm truncate">{alunoSel.nome_completo}</p>
+              <p className="text-[10px] text-slate-400">{alunoSel.turma_nome || 'Sem turma atribuída'}</p>
             </div>
           </div>
 
-          {/* KPIs do aluno */}
+          {/* KPIs */}
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
             {[
-              { label: 'Total Aulas', value: dados.kpi.total ?? 0, color: 'text-slate-700', bg: 'bg-white border-slate-100' },
-              { label: 'Presenças',   value: dados.kpi.presentes ?? 0, color: 'text-green-700', bg: 'bg-green-50 border-green-100' },
-              { label: 'Faltas',      value: dados.kpi.faltas ?? 0, color: 'text-red-600', bg: 'bg-red-50 border-red-100' },
-              { label: 'Justificadas', value: dados.kpi.justificadas ?? 0, color: 'text-amber-600', bg: 'bg-amber-50 border-amber-100' },
+              { label: 'Total Aulas',   value: dados.kpi.total ?? 0,        color: 'text-slate-700',  bg: 'bg-white border-slate-100' },
+              { label: 'Presenças',     value: dados.kpi.presentes ?? 0,    color: 'text-green-700',  bg: 'bg-green-50 border-green-100' },
+              { label: 'Faltas',        value: dados.kpi.faltas ?? 0,       color: 'text-red-600',    bg: 'bg-red-50 border-red-100' },
+              { label: 'Justificadas',  value: dados.kpi.justificadas ?? 0, color: 'text-amber-600',  bg: 'bg-amber-50 border-amber-100' },
               { label: 'Taxa Presença', value: `${dados.kpi.taxa ?? 0}%`,
                 color: (dados.kpi.taxa ?? 0) >= 75 ? 'text-green-700' : (dados.kpi.taxa ?? 0) >= 50 ? 'text-amber-600' : 'text-red-600',
-                bg: `border-l-4 bg-white ${taxaBorder(dados.kpi.taxa ?? 0)} border-slate-100` },
+                bg: `bg-white border ${taxaBorder(dados.kpi.taxa ?? 0)}` },
             ].map(k => (
               <div key={k.label} className={`${k.bg} rounded-2xl p-4 border shadow-sm`}>
                 <p className="text-[9px] font-black uppercase text-slate-400 mb-1">{k.label}</p>
@@ -3041,7 +3095,7 @@ function PorAlunoSubTab() {
               <span className="text-[9px] text-slate-400">{dados.registros.length} registro{dados.registros.length !== 1 ? 's' : ''}</span>
             </div>
             {dados.registros.length === 0 ? (
-              <div className="py-10 text-center text-slate-400 text-sm">Nenhum registro encontrado.</div>
+              <div className="py-10 text-center text-slate-400 text-sm">Nenhum registro no período.</div>
             ) : (
               <div className="divide-y divide-slate-50 max-h-[500px] overflow-y-auto">
                 {dados.registros.map((r: any) => {
@@ -3052,9 +3106,9 @@ function PorAlunoSubTab() {
                     : 'bg-red-100 text-red-600';
                   return (
                     <div key={r.id} className="flex items-center gap-3 px-5 py-2.5 hover:bg-slate-50/50 transition-colors">
-                      <span className="text-xs font-black text-slate-700 w-20 shrink-0">{fmtData(r.data)}</span>
+                      <span className="text-xs font-black text-slate-700 w-16 shrink-0">{fmtData(r.data)}</span>
                       <span className="flex-1 text-xs text-slate-600 truncate min-w-0">{r.tema_aula || '–'}</span>
-                      <span className="text-[9px] text-slate-400 shrink-0 hidden sm:block truncate max-w-[120px]">{r.turma_nome}</span>
+                      <span className="text-[9px] text-slate-400 shrink-0 hidden sm:block truncate max-w-[110px]">{r.turma_nome}</span>
                       <span className={`text-[9px] font-black px-2 py-0.5 rounded-full shrink-0 ${corBadge}`}>
                         {r.descricao === 'Falta Justificada' ? 'Justificada' : r.descricao}
                       </span>
@@ -3269,7 +3323,7 @@ function PresencaTab({ turmas, podeEditar }: { turmas: Turma[]; podeEditar: bool
       </div>
 
       {subTab === 'relatorios' && <RelatoriosPresencaSubTab turmas={turmas} />}
-      {subTab === 'por-aluno'  && <PorAlunoSubTab />}
+      {subTab === 'por-aluno'  && <PorAlunoSubTab turmas={turmas} />}
 
       {subTab === 'historico' && (<>
       {/* ─── Cabeçalho ─────────────────────────────────────────────────────── */}
