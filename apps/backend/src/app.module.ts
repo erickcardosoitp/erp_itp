@@ -93,6 +93,9 @@ import { GenteModule } from './gente/gente.module';
           ssl: (dbUrl.includes('localhost') || dbUrl.includes('127.0.0.1'))
             ? false
             : { rejectUnauthorized: false },
+          retryAttempts: 3,
+          retryDelay: 2000,
+          extra: { connectionTimeoutMillis: 25000, query_timeout: 25000 },
         };
       },
     }),
@@ -775,10 +778,8 @@ export class AppModule implements OnModuleInit {
       `);
       this.logger.log('✅ Tabela chamados_academicos criada (IF NOT EXISTS)');
 
-      // ── Retroativo: criar entradas 'Lista de Chamada' para sessões antigas ──
-      // Sessões criadas antes dessa funcionalidade não tinham entrada no diário.
-      // Idempotente: a subquery NOT EXISTS garante que não duplica.
-      await this.dataSource.query(`
+      // Fire-and-forget: não bloqueia o bootstrap (evita timeout Vercel 30s)
+      this.dataSource.query(`
         INSERT INTO diario_academico (id, tipo, titulo, descricao, turma_id, data, sessao_id, usuario_id, usuario_nome, created_at)
         SELECT
           gen_random_uuid(),
@@ -799,8 +800,8 @@ export class AppModule implements OnModuleInit {
           SELECT 1 FROM diario_academico d
           WHERE d.sessao_id = ps.id::text AND d.tipo = 'Lista de Chamada'
         )
-      `);
-      this.logger.log('✅ Entradas retroativas "Lista de Chamada" criadas para sessões sem registro no diário');
+      `).then(() => this.logger.log('✅ Entradas retroativas "Lista de Chamada" criadas'))
+        .catch(e => this.logger.warn('retroativo diário (ignorado):', e.message));
 
     } catch (err: any) {
       this.logger.error(`❌ Erro nas migrations automáticas: ${err.message}`);
