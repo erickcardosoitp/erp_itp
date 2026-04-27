@@ -25,10 +25,19 @@ export class ModuloPermGuard implements CanActivate {
     // Grupo ADMIN tem acesso total a tudo
     if (grupoNome === 'ADMIN') return true;
 
-    // Sem permissões configuradas → nega por segurança
     const permissoes = user.permissoes?.permissoes;
-    if (!permissoes) {
-      throw new ForbiddenException('Grupo sem permissões configuradas.');
+
+    // Sem permissões de grupo configuradas → fallback por nível de role
+    if (!permissoes || Object.keys(permissoes).length === 0) {
+      const ROLE_LEVEL: Record<string, number> = {
+        user: 0, cozinha: 1, assist: 2, monitor: 3, prof: 4,
+        adjunto: 5, drt: 8, vp: 9, prt: 10, admin: 10,
+      };
+      const level = ROLE_LEVEL[(user.role ?? '').toLowerCase()] ?? 0;
+      if (meta.acao === 'visualizar') return level >= 1;
+      if (meta.acao === 'incluir' || meta.acao === 'editar') return level >= 4;
+      if (meta.acao === 'excluir') return level >= 8;
+      return false;
     }
 
     const permModulo = permissoes[meta.modulo];

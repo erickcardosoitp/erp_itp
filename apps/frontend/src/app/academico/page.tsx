@@ -3128,7 +3128,9 @@ function PorAlunoSubTab({ turmas }: { turmas: Turma[] }) {
 
 function PresencaTab({ turmas, podeEditar }: { turmas: Turma[]; podeEditar: boolean }) {
   const { user } = useAuth();
-  const podeEditarSessao = ['admin', 'prt'].includes(user?.role ?? '');
+  const { canAccess } = usePermissions(user);
+  const podeIncluir = podeEditar || canAccess('academico', 'incluir');
+  const podeEditarSessao = ['admin', 'prt'].includes(user?.role ?? '') || podeEditar;
   const [subTab, setSubTab] = useState<'historico' | 'relatorios' | 'por-aluno'>('historico');
 
   // ─── Filtros do histórico ───────────────────────────────────────────────
@@ -3356,7 +3358,7 @@ function PresencaTab({ turmas, podeEditar }: { turmas: Turma[]; podeEditar: bool
           className="flex items-center gap-2 border border-purple-200 text-purple-700 bg-purple-50 hover:bg-purple-100 px-4 py-2 rounded-xl font-black text-[10px] uppercase transition-colors">
           <Smartphone size={13}/> Portal do Professor
         </a>
-        {podeEditar && (
+        {podeIncluir && (
           <button onClick={abrirNovaLista}
             className="flex items-center gap-2 bg-purple-600 text-white px-5 py-2 rounded-xl font-black text-[10px] uppercase hover:bg-purple-700 transition-colors">
             <ClipboardCheck size={13}/> Nova Lista de Presença
@@ -3377,7 +3379,7 @@ function PresencaTab({ turmas, podeEditar }: { turmas: Turma[]; podeEditar: bool
           <div className="py-16 text-center">
             <ClipboardCheck size={40} className="mx-auto mb-3 text-slate-200" />
             <p className="text-sm text-slate-400 font-bold">Nenhuma aula registrada ainda.</p>
-            {podeEditar && <p className="text-xs text-slate-300 mt-1">Clique em &quot;Nova Lista de Presença&quot; para começar.</p>}
+            {podeIncluir && <p className="text-xs text-slate-300 mt-1">Clique em &quot;Nova Lista de Presença&quot; para começar.</p>}
           </div>
         ) : (
           <div className="divide-y divide-slate-50">
@@ -3640,8 +3642,7 @@ function PresencaTab({ turmas, podeEditar }: { turmas: Turma[]; podeEditar: bool
                       className="w-full bg-purple-600 text-white py-2.5 rounded-xl font-black text-xs uppercase hover:bg-purple-700 disabled:opacity-50">
                       {carregandoAlunos ? 'Carregando alunos...' : 'Iniciar Chamada →'}
                     </button>
-                    {/* FIX #3: botão de link agora protegido por podeEditar */}
-                    {podeEditar && (
+                    {podeIncluir && (
                       <button onClick={gerarLinkChamada}
                         className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl font-black text-xs uppercase border transition-all ${
                           linkCopiado
