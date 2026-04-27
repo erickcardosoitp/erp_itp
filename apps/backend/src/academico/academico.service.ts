@@ -1542,4 +1542,142 @@ export class AcademicoService {
       urgentes:     Number(r.urgentes),
     };
   }
+
+  // ── CONTROLE FUTEBOL ──────────────────────────────────────────────────────
+
+  async listarControleFutebol() {
+    const rows = await this.dataSource.query(`
+      SELECT
+        cf.*,
+        a.nome_completo                               AS aluno_nome,
+        a.data_nascimento::text                       AS aluno_data_nascimento,
+        a.celular                                     AS aluno_celular,
+        -- responsável via inscrição mais recente
+        ins.nome_responsavel                          AS responsavel_nome,
+        ins.celular_responsavel                       AS responsavel_telefone,
+        -- documentos: verifica se tem os 5 obrigatórios + lgpd
+        COALESCE((
+          SELECT COUNT(*) FROM documentos_inscricao di
+          JOIN inscricoes i2 ON i2.id = di.inscricao_id
+          WHERE i2.aluno_id::text = a.id::text
+            AND di.obrigatorio = true
+        ), 0)                                          AS docs_total_obrig,
+        COALESCE((
+          SELECT COUNT(*) FROM documentos_inscricao di
+          JOIN inscricoes i2 ON i2.id = di.inscricao_id
+          WHERE i2.aluno_id::text = a.id::text
+            AND di.obrigatorio = true
+            AND di.arquivo IS NOT NULL AND di.arquivo <> ''
+        ), 0)                                          AS docs_enviados,
+        COALESCE(ins.lgpd_aceito, false)              AS lgpd_aceito,
+        -- estoque
+        up.nome                                       AS uniforme_nome,
+        cp.nome                                       AS chuteira_nome
+      FROM controles_futebol cf
+      LEFT JOIN alunos a ON a.id::text = cf.aluno_id
+      LEFT JOIN LATERAL (
+        SELECT i.nome_responsavel, i.celular_responsavel, i.lgpd_aceito
+        FROM inscricoes i
+        WHERE i.aluno_id::text = a.id::text
+        ORDER BY i.created_at DESC LIMIT 1
+      ) ins ON true
+      LEFT JOIN estoque_produtos up ON up.id::text = cf.estoque_uniforme_id
+      LEFT JOIN estoque_produtos cp ON cp.id::text = cf.estoque_chuteira_id
+      ORDER BY a.nome_completo ASC
+    `);
+    return rows.map((r: any) => ({
+      ...r,
+      docs_ok: Number(r.docs_total_obrig) > 0
+        && Number(r.docs_enviados) >= Number(r.docs_total_obrig)
+        && r.lgpd_aceito,
+    }));
+  }
+
+  async criarControleFutebol(dto: any) {
+    const id = (await this.dataSource.query(
+      `INSERT INTO controles_futebol
+        (id, aluno_id, tamanho_camisa, tamanho_short, numero_chuteira,
+         estoque_uniforme_id, estoque_chuteira_id,
+         uniforme_recebido, chuteira_recebida, status, observacoes,
+         created_at, updated_at)
+       VALUES (gen_random_uuid(), $1,$2,$3,$4,$5,$6,false,false,$7,$8,now(),now())
+       RETURNING id`,
+      [
+        dto.aluno_id, dto.tamanho_camisa ?? null, dto.tamanho_short ?? null,
+        dto.numero_chuteira ?? null, dto.estoque_uniforme_id ?? null,
+        dto.estoque_chuteira_id ?? null, dto.status ?? 'Pendente',
+        dto.observacoes ?? null,
+      ],
+    ))[0];
+    return this.dataSource.query(`SELECT * FROM controles_futebol WHERE id = $1`, [id.id]).then(r => r[0]);
+  }
+
+  async atualizarControleFutebol(id: string, dto: any, usuarioNome?: string) {
+    const [current] = await this.dataSource.query(
+      `SELECT * FROM controles_futebol WHERE id = $1`, [id],
+    );
+    if (!current) throw new Error('Controle não encontrado');
+
+    // Stock baixa for uniforme when first marked as received
+    if (dto.uniforme_recebido && !current.uniforme_recebido && dto.estoque_uniforme_id) {
+      await this.dataSource.query(
+        `UPDATE estoque_produtos SET quantidade_atual = quantidade_atual - 1 WHERE id = $1`,
+        [dto.estoque_uniforme_id],
+      );
+      await this.dataSource.query(
+        `INSERT INTO estoque_movimentos (id, produto_id, tipo, quantidade, observacao, usuario_nome, "createdAt")
+         VALUES (gen_random_uuid(), $1, 'baixa', 1, $2, $3, now())`,
+        [dto.estoque_uniforme_id, `Uniforme entregue ao aluno (Controle Futebol)`, usuarioNome ?? 'Sistema'],
+      );
+    }
+
+    // Stock baixa for chuteira when first marked as received
+    if (dto.chuteira_recebida && !current.chuteira_recebida && dto.estoque_chuteira_id) {
+      await this.dataSource.query(
+        `UPDATE estoque_produtos SET quantidade_atual = quantidade_atual - 1 WHERE id = $1`,
+        [dto.estoque_chuteira_id],
+      );
+      await this.dataSource.query(
+        `INSERT INTO estoque_movimentos (id, produto_id, tipo, quantidade, observacao, usuario_nome, "createdAt")
+         VALUES (gen_random_uuid(), $1, 'baixa', 1, $2, $3, now())`,
+        [dto.estoque_chuteira_id, `Chuteira entregue ao aluno (Controle Futebol)`, usuarioNome ?? 'Sistema'],
+      );
+    }
+
+    await this.dataSource.query(
+      `UPDATE controles_futebol SET
+        tamanho_camisa = COALESCE($1, tamanho_camisa),
+        tamanho_short  = COALESCE($2, tamanho_short),
+        numero_chuteira = COALESCE($3, numero_chuteira),
+        estoque_uniforme_id = COALESCE($4, estoque_uniforme_id),
+        estoque_chuteira_id = COALESCE($5, estoque_chuteira_id),
+        uniforme_recebido = $6,
+        chuteira_recebida = $7,
+        status = COALESCE($8, status),
+        observacoes = COALESCE($9, observacoes),
+        updated_at = now()
+       WHERE id = $10`,
+      [
+        dto.tamanho_camisa ?? null, dto.tamanho_short ?? null,
+        dto.numero_chuteira ?? null, dto.estoque_uniforme_id ?? null,
+        dto.estoque_chuteira_id ?? null,
+        dto.uniforme_recebido ?? current.uniforme_recebido,
+        dto.chuteira_recebida ?? current.chuteira_recebida,
+        dto.status ?? null, dto.observacoes ?? null,
+        id,
+      ],
+    );
+    return this.dataSource.query(`SELECT * FROM controles_futebol WHERE id = $1`, [id]).then(r => r[0]);
+  }
+
+  async deletarControleFutebol(id: string) {
+    await this.dataSource.query(`DELETE FROM controles_futebol WHERE id = $1`, [id]);
+    return { ok: true };
+  }
+
+  async listarEstoqueProdutos() {
+    return this.dataSource.query(
+      `SELECT id, nome, categoria, quantidade_atual FROM estoque_produtos WHERE ativo = true ORDER BY nome ASC`,
+    );
+  }
 }

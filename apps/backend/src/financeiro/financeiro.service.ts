@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { InjectDataSource } from '@nestjs/typeorm';
+import { Repository, DataSource } from 'typeorm';
 import { TipoMovimentacao } from './entities/tipo-movimentacao.entity';
 import { PlanoContas } from './entities/plano-contas.entity';
 import { CategoriaFinanceira } from './entities/categoria-financeira.entity';
@@ -8,6 +9,8 @@ import { TipoPessoa } from './entities/tipo-pessoa.entity';
 import { FormaPagamento } from './entities/forma-pagamento.entity';
 import { Recorrencia } from './entities/recorrencia.entity';
 import { MovimentacaoFinanceira } from './entities/movimentacao-financeira.entity';
+import { Boleto } from './entities/boleto.entity';
+import { BoletoParcela } from './entities/boleto-parcela.entity';
 import { NotificacoesService } from '../notificacoes/notificacoes.service';
 
 @Injectable()
@@ -20,6 +23,9 @@ export class FinanceiroService {
     @InjectRepository(FormaPagamento)          private formaPagRepo: Repository<FormaPagamento>,
     @InjectRepository(Recorrencia)             private recorrenciaRepo: Repository<Recorrencia>,
     @InjectRepository(MovimentacaoFinanceira)  private movRepo: Repository<MovimentacaoFinanceira>,
+    @InjectRepository(Boleto)                  private boletoRepo: Repository<Boleto>,
+    @InjectRepository(BoletoParcela)           private parcelaRepo: Repository<BoletoParcela>,
+    @InjectDataSource()                        private readonly dataSource: DataSource,
     private readonly notificacoes: NotificacoesService,
   ) {}
 
@@ -210,5 +216,142 @@ export class FinanceiroService {
     if (!e) throw new NotFoundException('Movimentação não encontrada');
     await this.movRepo.delete(id);
     return { message: 'Movimentação removida' };
+  }
+
+  // ── BOLETOS A RECEBER ─────────────────────────────────────────────────────
+
+  async listarBoletos() {
+    const boletos = await this.boletoRepo.find({ order: { data_emissao: 'DESC', created_at: 'DESC' } });
+    const parcelas = await this.parcelaRepo.find({ order: { boleto_id: 'ASC', numero_parcela: 'ASC' } });
+    return boletos.map(b => ({
+      ...b,
+      parcelas: parcelas.filter(p => p.boleto_id === b.id),
+    }));
+  }
+
+  async criarBoleto(dto: any) {
+    if (!dto.recebedor) throw new BadRequestException('Recebedor é obrigatório');
+    if (!dto.credor) throw new BadRequestException('Credor é obrigatório');
+    if (!dto.valor && dto.valor !== 0) throw new BadRequestException('Valor é obrigatório');
+    if (!dto.data_emissao) throw new BadRequestException('Data de emissão é obrigatória');
+
+    const boleto = await this.boletoRepo.save(this.boletoRepo.create({
+      recebedor: dto.recebedor,
+      credor: dto.credor,
+      cnpj: dto.cnpj ?? null,
+      valor: dto.valor,
+      cod_barras: dto.cod_barras ?? null,
+      data_emissao: dto.data_emissao,
+      parcelado: dto.parcelado ?? false,
+      qtd_parcelas: dto.qtd_parcelas ?? 1,
+      status: 'Pendente',
+      arquivo_base64: dto.arquivo_base64 ?? null,
+      arquivo_nome: dto.arquivo_nome ?? null,
+      descricao: dto.descricao ?? null,
+    }));
+
+    const parcelas: BoletoParcela[] = [];
+    const parcelasConfig: any[] = dto.parcelas ?? [];
+
+    if (parcelasConfig.length > 0) {
+      for (let i = 0; i < parcelasConfig.length; i++) {
+        const pc = parcelasConfig[i];
+        // Create movimentacao entry
+        const mov = await this.movRepo.save(this.movRepo.create({
+          nome: `Boleto: ${boleto.credor} — Parcela ${i + 1}/${parcelasConfig.length}`,
+          valor: pc.valor,
+          data: pc.data_vencimento,
+          tipo_movimentacao: 'Receita',
+          plano_contas: 'Boletos a Receber',
+          status: 'Pendente',
+          descricao: boleto.descricao ?? undefined,
+        } as any)) as unknown as MovimentacaoFinanceira;
+
+        const p = await this.parcelaRepo.save(this.parcelaRepo.create({
+          boleto_id: boleto.id,
+          numero_parcela: i + 1,
+          valor: pc.valor,
+          data_vencimento: pc.data_vencimento,
+          data_pagamento: null,
+          pago: false,
+          movimentacao_id: mov.id,
+        }));
+        parcelas.push(p);
+      }
+    } else {
+      // à vista — single parcela
+      const mov = await this.movRepo.save(this.movRepo.create({
+        nome: `Boleto: ${boleto.credor}`,
+        valor: boleto.valor,
+        data: boleto.data_emissao,
+        tipo_movimentacao: 'Receita',
+        plano_contas: 'Boletos a Receber',
+        status: 'Pendente',
+        descricao: boleto.descricao ?? undefined,
+      } as any)) as unknown as MovimentacaoFinanceira;
+
+      const p = await this.parcelaRepo.save(this.parcelaRepo.create({
+        boleto_id: boleto.id,
+        numero_parcela: 1,
+        valor: boleto.valor,
+        data_vencimento: boleto.data_emissao,
+        data_pagamento: null,
+        pago: false,
+        movimentacao_id: mov.id,
+      }));
+      parcelas.push(p);
+    }
+
+    return { ...boleto, parcelas };
+  }
+
+  async atualizarBoleto(id: string, dto: any) {
+    const b = await this.boletoRepo.findOneBy({ id });
+    if (!b) throw new NotFoundException('Boleto não encontrado');
+    const { parcelas: _p, ...fields } = dto;
+    await this.boletoRepo.update(id, fields);
+    return this.boletoRepo.findOneByOrFail({ id });
+  }
+
+  async marcarParcelaPaga(parcelaId: string, dto: { data_pagamento: string }) {
+    const parcela = await this.parcelaRepo.findOneBy({ id: parcelaId });
+    if (!parcela) throw new NotFoundException('Parcela não encontrada');
+
+    await this.parcelaRepo.update(parcelaId, {
+      pago: true,
+      data_pagamento: dto.data_pagamento,
+    });
+
+    // Sync movimentacao status
+    if (parcela.movimentacao_id) {
+      await this.movRepo.update(parcela.movimentacao_id, {
+        status: 'Pago',
+        data: dto.data_pagamento,
+      } as any);
+    }
+
+    // Check if all parcelas paid → update boleto status
+    const allParcelas = await this.parcelaRepo.findBy({ boleto_id: parcela.boleto_id });
+    const todasPagas = allParcelas.every(p => p.id === parcelaId || p.pago);
+    if (todasPagas) {
+      await this.boletoRepo.update(parcela.boleto_id, { status: 'Pago' });
+    }
+
+    return { ok: true };
+  }
+
+  async deletarBoleto(id: string) {
+    const b = await this.boletoRepo.findOneBy({ id });
+    if (!b) throw new NotFoundException('Boleto não encontrado');
+    // Clean up movimentacoes linked to parcelas
+    const parcelas = await this.parcelaRepo.findBy({ boleto_id: id });
+    for (const p of parcelas) {
+      if (p.movimentacao_id) {
+        await this.movRepo.delete(p.movimentacao_id).catch(() => {});
+      }
+    }
+    await this.parcelaRepo.delete({ boleto_id: id });
+    await this.boletoRepo.delete(id);
+    return { message: 'Boleto removido' };
   }
 }

@@ -7,6 +7,8 @@ import { TipoPessoa } from './entities/tipo-pessoa.entity';
 import { FormaPagamento } from './entities/forma-pagamento.entity';
 import { Recorrencia } from './entities/recorrencia.entity';
 import { MovimentacaoFinanceira } from './entities/movimentacao-financeira.entity';
+import { Boleto } from './entities/boleto.entity';
+import { BoletoParcela } from './entities/boleto-parcela.entity';
 import { FinanceiroService } from './financeiro.service';
 import { FinanceiroController } from './financeiro.controller';
 import { NotificacoesModule } from '../notificacoes/notificacoes.module';
@@ -21,6 +23,8 @@ import { NotificacoesModule } from '../notificacoes/notificacoes.module';
       FormaPagamento,
       Recorrencia,
       MovimentacaoFinanceira,
+      Boleto,
+      BoletoParcela,
     ]),
     NotificacoesModule,
   ],

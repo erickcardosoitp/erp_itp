@@ -141,4 +141,28 @@ export class FinanceiroController {
   @Delete('movimentacoes/:id')
   @ModuloPerm('financeiro', 'excluir')
   deletarMovimentacao(@Param('id') id: string) { return this.svc.deletarMovimentacao(id); }
+
+  // ── BOLETOS A RECEBER ─────────────────────────────────────────────────────
+
+  @Get('boletos')
+  @ModuloPerm('financeiro', 'visualizar')
+  listarBoletos() { return this.svc.listarBoletos(); }
+
+  @Post('boletos')
+  @ModuloPerm('financeiro', 'incluir')
+  criarBoleto(@Body() dto: any) { return this.svc.criarBoleto(dto); }
+
+  @Patch('boletos/:id')
+  @ModuloPerm('financeiro', 'editar')
+  atualizarBoleto(@Param('id') id: string, @Body() dto: any) { return this.svc.atualizarBoleto(id, dto); }
+
+  @Patch('boletos/parcelas/:parcelaId/pagar')
+  @ModuloPerm('financeiro', 'editar')
+  marcarParcelaPaga(@Param('parcelaId') parcelaId: string, @Body() dto: any) {
+    return this.svc.marcarParcelaPaga(parcelaId, dto);
+  }
+
+  @Delete('boletos/:id')
+  @ModuloPerm('financeiro', 'excluir')
+  deletarBoleto(@Param('id') id: string) { return this.svc.deletarBoleto(id); }
 }

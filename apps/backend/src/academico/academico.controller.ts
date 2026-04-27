@@ -393,4 +393,28 @@ export class AcademicoController {
   @Delete('chamados/:id')
   @ModuloPerm('academico', 'excluir')
   deletarChamado(@Param('id') id: string) { return this.svc.deletarChamado(id); }
+
+  // ── CONTROLE FUTEBOL ──────────────────────────────────────────────────────
+
+  @Get('controle-futebol')
+  @ModuloPerm('academico', 'visualizar')
+  listarControleFutebol() { return this.svc.listarControleFutebol(); }
+
+  @Post('controle-futebol')
+  @ModuloPerm('academico', 'incluir')
+  criarControleFutebol(@Body() dto: any) { return this.svc.criarControleFutebol(dto); }
+
+  @Patch('controle-futebol/:id')
+  @ModuloPerm('academico', 'editar')
+  atualizarControleFutebol(@Param('id') id: string, @Body() dto: any, @Req() req: any) {
+    return this.svc.atualizarControleFutebol(id, dto, req.user?.nome || req.user?.email);
+  }
+
+  @Delete('controle-futebol/:id')
+  @ModuloPerm('academico', 'excluir')
+  deletarControleFutebol(@Param('id') id: string) { return this.svc.deletarControleFutebol(id); }
+
+  @Get('estoque-produtos')
+  @ModuloPerm('academico', 'visualizar')
+  listarEstoqueProdutos() { return this.svc.listarEstoqueProdutos(); }
 }

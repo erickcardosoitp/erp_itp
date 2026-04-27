@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   DollarSign, TrendingUp, TrendingDown, Plus, Search, X,
   Edit3, Trash2, AlertCircle, RefreshCw, Settings2,
+  FileBarChart2, ChevronDown, ChevronUp, Upload, CheckCircle2,
 } from 'lucide-react';
 import api from '@/services/api';
 import { useAuth } from '@/context/auth-context';
@@ -73,6 +74,7 @@ export default function FinanceiroPage() {
   const [recorrencias, setRecorrencias] = useState<LookupItem[]>([]);
 
   const [isMounted, setIsMounted] = useState(false);
+  const [activeTab, setActiveTab] = useState<'movimentacoes' | 'boletos'>('movimentacoes');
   const { canDelete, canAccess } = usePermissions(user);
 
   const loadLookups = useCallback(async () => {
@@ -198,13 +200,24 @@ export default function FinanceiroPage() {
               Movimentações financeiras centralizadas
             </p>
           </div>
-          <div className="flex gap-3">
+          <div className="flex gap-3 flex-wrap">
+            <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl gap-1">
+              {([['movimentacoes', 'Movimentações', DollarSign], ['boletos', 'Boletos a Receber', FileBarChart2]] as const).map(([id, label, Icon]) => (
+                <button
+                  key={id}
+                  onClick={() => setActiveTab(id)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${activeTab === id ? 'bg-emerald-600 text-white shadow' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}
+                >
+                  <Icon size={13} /> {label}
+                </button>
+              ))}
+            </div>
             <button onClick={() => { loadMovimentacoes(); loadLookups(); }}
               className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 text-slate-500 dark:text-slate-300 hover:border-emerald-400 hover:text-emerald-600 transition-all text-[10px] font-black uppercase tracking-widest shadow-sm">
               <RefreshCw size={13} />
               Atualizar
             </button>
-            {podeEscrever && (
+            {podeEscrever && activeTab === 'movimentacoes' && (
               <button onClick={abrirCriar}
                 className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2 rounded-xl font-black text-[10px] uppercase flex items-center gap-2 transition-colors shadow-sm">
                 <Plus size={14} strokeWidth={3} /> Nova Movimentação
@@ -213,6 +226,9 @@ export default function FinanceiroPage() {
           </div>
         </header>
 
+        {activeTab === 'boletos' && <BoletosTab podeEscrever={podeEscrever} podeEditar={podeEditar} podeExcluir={podeExcluir} />}
+
+        {activeTab === 'movimentacoes' && <>
         {/* KPIs */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
           <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 p-5 flex items-center gap-4 shadow-sm">
@@ -442,7 +458,374 @@ export default function FinanceiroPage() {
           </div>
         )}
 
+        </>}
+
       </div>
+    </div>
+  );
+}
+
+// ─── Boletos a Receber ────────────────────────────────────────────────────────
+
+interface Boleto {
+  id: string;
+  recebedor: string;
+  credor: string;
+  cnpj?: string;
+  valor: number;
+  cod_barras?: string;
+  data_emissao: string;
+  parcelado: boolean;
+  qtd_parcelas: number;
+  status: string;
+  arquivo_base64?: string;
+  arquivo_nome?: string;
+  descricao?: string;
+  parcelas: BoletoParcela[];
+}
+
+interface BoletoParcela {
+  id: string;
+  boleto_id: string;
+  numero_parcela: number;
+  valor: number;
+  data_vencimento: string;
+  data_pagamento?: string | null;
+  pago: boolean;
+  movimentacao_id?: string;
+}
+
+function BoletosTab({ podeEscrever, podeEditar, podeExcluir }: { podeEscrever: boolean; podeEditar: boolean; podeExcluir: boolean }) {
+  const [boletos, setBoletos] = useState<Boleto[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busca, setBusca] = useState('');
+  const [filtroStatus, setFiltroStatus] = useState('');
+  const [expandido, setExpandido] = useState<string | null>(null);
+  const [modal, setModal] = useState(false);
+  const [form, setForm] = useState<any>({ parcelado: false, qtd_parcelas: 1, status: 'Pendente', data_emissao: new Date().toISOString().slice(0, 10) });
+  const [parcelas, setParcelas] = useState<{ valor: string; data_vencimento: string }[]>([]);
+  const [salvando, setSalvando] = useState(false);
+  const [pagandoParcela, setPagandoParcela] = useState<string | null>(null);
+
+  const carregar = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await api.get('/financeiro/boletos');
+      setBoletos(Array.isArray(r.data) ? r.data : []);
+    } catch {}
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { carregar(); }, [carregar]);
+
+  const filtrados = boletos.filter(b => {
+    const q = busca.toLowerCase();
+    const matchBusca = !q || b.credor.toLowerCase().includes(q) || b.recebedor.toLowerCase().includes(q) || (b.cod_barras ?? '').includes(q);
+    const matchStatus = !filtroStatus || b.status === filtroStatus;
+    return matchBusca && matchStatus;
+  });
+
+  const gerarParcelas = (qtd: number, valorTotal: number, dataEmissao: string) => {
+    const valorParcela = Math.round((valorTotal / qtd) * 100) / 100;
+    return Array.from({ length: qtd }, (_, i) => {
+      const d = new Date(dataEmissao);
+      d.setMonth(d.getMonth() + i + 1);
+      return { valor: String(valorParcela), data_vencimento: d.toISOString().slice(0, 10) };
+    });
+  };
+
+  const handleQtdParcelas = (qtd: number) => {
+    setForm((f: any) => ({ ...f, qtd_parcelas: qtd }));
+    if (form.valor && qtd > 1) setParcelas(gerarParcelas(qtd, parseFloat(form.valor), form.data_emissao));
+    else setParcelas([]);
+  };
+
+  const handleArquivo = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setForm((f: any) => ({ ...f, arquivo_base64: reader.result as string, arquivo_nome: file.name }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const salvar = async () => {
+    setSalvando(true);
+    try {
+      const payload = {
+        ...form,
+        valor: parseFloat(String(form.valor).replace(',', '.')),
+        parcelas: form.parcelado && parcelas.length > 0
+          ? parcelas.map(p => ({ valor: parseFloat(p.valor), data_vencimento: p.data_vencimento }))
+          : [],
+      };
+      await api.post('/financeiro/boletos', payload);
+      setModal(false);
+      setForm({ parcelado: false, qtd_parcelas: 1, status: 'Pendente', data_emissao: new Date().toISOString().slice(0, 10) });
+      setParcelas([]);
+      carregar();
+    } catch {}
+    setSalvando(false);
+  };
+
+  const deletar = async (id: string) => {
+    if (!confirm('Excluir este boleto e suas parcelas?')) return;
+    await api.delete(`/financeiro/boletos/${id}`);
+    carregar();
+  };
+
+  const pagarParcela = async (parcelaId: string, dataPagamento: string) => {
+    setPagandoParcela(parcelaId);
+    try {
+      await api.patch(`/financeiro/boletos/parcelas/${parcelaId}/pagar`, { data_pagamento: dataPagamento });
+      carregar();
+    } catch {}
+    setPagandoParcela(null);
+  };
+
+  const totalPendente = boletos.flatMap(b => b.parcelas).filter(p => !p.pago).reduce((s, p) => s + Number(p.valor), 0);
+  const totalRecebido = boletos.flatMap(b => b.parcelas).filter(p => p.pago).reduce((s, p) => s + Number(p.valor), 0);
+
+  return (
+    <div className="space-y-6">
+      {/* KPIs */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 p-5 flex items-center gap-4">
+          <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/30"><CheckCircle2 size={22} className="text-emerald-600"/></div>
+          <div><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Recebido</p><p className="text-xl font-black text-emerald-600">{moeda(totalRecebido)}</p></div>
+        </div>
+        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 p-5 flex items-center gap-4">
+          <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-900/30"><AlertCircle size={22} className="text-amber-500"/></div>
+          <div><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">A Receber</p><p className="text-xl font-black text-amber-500">{moeda(totalPendente)}</p></div>
+        </div>
+        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 p-5 flex items-center gap-4">
+          <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-900/30"><FileBarChart2 size={22} className="text-blue-500"/></div>
+          <div><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Total Boletos</p><p className="text-xl font-black text-blue-600">{boletos.length}</p></div>
+        </div>
+      </div>
+
+      {/* Toolbar */}
+      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 p-4 flex flex-wrap gap-3 items-center justify-between">
+        <div className="flex gap-3 flex-wrap flex-1">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"/>
+            <input
+              value={busca}
+              onChange={e => setBusca(e.target.value)}
+              placeholder="Buscar credor, recebedor, código de barras..."
+              className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+            />
+          </div>
+          <select
+            value={filtroStatus}
+            onChange={e => setFiltroStatus(e.target.value)}
+            className="px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-700"
+          >
+            <option value="">Todos os status</option>
+            <option>Pendente</option>
+            <option>Pago</option>
+          </select>
+        </div>
+        {podeEscrever && (
+          <button
+            onClick={() => setModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 transition-colors"
+          >
+            <Plus size={14}/> Novo Boleto
+          </button>
+        )}
+      </div>
+
+      {/* Lista */}
+      {loading ? (
+        <div className="bg-white dark:bg-slate-800 rounded-2xl p-8 text-center text-slate-400 text-sm">Carregando...</div>
+      ) : filtrados.length === 0 ? (
+        <div className="bg-white dark:bg-slate-800 rounded-2xl p-8 text-center text-slate-400 text-sm">Nenhum boleto encontrado.</div>
+      ) : (
+        <div className="space-y-3">
+          {filtrados.map(b => (
+            <div key={b.id} className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 overflow-hidden">
+              <div className="p-4 flex flex-wrap gap-4 items-start justify-between">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <h3 className="font-bold text-slate-800 dark:text-white">{b.credor}</h3>
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${b.status === 'Pago' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'}`}>
+                      {b.status}
+                    </span>
+                    {b.parcelado && <span className="px-2 py-0.5 bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 rounded-full text-xs">{b.qtd_parcelas}× parcelas</span>}
+                  </div>
+                  <div className="text-xs text-slate-500 mt-1 flex flex-wrap gap-3">
+                    <span>Recebedor: <strong className="text-slate-700 dark:text-slate-300">{b.recebedor}</strong></span>
+                    {b.cnpj && <span>CNPJ: {b.cnpj}</span>}
+                    <span>Emissão: {dataFmt(b.data_emissao)}</span>
+                    {b.cod_barras && <span className="font-mono">{b.cod_barras}</span>}
+                  </div>
+                  {b.descricao && <p className="text-xs text-slate-400 mt-1">{b.descricao}</p>}
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="text-right">
+                    <div className="text-lg font-black text-emerald-600">{moeda(b.valor)}</div>
+                    {b.arquivo_nome && (
+                      <a href={b.arquivo_base64} download={b.arquivo_nome} className="text-xs text-blue-500 hover:underline flex items-center gap-1 justify-end mt-0.5">
+                        <Upload size={10}/> {b.arquivo_nome}
+                      </a>
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <button
+                      onClick={() => setExpandido(expandido === b.id ? null : b.id)}
+                      className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400"
+                    >
+                      {expandido === b.id ? <ChevronUp size={16}/> : <ChevronDown size={16}/>}
+                    </button>
+                    {podeExcluir && (
+                      <button onClick={() => deletar(b.id)} className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-400"><Trash2 size={14}/></button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Parcelas expandidas */}
+              {expandido === b.id && (
+                <div className="border-t border-slate-100 dark:border-slate-700 p-4">
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Parcelas</p>
+                  <div className="space-y-2">
+                    {b.parcelas.map(p => (
+                      <div key={p.id} className="flex items-center justify-between bg-slate-50 dark:bg-slate-700/50 rounded-xl px-4 py-3">
+                        <div className="flex items-center gap-4">
+                          <span className="text-xs font-bold text-slate-500">{p.numero_parcela}/{b.qtd_parcelas}</span>
+                          <span className="font-semibold text-slate-800 dark:text-white">{moeda(p.valor)}</span>
+                          <span className="text-xs text-slate-500">Venc.: {dataFmt(p.data_vencimento)}</span>
+                          {p.pago && p.data_pagamento && <span className="text-xs text-emerald-600">Pago em {dataFmt(p.data_pagamento)}</span>}
+                        </div>
+                        <div>
+                          {p.pago ? (
+                            <span className="flex items-center gap-1 text-emerald-600 text-xs font-bold"><CheckCircle2 size={13}/> Pago</span>
+                          ) : podeEditar ? (
+                            <button
+                              disabled={pagandoParcela === p.id}
+                              onClick={() => pagarParcela(p.id, new Date().toISOString().slice(0, 10))}
+                              className="px-3 py-1 bg-emerald-600 text-white rounded-lg text-xs font-semibold hover:bg-emerald-700 disabled:opacity-60"
+                            >
+                              {pagandoParcela === p.id ? '...' : 'Marcar pago'}
+                            </button>
+                          ) : (
+                            <span className="text-xs text-amber-600 font-semibold">Pendente</span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Modal novo boleto */}
+      {modal && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 w-full max-w-lg space-y-4 shadow-2xl overflow-y-auto max-h-[90vh]">
+            <div className="flex justify-between items-center">
+              <h3 className="text-lg font-bold text-slate-800 dark:text-white">Novo Boleto a Receber</h3>
+              <button onClick={() => setModal(false)} className="text-slate-400 hover:text-slate-700"><X size={18}/></button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2">
+                <label className="text-xs font-semibold text-slate-500 mb-1 block">Credor (quem emitiu) *</label>
+                <input value={form.credor ?? ''} onChange={e => setForm((f: any) => ({ ...f, credor: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-800" placeholder="Nome do credor" />
+              </div>
+              <div className="col-span-2">
+                <label className="text-xs font-semibold text-slate-500 mb-1 block">Recebedor (quem vai pagar) *</label>
+                <input value={form.recebedor ?? ''} onChange={e => setForm((f: any) => ({ ...f, recebedor: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-800" placeholder="Instituto Tiapretinha" />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-500 mb-1 block">CNPJ</label>
+                <input value={form.cnpj ?? ''} onChange={e => setForm((f: any) => ({ ...f, cnpj: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-800" placeholder="00.000.000/0001-00" />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-500 mb-1 block">Valor Total (R$) *</label>
+                <input type="number" step="0.01" value={form.valor ?? ''} onChange={e => setForm((f: any) => ({ ...f, valor: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-800" />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-500 mb-1 block">Data de Emissão *</label>
+                <input type="date" value={form.data_emissao ?? ''} onChange={e => setForm((f: any) => ({ ...f, data_emissao: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-800" />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-500 mb-1 block">Código de Barras</label>
+                <input value={form.cod_barras ?? ''} onChange={e => setForm((f: any) => ({ ...f, cod_barras: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-800" placeholder="Linha digitável" />
+              </div>
+              <div className="col-span-2">
+                <label className="text-xs font-semibold text-slate-500 mb-1 block">Descrição</label>
+                <textarea value={form.descricao ?? ''} onChange={e => setForm((f: any) => ({ ...f, descricao: e.target.value }))} rows={2}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-800 resize-none" />
+              </div>
+              <div className="col-span-2 flex items-center gap-3">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={form.parcelado ?? false} onChange={e => { setForm((f: any) => ({ ...f, parcelado: e.target.checked })); if (!e.target.checked) setParcelas([]); }}
+                    className="rounded border-slate-300" />
+                  <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Parcelado</span>
+                </label>
+                {form.parcelado && (
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs text-slate-500">Qtd parcelas:</label>
+                    <input type="number" min={2} max={24} value={form.qtd_parcelas ?? 1}
+                      onChange={e => handleQtdParcelas(parseInt(e.target.value) || 1)}
+                      className="w-16 px-2 py-1 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-800" />
+                  </div>
+                )}
+              </div>
+              {form.parcelado && parcelas.length > 0 && (
+                <div className="col-span-2 space-y-2">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Parcelas (edite se necessário)</p>
+                  {parcelas.map((p, i) => (
+                    <div key={i} className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-xs text-slate-400">Parcela {i + 1} — Valor</label>
+                        <input type="number" step="0.01" value={p.valor}
+                          onChange={e => setParcelas(prev => prev.map((x, j) => j === i ? { ...x, valor: e.target.value } : x))}
+                          className="w-full px-2 py-1 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-800" />
+                      </div>
+                      <div>
+                        <label className="text-xs text-slate-400">Vencimento</label>
+                        <input type="date" value={p.data_vencimento}
+                          onChange={e => setParcelas(prev => prev.map((x, j) => j === i ? { ...x, data_vencimento: e.target.value } : x))}
+                          className="w-full px-2 py-1 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-800" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="col-span-2">
+                <label className="text-xs font-semibold text-slate-500 mb-1 block">Anexar boleto (PDF/imagem)</label>
+                <input type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={handleArquivo}
+                  className="w-full text-sm text-slate-500 file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100" />
+                {form.arquivo_nome && <p className="text-xs text-emerald-600 mt-1">✓ {form.arquivo_nome}</p>}
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button onClick={salvar} disabled={salvando}
+                className="flex-1 py-2.5 bg-emerald-600 text-white rounded-xl font-semibold text-sm hover:bg-emerald-700 disabled:opacity-60">
+                {salvando ? 'Salvando...' : 'Cadastrar Boleto'}
+              </button>
+              <button onClick={() => setModal(false)}
+                className="px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50">
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

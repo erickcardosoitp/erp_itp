@@ -4911,6 +4911,398 @@ function ChamadosTab({ alunos, turmas, podeEditar }: { alunos: Aluno[]; turmas: 
   );
 }
 
+// ─── Controles Tab ────────────────────────────────────────────────────────────
+
+interface ControleFutebol {
+  id: string;
+  aluno_id: string;
+  aluno_nome?: string;
+  aluno_data_nascimento?: string;
+  aluno_celular?: string;
+  responsavel_nome?: string;
+  responsavel_telefone?: string;
+  tamanho_camisa?: string;
+  tamanho_short?: string;
+  numero_chuteira?: string;
+  estoque_uniforme_id?: string;
+  estoque_chuteira_id?: string;
+  uniforme_recebido: boolean;
+  chuteira_recebida: boolean;
+  status: string;
+  observacoes?: string;
+  docs_ok?: boolean;
+  docs_total_obrig?: number;
+  docs_enviados?: number;
+  lgpd_aceito?: boolean;
+  uniforme_nome?: string;
+  chuteira_nome?: string;
+}
+
+interface EstoqueProduto { id: string; nome: string; categoria: string; quantidade_atual: number; }
+
+const STATUS_FUTEBOL = ['Pendente', 'Separado', 'Enviado', 'Entregue'];
+const STATUS_COLORS: Record<string, string> = {
+  Pendente: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
+  Separado: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
+  Enviado: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300',
+  Entregue: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
+};
+
+function ControlesTab({ podeEditar }: { podeEditar: boolean }) {
+  const [controles, setControles] = useState<ControleFutebol[]>([]);
+  const [estoqueProdutos, setEstoqueProdutos] = useState<EstoqueProduto[]>([]);
+  const [alunos, setAlunosCtrl] = useState<Aluno[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busca, setBusca] = useState('');
+  const [filtroStatus, setFiltroStatus] = useState('');
+  const [modal, setModal] = useState<{ aberto: boolean; item: ControleFutebol | null }>({ aberto: false, item: null });
+  const [form, setForm] = useState<Partial<ControleFutebol>>({});
+  const [salvando, setSalvando] = useState<string | null>(null);
+
+  const carregar = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [rc, re, ra] = await Promise.all([
+        api.get('/academico/controle-futebol'),
+        api.get('/academico/estoque-produtos'),
+        api.get('/academico/alunos'),
+      ]);
+      setControles(Array.isArray(rc.data) ? rc.data : []);
+      setEstoqueProdutos(Array.isArray(re.data) ? re.data : []);
+      setAlunosCtrl(Array.isArray(ra.data) ? ra.data : []);
+    } catch {}
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { carregar(); }, [carregar]);
+
+  const filtrados = controles.filter(c => {
+    const q = busca.toLowerCase();
+    const matchBusca = !q || (c.aluno_nome ?? '').toLowerCase().includes(q) || (c.responsavel_nome ?? '').toLowerCase().includes(q);
+    const matchStatus = !filtroStatus || c.status === filtroStatus;
+    return matchBusca && matchStatus;
+  });
+
+  const abrirCriar = () => { setForm({}); setModal({ aberto: true, item: null }); };
+  const abrirEditar = (c: ControleFutebol) => { setForm({ ...c }); setModal({ aberto: true, item: c }); };
+
+  const salvar = async () => {
+    setSalvando('form');
+    try {
+      if (modal.item) {
+        await api.patch(`/academico/controle-futebol/${modal.item.id}`, form);
+      } else {
+        await api.post('/academico/controle-futebol', form);
+      }
+      setModal({ aberto: false, item: null });
+      carregar();
+    } catch {}
+    setSalvando(null);
+  };
+
+  const deletar = async (id: string) => {
+    if (!confirm('Remover este controle?')) return;
+    await api.delete(`/academico/controle-futebol/${id}`);
+    carregar();
+  };
+
+  const toggleField = async (c: ControleFutebol, field: 'uniforme_recebido' | 'chuteira_recebida') => {
+    if (!podeEditar) return;
+    const novoval = !c[field];
+    setSalvando(c.id + field);
+    try {
+      await api.patch(`/academico/controle-futebol/${c.id}`, {
+        [field]: novoval,
+        estoque_uniforme_id: c.estoque_uniforme_id,
+        estoque_chuteira_id: c.estoque_chuteira_id,
+      });
+      carregar();
+    } catch {}
+    setSalvando(null);
+  };
+
+  const mudarStatus = async (c: ControleFutebol, novoStatus: string) => {
+    if (!podeEditar) return;
+    setSalvando(c.id + 'status');
+    try {
+      await api.patch(`/academico/controle-futebol/${c.id}`, { status: novoStatus });
+      setControles(prev => prev.map(x => x.id === c.id ? { ...x, status: novoStatus } : x));
+    } catch {}
+    setSalvando(null);
+  };
+
+  const stats = {
+    total: controles.length,
+    uniforme: controles.filter(c => c.uniforme_recebido).length,
+    chuteira: controles.filter(c => c.chuteira_recebida).length,
+    docsOk: controles.filter(c => c.docs_ok).length,
+    entregues: controles.filter(c => c.status === 'Entregue').length,
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Sub-navegação */}
+      <div className="flex gap-2 bg-white dark:bg-slate-900 rounded-2xl p-1.5 border border-slate-100 dark:border-slate-800 w-fit">
+        <button className="px-4 py-1.5 rounded-xl bg-green-600 text-white text-sm font-bold flex items-center gap-2">
+          <Star size={14} /> Futebol
+        </button>
+      </div>
+
+      {/* KPIs */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        {[
+          { label: 'Total', valor: stats.total, cor: 'blue' },
+          { label: 'Uniforme OK', valor: stats.uniforme, cor: 'green' },
+          { label: 'Chuteira OK', valor: stats.chuteira, cor: 'yellow' },
+          { label: 'Docs OK', valor: stats.docsOk, cor: 'purple' },
+          { label: 'Entregues', valor: stats.entregues, cor: 'emerald' },
+        ].map(k => (
+          <div key={k.label} className="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-100 dark:border-slate-800 text-center">
+            <div className="text-2xl font-black text-slate-800 dark:text-white">{k.valor}</div>
+            <div className="text-xs text-slate-500 mt-1">{k.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Controles + filtros */}
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 overflow-hidden">
+        <div className="p-4 flex flex-wrap gap-3 items-center justify-between border-b border-slate-100 dark:border-slate-800">
+          <div className="flex gap-2 flex-wrap flex-1">
+            <div className="relative flex-1 min-w-[180px]">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                value={busca}
+                onChange={e => setBusca(e.target.value)}
+                placeholder="Buscar aluno ou responsável..."
+                className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-green-500"
+              />
+            </div>
+            <select
+              value={filtroStatus}
+              onChange={e => setFiltroStatus(e.target.value)}
+              className="px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800"
+            >
+              <option value="">Todos os status</option>
+              {STATUS_FUTEBOL.map(s => <option key={s}>{s}</option>)}
+            </select>
+          </div>
+          {podeEditar && (
+            <button
+              onClick={abrirCriar}
+              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700 transition-colors"
+            >
+              <Plus size={14} /> Adicionar
+            </button>
+          )}
+        </div>
+
+        {loading ? (
+          <div className="p-8 text-center text-slate-400 text-sm">Carregando...</div>
+        ) : filtrados.length === 0 ? (
+          <div className="p-8 text-center text-slate-400 text-sm">Nenhum registro encontrado.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 dark:bg-slate-800 text-xs uppercase text-slate-500 dark:text-slate-400">
+                <tr>
+                  <th className="px-4 py-3 text-left">Aluno</th>
+                  <th className="px-4 py-3 text-left">Idade</th>
+                  <th className="px-4 py-3 text-left">Responsável</th>
+                  <th className="px-4 py-3 text-center">Docs</th>
+                  <th className="px-4 py-3 text-center">Tam. Camisa</th>
+                  <th className="px-4 py-3 text-center">Tam. Short</th>
+                  <th className="px-4 py-3 text-center">Chuteira</th>
+                  <th className="px-4 py-3 text-center">Uniforme</th>
+                  <th className="px-4 py-3 text-center">Chuteira</th>
+                  <th className="px-4 py-3 text-center">Status Galo</th>
+                  <th className="px-4 py-3 text-center">Ações</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {filtrados.map(c => {
+                  const idade = c.aluno_data_nascimento ? calcularIdade(c.aluno_data_nascimento) : null;
+                  return (
+                    <tr key={c.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                      <td className="px-4 py-3 font-medium text-slate-800 dark:text-white">
+                        {c.aluno_nome ?? '—'}
+                        {c.aluno_celular && <div className="text-xs text-slate-400">{c.aluno_celular}</div>}
+                      </td>
+                      <td className="px-4 py-3 text-slate-500">{idade ?? '—'}</td>
+                      <td className="px-4 py-3">
+                        <div className="text-slate-700 dark:text-slate-300">{c.responsavel_nome ?? '—'}</div>
+                        {c.responsavel_telefone && <div className="text-xs text-slate-400">{c.responsavel_telefone}</div>}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        {c.docs_ok
+                          ? <span className="inline-flex items-center gap-1 text-green-600 font-semibold text-xs"><ShieldCheck size={12}/>OK</span>
+                          : <span className="inline-flex items-center gap-1 text-red-500 text-xs"><AlertTriangle size={12}/>{c.docs_enviados ?? 0}/{c.docs_total_obrig ?? 0}</span>}
+                      </td>
+                      <td className="px-4 py-3 text-center text-slate-600 dark:text-slate-300">{c.tamanho_camisa ?? '—'}</td>
+                      <td className="px-4 py-3 text-center text-slate-600 dark:text-slate-300">{c.tamanho_short ?? '—'}</td>
+                      <td className="px-4 py-3 text-center text-slate-600 dark:text-slate-300">{c.numero_chuteira ?? '—'}</td>
+                      <td className="px-4 py-3 text-center">
+                        <button
+                          disabled={!podeEditar || salvando === c.id + 'uniforme_recebido'}
+                          onClick={() => toggleField(c, 'uniforme_recebido')}
+                          className={`px-2 py-1 rounded-lg text-xs font-semibold border transition-colors ${c.uniforme_recebido ? 'bg-green-100 border-green-300 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 'bg-slate-100 border-slate-300 text-slate-500 dark:bg-slate-800 dark:text-slate-400'}`}
+                        >
+                          {c.uniforme_recebido ? '✓ Sim' : 'Não'}
+                        </button>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <button
+                          disabled={!podeEditar || salvando === c.id + 'chuteira_recebida'}
+                          onClick={() => toggleField(c, 'chuteira_recebida')}
+                          className={`px-2 py-1 rounded-lg text-xs font-semibold border transition-colors ${c.chuteira_recebida ? 'bg-green-100 border-green-300 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 'bg-slate-100 border-slate-300 text-slate-500 dark:bg-slate-800 dark:text-slate-400'}`}
+                        >
+                          {c.chuteira_recebida ? '✓ Sim' : 'Não'}
+                        </button>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        {podeEditar ? (
+                          <select
+                            value={c.status}
+                            disabled={salvando === c.id + 'status'}
+                            onChange={e => mudarStatus(c, e.target.value)}
+                            className={`px-2 py-1 rounded-lg text-xs font-semibold border-0 ${STATUS_COLORS[c.status] ?? 'bg-slate-100'}`}
+                          >
+                            {STATUS_FUTEBOL.map(s => <option key={s}>{s}</option>)}
+                          </select>
+                        ) : (
+                          <span className={`px-2 py-1 rounded-lg text-xs font-semibold ${STATUS_COLORS[c.status] ?? 'bg-slate-100'}`}>{c.status}</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <div className="flex justify-center gap-1">
+                          {podeEditar && (
+                            <>
+                              <button onClick={() => abrirEditar(c)} className="p-1.5 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-500"><Edit3 size={13}/></button>
+                              <button onClick={() => deletar(c.id)} className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500"><Trash2 size={13}/></button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Modal criar/editar */}
+      {modal.aberto && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 w-full max-w-lg space-y-4 shadow-2xl overflow-y-auto max-h-[90vh]">
+            <div className="flex justify-between items-center">
+              <h3 className="text-lg font-bold text-slate-800 dark:text-white">
+                {modal.item ? 'Editar Controle' : 'Novo Controle — Futebol'}
+              </h3>
+              <button onClick={() => setModal({ aberto: false, item: null })} className="text-slate-400 hover:text-slate-700"><X size={18}/></button>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3">
+              {!modal.item && (
+                <div>
+                  <label className="text-xs font-semibold text-slate-500 mb-1 block">Aluno *</label>
+                  <select
+                    value={form.aluno_id ?? ''}
+                    onChange={e => setForm(f => ({ ...f, aluno_id: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800"
+                  >
+                    <option value="">Selecione...</option>
+                    {alunos.map(a => <option key={a.id} value={a.id}>{a.nome_completo}</option>)}
+                  </select>
+                </div>
+              )}
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-slate-500 mb-1 block">Tam. Camisa</label>
+                  <input value={form.tamanho_camisa ?? ''} onChange={e => setForm(f => ({ ...f, tamanho_camisa: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800" placeholder="P, M, G..." />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-500 mb-1 block">Tam. Short</label>
+                  <input value={form.tamanho_short ?? ''} onChange={e => setForm(f => ({ ...f, tamanho_short: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800" placeholder="P, M, G..." />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-500 mb-1 block">Nº Chuteira</label>
+                  <input value={form.numero_chuteira ?? ''} onChange={e => setForm(f => ({ ...f, numero_chuteira: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800" placeholder="36, 37..." />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-500 mb-1 block">Item de Estoque — Uniforme</label>
+                <select
+                  value={form.estoque_uniforme_id ?? ''}
+                  onChange={e => setForm(f => ({ ...f, estoque_uniforme_id: e.target.value || undefined }))}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800"
+                >
+                  <option value="">Nenhum</option>
+                  {estoqueProdutos.map(p => <option key={p.id} value={p.id}>{p.nome} (qtd: {p.quantidade_atual})</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-500 mb-1 block">Item de Estoque — Chuteira</label>
+                <select
+                  value={form.estoque_chuteira_id ?? ''}
+                  onChange={e => setForm(f => ({ ...f, estoque_chuteira_id: e.target.value || undefined }))}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800"
+                >
+                  <option value="">Nenhum</option>
+                  {estoqueProdutos.map(p => <option key={p.id} value={p.id}>{p.nome} (qtd: {p.quantidade_atual})</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-500 mb-1 block">Status Galo</label>
+                <select
+                  value={form.status ?? 'Pendente'}
+                  onChange={e => setForm(f => ({ ...f, status: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800"
+                >
+                  {STATUS_FUTEBOL.map(s => <option key={s}>{s}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-500 mb-1 block">Observações</label>
+                <textarea
+                  value={form.observacoes ?? ''}
+                  onChange={e => setForm(f => ({ ...f, observacoes: e.target.value }))}
+                  rows={2}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800 resize-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={salvar}
+                disabled={salvando === 'form'}
+                className="flex-1 py-2.5 bg-green-600 text-white rounded-xl font-semibold text-sm hover:bg-green-700 disabled:opacity-60"
+              >
+                {salvando === 'form' ? 'Salvando...' : 'Salvar'}
+              </button>
+              <button
+                onClick={() => setModal({ aberto: false, item: null })}
+                className="px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Página principal ─────────────────────────────────────────────────────────
 
 export default function AcademicoPage() {
@@ -4963,6 +5355,7 @@ export default function AcademicoPage() {
     { id: 'acervo',        label: 'Acervo',        Icon: FileText },
     { id: 'chamados',      label: 'Chamados',      Icon: AlertCircle },
     { id: 'monitoramento', label: 'Monitoramento', Icon: Activity },
+    { id: 'controles',     label: 'Controles',     Icon: Shield },
   ];
 
   return (
@@ -5006,6 +5399,7 @@ export default function AcademicoPage() {
           {activeTab === 'acervo'        && <AcervoTab />}
           {activeTab === 'chamados'      && <ChamadosTab alunos={alunos} turmas={turmas} podeEditar={podeEditar} />}
           {activeTab === 'monitoramento' && <MonitoramentoTab />}
+          {activeTab === 'controles'     && <ControlesTab podeEditar={podeEditar} />}
         </main>
       </div>
     </div>

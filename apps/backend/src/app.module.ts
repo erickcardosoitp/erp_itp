@@ -812,6 +812,62 @@ export class AppModule implements OnModuleInit {
       `).then(() => this.logger.log('✅ Entradas retroativas "Lista de Chamada" criadas'))
         .catch(e => this.logger.warn('retroativo diário (ignorado):', e.message));
 
+      // ── Controle Futebol ────────────────────────────────────────────────────
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS controles_futebol (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          aluno_id TEXT NOT NULL,
+          tamanho_camisa TEXT,
+          tamanho_short TEXT,
+          numero_chuteira TEXT,
+          estoque_uniforme_id TEXT,
+          estoque_chuteira_id TEXT,
+          uniforme_recebido BOOLEAN NOT NULL DEFAULT false,
+          chuteira_recebida BOOLEAN NOT NULL DEFAULT false,
+          status TEXT NOT NULL DEFAULT 'Pendente',
+          observacoes TEXT,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `);
+      this.logger.log('✅ Tabela controles_futebol criada (IF NOT EXISTS)');
+
+      // ── Boletos a Receber ────────────────────────────────────────────────────
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS boletos (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          recebedor TEXT NOT NULL,
+          credor TEXT NOT NULL,
+          cnpj TEXT,
+          valor NUMERIC(15,2) NOT NULL DEFAULT 0,
+          cod_barras TEXT,
+          data_emissao DATE NOT NULL,
+          parcelado BOOLEAN NOT NULL DEFAULT false,
+          qtd_parcelas INT NOT NULL DEFAULT 1,
+          status TEXT NOT NULL DEFAULT 'Pendente',
+          arquivo_base64 TEXT,
+          arquivo_nome TEXT,
+          descricao TEXT,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `);
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS boleto_parcelas (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          boleto_id UUID NOT NULL REFERENCES boletos(id) ON DELETE CASCADE,
+          numero_parcela INT NOT NULL,
+          valor NUMERIC(15,2) NOT NULL,
+          data_vencimento DATE NOT NULL,
+          data_pagamento DATE,
+          pago BOOLEAN NOT NULL DEFAULT false,
+          movimentacao_id UUID,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `);
+      this.logger.log('✅ Tabelas boletos/boleto_parcelas criadas (IF NOT EXISTS)');
+
     } catch (err: any) {
       this.logger.error(`❌ Erro nas migrations automáticas: ${err.message}`);
     }
