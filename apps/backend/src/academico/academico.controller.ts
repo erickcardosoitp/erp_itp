@@ -295,6 +295,18 @@ export class AcademicoController {
     return this.svc.editarRegistroPresenca(id, dto);
   }
 
+  @Get('presenca/relatorio')
+  @ModuloPerm('academico', 'visualizar')
+  relatorioPresenca(@Query() q: any) {
+    return this.svc.relatorioPresenca({ turma_id: q.turma_id, data_ini: q.data_ini, data_fim: q.data_fim });
+  }
+
+  @Get('presenca/relatorio/aluno/:alunoId')
+  @ModuloPerm('academico', 'visualizar')
+  relatorioPresencaAluno(@Param('alunoId') alunoId: string, @Query() q: any) {
+    return this.svc.relatorioPresencaAluno(alunoId, { data_ini: q.data_ini, data_fim: q.data_fim });
+  }
+
   @Get('presenca/alertas-candidatos')
   @ModuloPerm('academico', 'visualizar')
   alertasCandidatos() { return this.svc.listarAlertasCandidatos(); }

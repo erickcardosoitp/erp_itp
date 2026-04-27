@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
+  LineChart, Line, CartesianGrid, Legend,
 } from 'recharts';
 import api from '@/services/api';
 import { useAuth } from '@/context/auth-context';
@@ -2620,11 +2621,461 @@ function DiarioTab({ turmas, alunos }: { turmas: Turma[]; alunos: Aluno[] }) {
   );
 }
 
+// ─── Relatórios de Presença ───────────────────────────────────────────────────
+
+function RelatoriosPresencaSubTab({ turmas }: { turmas: Turma[] }) {
+  const [turmaId, setTurmaId]   = useState('');
+  const [dataIni, setDataIni]   = useState('');
+  const [dataFim, setDataFim]   = useState('');
+  const [dados, setDados]       = useState<any>(null);
+  const [loading, setLoading]   = useState(false);
+
+  const aplicarPreset = (dias: number) => {
+    const fim = new Date();
+    const ini = new Date(); ini.setDate(ini.getDate() - dias);
+    setDataIni(ini.toISOString().slice(0, 10));
+    setDataFim(fim.toISOString().slice(0, 10));
+  };
+
+  const carregar = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params: any = {};
+      if (turmaId) params.turma_id = turmaId;
+      if (dataIni) params.data_ini = dataIni;
+      if (dataFim) params.data_fim = dataFim;
+      const r = await api.get('/academico/presenca/relatorio', { params });
+      setDados(r.data);
+    } catch { /* silencioso */ }
+    setLoading(false);
+  }, [turmaId, dataIni, dataFim]);
+
+  useEffect(() => { carregar(); }, [carregar]);
+
+  const exportarCSV = () => {
+    if (!dados?.tendencia?.length) return;
+    const linhas = [['Data', 'Presentes', 'Ausentes', 'Taxa (%)']];
+    dados.tendencia.forEach((t: any) => {
+      const total = t.presentes + t.ausentes;
+      const taxa  = total > 0 ? Math.round(t.presentes / total * 100) : 0;
+      linhas.push([t.data, t.presentes, t.ausentes, taxa]);
+    });
+    const csv  = linhas.map(r => r.join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = 'relatorio-presenca.csv'; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const kpi = dados?.kpi ?? {};
+
+  const porTurmaData = (dados?.por_turma ?? []).map((t: any) => ({
+    nome:     (t.turma_nome || '–').slice(0, 22),
+    presentes: t.presentes,
+    ausentes:  t.ausentes,
+    sessoes:   t.sessoes,
+    taxa:      t.presentes + t.ausentes > 0 ? Math.round(t.presentes / (t.presentes + t.ausentes) * 100) : 0,
+  }));
+
+  const tendenciaData = (dados?.tendencia ?? []).map((t: any) => {
+    const [, m, d] = (t.data || '').split('-');
+    const total = t.presentes + t.ausentes;
+    return { ...t, label: `${d}/${m}`, taxa: total > 0 ? Math.round(t.presentes / total * 100) : 0 };
+  });
+
+  const taxaColor = (v: number) => v >= 75 ? 'text-green-600 bg-green-50' : v >= 50 ? 'text-amber-600 bg-amber-50' : 'text-red-500 bg-red-50';
+
+  return (
+    <div className="space-y-4">
+      {/* Filtros */}
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="flex-1 min-w-[180px]">
+            <label className="text-[9px] font-black uppercase text-slate-400 mb-1 block">Turma</label>
+            <select value={turmaId} onChange={e => setTurmaId(e.target.value)}
+              className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white">
+              <option value="">Todas as turmas</option>
+              {turmas.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-[9px] font-black uppercase text-slate-400 mb-1 block">De</label>
+            <input type="date" value={dataIni} onChange={e => setDataIni(e.target.value)}
+              className="px-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-400" />
+          </div>
+          <div>
+            <label className="text-[9px] font-black uppercase text-slate-400 mb-1 block">Até</label>
+            <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)}
+              className="px-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-400" />
+          </div>
+          <div className="flex gap-1 flex-wrap">
+            {[{ label: '7d', dias: 7 }, { label: '30d', dias: 30 }, { label: '90d', dias: 90 }, { label: '6m', dias: 180 }].map(p => (
+              <button key={p.label} onClick={() => aplicarPreset(p.dias)}
+                className="px-2.5 py-2 rounded-xl border border-slate-200 text-[9px] font-black uppercase hover:bg-purple-50 hover:border-purple-200 hover:text-purple-700 transition-colors">
+                {p.label}
+              </button>
+            ))}
+            <button onClick={() => { setDataIni(''); setDataFim(''); }}
+              className="px-2.5 py-2 rounded-xl border border-slate-200 text-[9px] font-black uppercase text-slate-400 hover:bg-slate-100 transition-colors">
+              Tudo
+            </button>
+          </div>
+          <button onClick={carregar} disabled={loading}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-black uppercase disabled:opacity-50">
+            <RefreshCw size={12} className={loading ? 'animate-spin' : ''} /> Atualizar
+          </button>
+          <button onClick={exportarCSV} disabled={!dados}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-green-600 hover:bg-green-700 text-white text-[10px] font-black uppercase disabled:opacity-30 transition-colors">
+            <FileText size={12} /> Exportar CSV
+          </button>
+        </div>
+      </div>
+
+      {loading && (
+        <div className="py-12 text-center text-sm text-slate-400">
+          <RefreshCw size={24} className="animate-spin mx-auto mb-3 text-slate-300" /> Calculando...
+        </div>
+      )}
+
+      {dados && !loading && (
+        <>
+          {/* KPIs */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {[
+              { label: 'Sessões Registradas', value: kpi.total_sessoes ?? 0, color: 'text-purple-700', bg: 'bg-purple-50 border-purple-100' },
+              { label: 'Taxa de Presença',    value: `${kpi.taxa_presenca ?? 0}%`, color: (kpi.taxa_presenca ?? 0) >= 75 ? 'text-green-700' : 'text-amber-600', bg: 'bg-white border-slate-100' },
+              { label: 'Total Presentes',     value: (kpi.total_presentes ?? 0).toLocaleString(), color: 'text-green-700', bg: 'bg-green-50 border-green-100' },
+              { label: 'Total Ausentes',      value: (kpi.total_ausentes ?? 0).toLocaleString(),  color: 'text-red-600',   bg: 'bg-red-50 border-red-100' },
+            ].map(k => (
+              <div key={k.label} className={`${k.bg} rounded-2xl p-4 border shadow-sm`}>
+                <p className="text-[9px] font-black uppercase text-slate-400 mb-1">{k.label}</p>
+                <p className={`text-3xl font-black ${k.color}`}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Gráficos */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Presença por Turma */}
+            {porTurmaData.length > 0 && (
+              <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+                <h3 className="text-[10px] font-black uppercase text-slate-500 tracking-widest mb-4">Presença por Turma</h3>
+                <ResponsiveContainer width="100%" height={Math.max(180, porTurmaData.length * 36)}>
+                  <BarChart data={porTurmaData} layout="vertical" margin={{ left: 0, right: 20 }}>
+                    <XAxis type="number" tick={{ fontSize: 9 }} />
+                    <YAxis dataKey="nome" type="category" tick={{ fontSize: 9 }} width={90} />
+                    <Tooltip
+                      formatter={(v: any, name: string) => [v, name === 'presentes' ? 'Presentes' : 'Ausentes']}
+                      contentStyle={{ fontSize: 11, borderRadius: 10 }}
+                    />
+                    <Bar dataKey="presentes" fill="#22c55e" radius={[0, 4, 4, 0]} name="presentes" stackId="a" />
+                    <Bar dataKey="ausentes"  fill="#ef4444" radius={[0, 4, 4, 0]} name="ausentes"  stackId="a" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
+            {/* Tendência de Presença */}
+            {tendenciaData.length > 0 && (
+              <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+                <h3 className="text-[10px] font-black uppercase text-slate-500 tracking-widest mb-4">Tendência de Presença (%)</h3>
+                <ResponsiveContainer width="100%" height={180}>
+                  <LineChart data={tendenciaData} margin={{ right: 10 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                    <XAxis dataKey="label" tick={{ fontSize: 9 }} interval={Math.ceil(tendenciaData.length / 10)} />
+                    <YAxis tick={{ fontSize: 9 }} domain={[0, 100]} unit="%" />
+                    <Tooltip formatter={(v: any) => [`${v}%`, 'Taxa Presença']} contentStyle={{ fontSize: 11, borderRadius: 10 }} />
+                    <Line type="monotone" dataKey="taxa" stroke="#7c3aed" strokeWidth={2.5} dot={tendenciaData.length < 30} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </div>
+
+          {/* Tabela resumo por turma */}
+          {porTurmaData.length > 0 && (
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+              <div className="px-5 py-3 border-b border-slate-100 bg-slate-50/50">
+                <h3 className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Resumo por Turma</h3>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-100">
+                      {['Turma', 'Sessões', 'Presentes', 'Ausentes', 'Taxa'].map(h => (
+                        <th key={h} className={`px-4 py-2.5 text-[9px] font-black uppercase text-slate-400 ${h === 'Turma' ? 'text-left' : 'text-right'}`}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {porTurmaData.map((t: any, i: number) => (
+                      <tr key={i} className="hover:bg-slate-50/50 transition-colors">
+                        <td className="px-4 py-2.5 font-bold text-slate-800">{t.nome}</td>
+                        <td className="px-4 py-2.5 text-right text-slate-500">{t.sessoes}</td>
+                        <td className="px-4 py-2.5 text-right text-green-700 font-bold">{t.presentes}</td>
+                        <td className="px-4 py-2.5 text-right text-red-600 font-bold">{t.ausentes}</td>
+                        <td className="px-4 py-2.5 text-right">
+                          <span className={`font-black text-[10px] px-2 py-0.5 rounded-full ${taxaColor(t.taxa)}`}>{t.taxa}%</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Top faltas */}
+          {dados.top_faltas?.length > 0 && (
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+              <div className="px-5 py-3 border-b border-slate-100 bg-slate-50/50">
+                <h3 className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Alunos com Mais Faltas</h3>
+              </div>
+              <div className="divide-y divide-slate-50">
+                {dados.top_faltas.map((a: any, i: number) => {
+                  const taxa = a.total_registros > 0 ? Math.round(a.total_presentes / a.total_registros * 100) : 0;
+                  return (
+                    <div key={i} className="flex items-center gap-3 px-5 py-2.5 hover:bg-slate-50/50 transition-colors">
+                      <span className="text-[9px] font-black text-slate-300 w-5 shrink-0 text-center">{i + 1}</span>
+                      <span className="flex-1 text-xs font-bold text-slate-800 truncate">{a.aluno_nome}</span>
+                      <span className="text-red-600 font-black text-xs shrink-0">{a.total_faltas} falta{a.total_faltas !== 1 ? 's' : ''}</span>
+                      <span className={`text-[9px] font-black px-2 py-0.5 rounded-full shrink-0 ${taxaColor(taxa)}`}>{taxa}% presença</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {porTurmaData.length === 0 && tendenciaData.length === 0 && (
+            <div className="py-16 text-center">
+              <Activity size={40} className="mx-auto mb-3 text-slate-200" />
+              <p className="text-sm font-bold text-slate-400">Nenhum dado encontrado para o período selecionado.</p>
+              <p className="text-xs text-slate-300 mt-1">Tente selecionar um intervalo diferente ou &quot;Tudo&quot;.</p>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ─── Por Aluno ────────────────────────────────────────────────────────────────
+
+function PorAlunoSubTab() {
+  const [busca, setBusca]       = useState('');
+  const [sugestoes, setSugestoes] = useState<Aluno[]>([]);
+  const [alunoSel, setAlunoSel] = useState<Aluno | null>(null);
+  const [dataIni, setDataIni]   = useState('');
+  const [dataFim, setDataFim]   = useState('');
+  const [dados, setDados]       = useState<any>(null);
+  const [loading, setLoading]   = useState(false);
+  const [buscando, setBuscando] = useState(false);
+  const dropRef = useRef<HTMLDivElement>(null);
+
+  const buscarAlunos = useCallback(async (q: string) => {
+    if (q.trim().length < 2) { setSugestoes([]); return; }
+    setBuscando(true);
+    try {
+      const r = await api.get('/academico/alunos', { params: { nome: q } });
+      setSugestoes((r.data as Aluno[]).slice(0, 10));
+    } catch { /* silencioso */ }
+    setBuscando(false);
+  }, []);
+
+  useEffect(() => {
+    const t = setTimeout(() => buscarAlunos(busca), 300);
+    return () => clearTimeout(t);
+  }, [busca, buscarAlunos]);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (dropRef.current && !dropRef.current.contains(e.target as Node)) setSugestoes([]);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const selecionarAluno = (a: Aluno) => {
+    setAlunoSel(a); setBusca(a.nome_completo); setSugestoes([]); setDados(null);
+  };
+
+  const carregar = useCallback(async () => {
+    if (!alunoSel) return;
+    setLoading(true);
+    try {
+      const params: any = {};
+      if (dataIni) params.data_ini = dataIni;
+      if (dataFim) params.data_fim = dataFim;
+      const r = await api.get(`/academico/presenca/relatorio/aluno/${alunoSel.id}`, { params });
+      setDados(r.data);
+    } catch { /* silencioso */ }
+    setLoading(false);
+  }, [alunoSel, dataIni, dataFim]);
+
+  useEffect(() => { if (alunoSel) carregar(); }, [carregar]);
+
+  const fmtData = (v: string) => {
+    if (!v) return '–';
+    const [y, m, d] = v.split('-');
+    return `${d}/${m}/${y}`;
+  };
+
+  const taxaColor = (v: number) => v >= 75 ? 'text-green-600 bg-green-50' : v >= 50 ? 'text-amber-600 bg-amber-50' : 'text-red-500 bg-red-50';
+  const taxaBorder = (v: number) => v >= 75 ? 'border-green-100' : v >= 50 ? 'border-amber-100' : 'border-red-100';
+
+  return (
+    <div className="space-y-4">
+      {/* Seletor de aluno + filtros */}
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="flex-1 min-w-[240px] relative" ref={dropRef}>
+            <label className="text-[9px] font-black uppercase text-slate-400 mb-1 block">Buscar Aluno</label>
+            <div className="relative">
+              <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text" value={busca}
+                onChange={e => { setBusca(e.target.value); setAlunoSel(null); setDados(null); }}
+                placeholder="Digite o nome do aluno..."
+                className="w-full pl-8 pr-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-400"
+              />
+              {buscando && <RefreshCw size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 animate-spin" />}
+            </div>
+            {sugestoes.length > 0 && (
+              <div className="absolute top-full left-0 right-0 z-50 bg-white border border-slate-200 rounded-xl shadow-xl mt-1 max-h-52 overflow-y-auto">
+                {sugestoes.map(a => (
+                  <button key={a.id} onClick={() => selecionarAluno(a)}
+                    className="w-full text-left px-3.5 py-2.5 text-xs hover:bg-purple-50 hover:text-purple-700 font-bold border-b border-slate-50 last:border-0 flex items-center gap-2">
+                    <User size={11} className="text-slate-400 shrink-0" />
+                    <span className="flex-1 truncate">{a.nome_completo}</span>
+                    {a.turma_nome && <span className="text-[9px] text-slate-400 font-normal shrink-0">{a.turma_nome}</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <div>
+            <label className="text-[9px] font-black uppercase text-slate-400 mb-1 block">De</label>
+            <input type="date" value={dataIni} onChange={e => setDataIni(e.target.value)}
+              className="px-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-400" />
+          </div>
+          <div>
+            <label className="text-[9px] font-black uppercase text-slate-400 mb-1 block">Até</label>
+            <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)}
+              className="px-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-400" />
+          </div>
+          <button onClick={carregar} disabled={!alunoSel || loading}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-black uppercase disabled:opacity-40">
+            <RefreshCw size={12} className={loading ? 'animate-spin' : ''} /> Atualizar
+          </button>
+        </div>
+      </div>
+
+      {!alunoSel && (
+        <div className="py-16 text-center">
+          <User size={40} className="mx-auto mb-3 text-slate-200" />
+          <p className="text-sm font-bold text-slate-400">Busque um aluno para ver seu histórico de presença.</p>
+        </div>
+      )}
+
+      {alunoSel && loading && (
+        <div className="py-12 text-center text-sm text-slate-400">
+          <RefreshCw size={24} className="animate-spin mx-auto mb-3 text-slate-300" /> Carregando...
+        </div>
+      )}
+
+      {alunoSel && dados && !loading && (
+        <>
+          {/* Cabeçalho do aluno */}
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm px-5 py-4 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center font-black text-purple-600 text-sm shrink-0">
+              {alunoSel.nome_completo[0].toUpperCase()}
+            </div>
+            <div>
+              <p className="font-black text-slate-800 text-sm">{alunoSel.nome_completo}</p>
+              <p className="text-[10px] text-slate-400">{alunoSel.turma_nome || 'Sem turma'}</p>
+            </div>
+          </div>
+
+          {/* KPIs do aluno */}
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+            {[
+              { label: 'Total Aulas', value: dados.kpi.total ?? 0, color: 'text-slate-700', bg: 'bg-white border-slate-100' },
+              { label: 'Presenças',   value: dados.kpi.presentes ?? 0, color: 'text-green-700', bg: 'bg-green-50 border-green-100' },
+              { label: 'Faltas',      value: dados.kpi.faltas ?? 0, color: 'text-red-600', bg: 'bg-red-50 border-red-100' },
+              { label: 'Justificadas', value: dados.kpi.justificadas ?? 0, color: 'text-amber-600', bg: 'bg-amber-50 border-amber-100' },
+              { label: 'Taxa Presença', value: `${dados.kpi.taxa ?? 0}%`,
+                color: (dados.kpi.taxa ?? 0) >= 75 ? 'text-green-700' : (dados.kpi.taxa ?? 0) >= 50 ? 'text-amber-600' : 'text-red-600',
+                bg: `border-l-4 bg-white ${taxaBorder(dados.kpi.taxa ?? 0)} border-slate-100` },
+            ].map(k => (
+              <div key={k.label} className={`${k.bg} rounded-2xl p-4 border shadow-sm`}>
+                <p className="text-[9px] font-black uppercase text-slate-400 mb-1">{k.label}</p>
+                <p className={`text-3xl font-black ${k.color}`}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Gráfico mensal */}
+          {dados.tendencia_mensal?.length > 0 && (
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+              <h3 className="text-[10px] font-black uppercase text-slate-500 tracking-widest mb-4">Presença por Mês</h3>
+              <ResponsiveContainer width="100%" height={180}>
+                <BarChart data={dados.tendencia_mensal} margin={{ right: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <XAxis dataKey="mes" tick={{ fontSize: 9 }} />
+                  <YAxis tick={{ fontSize: 9 }} />
+                  <Tooltip contentStyle={{ fontSize: 11, borderRadius: 10 }} />
+                  <Legend wrapperStyle={{ fontSize: 9 }} />
+                  <Bar dataKey="presentes" fill="#22c55e" name="Presenças" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="faltas"    fill="#ef4444" name="Faltas"    radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {/* Histórico detalhado */}
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+            <div className="px-5 py-3 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+              <h3 className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Histórico Detalhado</h3>
+              <span className="text-[9px] text-slate-400">{dados.registros.length} registro{dados.registros.length !== 1 ? 's' : ''}</span>
+            </div>
+            {dados.registros.length === 0 ? (
+              <div className="py-10 text-center text-slate-400 text-sm">Nenhum registro encontrado.</div>
+            ) : (
+              <div className="divide-y divide-slate-50 max-h-[500px] overflow-y-auto">
+                {dados.registros.map((r: any) => {
+                  const corBadge = r.descricao === 'Presente'
+                    ? 'bg-green-100 text-green-700'
+                    : r.isento ? 'bg-slate-100 text-slate-500'
+                    : r.justificada ? 'bg-amber-100 text-amber-700'
+                    : 'bg-red-100 text-red-600';
+                  return (
+                    <div key={r.id} className="flex items-center gap-3 px-5 py-2.5 hover:bg-slate-50/50 transition-colors">
+                      <span className="text-xs font-black text-slate-700 w-20 shrink-0">{fmtData(r.data)}</span>
+                      <span className="flex-1 text-xs text-slate-600 truncate min-w-0">{r.tema_aula || '–'}</span>
+                      <span className="text-[9px] text-slate-400 shrink-0 hidden sm:block truncate max-w-[120px]">{r.turma_nome}</span>
+                      <span className={`text-[9px] font-black px-2 py-0.5 rounded-full shrink-0 ${corBadge}`}>
+                        {r.descricao === 'Falta Justificada' ? 'Justificada' : r.descricao}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ─── Tab: Presença ───────────────────────────────────────────────────────────
 
 function PresencaTab({ turmas, podeEditar }: { turmas: Turma[]; podeEditar: boolean }) {
   const { user } = useAuth();
   const podeEditarSessao = ['admin', 'prt'].includes(user?.role ?? '');
+  const [subTab, setSubTab] = useState<'historico' | 'relatorios' | 'por-aluno'>('historico');
 
   // ─── Filtros do histórico ───────────────────────────────────────────────
   const [filtroTurma, setFiltroTurma] = useState('');
@@ -2801,6 +3252,26 @@ function PresencaTab({ turmas, podeEditar }: { turmas: Turma[]; podeEditar: bool
 
   return (
     <div className="space-y-4">
+      {/* ─── Sub-tabs ─────────────────────────────────────────────────────── */}
+      <div className="flex bg-white border border-slate-100 shadow-sm rounded-2xl p-1.5 gap-1">
+        {([
+          { id: 'historico',  label: 'Histórico',  Icon: History  },
+          { id: 'relatorios', label: 'Relatórios', Icon: Activity },
+          { id: 'por-aluno',  label: 'Por Aluno',  Icon: User     },
+        ] as const).map(({ id, label, Icon }) => (
+          <button key={id} onClick={() => setSubTab(id)}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${
+              subTab === id ? 'bg-purple-600 text-white shadow' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
+            }`}>
+            <Icon size={11} /> {label}
+          </button>
+        ))}
+      </div>
+
+      {subTab === 'relatorios' && <RelatoriosPresencaSubTab turmas={turmas} />}
+      {subTab === 'por-aluno'  && <PorAlunoSubTab />}
+
+      {subTab === 'historico' && (<>
       {/* ─── Cabeçalho ─────────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-end gap-3 bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
         <div className="flex-1 min-w-[180px]">
@@ -2944,6 +3415,8 @@ function PresencaTab({ turmas, podeEditar }: { turmas: Turma[]; podeEditar: bool
           </div>
         )}
       </div>
+
+      </>)}
 
       {/* ─── Modal Nova Lista de Presença ───────────────────────────────────── */}
       {/* ─── Modal Editar Sessão ────────────────────────────────────────────── */}

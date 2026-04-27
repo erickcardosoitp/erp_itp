@@ -1358,6 +1358,101 @@ export class AcademicoService {
     return { ok: true };
   }
 
+  // ── RELATÓRIOS DE PRESENÇA ────────────────────────────────────────────────
+
+  async relatorioPresenca(filtros: { turma_id?: string; data_ini?: string; data_fim?: string }) {
+    const sParams: any[] = [];
+    const sWhere: string[] = [];
+    if (filtros.turma_id) { sWhere.push(`s.turma_id = $${sParams.length + 1}`); sParams.push(filtros.turma_id); }
+    if (filtros.data_ini) { sWhere.push(`s.data >= $${sParams.length + 1}`); sParams.push(filtros.data_ini); }
+    if (filtros.data_fim) { sWhere.push(`s.data <= $${sParams.length + 1}`); sParams.push(filtros.data_fim); }
+    const sw = sWhere.length ? `WHERE ${sWhere.join(' AND ')}` : '';
+
+    const dParams: any[] = ['Presença'];
+    const dWhere: string[] = [`d.tipo = $1`];
+    if (filtros.turma_id) { dWhere.push(`d.turma_id = $${dParams.length + 1}`); dParams.push(filtros.turma_id); }
+    if (filtros.data_ini) { dWhere.push(`d.data >= $${dParams.length + 1}`); dParams.push(filtros.data_ini); }
+    if (filtros.data_fim) { dWhere.push(`d.data <= $${dParams.length + 1}`); dParams.push(filtros.data_fim); }
+    const dw = `WHERE ${dWhere.join(' AND ')}`;
+
+    const [kpiR, porTurma, tendencia, topFaltas] = await Promise.all([
+      this.dataSource.query(`
+        SELECT COUNT(*)::int AS total_sessoes,
+          COALESCE(SUM(total_presentes),0)::int AS total_presentes,
+          COALESCE(SUM(total_ausentes),0)::int AS total_ausentes,
+          CASE WHEN SUM(total_presentes)+SUM(total_ausentes)>0
+            THEN ROUND(SUM(total_presentes)::numeric/(SUM(total_presentes)+SUM(total_ausentes))*100,1)
+            ELSE 0 END AS taxa_presenca
+        FROM presenca_sessoes s ${sw}`, sParams),
+      this.dataSource.query(`
+        SELECT turma_nome,
+          SUM(total_presentes)::int AS presentes,
+          SUM(total_ausentes)::int AS ausentes,
+          COUNT(*)::int AS sessoes
+        FROM presenca_sessoes s ${sw}
+        GROUP BY turma_nome ORDER BY presentes DESC LIMIT 20`, sParams),
+      this.dataSource.query(`
+        SELECT data::text,
+          SUM(total_presentes)::int AS presentes,
+          SUM(total_ausentes)::int AS ausentes
+        FROM presenca_sessoes s ${sw}
+        GROUP BY data ORDER BY data ASC LIMIT 90`, sParams),
+      this.dataSource.query(`
+        SELECT d.aluno_nome, d.aluno_id,
+          COUNT(*) FILTER (WHERE d.descricao = 'Falta' AND NOT d.isento)::int AS total_faltas,
+          COUNT(*) FILTER (WHERE d.descricao = 'Presente')::int AS total_presentes,
+          COUNT(*)::int AS total_registros
+        FROM diario_academico d ${dw} AND d.aluno_nome IS NOT NULL
+        GROUP BY d.aluno_nome, d.aluno_id
+        HAVING COUNT(*) FILTER (WHERE d.descricao = 'Falta' AND NOT d.isento) > 0
+        ORDER BY total_faltas DESC LIMIT 15`, dParams),
+    ]);
+    return {
+      kpi: { ...kpiR[0], taxa_presenca: Number(kpiR[0]?.taxa_presenca ?? 0) },
+      por_turma: porTurma,
+      tendencia,
+      top_faltas: topFaltas,
+    };
+  }
+
+  async relatorioPresencaAluno(alunoId: string, filtros: { data_ini?: string; data_fim?: string }) {
+    const params: any[] = [alunoId, 'Presença'];
+    const where: string[] = [`d.aluno_id = $1`, `d.tipo = $2`];
+    if (filtros.data_ini) { where.push(`d.data >= $${params.length + 1}`); params.push(filtros.data_ini); }
+    if (filtros.data_fim) { where.push(`d.data <= $${params.length + 1}`); params.push(filtros.data_fim); }
+    const wc = `WHERE ${where.join(' AND ')}`;
+
+    const [registros, kpiR, meses] = await Promise.all([
+      this.dataSource.query(`
+        SELECT d.id, d.data::text, d.turma_id, d.descricao, d.isento, d.justificada,
+          d.sessao_id, s.tema_aula, s.turma_nome, d.aluno_nome
+        FROM diario_academico d
+        LEFT JOIN presenca_sessoes s ON s.id::text = d.sessao_id
+        ${wc} ORDER BY d.data DESC LIMIT 200`, params),
+      this.dataSource.query(`
+        SELECT COUNT(*)::int AS total,
+          COUNT(*) FILTER (WHERE d.descricao = 'Presente')::int AS presentes,
+          COUNT(*) FILTER (WHERE d.descricao = 'Falta' AND NOT d.isento)::int AS faltas,
+          COUNT(*) FILTER (WHERE d.justificada)::int AS justificadas,
+          COUNT(*) FILTER (WHERE d.isento)::int AS isentos,
+          CASE WHEN COUNT(*)>0
+            THEN ROUND(COUNT(*) FILTER (WHERE d.descricao='Presente')::numeric/COUNT(*)*100,1)
+            ELSE 0 END AS taxa
+        FROM diario_academico d ${wc}`, params),
+      this.dataSource.query(`
+        SELECT TO_CHAR(d.data,'YYYY-MM') AS mes,
+          COUNT(*) FILTER (WHERE d.descricao='Presente')::int AS presentes,
+          COUNT(*) FILTER (WHERE d.descricao='Falta' AND NOT d.isento)::int AS faltas
+        FROM diario_academico d ${wc}
+        GROUP BY mes ORDER BY mes DESC LIMIT 12`, params),
+    ]);
+    return {
+      registros,
+      kpi: { ...kpiR[0], taxa: Number(kpiR[0]?.taxa ?? 0) },
+      tendencia_mensal: meses.reverse(),
+    };
+  }
+
   async statsChamados() {
     const rows = await this.dataSource.query(`
       SELECT
