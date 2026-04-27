@@ -63,11 +63,15 @@ export const setupApp = async (app: NestExpressApplication) => {
 
 // Função para inicializar o app (sem o listen)
 async function bootstrap() {
+  const t0 = Date.now();
+  console.log('[BOOTSTRAP] NestFactory.create iniciando...');
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     logger: ['error', 'warn', 'log'],
   });
+  console.log(`[BOOTSTRAP] NestFactory.create OK — ${Date.now() - t0}ms`);
   await setupApp(app);
   await app.init();
+  console.log(`[BOOTSTRAP] app.init() OK — ${Date.now() - t0}ms total`);
   return app;
 }
 

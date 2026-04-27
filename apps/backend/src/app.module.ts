@@ -93,9 +93,8 @@ import { GenteModule } from './gente/gente.module';
           ssl: (dbUrl.includes('localhost') || dbUrl.includes('127.0.0.1'))
             ? false
             : { rejectUnauthorized: false },
-          retryAttempts: 3,
-          retryDelay: 2000,
-          extra: { connectionTimeoutMillis: 25000, query_timeout: 25000 },
+          retryAttempts: 0,
+          extra: { connectionTimeoutMillis: 55000 },
         };
       },
     }),
