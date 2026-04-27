@@ -4041,29 +4041,42 @@ function MonitoramentoTab() {
           <div className="flex items-center gap-2 mb-3">
             <AlertTriangle size={15} className="text-rose-600" />
             <p className="text-[10px] font-black uppercase tracking-widest text-rose-600">
-              Alunos com Faltas Frequentes — últimos 30 dias
+              Alunos com Faltas Frequentes — últimos 60 dias
             </p>
           </div>
           <div className="space-y-2">
-            {faltas_frequentes.map((a: any) => (
-              <div key={a.aluno_id} className="flex items-center justify-between bg-white dark:bg-slate-900 rounded-xl px-4 py-2.5 border border-rose-100 dark:border-rose-900">
-                <div>
-                  <p className="text-xs font-bold text-slate-800 dark:text-slate-100">{a.nome_completo}</p>
-                  <p className="text-[9px] text-slate-400">{a.turma_nome ? `${a.turma_nome} · ` : ''}{a.numero_matricula || '–'}</p>
-                </div>
-                <div className="flex items-center gap-3">
-                  {a.celular && (
-                    <a href={`https://wa.me/55${a.celular.replace(/\D/g,'')}`} target="_blank" rel="noopener noreferrer"
-                      className="text-[9px] font-black uppercase px-2 py-1 rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors">
-                      WhatsApp
-                    </a>
+            {faltas_frequentes.map((a: any) => {
+              const turmas: { turma_nome: string; faltas: number; total_aulas: number }[] =
+                Array.isArray(a.turmas_detalhe) ? a.turmas_detalhe : [];
+              return (
+                <div key={a.aluno_id} className="bg-white dark:bg-slate-900 rounded-xl px-4 py-3 border border-rose-100 dark:border-rose-900">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-slate-800 dark:text-slate-100">{a.nome_completo}</p>
+                      <p className="text-[9px] text-slate-400">{a.numero_matricula || '–'}</p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {a.celular && (
+                        <a href={`https://wa.me/55${a.celular.replace(/\D/g,'')}`} target="_blank" rel="noopener noreferrer"
+                          className="text-[9px] font-black uppercase px-2 py-1 rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors">
+                          WhatsApp
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                  {turmas.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {turmas.map(t => (
+                        <span key={t.turma_nome} className="inline-flex items-center gap-1 bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-400 text-[10px] font-black px-2.5 py-1 rounded-full">
+                          {t.turma_nome}
+                          <span className="opacity-60">({t.faltas}/{t.total_aulas})</span>
+                        </span>
+                      ))}
+                    </div>
                   )}
-                  <span className="bg-rose-100 text-rose-700 text-[10px] font-black px-2.5 py-1 rounded-full">
-                    {a.faltas_recentes}/{a.total_aulas ?? '?'} aulas
-                  </span>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -4129,25 +4142,40 @@ function MonitoramentoTab() {
           {top_faltas.length === 0 ? (
             <p className="text-xs text-slate-400 py-4 text-center">Nenhuma falta registrada ainda.</p>
           ) : (
-            <div className="space-y-2">
-              {top_faltas.slice(0, 8).map((a: any, i: number) => (
-                <div key={a.aluno_id} className="flex items-center gap-3">
-                  <span className={`shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-black text-white ${i === 0 ? 'bg-rose-500' : i < 3 ? 'bg-orange-400' : 'bg-slate-400'}`}>{i + 1}</span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">{a.nome_completo}</p>
-                    <div className="flex items-center gap-1 mt-0.5">
-                      <div className="flex-1 h-1.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
-                        <div className={`h-full rounded-full ${i === 0 ? 'bg-rose-500' : i < 3 ? 'bg-orange-400' : 'bg-slate-400'}`}
-                          style={{ width: `${Math.round(100 * a.faltas / (top_faltas[0]?.faltas || 1))}%` }} />
+            <div className="space-y-3">
+              {top_faltas.slice(0, 8).map((a: any, i: number) => {
+                const turmas: { turma_nome: string; faltas: number; total_aulas: number }[] =
+                  Array.isArray(a.turmas_detalhe) ? a.turmas_detalhe : [];
+                return (
+                  <div key={a.aluno_id} className="space-y-1">
+                    <div className="flex items-center gap-3">
+                      <span className={`shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-black text-white ${i === 0 ? 'bg-rose-500' : i < 3 ? 'bg-orange-400' : 'bg-slate-400'}`}>{i + 1}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">{a.nome_completo}</p>
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <div className="flex-1 h-1.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                            <div className={`h-full rounded-full ${i === 0 ? 'bg-rose-500' : i < 3 ? 'bg-orange-400' : 'bg-slate-400'}`}
+                              style={{ width: `${Math.round(100 * a.faltas / (top_faltas[0]?.faltas || 1))}%` }} />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <span className="text-xs font-black text-rose-600">{a.faltas}</span>
+                        <span className="text-[9px] text-slate-400 ml-0.5">falta{a.faltas !== 1 ? 's' : ''}</span>
                       </div>
                     </div>
+                    {turmas.length > 0 && (
+                      <div className="ml-8 flex flex-wrap gap-1">
+                        {turmas.map(t => (
+                          <span key={t.turma_nome} className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-800">
+                            {t.turma_nome} <span className="opacity-70">({t.faltas}/{t.total_aulas})</span>
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  <div className="shrink-0 text-right">
-                    <span className="text-xs font-black text-rose-600">{a.faltas}</span>
-                    <span className="text-[9px] text-slate-400 ml-0.5">falta{a.faltas !== 1 ? 's' : ''}</span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

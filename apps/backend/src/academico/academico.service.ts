@@ -885,7 +885,22 @@ export class AcademicoService {
             COUNT(*) FILTER (WHERE d.descricao = 'Falta' AND d.isento = false AND d.justificada = false) AS faltas,
             COUNT(*) FILTER (WHERE d.descricao = 'Presente') AS presencas,
             COUNT(*) FILTER (WHERE d.descricao = 'Falta' AND d.isento = false AND d.justificada = false
-              AND d.data >= NOW() - INTERVAL '30 days') AS faltas_recentes
+              AND d.data >= NOW() - INTERVAL '30 days') AS faltas_recentes,
+            (
+              SELECT json_agg(
+                json_build_object('turma_nome', tx.nome, 'faltas', tx.faltas, 'total_aulas', tx.total_aulas)
+                ORDER BY tx.faltas DESC
+              )
+              FROM (
+                SELECT t2.nome,
+                       COUNT(*) FILTER (WHERE d2.descricao = 'Falta' AND d2.isento = false AND d2.justificada = false) AS faltas,
+                       COUNT(DISTINCT d2.sessao_id) FILTER (WHERE d2.isento = false) AS total_aulas
+                FROM diario_academico d2
+                JOIN turmas t2 ON t2.id::text = d2.turma_id::text
+                WHERE d2.aluno_id::text = a.id::text AND d2.tipo = 'Presença'
+                GROUP BY t2.nome
+              ) tx
+            ) AS turmas_detalhe
           FROM alunos a
           JOIN diario_academico d ON d.aluno_id::text = a.id::text AND d.tipo = 'Presença'
           WHERE a.ativo = true
@@ -968,13 +983,26 @@ export class AcademicoService {
             a.nome_completo,
             a.numero_matricula,
             a.celular,
-            (SELECT t.nome FROM turmas t
-              JOIN turma_alunos ta ON ta.turma_id = t.id
-              WHERE ta.aluno_id::text = a.id::text AND ta.status = 'ativo'
-              LIMIT 1) AS turma_nome,
             COUNT(*) FILTER (WHERE d.descricao = 'Falta' AND d.isento = false AND d.justificada = false) AS faltas_recentes,
-            COUNT(DISTINCT d.sessao_id) AS total_aulas,
-            MAX(d.data) AS ultima_falta
+            COUNT(DISTINCT d.sessao_id) FILTER (WHERE d.isento = false) AS total_aulas,
+            MAX(d.data) AS ultima_falta,
+            (
+              SELECT json_agg(
+                json_build_object('turma_nome', tx.nome, 'faltas', tx.faltas, 'total_aulas', tx.total_aulas)
+                ORDER BY tx.faltas DESC
+              )
+              FROM (
+                SELECT t2.nome,
+                       COUNT(*) FILTER (WHERE d2.descricao = 'Falta' AND d2.isento = false AND d2.justificada = false) AS faltas,
+                       COUNT(DISTINCT d2.sessao_id) FILTER (WHERE d2.isento = false) AS total_aulas
+                FROM diario_academico d2
+                JOIN turmas t2 ON t2.id::text = d2.turma_id::text
+                WHERE d2.aluno_id::text = a.id::text
+                  AND d2.tipo = 'Presença'
+                  AND d2.data >= CURRENT_DATE - 60
+                GROUP BY t2.nome
+              ) tx
+            ) AS turmas_detalhe
           FROM alunos a
           JOIN diario_academico d ON d.aluno_id::text = a.id::text
             AND d.tipo = 'Presença'
@@ -1008,11 +1036,11 @@ export class AcademicoService {
         total_justificadas: Number(r.total_justificadas),
         total_isentos:     Number(r.total_isentos),
       },
-      top_faltas:        topFaltas.map((x: any) => ({ ...x, faltas: Number(x.faltas), presencas: Number(x.presencas), faltas_recentes: Number(x.faltas_recentes) })),
+      top_faltas:        topFaltas.map((x: any) => ({ ...x, faltas: Number(x.faltas), presencas: Number(x.presencas), faltas_recentes: Number(x.faltas_recentes), turmas_detalhe: x.turmas_detalhe ?? [] })),
       top_presencas:     topPresencas.map((x: any) => ({ ...x, presencas: Number(x.presencas), faltas: Number(x.faltas), pct_presenca: Number(x.pct_presenca) })),
       por_bairro:        porBairro.map((x: any) => ({ bairro: x.bairro, total: Number(x.total) })),
       turmas_presenca:   turmasEvasao.map((x: any) => ({ ...x, total_alunos: Number(x.total_alunos), presencas: Number(x.presencas), faltas: Number(x.faltas), total_computados: Number(x.total_computados), total_sessoes: Number(x.total_sessoes) })),
-      faltas_frequentes: faltasRecentes.map((x: any) => ({ ...x, faltas_recentes: Number(x.faltas_recentes), total_aulas: Number(x.total_aulas), turma_nome: x.turma_nome ?? null })),
+      faltas_frequentes: faltasRecentes.map((x: any) => ({ ...x, faltas_recentes: Number(x.faltas_recentes), total_aulas: Number(x.total_aulas), turmas_detalhe: x.turmas_detalhe ?? [] })),
       diario_por_tipo:   diarioResumo.map((x: any) => ({ tipo: x.tipo, total: Number(x.total) })),
     };
   }
