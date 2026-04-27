@@ -81,20 +81,21 @@ import { GenteModule } from './gente/gente.module';
         if (!dbUrl) {
           throw new Error('A variável de ambiente DATABASE_URL não foi definida.');
         }
+        // Adiciona connect_timeout=50 (TCP timeout em segundos) se não estiver presente
+        // Necessário para Neon serverless: limita o cold start a 50s < maxDuration 60s
+        const dbUrlWithTimeout = dbUrl.includes('connect_timeout')
+          ? dbUrl
+          : (dbUrl.includes('?') ? `${dbUrl}&connect_timeout=50` : `${dbUrl}?connect_timeout=50`);
         return {
           type: 'postgres',
-          url: dbUrl,
+          url: dbUrlWithTimeout,
           entities: [Materia, Usuario, Aluno, Inscricao, InscricaoAnotacao, InscricaoMovimentacao, Grupo, DocumentoInscricao],
           autoLoadEntities: true,
           synchronize: false,
-          // Para conexões não-locais (produção), apenas habilita o SSL.
-          // A modalidade específica ('require', 'verify-full') deve ser controlada
-          // pelo parâmetro 'sslmode' na sua variável de ambiente DATABASE_URL.
           ssl: (dbUrl.includes('localhost') || dbUrl.includes('127.0.0.1'))
             ? false
             : { rejectUnauthorized: false },
           retryAttempts: 0,
-          extra: { connectionTimeoutMillis: 55000 },
         };
       },
     }),
