@@ -354,7 +354,7 @@ function GradeTab({ podeEditar, turmas }: { podeEditar: boolean; turmas: Turma[]
             {/* Indicador de hora atual */}
             {lineTop >= 0 && todayDia >= 1 && (
               <div className="absolute left-0 right-0 z-20 pointer-events-none"
-                style={{ top: `${lineTop + GRADE_HEAD_H}px` }}>
+                style={{ top: `${lineTop}px` }}>
                 <div className="flex items-center">
                   <div className="flex items-center justify-end pr-2" style={{ width: 68, flexShrink: 0 }}>
                     <span className="text-[9px] font-black text-red-500 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded-full leading-none whitespace-nowrap">

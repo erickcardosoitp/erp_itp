@@ -99,6 +99,7 @@ export default function DossieCandidato({ aluno, onClose, onSuccess }: DossiePro
   });
   const [motivoTexto, setMotivoTexto] = useState('');
   const [lgpdLoading, setLgpdLoading] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
   const [docLoading, setDocLoading] = useState(false);
   const [uploadedDocs, setUploadedDocs] = useState<DocEnviado[]>([]);
   const [obrigatoriosPendentes, setObrigatoriosPendentes] = useState<string[]>([]);
@@ -185,12 +186,111 @@ export default function DossieCandidato({ aluno, onClose, onSuccess }: DossiePro
     setLgpdLoading(true);
     try {
       await api.patch(`/matriculas/${aluno.id}/enviar-lgpd`);
-      setFormData(prev => ({ ...prev, status_matricula: 'Aguardando Assinatura LGPD' }));
+      if (formData.status_matricula !== 'Matriculado') {
+        setFormData(prev => ({ ...prev, status_matricula: 'Aguardando Assinatura LGPD' }));
+      }
       onSuccess?.();
     } catch (e: any) {
       alert('Erro ao enviar termo LGPD: ' + (e.response?.data?.message || e.message));
     } finally {
       setLgpdLoading(false);
+    }
+  };
+
+  const gerarPdfLGPD = async () => {
+    setPdfLoading(true);
+    try {
+      const { jsPDF } = await import('jspdf');
+      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      const margin = 20;
+      const pageW = 210;
+      const contentW = pageW - margin * 2;
+      let y = 20;
+
+      const addText = (text: string, size: number, bold = false, color = '#000000') => {
+        doc.setFontSize(size);
+        doc.setFont('helvetica', bold ? 'bold' : 'normal');
+        doc.setTextColor(color);
+        const lines = doc.splitTextToSize(text, contentW);
+        doc.text(lines, margin, y);
+        y += lines.length * (size * 0.4) + 3;
+      };
+
+      const addLine = () => {
+        doc.setDrawColor(200, 200, 200);
+        doc.line(margin, y, pageW - margin, y);
+        y += 4;
+      };
+
+      // Cabeçalho
+      doc.setFillColor(30, 58, 95);
+      doc.rect(0, 0, pageW, 28, 'F');
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor('#FFFFFF');
+      doc.text('Instituto Tia Pretinha', margin, 12);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.text('CNPJ nº 11.759.851/0001-39', margin, 19);
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Termo de Autorização de Uso de Imagem, Voz e Tratamento de Dados', margin, 25);
+      y = 36;
+
+      // Dados do candidato
+      addText('DADOS DO CANDIDATO / RESPONSÁVEL', 9, true, '#1e3a5f');
+      addLine();
+      addText(`Candidato(a): ${formData.nome_completo}`, 10);
+      if (formData.cpf) addText(`CPF: ${formData.cpf}`, 10);
+      if (formData.maior_18_anos === false && formData.nome_responsavel) {
+        addText(`Responsável: ${formData.nome_responsavel}`, 10);
+        if (formData.cpf_responsavel) addText(`CPF do Responsável: ${formData.cpf_responsavel}`, 10);
+      }
+      y += 4;
+
+      const secoes = [
+        { num: '1', titulo: 'Autorização de Uso de Imagem e Voz', texto: 'Autorizo o INSTITUTO TIA PRETINHA a captar, registrar, utilizar e divulgar imagens, vídeos, gravações de áudio e demais registros audiovisuais do participante obtidos durante atividades institucionais, incluindo: aulas, oficinas e treinamentos; atividades esportivas e culturais; eventos institucionais; apresentações públicas; ações sociais e comunitárias; projetos educacionais ou culturais.' },
+        { num: '2', titulo: 'Divulgação em Meios de Comunicação', texto: 'Estou ciente de que os registros poderão ser utilizados em materiais institucionais e canais de comunicação do Instituto, incluindo: redes sociais, website institucional, relatórios institucionais, materiais gráficos ou digitais, apresentações institucionais, prestação de contas de projetos, editais, relatórios e publicações de parceiros ou financiadores.' },
+        { num: '3', titulo: 'Armazenamento em Ambiente Digital (Cloud)', texto: 'Declaro estar ciente de que dados pessoais, imagens, vídeos e documentos poderão ser armazenados em sistemas eletrônicos, bancos de dados e plataformas de armazenamento em nuvem utilizados pela instituição para fins administrativos e institucionais.' },
+        { num: '4', titulo: 'Tratamento de Dados Pessoais (LGPD)', texto: 'Estou ciente de que os dados pessoais coletados poderão ser utilizados pelo Instituto para: cadastro e identificação do participante; gestão administrativa e operacional; comunicação institucional; registro histórico; elaboração de relatórios; prestação de contas a parceiros, financiadores e órgãos públicos. O tratamento de dados observará os princípios e diretrizes previstos na Lei Geral de Proteção de Dados Pessoais (LGPD).' },
+        { num: '5', titulo: 'Gratuidade da Autorização', texto: 'Declaro que a presente autorização é concedida de forma gratuita, não sendo devida qualquer remuneração pela utilização de imagem, voz ou dados relacionados às atividades institucionais.' },
+        { num: '6', titulo: 'Prazo da Autorização', texto: 'A autorização concedida por meio deste termo possui prazo indeterminado, podendo ser utilizada pelo Instituto enquanto os registros forem necessários para fins institucionais, históricos ou administrativos.' },
+        { num: '7', titulo: 'Direito de Revogação', texto: 'O titular dos dados ou responsável legal poderá solicitar, a qualquer momento, a revogação desta autorização ou a exclusão de dados pessoais, mediante solicitação formal enviada ao Instituto. A revogação não afetará utilizações realizadas anteriormente ou materiais institucionais já publicados.' },
+      ];
+
+      for (const s of secoes) {
+        if (y > 240) { doc.addPage(); y = 20; }
+        addText(`${s.num}. ${s.titulo}`, 10, true, '#1e3a5f');
+        addText(s.texto, 9);
+        y += 2;
+      }
+
+      // Bloco de assinatura
+      if (y > 200) { doc.addPage(); y = 20; }
+      y += 4;
+      addText('REGISTRO DE ASSINATURA ELETRÔNICA', 9, true, '#1e3a5f');
+      addLine();
+
+      const dataAssinatura = formData.data_assinatura_lgpd
+        ? new Date(formData.data_assinatura_lgpd).toLocaleString('pt-BR')
+        : '—';
+      addText(`Assinado por: ${formData.nome_assinatura_imagem || formData.nome_completo}`, 10);
+      addText(`Data e hora: ${dataAssinatura}`, 10);
+      if (formData.lgpd_ip) addText(`Endereço IP: ${formData.lgpd_ip}`, 10);
+      if (formData.lgpd_user_agent) {
+        const ua = String(formData.lgpd_user_agent);
+        addText(`Navegador: ${ua.length > 120 ? ua.substring(0, 120) + '…' : ua}`, 9);
+      }
+      y += 6;
+      addText('Este documento tem validade jurídica conforme Lei nº 14.063/2020.', 8, false, '#666666');
+      addText('Instituto Tia Pretinha · CNPJ 11.759.851/0001-39', 8, false, '#666666');
+
+      const nomeArquivo = `LGPD_${formData.nome_completo.replace(/\s+/g, '_')}_${new Date().getFullYear()}.pdf`;
+      doc.save(nomeArquivo);
+    } catch (e: any) {
+      alert('Erro ao gerar PDF: ' + e.message);
+    } finally {
+      setPdfLoading(false);
     }
   };
 
@@ -522,25 +622,110 @@ export default function DossieCandidato({ aluno, onClose, onSuccess }: DossiePro
               </div>
               )}
 
-              {/* Status LGPD + Botão Enviar Termo LGPD */}
-              <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-100 flex justify-between items-center gap-4">
-                <div>
-                  <p className="text-[10px] font-black uppercase text-blue-700 mb-1">Status LGPD</p>
-                  <span className={`text-[10px] font-black px-3 py-1 rounded-full ${formData.lgpd_aceito ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
-                    {formData.lgpd_aceito ? '✔ ASSINADO' : '⏳ PENDENTE'}
-                  </span>
-                </div>
-                {!formData.lgpd_aceito && (
-                  <button
-                    onClick={handleEnviarLGPD}
-                    disabled={lgpdLoading}
-                    className="flex items-center gap-2 px-5 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-60 shrink-0"
-                  >
-                    {lgpdLoading ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-                    Enviar Termo LGPD
-                  </button>
-                )}
-              </div>
+              {/* Painel LGPD completo */}
+              {(() => {
+                const assinado = !!formData.data_assinatura_lgpd;
+                const dataAssinatura = assinado ? new Date(formData.data_assinatura_lgpd) : null;
+                const umAnoAtras = new Date(); umAnoAtras.setFullYear(umAnoAtras.getFullYear() - 1);
+                const precisaRenovar = dataAssinatura && dataAssinatura < umAnoAtras;
+                const vencimento = dataAssinatura ? new Date(dataAssinatura) : null;
+                if (vencimento) vencimento.setFullYear(vencimento.getFullYear() + 1);
+
+                return (
+                  <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-100 space-y-3">
+                    {/* Cabeçalho: status + botões */}
+                    <div className="flex justify-between items-start gap-4 flex-wrap">
+                      <div>
+                        <p className="text-[10px] font-black uppercase text-blue-700 mb-1">Status LGPD</p>
+                        <span className={`text-[10px] font-black px-3 py-1 rounded-full ${
+                          precisaRenovar
+                            ? 'bg-orange-100 text-orange-700'
+                            : assinado
+                              ? 'bg-green-100 text-green-700'
+                              : formData.lgpd_aceito
+                                ? 'bg-blue-100 text-blue-700'
+                                : 'bg-amber-100 text-amber-700'
+                        }`}>
+                          {precisaRenovar
+                            ? '⚠ RENOVAÇÃO NECESSÁRIA'
+                            : assinado
+                              ? '✔ ASSINADO'
+                              : formData.lgpd_aceito
+                                ? '✔ CONFIRMADO'
+                                : '⏳ PENDENTE'}
+                        </span>
+                      </div>
+                      <div className="flex gap-2 flex-wrap">
+                        {assinado && (
+                          <button
+                            onClick={gerarPdfLGPD}
+                            disabled={pdfLoading}
+                            className="flex items-center gap-1.5 px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-60"
+                          >
+                            {pdfLoading ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
+                            PDF
+                          </button>
+                        )}
+                        <button
+                          onClick={handleEnviarLGPD}
+                          disabled={lgpdLoading}
+                          className="flex items-center gap-1.5 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-60"
+                        >
+                          {lgpdLoading ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
+                          {assinado ? 'Renovar' : formData.lgpd_aceito ? 'Reenviar' : 'Enviar'}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Detalhes da assinatura */}
+                    {assinado && (
+                      <div className="border-t border-blue-100 pt-3 grid grid-cols-1 gap-1.5 text-[10px]">
+                        <div className="flex gap-2">
+                          <span className="font-black uppercase text-blue-600 w-24 shrink-0">Assinado em</span>
+                          <span className="text-slate-700">{dataAssinatura!.toLocaleString('pt-BR')}</span>
+                        </div>
+                        {vencimento && (
+                          <div className="flex gap-2">
+                            <span className="font-black uppercase text-blue-600 w-24 shrink-0">Validade</span>
+                            <span className={`${precisaRenovar ? 'text-orange-600 font-bold' : 'text-slate-700'}`}>
+                              {vencimento.toLocaleDateString('pt-BR')} {precisaRenovar ? '(vencido)' : ''}
+                            </span>
+                          </div>
+                        )}
+                        {formData.lgpd_ip && (
+                          <div className="flex gap-2">
+                            <span className="font-black uppercase text-blue-600 w-24 shrink-0">IP</span>
+                            <span className="text-slate-700 font-mono">{formData.lgpd_ip}</span>
+                          </div>
+                        )}
+                        {formData.lgpd_user_agent && (
+                          <div className="flex gap-2">
+                            <span className="font-black uppercase text-blue-600 w-24 shrink-0">Navegador</span>
+                            <span className="text-slate-600 break-all leading-tight" title={formData.lgpd_user_agent}>
+                              {String(formData.lgpd_user_agent).length > 80
+                                ? String(formData.lgpd_user_agent).substring(0, 80) + '…'
+                                : formData.lgpd_user_agent}
+                            </span>
+                          </div>
+                        )}
+                        {formData.updatedAt && (
+                          <div className="flex gap-2">
+                            <span className="font-black uppercase text-blue-600 w-24 shrink-0">Última atualiz.</span>
+                            <span className="text-slate-500">{new Date(formData.updatedAt).toLocaleString('pt-BR')}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Alerta de renovação */}
+                    {precisaRenovar && (
+                      <div className="bg-orange-50 border border-orange-200 rounded-xl px-3 py-2 text-[10px] text-orange-700 font-semibold">
+                        ⚠ O termo LGPD foi assinado há mais de 1 ano. Clique em "Renovar" para solicitar nova assinatura.
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
 
             </div>

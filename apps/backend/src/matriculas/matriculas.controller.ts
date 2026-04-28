@@ -196,7 +196,7 @@ export class MatriculasController {
   @Public()
   async assinarLGPD(
     @Param('token') token: string,
-    @Body() body: { nome_completo: string; cpf: string; confirmacoes: string[] },
+    @Body() body: { nome_completo: string; cpf: string; confirmacoes: string[]; user_agent?: string },
     @Req() req: any,
   ) {
     if (!body?.nome_completo?.trim() || !body?.cpf?.trim()) {
@@ -205,7 +205,8 @@ export class MatriculasController {
     const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim()
       || req.ip
       || 'desconhecido';
-    return await this.matriculasService.assinarLGPD(token, body.nome_completo, body.cpf, ip);
+    const userAgent = body.user_agent || (req.headers['user-agent'] as string) || undefined;
+    return await this.matriculasService.assinarLGPD(token, body.nome_completo, body.cpf, ip, userAgent);
   }
 
   // ── Rotas PÚBLICAS de Documentos ────────────────────────────────────────────

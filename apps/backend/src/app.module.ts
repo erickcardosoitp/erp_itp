@@ -873,6 +873,11 @@ export class AppModule implements OnModuleInit {
           ADD COLUMN IF NOT EXISTS pessoa_tipo TEXT
       `);
       this.logger.log('✅ Colunas boletos (pessoa_nome, pessoa_tipo) aplicadas (IF NOT EXISTS)');
+      await this.dataSource.query(`
+        ALTER TABLE IF EXISTS inscricoes
+          ADD COLUMN IF NOT EXISTS lgpd_user_agent TEXT
+      `);
+      this.logger.log('✅ Coluna inscricoes.lgpd_user_agent aplicada (IF NOT EXISTS)');
 
     } catch (err: any) {
       this.logger.error(`❌ Erro nas migrations automáticas: ${err.message}`);

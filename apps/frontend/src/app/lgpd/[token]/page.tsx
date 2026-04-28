@@ -86,6 +86,7 @@ export default function LGPDSignPage() {
           nome_completo: nomeDigitado.trim(),
           cpf: cpfDigitado,
           confirmacoes: SECOES.map(s => s.id),
+          user_agent: navigator.userAgent,
         }),
       });
       if (!res.ok) {

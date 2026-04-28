@@ -146,6 +146,9 @@ export class Inscricao {
   @Column({ name: 'lgpd_ip', type: 'varchar', nullable: true })
   lgpd_ip: string | null;
 
+  @Column({ name: 'lgpd_user_agent', type: 'text', nullable: true })
+  lgpd_user_agent: string | null;
+
   /** Token para a página pública de envio de documentos */
   @Column({ name: 'doc_token', type: 'varchar', nullable: true, unique: true })
   doc_token: string | null;

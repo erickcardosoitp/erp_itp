@@ -281,11 +281,11 @@ export class MatriculasService {
 
   /**
    * Busca inscrição por token LGPD — valida existência e expiração.
+   * Permite re-assinatura quando um novo token de renovação foi emitido (lgpd_aceito=true mas token presente).
    */
   async buscarPorTokenLGPD(token: string): Promise<Inscricao> {
     const inscricao = await this.inscricaoRepository.findOneBy({ lgpd_token: token });
     if (!inscricao) throw new NotFoundException('Link inválido. Solicite um novo link à equipe do Instituto.');
-    if (inscricao.lgpd_aceito) throw new BadRequestException('Este termo já foi assinado.');
     if (inscricao.lgpd_token_expires_at && new Date() > inscricao.lgpd_token_expires_at) {
       throw new BadRequestException('Este link expirou (prazo de 72h). Solicite um novo link.');
     }
@@ -295,7 +295,7 @@ export class MatriculasService {
   /**
    * Processa a assinatura eletrônica do termo LGPD pelo candidato.
    */
-  async assinarLGPD(token: string, nomeDigitado: string, cpf: string, ip: string): Promise<Inscricao> {
+  async assinarLGPD(token: string, nomeDigitado: string, cpf: string, ip: string, userAgent?: string): Promise<Inscricao> {
     const inscricao = await this.buscarPorTokenLGPD(token);
 
     // Aceita CPF da aluna OU do responsável (para menores cujo responsável assina)
@@ -311,6 +311,7 @@ export class MatriculasService {
     inscricao.data_assinatura_lgpd = new Date();
     inscricao.nome_assinatura_imagem = nomeDigitado;
     inscricao.lgpd_ip = ip;
+    if (userAgent) inscricao.lgpd_user_agent = userAgent;
     inscricao.lgpd_token = null;
     inscricao.lgpd_token_expires_at = null;
 
