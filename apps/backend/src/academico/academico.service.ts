@@ -183,10 +183,10 @@ export class AcademicoService {
         COALESCE(t.nome, g.nome_turma) AS nome_turma,
         COALESCE(p.nome, u.nome, f.nome, g.nome_professor) AS nome_professor
       FROM grade_horaria g
-      LEFT JOIN turmas t ON t.id = g.turma_id::uuid
-      LEFT JOIN professores p ON p.id = t.professor_id::uuid
-      LEFT JOIN usuarios u ON u.id = t.professor_id::uuid
-      LEFT JOIN funcionarios f ON f.id = t.professor_id::uuid
+      LEFT JOIN turmas t ON t.id::text = g.turma_id
+      LEFT JOIN professores p ON p.id::text = t.professor_id
+      LEFT JOIN usuarios u ON u.id::text = t.professor_id
+      LEFT JOIN funcionarios f ON f.id::text = t.professor_id
       ORDER BY g.dia_semana ASC, g.horario_inicio ASC NULLS LAST
     `);
   }

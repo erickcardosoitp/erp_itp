@@ -720,7 +720,7 @@ export default function DossieCandidato({ aluno, onClose, onSuccess }: DossiePro
                     {/* Alerta de renovação */}
                     {precisaRenovar && (
                       <div className="bg-orange-50 border border-orange-200 rounded-xl px-3 py-2 text-[10px] text-orange-700 font-semibold">
-                        ⚠ O termo LGPD foi assinado há mais de 1 ano. Clique em "Renovar" para solicitar nova assinatura.
+                        ⚠ O termo LGPD foi assinado há mais de 1 ano. Clique em &quot;Renovar&quot; para solicitar nova assinatura.
                       </div>
                     )}
                   </div>
