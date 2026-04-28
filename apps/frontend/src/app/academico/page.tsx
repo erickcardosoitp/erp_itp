@@ -723,6 +723,7 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
   const [loading, setLoading] = useState(true);
   const [inativandoId, setInativandoId] = useState<string | null>(null);
   const [excluindoId, setExcluindoId] = useState<string | null>(null);
+  const [inputNome, setInputNome] = useState('');
   const [filtroNome, setFiltroNome] = useState('');
   const [filtroCursoNome, setFiltroCursoNome] = useState('');
   const [filtroTurmaId, setFiltroTurmaId] = useState('');
@@ -731,6 +732,12 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
   const [filtroSexo, setFiltroSexo] = useState('');
   const [filtroCidade, setFiltroCidade] = useState('');
   const [erroLoad, setErroLoad] = useState<string | null>(null);
+
+  // Debounce do campo nome: só dispara a busca 400ms após o usuário parar de digitar
+  useEffect(() => {
+    const t = setTimeout(() => setFiltroNome(inputNome), 400);
+    return () => clearTimeout(t);
+  }, [inputNome]);
   const [fichaAluno, setFichaAluno] = useState<any>(null);
   const [fichaAba, setFichaAba] = useState<'dados' | 'presenca'>('dados');
   const [dossieCandidato, setDossieCandidato] = useState<any>(null);
@@ -970,7 +977,7 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
           <label className="text-[9px] font-black uppercase text-slate-400 mb-1 block">Nome</label>
           <div className="relative">
             <Search size={11} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input value={filtroNome} onChange={e => setFiltroNome(e.target.value)} placeholder="Buscar aluno..."
+            <input value={inputNome} onChange={e => setInputNome(e.target.value)} placeholder="Buscar aluno..."
               className="w-full pl-8 pr-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-400" />
           </div>
         </div>
@@ -1026,7 +1033,7 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
           <input value={filtroCidade} onChange={e => setFiltroCidade(e.target.value)} placeholder="Cidade..."
             className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-400" />
         </div>
-        <button onClick={() => { setFiltroNome(''); setFiltroCursoNome(''); setFiltroTurmaId(''); setFiltroStatus(''); setFiltroTurno(''); setFiltroSexo(''); setFiltroCidade(''); }}
+        <button onClick={() => { setInputNome(''); setFiltroNome(''); setFiltroCursoNome(''); setFiltroTurmaId(''); setFiltroStatus(''); setFiltroTurno(''); setFiltroSexo(''); setFiltroCidade(''); }}
           className="text-[10px] font-black uppercase text-red-400 hover:text-red-600 flex items-center gap-1">
           <X size={11}/> Limpar
         </button>

@@ -384,4 +384,62 @@ export class FinanceiroService {
     await this.boletoRepo.delete(id);
     return { message: 'Boleto removido' };
   }
+
+  /**
+   * Verifica parcelas a vencer nos próximos `dias` dias e cria notificações.
+   * Idempotente: não cria duplicatas para o mesmo vencimento no mesmo dia.
+   */
+  async alertarVencimentos(dias = 7): Promise<{ notificados: number }> {
+    const hoje = new Date();
+    const limite = new Date();
+    limite.setDate(limite.getDate() + dias);
+
+    const hojeStr  = hoje.toISOString().slice(0, 10);
+    const limiteStr = limite.toISOString().slice(0, 10);
+
+    const parcelas = await this.dataSource.query<any[]>(
+      `SELECT bp.id, bp.data_vencimento, bp.valor, bp.numero_parcela,
+              b.credor, b.descricao, b.qtd_parcelas, b.id AS boleto_id
+       FROM boleto_parcelas bp
+       JOIN boletos b ON b.id = bp.boleto_id
+       WHERE bp.pago = false
+         AND bp.data_vencimento >= $1
+         AND bp.data_vencimento <= $2
+         AND b.status = 'Pendente'
+       ORDER BY bp.data_vencimento ASC`,
+      [hojeStr, limiteStr],
+    );
+
+    let notificados = 0;
+    for (const p of parcelas) {
+      const titulo = `Boleto a vencer: ${p.descricao || p.credor}`;
+      const referencia_id = String(p.id);
+
+      // Evita duplicata: verifica se já existe notificação com mesmo referencia_id criada hoje
+      const existentes = await this.dataSource.query<any[]>(
+        `SELECT id FROM notificacoes
+         WHERE referencia_id = $1 AND referencia_tipo = 'boleto_parcela'
+           AND DATE("createdAt") = $2
+         LIMIT 1`,
+        [referencia_id, hojeStr],
+      );
+      if (existentes.length > 0) continue;
+
+      const diasRestantes = Math.ceil(
+        (new Date(p.data_vencimento).getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24),
+      );
+
+      await this.notificacoes.criar({
+        tipo: 'alerta',
+        titulo,
+        mensagem: `Vence em ${diasRestantes} dia(s) (${p.data_vencimento}). Valor: R$ ${Number(p.valor).toFixed(2).replace('.', ',')}. Parcela ${p.numero_parcela}/${p.qtd_parcelas}.`,
+        referencia_id,
+        referencia_tipo: 'boleto_parcela',
+      }).catch(() => {});
+
+      notificados++;
+    }
+
+    return { notificados };
+  }
 }

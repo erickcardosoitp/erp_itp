@@ -612,13 +612,15 @@ function BoletosTab({ podeEscrever, podeEditar, podeExcluir }: { podeEscrever: b
       setBoletos(Array.isArray(r.data) ? r.data : []);
     } catch {}
     setLoading(false);
+    // Gera notificações para parcelas a vencer nos próximos 7 dias (fire-and-forget)
+    api.post('/financeiro/boletos/alertar-vencimentos', { dias: 7 }).catch(() => {});
   }, []);
 
   useEffect(() => { carregar(); }, [carregar]);
 
   const filtrados = boletos.filter(b => {
     const q = busca.toLowerCase();
-    const matchBusca = !q || b.credor.toLowerCase().includes(q) || b.recebedor.toLowerCase().includes(q) || (b.cod_barras ?? '').includes(q);
+    const matchBusca = !q || (b.descricao ?? '').toLowerCase().includes(q) || b.credor.toLowerCase().includes(q) || b.recebedor.toLowerCase().includes(q) || (b.cod_barras ?? '').includes(q);
     const matchStatus = !filtroStatus || b.status === filtroStatus;
     return matchBusca && matchStatus;
   });
@@ -706,6 +708,52 @@ function BoletosTab({ podeEscrever, podeEditar, podeExcluir }: { podeEscrever: b
         </div>
       </div>
 
+      {/* Banner: parcelas a vencer em até 7 dias */}
+      {(() => {
+        const hoje = new Date();
+        hoje.setHours(0, 0, 0, 0);
+        const limite = new Date(hoje);
+        limite.setDate(limite.getDate() + 7);
+        const urgentes = boletos.flatMap(b =>
+          b.parcelas
+            .filter(p => {
+              if (p.pago) return false;
+              const d = new Date(p.data_vencimento + 'T12:00:00');
+              return d >= hoje && d <= limite;
+            })
+            .map(p => ({ ...p, boleto: b }))
+        ).sort((a, b) => a.data_vencimento.localeCompare(b.data_vencimento));
+        if (!urgentes.length) return null;
+        return (
+          <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-2xl p-4 space-y-2">
+            <div className="flex items-center gap-2">
+              <AlertCircle size={16} className="text-amber-600 shrink-0" />
+              <p className="text-sm font-bold text-amber-800 dark:text-amber-300">
+                {urgentes.length} parcela{urgentes.length > 1 ? 's' : ''} a vencer nos próximos 7 dias
+              </p>
+            </div>
+            <div className="space-y-1">
+              {urgentes.map(p => {
+                const dias = Math.ceil((new Date(p.data_vencimento + 'T12:00:00').getTime() - hoje.getTime()) / 86400000);
+                const label = p.boleto.descricao || p.boleto.credor;
+                return (
+                  <div key={p.id} className="flex items-center justify-between text-xs bg-white dark:bg-slate-800 rounded-xl px-3 py-2 border border-amber-100 dark:border-amber-800">
+                    <span className="font-semibold text-slate-700 dark:text-slate-200 truncate max-w-[60%]">{label}</span>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <span className="font-mono text-slate-500">{dataFmt(p.data_vencimento)}</span>
+                      <span className={`font-bold px-2 py-0.5 rounded-full ${dias === 0 ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+                        {dias === 0 ? 'hoje' : `${dias}d`}
+                      </span>
+                      <span className="font-bold text-emerald-700 dark:text-emerald-400">{moeda(p.valor)}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Toolbar */}
       <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 p-4 flex flex-wrap gap-3 items-center justify-between">
         <div className="flex gap-3 flex-wrap flex-1">
@@ -750,13 +798,14 @@ function BoletosTab({ podeEscrever, podeEditar, podeExcluir }: { podeEscrever: b
               <div className="p-4 flex flex-wrap gap-4 items-start justify-between">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-3 flex-wrap">
-                    <h3 className="font-bold text-slate-800 dark:text-white">{b.credor}</h3>
+                    <h3 className="font-bold text-slate-800 dark:text-white">{b.descricao || b.credor}</h3>
                     <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${b.status === 'Pago' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'}`}>
                       {b.status}
                     </span>
                     {b.parcelado && <span className="px-2 py-0.5 bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 rounded-full text-xs">{b.qtd_parcelas}× parcelas</span>}
                   </div>
                   <div className="text-xs text-slate-500 mt-1 flex flex-wrap gap-3">
+                    <span>Credor: <strong className="text-slate-700 dark:text-slate-300">{b.credor}</strong></span>
                     <span>Recebedor: <strong className="text-slate-700 dark:text-slate-300">{b.recebedor}</strong></span>
                     {b.cnpj && <span>CNPJ: {b.cnpj}</span>}
                     <span>Emissão: {dataFmt(b.data_emissao)}</span>
@@ -768,7 +817,6 @@ function BoletosTab({ podeEscrever, podeEditar, podeExcluir }: { podeEscrever: b
                       <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">{b.pessoa_nome}</span>
                     </div>
                   )}
-                  {b.descricao && <p className="text-xs text-slate-400 mt-1">{b.descricao}</p>}
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="text-right">
@@ -841,6 +889,11 @@ function BoletosTab({ podeEscrever, podeEditar, podeExcluir }: { podeEscrever: b
             </div>
 
             <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2">
+                <label className="text-xs font-semibold text-slate-500 mb-1 block">Descrição (título do boleto) *</label>
+                <input value={form.descricao ?? ''} onChange={e => setForm((f: any) => ({ ...f, descricao: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-800" placeholder="Ex: Aluguel março, Conta de luz, Fornecedor X..." />
+              </div>
               <div className="col-span-2">
                 <label className="text-xs font-semibold text-slate-500 mb-1 block">Credor (quem emitiu) *</label>
                 <input value={form.credor ?? ''} onChange={e => setForm((f: any) => ({ ...f, credor: e.target.value }))}
@@ -952,11 +1005,6 @@ function BoletosTab({ podeEscrever, podeEditar, podeExcluir }: { podeEscrever: b
                     className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-800" />
                 </div>
               )}
-              <div className="col-span-2">
-                <label className="text-xs font-semibold text-slate-500 mb-1 block">Descrição</label>
-                <textarea value={form.descricao ?? ''} onChange={e => setForm((f: any) => ({ ...f, descricao: e.target.value }))} rows={2}
-                  className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-800 resize-none" />
-              </div>
               <div className="col-span-2 flex items-center gap-3">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input type="checkbox" checked={form.parcelado ?? false} onChange={e => { setForm((f: any) => ({ ...f, parcelado: e.target.checked })); if (!e.target.checked) setParcelas([]); }}

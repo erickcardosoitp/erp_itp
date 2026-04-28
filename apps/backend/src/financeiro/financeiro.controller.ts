@@ -171,4 +171,10 @@ export class FinanceiroController {
   @Delete('boletos/:id')
   @ModuloPerm('financeiro', 'excluir')
   deletarBoleto(@Param('id') id: string) { return this.svc.deletarBoleto(id); }
+
+  @Post('boletos/alertar-vencimentos')
+  @ModuloPerm('financeiro', 'visualizar')
+  alertarVencimentos(@Body() body: { dias?: number }) {
+    return this.svc.alertarVencimentos(body?.dias ?? 7);
+  }
 }
