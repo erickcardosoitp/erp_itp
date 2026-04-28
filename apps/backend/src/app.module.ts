@@ -867,6 +867,12 @@ export class AppModule implements OnModuleInit {
         )
       `);
       this.logger.log('✅ Tabelas boletos/boleto_parcelas criadas (IF NOT EXISTS)');
+      await this.dataSource.query(`
+        ALTER TABLE boletos
+          ADD COLUMN IF NOT EXISTS pessoa_nome TEXT,
+          ADD COLUMN IF NOT EXISTS pessoa_tipo TEXT
+      `);
+      this.logger.log('✅ Colunas boletos (pessoa_nome, pessoa_tipo) aplicadas (IF NOT EXISTS)');
 
     } catch (err: any) {
       this.logger.error(`❌ Erro nas migrations automáticas: ${err.message}`);

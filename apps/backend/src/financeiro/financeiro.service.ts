@@ -218,6 +218,34 @@ export class FinanceiroService {
     return { message: 'Movimentação removida' };
   }
 
+  // ── BUSCA UNIFICADA DE PESSOA ─────────────────────────────────────────────
+
+  async buscarPessoa(q: string) {
+    if (!q || q.trim().length < 2) return [];
+    const termo = `%${q.trim().toLowerCase()}%`;
+    const [alunos, funcionarios, candidatos, doadores] = await Promise.all([
+      this.dataSource.query(`
+        SELECT id::text, nome_completo AS nome, cpf, email, 'Aluno' AS tipo, numero_matricula AS referencia
+        FROM alunos WHERE ativo = true AND (LOWER(nome_completo) LIKE $1 OR REPLACE(cpf,'.','') LIKE $1) LIMIT 5
+      `, [termo]),
+      this.dataSource.query(`
+        SELECT id::text, nome, cpf, email, 'Funcionário' AS tipo, matricula AS referencia
+        FROM funcionarios WHERE ativo = true AND (LOWER(nome) LIKE $1 OR REPLACE(cpf,'.','') LIKE $1) LIMIT 5
+      `, [termo]),
+      this.dataSource.query(`
+        SELECT id::text, nome_completo AS nome, cpf, email, 'Candidato' AS tipo, NULL AS referencia
+        FROM inscricoes WHERE aluno_id IS NULL AND (LOWER(nome_completo) LIKE $1 OR REPLACE(cpf,'.','') LIKE $1) LIMIT 5
+      `, [termo]),
+      this.dataSource.query(`
+        SELECT id::text, nome, cpf_cnpj AS cpf, email,
+          CASE WHEN tipo = 'PJ' THEN 'Pessoa Jurídica' ELSE 'Pessoa Física' END AS tipo,
+          codigo_interno AS referencia
+        FROM doadores WHERE LOWER(nome) LIKE $1 OR REPLACE(cpf_cnpj,'.','') LIKE $1 LIMIT 5
+      `, [termo]).catch(() => []),
+    ]);
+    return [...alunos, ...funcionarios, ...candidatos, ...doadores].slice(0, 12);
+  }
+
   // ── BOLETOS A RECEBER ─────────────────────────────────────────────────────
 
   async listarBoletos() {
@@ -248,6 +276,8 @@ export class FinanceiroService {
       arquivo_base64: dto.arquivo_base64 ?? null,
       arquivo_nome: dto.arquivo_nome ?? null,
       descricao: dto.descricao ?? null,
+      pessoa_nome: dto.pessoa_nome ?? null,
+      pessoa_tipo: dto.pessoa_tipo ?? null,
     }));
 
     const parcelas: BoletoParcela[] = [];

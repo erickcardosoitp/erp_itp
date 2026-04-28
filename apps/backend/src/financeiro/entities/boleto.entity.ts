@@ -41,6 +41,12 @@ export class Boleto {
   @Column({ type: 'text', nullable: true })
   descricao: string | null;
 
+  @Column({ type: 'text', nullable: true })
+  pessoa_nome: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  pessoa_tipo: string | null;
+
   @CreateDateColumn({ name: 'created_at' })
   created_at: Date;
 

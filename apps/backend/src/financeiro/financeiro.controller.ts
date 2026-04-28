@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Req, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, Req, UseGuards } from '@nestjs/common';
 import { FinanceiroService } from './financeiro.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ModuloPermGuard } from '../auth/guards/modulo-perm.guard';
@@ -141,6 +141,12 @@ export class FinanceiroController {
   @Delete('movimentacoes/:id')
   @ModuloPerm('financeiro', 'excluir')
   deletarMovimentacao(@Param('id') id: string) { return this.svc.deletarMovimentacao(id); }
+
+  // ── BUSCA UNIFICADA DE PESSOA ─────────────────────────────────────────────
+
+  @Get('buscar-pessoa')
+  @ModuloPerm('financeiro', 'visualizar')
+  buscarPessoa(@Query('q') q: string) { return this.svc.buscarPessoa(q ?? ''); }
 
   // ── BOLETOS A RECEBER ─────────────────────────────────────────────────────
 

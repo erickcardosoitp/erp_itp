@@ -4,12 +4,15 @@ import { AppModule } from '../src/app.module';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import * as cookieParser from 'cookie-parser';
+import * as express from 'express';
 import { join } from 'path';
 import { existsSync } from 'fs';
 
 const logger = new Logger('Bootstrap');
 
 export const setupApp = async (app: NestExpressApplication) => {
+  app.use(express.json({ limit: '10mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '10mb' }));
   const cookieMiddleware = (cookieParser as any).default || cookieParser;
   app.use(cookieMiddleware());
   app.setGlobalPrefix('api');

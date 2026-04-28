@@ -542,6 +542,8 @@ interface Boleto {
   arquivo_base64?: string;
   arquivo_nome?: string;
   descricao?: string;
+  pessoa_nome?: string;
+  pessoa_tipo?: string;
   parcelas: BoletoParcela[];
 }
 
@@ -568,24 +570,84 @@ function BoletosTab({ podeEscrever, podeEditar, podeExcluir }: { podeEscrever: b
   const [salvando, setSalvando] = useState(false);
   const [pagandoParcela, setPagandoParcela] = useState<string | null>(null);
 
+  // ── Pessoa selector ──
+  const [pessoaBusca, setPessoaBusca] = useState('');
+  const [pessoaResultados, setPessoaResultados] = useState<any[]>([]);
+  const [pessoaBuscando, setPessoaBuscando] = useState(false);
+
+  useEffect(() => {
+    if (pessoaBusca.length < 2) { setPessoaResultados([]); return; }
+    const t = setTimeout(async () => {
+      setPessoaBuscando(true);
+      try {
+        const r = await api.get(`/financeiro/buscar-pessoa?q=${encodeURIComponent(pessoaBusca)}`);
+        setPessoaResultados(Array.isArray(r.data) ? r.data : []);
+      } catch { setPessoaResultados([]); }
+      setPessoaBuscando(false);
+    }, 350);
+    return () => clearTimeout(t);
+  }, [pessoaBusca]);
+
   // ── Scanner ──
   const [scanner, setScanner] = useState(false);
   const [scanResult, setScanResult] = useState<BarcodeInfo | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const readerRef = useRef<any>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+
+  const pararCamera = () => {
+    try { readerRef.current?.reset?.(); } catch {}
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
+    }
+    if (videoRef.current) videoRef.current.srcObject = null;
+  };
 
   useEffect(() => {
-    if (!scanner) {
-      try { readerRef.current?.reset?.(); } catch {}
-      return;
-    }
+    if (!scanner) { pararCamera(); return; }
     let active = true;
+
     const timer = setTimeout(async () => {
       if (!active || !videoRef.current) return;
+
+      // Tenta BarcodeDetector nativo (Chrome/Edge/Android)
+      if ('BarcodeDetector' in window) {
+        try {
+          const detector = new (window as any).BarcodeDetector({
+            formats: ['itf', 'code_128', 'qr_code', 'code_39', 'code_93', 'pdf417'],
+          });
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 } },
+          });
+          if (!active) { stream.getTracks().forEach(t => t.stop()); return; }
+          streamRef.current = stream;
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play();
+
+          const scanLoop = async () => {
+            if (!active) return;
+            try {
+              const codes = await detector.detect(videoRef.current!);
+              if (codes.length > 0 && active) {
+                const info = parsearCodigoBarras(codes[0].rawValue);
+                setScanResult(info);
+                pararCamera();
+                return;
+              }
+            } catch {}
+            if (active) requestAnimationFrame(scanLoop);
+          };
+          scanLoop();
+          return;
+        } catch { /* fallback */ }
+      }
+
+      // Fallback: @zxing/browser
       try {
         const { BrowserMultiFormatReader } = await import('@zxing/browser');
-        const reader = new BrowserMultiFormatReader();
+        const reader = new BrowserMultiFormatReader(undefined, { delayBetweenScanAttempts: 200 } as any);
         readerRef.current = reader;
         let controls: any = null;
         controls = await reader.decodeFromVideoDevice(undefined, videoRef.current, (result) => {
@@ -595,18 +657,20 @@ function BoletosTab({ podeEscrever, podeEditar, podeExcluir }: { podeEscrever: b
           try { controls?.stop(); } catch {}
         });
       } catch {
-        if (active) setScanError('Câmera não disponível. Insira o código manualmente abaixo.');
+        if (active) setScanError('Câmera não disponível. Verifique as permissões ou insira o código manualmente.');
       }
-    }, 200);
+    }, 250);
+
     return () => {
       active = false;
       clearTimeout(timer);
-      try { readerRef.current?.reset?.(); } catch {}
+      pararCamera();
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scanner]);
 
   const fecharScanner = () => {
-    try { readerRef.current?.reset?.(); } catch {}
+    pararCamera();
     setScanner(false);
     setScanResult(null);
     setScanError(null);
@@ -686,8 +750,9 @@ function BoletosTab({ podeEscrever, podeEditar, podeExcluir }: { podeEscrever: b
       const payload = { ...form, valor: valorNum, parcelas: parcelasPayload };
       await api.post('/financeiro/boletos', payload);
       setModal(false);
-      setForm({ parcelado: false, qtd_parcelas: 1, status: 'Pendente', data_emissao: new Date().toISOString().slice(0, 10), data_vencimento: '' });
+      setForm({ parcelado: false, qtd_parcelas: 1, status: 'Pendente', data_emissao: new Date().toISOString().slice(0, 10), data_vencimento: '', pessoa_nome: '', pessoa_tipo: '' });
       setParcelas([]);
+      setPessoaBusca('');
       carregar();
     } catch {}
     setSalvando(false);
@@ -791,8 +856,14 @@ function BoletosTab({ podeEscrever, podeEditar, podeExcluir }: { podeEscrever: b
                     <span>Recebedor: <strong className="text-slate-700 dark:text-slate-300">{b.recebedor}</strong></span>
                     {b.cnpj && <span>CNPJ: {b.cnpj}</span>}
                     <span>Emissão: {dataFmt(b.data_emissao)}</span>
-                    {b.cod_barras && <span className="font-mono">{b.cod_barras}</span>}
+                    {b.cod_barras && <span className="font-mono text-[10px]">{b.cod_barras}</span>}
                   </div>
+                  {b.pessoa_nome && (
+                    <div className="mt-1 flex items-center gap-1.5">
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400 font-semibold">{b.pessoa_tipo}</span>
+                      <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">{b.pessoa_nome}</span>
+                    </div>
+                  )}
                   {b.descricao && <p className="text-xs text-slate-400 mt-1">{b.descricao}</p>}
                 </div>
                 <div className="flex items-center gap-3">
@@ -979,6 +1050,52 @@ function BoletosTab({ podeEscrever, podeEditar, podeExcluir }: { podeEscrever: b
                 <input value={form.recebedor ?? ''} onChange={e => setForm((f: any) => ({ ...f, recebedor: e.target.value }))}
                   className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-800" placeholder="Instituto Tiapretinha" />
               </div>
+
+              {/* Referência de Pessoa */}
+              <div className="col-span-2">
+                <label className="text-xs font-semibold text-slate-500 mb-1 block">Referência (Aluno / Funcionário / Candidato / Pessoa)</label>
+                {form.pessoa_nome ? (
+                  <div className="flex items-center justify-between bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-700 rounded-xl px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300 font-bold">{form.pessoa_tipo}</span>
+                      <span className="text-sm font-semibold text-slate-800 dark:text-white">{form.pessoa_nome}</span>
+                    </div>
+                    <button type="button" onClick={() => { setForm((f: any) => ({ ...f, pessoa_nome: '', pessoa_tipo: '' })); setPessoaBusca(''); }}
+                      className="text-slate-400 hover:text-red-500 transition-colors"><X size={14}/></button>
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"/>
+                    <input
+                      value={pessoaBusca}
+                      onChange={e => setPessoaBusca(e.target.value)}
+                      placeholder="Buscar por nome ou CPF/CNPJ..."
+                      className="w-full pl-8 pr-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-800"
+                    />
+                    {pessoaBuscando && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-400">...</span>}
+                    {pessoaResultados.length > 0 && (
+                      <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-xl shadow-lg overflow-hidden">
+                        {pessoaResultados.map((p, i) => (
+                          <button key={i} type="button"
+                            onClick={() => {
+                              setForm((f: any) => ({ ...f, pessoa_nome: p.nome, pessoa_tipo: p.tipo }));
+                              setPessoaBusca('');
+                              setPessoaResultados([]);
+                            }}
+                            className="w-full px-3 py-2.5 text-left hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-3 border-b border-slate-100 dark:border-slate-700 last:border-0">
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300 font-bold shrink-0">{p.tipo}</span>
+                            <div className="min-w-0">
+                              <p className="text-xs font-semibold text-slate-800 dark:text-white truncate">{p.nome}</p>
+                              {(p.cpf || p.referencia) && <p className="text-[10px] text-slate-400 truncate">{p.referencia ?? p.cpf}</p>}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
               <div>
                 <label className="text-xs font-semibold text-slate-500 mb-1 block">CNPJ</label>
                 <input value={form.cnpj ?? ''} onChange={e => setForm((f: any) => ({ ...f, cnpj: e.target.value }))}
