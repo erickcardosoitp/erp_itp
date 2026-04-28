@@ -77,24 +77,28 @@ function parsearCodigoBarras(codigo: string): BarcodeInfo {
   const clean = codigo.replace(/\D/g, '');
   let barcode = clean;
 
-  // Linha digitável (47 dígitos) → converte para código de barras (44 dígitos)
+  // Linha digitável (47 dígitos) → código de barras 44 dígitos (padrão FEBRABAN)
+  // Estrutura linha digitável: bank(3)+moeda(1)+campoLivre_pt1(5)+check1(1) | campoLivre_pt2(10)+check2(1) | campoLivre_pt3(10)+check3(1) | checkGeral(1) | fator(4) | valor(10)
+  // Estrutura barcode 44 dígitos: bank(3)+moeda(1)+checkGeral(1)+fator(4)+valor(10)+campoLivre(25)
   if (clean.length === 47) {
-    const banco = clean.substring(0, 3);
-    const moeda = clean.substring(3, 4);
+    const banco    = clean.substring(0, 3);
+    const moeda    = clean.substring(3, 4);
     const campoLivre = clean.substring(4, 9) + clean.substring(10, 20) + clean.substring(21, 31);
     const checkGeral = clean.substring(32, 33);
-    const fator = clean.substring(33, 37);
-    const valor = clean.substring(37, 47);
-    barcode = banco + moeda + campoLivre + checkGeral + fator + valor;
+    const fator    = clean.substring(33, 37);
+    const valor    = clean.substring(37, 47);
+    barcode = banco + moeda + checkGeral + fator + valor + campoLivre;
   }
 
   if (barcode.length !== 44) {
     return { raw: clean, banco: '', bancoCode: '', valor: null, vencimento: null, valido: false };
   }
 
+  // Posições no código de barras 44 dígitos (FEBRABAN):
+  // [0-2] banco, [3] moeda, [4] check geral, [5-8] fator vencimento, [9-18] valor, [19-43] campo livre
   const bancoCode = barcode.substring(0, 3);
-  const fatorStr = barcode.substring(35, 39);
-  const valorStr = barcode.substring(39, 49);
+  const fatorStr  = barcode.substring(5, 9);
+  const valorStr  = barcode.substring(9, 19);
 
   const banco = BANCOS[bancoCode] ?? `Banco ${bancoCode}`;
   const valor = parseInt(valorStr) === 0 ? null : parseInt(valorStr) / 100;
@@ -102,9 +106,22 @@ function parsearCodigoBarras(codigo: string): BarcodeInfo {
   let vencimento: string | null = null;
   const fator = parseInt(fatorStr);
   if (fator > 0) {
-    const base = new Date('1997-10-07T00:00:00Z');
-    base.setUTCDate(base.getUTCDate() + fator);
-    vencimento = base.toISOString().slice(0, 10);
+    // Ciclo antigo: base 07/10/1997, fator 9999 esgotou-se em 21/02/2025
+    const baseAntiga = new Date('1997-10-07T00:00:00Z');
+    baseAntiga.setUTCDate(baseAntiga.getUTCDate() + fator);
+
+    // Novo ciclo BACEN (22/02/2025): fator reinicia em 1000 com nova base
+    // Se a data pelo ciclo antigo estiver mais de 2 anos no passado, usar novo ciclo
+    const limitePassado = new Date();
+    limitePassado.setFullYear(limitePassado.getFullYear() - 2);
+
+    if (baseAntiga < limitePassado) {
+      const novaBase = new Date('2025-02-22T00:00:00Z');
+      novaBase.setUTCDate(novaBase.getUTCDate() + (fator - 1000));
+      vencimento = novaBase.toISOString().slice(0, 10);
+    } else {
+      vencimento = baseAntiga.toISOString().slice(0, 10);
+    }
   }
 
   return { raw: barcode, banco, bancoCode, valor, vencimento, valido: true };
