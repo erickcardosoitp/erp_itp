@@ -311,14 +311,16 @@ export default function GestaoMatriculas() {
 
   const calcCompletude = (m: any) => {
     const faltando: string[] = [];
-    if (!m.cpf) faltando.push('CPF');
+    const ehMenor = m.maior_18_anos === false || (m.idade && Number(m.idade) < 18);
+    if (!ehMenor && !m.cpf) faltando.push('CPF');
     if (!m.email) faltando.push('E-mail');
-    if (!m.celular) faltando.push('Celular');
+    if (!ehMenor && !m.celular) faltando.push('Celular');
     if (!m.data_nascimento) faltando.push('Data de nascimento');
     if (!m.cidade) faltando.push('Cidade');
     if (!m.lgpd_aceito) faltando.push('Termo LGPD não assinado');
     if (!['Documentos Enviados', 'Matriculado'].includes(m.status_matricula)) faltando.push('Documentos pendentes');
-    const pct = Math.round(((7 - faltando.length) / 7) * 100);
+    const total = ehMenor ? 5 : 7;
+    const pct = Math.round(((total - faltando.length) / total) * 100);
     return { pct, faltando };
   };
 

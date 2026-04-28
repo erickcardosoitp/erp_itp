@@ -366,6 +366,7 @@ export default function DossieCandidato({ aluno, onClose, onSuccess }: DossiePro
           const m = hoje.getMonth() - d.getMonth();
           if (m < 0 || (m === 0 && hoje.getDate() < d.getDate())) idade--;
           updated.idade = idade;
+          updated.maior_18_anos = idade >= 18;
         }
       }
       return updated;
@@ -910,7 +911,8 @@ export default function DossieCandidato({ aluno, onClose, onSuccess }: DossiePro
                 <>
                   {/* Barra de progresso */}
                   {(() => {
-                    const total = 5;
+                    const maior18 = formData.maior_18_anos !== false;
+                    const total = maior18 ? 3 : 5;
                     const enviados = total - obrigatoriosPendentes.length;
                     const pct = Math.round((enviados / total) * 100);
                     return (

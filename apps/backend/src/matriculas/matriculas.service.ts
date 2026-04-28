@@ -16,14 +16,31 @@ import { AcademicoService } from '../academico/academico.service';
 import { NotificacoesService } from '../notificacoes/notificacoes.service';
 
 
+/** Calcula a idade em anos completos a partir de uma data de nascimento (string ISO ou Date). */
+function calcularIdade(dataNascimento: string | Date | null | undefined): number | null {
+  if (!dataNascimento) return null;
+  const nasc = typeof dataNascimento === 'string' ? new Date(dataNascimento + (String(dataNascimento).length === 10 ? 'T12:00:00' : '')) : dataNascimento;
+  if (isNaN(nasc.getTime())) return null;
+  const hoje = new Date();
+  let idade = hoje.getFullYear() - nasc.getFullYear();
+  const m = hoje.getMonth() - nasc.getMonth();
+  if (m < 0 || (m === 0 && hoje.getDate() < nasc.getDate())) idade--;
+  return idade;
+}
+
 /** Tipos obrigatórios que devem estar presentes para considerar o envio completo. */
-const TIPOS_OBRIGATORIOS = [
-  TipoDocumento.FOTO_ALUNO,
-  TipoDocumento.IDENTIDADE,
-  TipoDocumento.COMPROVANTE_RESID,
-  TipoDocumento.CERTIDAO_NASCIMENTO,
-  TipoDocumento.IDENTIDADE_RESP,
-];
+function getTiposObrigatorios(maior18: boolean): TipoDocumento[] {
+  const base = [
+    TipoDocumento.FOTO_ALUNO,
+    TipoDocumento.IDENTIDADE,
+    TipoDocumento.COMPROVANTE_RESID,
+  ];
+  if (!maior18) {
+    base.push(TipoDocumento.CERTIDAO_NASCIMENTO);
+    base.push(TipoDocumento.IDENTIDADE_RESP);
+  }
+  return base;
+}
 
 /** Mimetypes aceitos para uploads de documentos */
 const MIMETYPES_ACEITOS = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
@@ -372,6 +389,18 @@ export class MatriculasService {
    */
   async receberInscricao(dados: any): Promise<Inscricao> {
     const cpfLimpo = String(dados.cpf ?? '').replace(/\D/g, '');
+
+    // Auto-calcular idade e maior_18_anos a partir da data de nascimento
+    if (dados.data_nascimento) {
+      const idadeCalc = calcularIdade(dados.data_nascimento);
+      if (idadeCalc !== null) {
+        dados.idade = idadeCalc;
+        if (dados.maior_18_anos === undefined || dados.maior_18_anos === null) {
+          dados.maior_18_anos = idadeCalc >= 18;
+        }
+      }
+    }
+
     const ehMenor = dados.maior_18_anos === false || (dados.idade && parseInt(dados.idade) < 18);
 
     // ── Validações com notificação amigável em caso de falha ──────────
@@ -725,6 +754,17 @@ export class MatriculasService {
       const hoje = new Date();
       // Validação de campos obrigatórios
       if (!dados.nome_completo?.trim()) throw new BadRequestException('Nome completo é obrigatório.');
+
+      // Auto-calcular idade a partir da data de nascimento
+      if (dados.data_nascimento) {
+        const idadeCalc = calcularIdade(dados.data_nascimento);
+        if (idadeCalc !== null) {
+          dados.idade = idadeCalc;
+          if (dados.maior_18_anos === undefined || dados.maior_18_anos === null) {
+            dados.maior_18_anos = idadeCalc >= 18;
+          }
+        }
+      }
       
       // Verifica duplicidade de CPF apenas quando informado
       const cpfLimpo = dados.cpf?.replace(/\D/g, '') || null;
@@ -960,7 +1000,7 @@ export class MatriculasService {
    * Lista documentos de uma inscrição via doc_token, com status de completude.
    */
   async listarDocumentosPublico(token: string): Promise<{
-    inscricao: { id: number; nome_completo: string; status_matricula: string };
+    inscricao: { id: number; nome_completo: string; status_matricula: string; maior_18_anos: boolean };
     documentos: DocumentoInscricao[];
     tipos_enviados: string[];
     obrigatorios_pendentes: string[];
@@ -973,14 +1013,17 @@ export class MatriculasService {
       order: { createdAt: 'ASC' },
     });
 
+    const maior18 = inscricao.maior_18_anos ?? true;
+    const tiposObrigatorios = getTiposObrigatorios(maior18);
     const tiposEnviados = documentos.map(d => d.tipo);
-    const obrigatoriosPendentes = TIPOS_OBRIGATORIOS.filter(t => !tiposEnviados.includes(t));
+    const obrigatoriosPendentes = tiposObrigatorios.filter(t => !tiposEnviados.includes(t));
 
     return {
       inscricao: {
         id: inscricao.id,
         nome_completo: inscricao.nome_completo,
         status_matricula: inscricao.status_matricula,
+        maior_18_anos: maior18,
       },
       documentos,
       tipos_enviados: tiposEnviados,
@@ -1050,7 +1093,8 @@ export class MatriculasService {
       })
     ).map(d => d.tipo);
 
-    const todosObrigatorios = TIPOS_OBRIGATORIOS.every(t => tiposEnviados.includes(t));
+    const maior18 = inscricao.maior_18_anos ?? true;
+    const todosObrigatorios = getTiposObrigatorios(maior18).every(t => tiposEnviados.includes(t));
     if (todosObrigatorios && inscricao.status_matricula === StatusMatricula.AGUARDANDO_DOCUMENTOS) {
       inscricao.status_matricula = StatusMatricula.DOCUMENTOS_ENVIADOS;
       await this.inscricaoRepository.save(inscricao);
@@ -1063,12 +1107,15 @@ export class MatriculasService {
    * Lista documentos de uma inscrição diretamente pelo ID (uso admin).
    */
   async listarDocumentosPorId(inscricaoId: number) {
+    const inscricao = await this.inscricaoRepository.findOneBy({ id: inscricaoId });
+    const maior18 = inscricao?.maior_18_anos ?? true;
     const documentos = await this.documentoRepository.find({
       where: { inscricao_id: inscricaoId },
       order: { createdAt: 'ASC' },
     });
     const tiposEnviados = documentos.map(d => d.tipo);
-    const obrigatoriosPendentes = TIPOS_OBRIGATORIOS.filter(t => !tiposEnviados.includes(t));
+    const tiposObrigatorios = getTiposObrigatorios(maior18);
+    const obrigatoriosPendentes = tiposObrigatorios.filter(t => !tiposEnviados.includes(t));
     return {
       documentos,
       tipos_enviados: tiposEnviados,

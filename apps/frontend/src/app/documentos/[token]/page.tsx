@@ -29,6 +29,7 @@ interface StatusResponse {
     id: number;
     nome_completo: string;
     status_matricula: string;
+    maior_18_anos: boolean;
   };
   documentos: DocumentoEnviado[];
   tipos_enviados: string[];
@@ -38,28 +39,33 @@ interface StatusResponse {
 
 // ─── Configuração dos documentos ──────────────────────────────────────────────
 
-const DOCS_OBRIGATORIOS: { tipo: TipoDocumento; label: string; desc: string }[] = [
-  {
-    tipo: 'identidade',
-    label: 'Documento de Identidade',
-    desc: 'RG, CNH ou CTPS do aluno',
-  },
-  {
-    tipo: 'comprovante_residencia',
-    label: 'Comprovante de Residência',
-    desc: 'Conta de água, luz, gás ou fatura de cartão (últimos 3 meses)',
-  },
-  {
-    tipo: 'certidao_nascimento',
-    label: 'Certidão de Nascimento',
-    desc: 'Original ou cópia autenticada',
-  },
-  {
-    tipo: 'identidade_responsavel',
-    label: 'Identidade do Responsável',
-    desc: 'Para menores de 18 anos — RG ou CNH do responsável legal',
-  },
-];
+function getDocsObrigatorios(maior18: boolean): { tipo: TipoDocumento; label: string; desc: string }[] {
+  const base: { tipo: TipoDocumento; label: string; desc: string }[] = [
+    {
+      tipo: 'identidade',
+      label: 'Documento de Identidade',
+      desc: 'RG, CNH ou CTPS do aluno',
+    },
+    {
+      tipo: 'comprovante_residencia',
+      label: 'Comprovante de Residência',
+      desc: 'Conta de água, luz, gás ou fatura de cartão (últimos 3 meses)',
+    },
+  ];
+  if (!maior18) {
+    base.push({
+      tipo: 'certidao_nascimento',
+      label: 'Certidão de Nascimento',
+      desc: 'Original ou cópia autenticada',
+    });
+    base.push({
+      tipo: 'identidade_responsavel',
+      label: 'Identidade do Responsável',
+      desc: 'Para menores de 18 anos — RG ou CNH do responsável legal',
+    });
+  }
+  return base;
+}
 
 const DOC_OPCIONAL: { tipo: TipoDocumento; label: string; desc: string } = {
   tipo: 'declaracao_escolaridade',
@@ -547,9 +553,10 @@ export default function DocumentosPage() {
     );
   }
 
+  const docsObrigatorios = getDocsObrigatorios(status?.inscricao.maior_18_anos ?? true);
   const totalEnviados = (status?.tipos_enviados.length ?? 0);
-  const totalObrig = DOCS_OBRIGATORIOS.length;
-  const obrigEnviados = DOCS_OBRIGATORIOS.filter(d => status?.tipos_enviados.includes(d.tipo)).length;
+  const totalObrig = docsObrigatorios.length;
+  const obrigEnviados = docsObrigatorios.filter(d => status?.tipos_enviados.includes(d.tipo)).length;
   const pct = Math.round((obrigEnviados / totalObrig) * 100);
 
   return (
@@ -652,7 +659,7 @@ export default function DocumentosPage() {
             <span className="text-xs text-gray-400">* obrigatório</span>
           </div>
           <div className="space-y-3">
-            {DOCS_OBRIGATORIOS.map(d => (
+            {docsObrigatorios.map(d => (
               <DocCard
                 key={d.tipo}
                 label={d.label}
