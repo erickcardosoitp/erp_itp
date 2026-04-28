@@ -1,11 +1,10 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   DollarSign, TrendingUp, TrendingDown, Plus, Search, X,
   Edit3, Trash2, AlertCircle, RefreshCw, Settings2,
   FileBarChart2, ChevronDown, ChevronUp, Upload, CheckCircle2,
-  Camera, ScanLine,
 } from 'lucide-react';
 import api from '@/services/api';
 import { useAuth } from '@/context/auth-context';
@@ -605,110 +604,6 @@ function BoletosTab({ podeEscrever, podeEditar, podeExcluir }: { podeEscrever: b
     return () => clearTimeout(t);
   }, [pessoaBusca]);
 
-  // ── Scanner ──
-  const [scanner, setScanner] = useState(false);
-  const [scanResult, setScanResult] = useState<BarcodeInfo | null>(null);
-  const [scanError, setScanError] = useState<string | null>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const readerRef = useRef<any>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-
-  const pararCamera = () => {
-    try { readerRef.current?.reset?.(); } catch {}
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(t => t.stop());
-      streamRef.current = null;
-    }
-    if (videoRef.current) videoRef.current.srcObject = null;
-  };
-
-  useEffect(() => {
-    if (!scanner) { pararCamera(); return; }
-    let active = true;
-
-    const timer = setTimeout(async () => {
-      if (!active || !videoRef.current) return;
-
-      // Tenta BarcodeDetector nativo (Chrome/Edge/Android)
-      if ('BarcodeDetector' in window) {
-        try {
-          const detector = new (window as any).BarcodeDetector({
-            formats: ['itf', 'code_128', 'qr_code', 'code_39', 'code_93', 'pdf417'],
-          });
-          const stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 } },
-          });
-          if (!active) { stream.getTracks().forEach(t => t.stop()); return; }
-          streamRef.current = stream;
-          videoRef.current.srcObject = stream;
-          await videoRef.current.play();
-
-          const scanLoop = async () => {
-            if (!active) return;
-            try {
-              const codes = await detector.detect(videoRef.current!);
-              if (codes.length > 0 && active) {
-                const info = parsearCodigoBarras(codes[0].rawValue);
-                setScanResult(info);
-                pararCamera();
-                return;
-              }
-            } catch {}
-            if (active) requestAnimationFrame(scanLoop);
-          };
-          scanLoop();
-          return;
-        } catch { /* fallback */ }
-      }
-
-      // Fallback: @zxing/browser
-      try {
-        const { BrowserMultiFormatReader } = await import('@zxing/browser');
-        const reader = new BrowserMultiFormatReader(undefined, { delayBetweenScanAttempts: 200 } as any);
-        readerRef.current = reader;
-        let controls: any = null;
-        controls = await reader.decodeFromVideoDevice(undefined, videoRef.current, (result) => {
-          if (!active || !result) return;
-          const info = parsearCodigoBarras(result.getText());
-          setScanResult(info);
-          try { controls?.stop(); } catch {}
-        });
-      } catch {
-        if (active) setScanError('Câmera não disponível. Verifique as permissões ou insira o código manualmente.');
-      }
-    }, 250);
-
-    return () => {
-      active = false;
-      clearTimeout(timer);
-      pararCamera();
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scanner]);
-
-  const fecharScanner = () => {
-    pararCamera();
-    setScanner(false);
-    setScanResult(null);
-    setScanError(null);
-  };
-
-  const usarBoleto = (info: BarcodeInfo) => {
-    setForm((f: any) => ({
-      ...f,
-      cod_barras: info.raw,
-      ...(info.valor ? { valor: String(info.valor) } : {}),
-      ...(info.banco ? { credor: info.banco } : {}),
-      ...(info.vencimento ? { data_vencimento: info.vencimento } : {}),
-    }));
-    fecharScanner();
-    setModal(true);
-  };
-
-  const escaneiarNovamente = () => {
-    setScanResult(null);
-    setScanError(null);
-  };
 
   const carregar = useCallback(async () => {
     setLoading(true);
@@ -834,20 +729,12 @@ function BoletosTab({ podeEscrever, podeEditar, podeExcluir }: { podeEscrever: b
           </select>
         </div>
         {podeEscrever && (
-          <div className="flex gap-2">
-            <button
-              onClick={() => { setScanResult(null); setScanError(null); setScanner(true); }}
-              className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 rounded-xl text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
-            >
-              <Camera size={14}/> Escanear
-            </button>
-            <button
-              onClick={() => setModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 transition-colors"
-            >
-              <Plus size={14}/> Novo Boleto
-            </button>
-          </div>
+          <button
+            onClick={() => setModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 transition-colors"
+          >
+            <Plus size={14}/> Novo Boleto
+          </button>
         )}
       </div>
 
@@ -944,109 +831,6 @@ function BoletosTab({ podeEscrever, podeEditar, podeExcluir }: { podeEscrever: b
         </div>
       )}
 
-      {/* Modal Scanner */}
-      {scanner && (
-        <div className="fixed inset-0 z-[60] bg-black/80 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden">
-            <div className="flex items-center justify-between p-4 border-b border-slate-100 dark:border-slate-700">
-              <div className="flex items-center gap-2">
-                <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-900/30">
-                  <ScanLine size={16} className="text-emerald-600"/>
-                </div>
-                <h3 className="font-bold text-slate-800 dark:text-white text-sm">Escanear Código de Barras</h3>
-              </div>
-              <button onClick={fecharScanner} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400"><X size={18}/></button>
-            </div>
-
-            {!scanResult ? (
-              <>
-                <div className="relative bg-black" style={{ aspectRatio: '4/3' }}>
-                  <video ref={videoRef} className="w-full h-full object-cover" autoPlay playsInline muted />
-                  {!scanError && (
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                      <div className="w-64 h-28 relative">
-                        <div className="absolute inset-0 border-2 border-emerald-400/60 rounded-lg"/>
-                        <div className="absolute top-0 left-0 w-7 h-7 border-t-4 border-l-4 border-emerald-400 rounded-tl-lg"/>
-                        <div className="absolute top-0 right-0 w-7 h-7 border-t-4 border-r-4 border-emerald-400 rounded-tr-lg"/>
-                        <div className="absolute bottom-0 left-0 w-7 h-7 border-b-4 border-l-4 border-emerald-400 rounded-bl-lg"/>
-                        <div className="absolute bottom-0 right-0 w-7 h-7 border-b-4 border-r-4 border-emerald-400 rounded-br-lg"/>
-                        <div className="absolute inset-x-0 top-1/2 h-0.5 bg-emerald-400/70 -translate-y-1/2 animate-pulse"/>
-                      </div>
-                    </div>
-                  )}
-                  {scanError && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/80 p-6">
-                      <p className="text-white text-center text-sm">{scanError}</p>
-                    </div>
-                  )}
-                </div>
-                <div className="p-4 space-y-3">
-                  {!scanError && <p className="text-xs text-center text-slate-500">Aponte a câmera para o código de barras do boleto</p>}
-                  <div>
-                    <label className="text-xs font-semibold text-slate-500 block mb-1">Ou insira o código manualmente</label>
-                    <input
-                      placeholder="Cole os 44 ou 47 dígitos do boleto..."
-                      className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-800 font-mono"
-                      onChange={e => {
-                        const v = e.target.value.replace(/\D/g, '');
-                        if (v.length === 44 || v.length === 47) {
-                          setScanResult(parsearCodigoBarras(v));
-                        }
-                      }}
-                    />
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div className="p-5 space-y-4">
-                <div className="flex items-center gap-2 text-emerald-600">
-                  <CheckCircle2 size={18}/>
-                  <span className="font-bold text-sm">Boleto identificado!</span>
-                </div>
-                <div className="bg-slate-50 dark:bg-slate-800 rounded-2xl p-4 space-y-3">
-                  {scanResult.banco && (
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs text-slate-500">Banco</span>
-                      <span className="text-xs font-bold text-slate-800 dark:text-white">{scanResult.banco}</span>
-                    </div>
-                  )}
-                  {scanResult.valor !== null && (
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs text-slate-500">Valor</span>
-                      <span className="text-lg font-black text-emerald-600">{moeda(scanResult.valor)}</span>
-                    </div>
-                  )}
-                  {scanResult.vencimento && (
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs text-slate-500">Vencimento</span>
-                      <span className="text-xs font-bold text-slate-800 dark:text-white">{dataFmt(scanResult.vencimento)}</span>
-                    </div>
-                  )}
-                  <div className="pt-2 border-t border-slate-200 dark:border-slate-700">
-                    <p className="text-[10px] text-slate-400 font-mono break-all">{scanResult.raw}</p>
-                  </div>
-                </div>
-                {!scanResult.valido && (
-                  <p className="text-xs text-amber-700 bg-amber-50 dark:bg-amber-900/20 rounded-xl px-3 py-2">
-                    ⚠ Código não reconhecido como boleto bancário padrão. Será salvo assim mesmo.
-                  </p>
-                )}
-                <div className="flex gap-2">
-                  <button onClick={escaneiarNovamente}
-                    className="flex-1 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">
-                    Escanear novamente
-                  </button>
-                  <button onClick={() => usarBoleto(scanResult)}
-                    className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold">
-                    Usar estes dados
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
       {/* Modal novo boleto */}
       {modal && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
@@ -1128,17 +912,27 @@ function BoletosTab({ podeEscrever, podeEditar, podeExcluir }: { podeEscrever: b
                 <input type="date" value={form.data_emissao ?? ''} onChange={e => setForm((f: any) => ({ ...f, data_emissao: e.target.value }))}
                   className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-800" />
               </div>
-              <div>
+              <div className="col-span-2">
                 <label className="text-xs font-semibold text-slate-500 mb-1 block">Código de Barras</label>
-                <div className="flex gap-2">
-                  <input value={form.cod_barras ?? ''} onChange={e => setForm((f: any) => ({ ...f, cod_barras: e.target.value }))}
-                    className="flex-1 px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-800" placeholder="Linha digitável (44 ou 47 dígitos)" />
-                  <button type="button" onClick={() => { setScanResult(null); setScanError(null); setScanner(true); }}
-                    title="Escanear código de barras"
-                    className="px-3 py-2 bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 transition-colors">
-                    <Camera size={15}/>
-                  </button>
-                </div>
+                <input
+                  value={form.cod_barras ?? ''}
+                  onChange={e => {
+                    const raw = e.target.value;
+                    const digits = raw.replace(/\D/g, '');
+                    const update: any = { cod_barras: raw };
+                    if (digits.length === 44 || digits.length === 47) {
+                      const info = parsearCodigoBarras(digits);
+                      if (info.valido) {
+                        if (info.valor && !form.valor) update.valor = String(info.valor);
+                        if (info.vencimento && !form.data_vencimento) update.data_vencimento = info.vencimento;
+                        if (info.banco && !form.credor) update.credor = info.banco;
+                      }
+                    }
+                    setForm((f: any) => ({ ...f, ...update }));
+                  }}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-800 font-mono"
+                  placeholder="Bipe o código de barras ou cole os 44/47 dígitos"
+                />
                 {form.cod_barras && form.cod_barras.replace(/\D/g, '').length >= 44 && (() => {
                   const info = parsearCodigoBarras(form.cod_barras);
                   if (!info.valido) return null;
