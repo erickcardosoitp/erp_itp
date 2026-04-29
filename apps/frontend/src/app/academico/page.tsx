@@ -732,12 +732,6 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
   const [filtroSexo, setFiltroSexo] = useState('');
   const [filtroCidade, setFiltroCidade] = useState('');
   const [erroLoad, setErroLoad] = useState<string | null>(null);
-
-  // Debounce do campo nome: só dispara a busca 400ms após o usuário parar de digitar
-  useEffect(() => {
-    const t = setTimeout(() => setFiltroNome(inputNome), 400);
-    return () => clearTimeout(t);
-  }, [inputNome]);
   const [fichaAluno, setFichaAluno] = useState<any>(null);
   const [fichaAba, setFichaAba] = useState<'dados' | 'presenca'>('dados');
   const [dossieCandidato, setDossieCandidato] = useState<any>(null);
@@ -785,6 +779,12 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
     const curso = cursos.find(c => c.nome === filtroCursoNome);
     return curso ? t.curso_id === curso.id : false;
   });
+
+  // Debounce do campo nome: só dispara a busca 400ms após o usuário parar de digitar
+  useEffect(() => {
+    const t = setTimeout(() => setFiltroNome(inputNome), 400);
+    return () => clearTimeout(t);
+  }, [inputNome]);
 
   const load = useCallback(async () => {
     setLoading(true);
