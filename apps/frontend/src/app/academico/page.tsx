@@ -240,7 +240,13 @@ function GradeTab({ podeEditar, turmas }: { podeEditar: boolean; turmas: Turma[]
   }, []);
 
   const load = useCallback(async () => {
-    try { const r = await api.get('/academico/grade'); setGrade(r.data); } catch {}
+    try {
+      const r = await api.get('/academico/grade');
+      setGrade(r.data);
+      setErroGrade(null);
+    } catch (e: any) {
+      setErroGrade(e?.response?.data?.message || e?.message || 'Erro ao carregar grade horária.');
+    }
   }, []);
   useEffect(() => { load(); }, [load]);
 
@@ -316,6 +322,13 @@ function GradeTab({ podeEditar, turmas }: { podeEditar: boolean; turmas: Turma[]
 
   return (
     <div className="space-y-5">
+
+      {/* ── Erro de carregamento ─────────────────────────────────────────── */}
+      {erroGrade && grade.length === 0 && (
+        <div className="bg-red-50 border border-red-200 text-red-700 text-xs font-bold rounded-2xl px-4 py-3 flex items-center gap-2">
+          <X size={14} className="shrink-0"/> Erro ao carregar grade: {erroGrade}
+        </div>
+      )}
 
       {/* ── KPIs ─────────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -1777,6 +1790,7 @@ function TurmasTab({ cursos, professores, alunos }: { cursos: Curso[]; professor
   const [salvando, setSalvando] = useState(false);
   const [horariosDia, setHorariosDia] = useState<Record<number, HorarioDia>>({});
   const [gradeCardsTurma, setGradeCardsTurma] = useState<GradeCard[]>([]);
+  const [gradeLoaded, setGradeLoaded] = useState(false);
   const [showIncluir, setShowIncluir] = useState(false);
   const [incluirAlunoId, setIncluirAlunoId] = useState('');
   const [incluirTurmaId, setIncluirTurmaId] = useState('');
@@ -1826,6 +1840,7 @@ function TurmasTab({ cursos, professores, alunos }: { cursos: Curso[]; professor
     setErro(null);
     setHorariosDia({});
     setGradeCardsTurma([]);
+    setGradeLoaded(false);
     if (t) {
       setEditando(t);
       setForm({ ...t, cor: t.cor || '#7c3aed' });
@@ -1842,10 +1857,12 @@ function TurmasTab({ cursos, professores, alunos }: { cursos: Curso[]; professor
           };
         }
         setHorariosDia(horarios);
+        setGradeLoaded(true);
       } catch {}
     } else {
       setEditando(null);
       setForm({ ano: new Date().getFullYear().toString(), cor: '#7c3aed' });
+      setGradeLoaded(true);
     }
     setShowModal(true);
   };
@@ -1868,22 +1885,33 @@ function TurmasTab({ cursos, professores, alunos }: { cursos: Curso[]; professor
       if (editando) {
         await api.patch(`/academico/turmas/${editando.id}`, form);
         turmaId = editando.id;
-        // Remove grade cards antigos da turma e recria
-        await Promise.all(gradeCardsTurma.map(g => api.delete(`/academico/grade/${g.id}`).catch(() => {})));
+        if (gradeLoaded) {
+          const diasAtivos = Object.entries(horariosDia).filter(([, v]) => v.ativo && v.hora_inicio && v.hora_fim);
+          // Cria novos cards primeiro — se falhar, os antigos permanecem intactos
+          await Promise.all(diasAtivos.map(([dia, h]) =>
+            api.post('/academico/grade', {
+              turma_id: turmaId,
+              dia_semana: parseInt(dia),
+              horario_inicio: h.hora_inicio.length === 5 ? h.hora_inicio + ':00' : h.hora_inicio,
+              horario_fim:    h.hora_fim.length    === 5 ? h.hora_fim    + ':00' : h.hora_fim,
+            })
+          ));
+          // Só apaga os antigos após criação bem-sucedida
+          await Promise.all(gradeCardsTurma.map(g => api.delete(`/academico/grade/${g.id}`).catch(() => {})));
+        }
       } else {
         const r = await api.post('/academico/turmas', form);
         turmaId = r.data.id;
+        const diasAtivos = Object.entries(horariosDia).filter(([, v]) => v.ativo && v.hora_inicio && v.hora_fim);
+        await Promise.all(diasAtivos.map(([dia, h]) =>
+          api.post('/academico/grade', {
+            turma_id: turmaId,
+            dia_semana: parseInt(dia),
+            horario_inicio: h.hora_inicio.length === 5 ? h.hora_inicio + ':00' : h.hora_inicio,
+            horario_fim:    h.hora_fim.length    === 5 ? h.hora_fim    + ':00' : h.hora_fim,
+          })
+        ));
       }
-      // Cria novos grade cards para cada dia ativo
-      const diasAtivos = Object.entries(horariosDia).filter(([, v]) => v.ativo && v.hora_inicio && v.hora_fim);
-      await Promise.all(diasAtivos.map(([dia, h]) =>
-        api.post('/academico/grade', {
-          turma_id: turmaId,
-          dia_semana: parseInt(dia),
-          horario_inicio: h.hora_inicio.length === 5 ? h.hora_inicio + ':00' : h.hora_inicio,
-          horario_fim:    h.hora_fim.length    === 5 ? h.hora_fim    + ':00' : h.hora_fim,
-        }).catch(() => {})
-      ));
       setShowModal(false); await load();
     } catch (e: any) {
       const msg = e?.response?.data?.message || e?.message || 'Erro desconhecido ao salvar turma.';
