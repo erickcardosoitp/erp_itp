@@ -329,6 +329,27 @@ export class GenteService {
         `SELECT id, nome, cargo, foto FROM funcionarios WHERE id = $1`, [col.funcionario_id]);
       if (!func) return null;
 
+      // Colaborador isento de pagamento — aparece na folha com líquido 0
+      if (col.pagamento_isento) {
+        return {
+          colaborador_id: col.id,
+          nome: func.nome,
+          cargo: func.cargo,
+          foto: func.foto,
+          total_vr: 0,
+          total_proventos: 0,
+          vales_pendentes: 0,
+          qtd_vales_pendentes: 0,
+          outros_descontos: 0,
+          qtd_outros_descontos: 0,
+          total_descontos: 0,
+          liquido: 0,
+          recibo_id: null,
+          recibo_status: null,
+          pagamento_isento: true,
+        };
+      }
+
       const codigosCol = await this.listarCodigosColaborador(col.id);
       const totalVR = codigosCol.reduce((s, cc) => s + Number(cc.valor_efetivo ?? 0), 0);
       const totalProventos = totalVR;
@@ -359,7 +380,7 @@ export class GenteService {
       );
       const totalFaltas = faltasRows.reduce((s, f) => {
         const pct = Number(f.percentual_desconto ?? 100) / 100;
-        return s + Math.round((totalProventos / 30) * pct * 100) / 100;
+        return s + Math.round(totalProventos * pct * 100) / 100;
       }, 0);
       const qtdFaltas = faltasRows.length;
 
@@ -592,7 +613,7 @@ export class GenteService {
 
       for (const f of faltasDoMes) {
         const pct = Number(f.percentual_desconto ?? 100) / 100;
-        const valorDesc = Math.round((totalProventos / 30) * pct * 100) / 100;
+        const valorDesc = Math.round(totalProventos * pct * 100) / 100;
         if (valorDesc > 0) {
           descontos.push({
             codigo: 'FALTA',

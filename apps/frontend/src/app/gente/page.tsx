@@ -492,6 +492,12 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
           className="rounded border-slate-300 text-purple-600 focus:ring-purple-500" />
         <label htmlFor="jornada_flexivel" className="text-sm text-slate-700 dark:text-slate-300 cursor-pointer">Jornada flexível (sem horário fixo)</label>
       </div>
+      <div className="flex items-center gap-2 mb-1">
+        <input type="checkbox" id="pagamento_isento" checked={!!form.pagamento_isento}
+          onChange={e => setForm((f: any) => ({ ...f, pagamento_isento: e.target.checked }))}
+          className="rounded border-slate-300 text-orange-600 focus:ring-orange-500" />
+        <label htmlFor="pagamento_isento" className="text-sm text-orange-700 dark:text-orange-400 cursor-pointer font-semibold">Pagamento isento (não pago pelo instituto)</label>
+      </div>
       {!form.jornada_flexivel ? (
         <div className="grid grid-cols-2 gap-3">
           <FL label="Entrada"><input type="time" value={form.horario_entrada || ''} onChange={e => setForm((f: any) => ({ ...f, horario_entrada: e.target.value }))} className={ic} /></FL>
@@ -696,6 +702,7 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
                   </div>
                   <div className="flex items-center gap-2 flex-wrap justify-end">
                     <Badge label={c.tipo === 'voluntario' ? 'Voluntário' : 'Funcionário'} color={c.tipo === 'voluntario' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' : 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300'} />
+                    {c.pagamento_isento && <Badge label="Isento" color="bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400" />}
                     {c.jornada_flexivel ? <span className="text-xs text-slate-400 hidden sm:block">Jornada flexível</span> : c.horario_entrada && <span className="text-xs text-slate-400 hidden sm:block">{c.horario_entrada}→{c.horario_saida}</span>}
                     <button onClick={() => abrirCodigosColaborador(c)} className="p-1.5 text-slate-400 hover:text-emerald-600 transition" title="Códigos VR"><Tag size={14} /></button>
                     <button onClick={() => setDocModalColaborador({ id: c.id, nome: c.funcionario?.nome ?? '' })} className="p-1.5 text-slate-400 hover:text-blue-600 transition" title="Documentos"><Paperclip size={14} /></button>
@@ -3032,7 +3039,11 @@ function FinanceiroTab({ reload }: { reload: number }) {
                           ? <span className="text-orange-600 font-semibold">{fmt.moeda(c.outros_descontos)} <span className="text-xs text-orange-400">({c.qtd_outros_descontos})</span></span>
                           : <span className="text-slate-400">—</span>}
                       </td>
-                      <td className="px-4 py-3 font-black text-emerald-600 dark:text-emerald-400">{fmt.moeda(c.liquido)}</td>
+                      <td className="px-4 py-3 font-black">
+                        {c.pagamento_isento
+                          ? <span className="text-xs font-bold text-orange-600 bg-orange-50 border border-orange-200 rounded-lg px-2 py-1">Isento</span>
+                          : <span className="text-emerald-600 dark:text-emerald-400">{fmt.moeda(c.liquido)}</span>}
+                      </td>
                       <td className="px-4 py-3">
                         {c.recibo_status
                           ? <Badge label={c.recibo_status === 'pago' ? '✓ Pago' : 'Pendente'} color={c.recibo_status === 'pago' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'} />

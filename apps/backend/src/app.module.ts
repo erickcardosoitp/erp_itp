@@ -720,6 +720,11 @@ export class AppModule implements OnModuleInit {
       `);
       this.logger.log('✅ Coluna gente_colaboradores.valor_passagem aplicada (IF NOT EXISTS)');
       await this.dataSource.query(`
+        ALTER TABLE IF EXISTS gente_colaboradores
+          ADD COLUMN IF NOT EXISTS pagamento_isento BOOLEAN DEFAULT false
+      `);
+      this.logger.log('✅ Coluna gente_colaboradores.pagamento_isento aplicada (IF NOT EXISTS)');
+      await this.dataSource.query(`
         ALTER TABLE IF EXISTS funcionarios
           ADD COLUMN IF NOT EXISTS data_nascimento DATE,
           ADD COLUMN IF NOT EXISTS celular TEXT,
