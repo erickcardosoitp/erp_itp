@@ -23,16 +23,15 @@ export class AuthController {
       const result = await this.authService.login(identifier, password, !!lembrar);
 
       const isProd = process.env.NODE_ENV === 'production';
-      // Se "lembrar": cookie de 30 dias; caso contrário, session cookie (some ao fechar browser)
       const cookieOpts: Record<string, any> = {
         httpOnly: true,
         secure: isProd,
         sameSite: 'lax',
         path: '/',
+        maxAge: lembrar
+          ? 30 * 24 * 60 * 60 * 1000  // 30 dias em ms
+          : 8 * 60 * 60 * 1000,        // 8h em ms
       };
-      if (lembrar) {
-        cookieOpts.maxAge = 30 * 24 * 60 * 60; // 30 dias em segundos
-      }
 
       res.cookie('itp_token', result.access_token, cookieOpts);
 

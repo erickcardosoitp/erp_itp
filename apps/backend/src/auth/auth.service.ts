@@ -133,7 +133,7 @@ export class AuthService {
       const payloadComFlag = { ...payload, deve_trocar_senha: deveTracar };
 
       // "Lembrar acesso" → token de 30 dias; caso contrário → 8 horas
-      const expiresIn = lembrar ? '30d' : '3h';
+      const expiresIn = lembrar ? '30d' : '8h';
 
       return {
         access_token: await this.jwtService.signAsync(payloadComFlag, { expiresIn }),
