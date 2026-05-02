@@ -176,19 +176,24 @@ export class AcademicoService {
 
   // ── GRADE HORÁRIA ─────────────────────────────────────────────────────────
 
-  listarGrade() {
+  async listarGrade() {
     this.logger.log('Listando grade horária');
-    return this.dataSource.query(`
-      SELECT g.*,
-        COALESCE(t.nome, g.nome_turma) AS nome_turma,
-        COALESCE(p.nome, u.nome, f.nome, g.nome_professor) AS nome_professor
-      FROM grade_horaria g
-      LEFT JOIN turmas t ON t.id::text = g.turma_id
-      LEFT JOIN professores p ON p.id::text = t.professor_id::text
-      LEFT JOIN usuarios u ON u.id::text = t.professor_id::text
-      LEFT JOIN funcionarios f ON f.id::text = t.professor_id::text
-      ORDER BY g.dia_semana ASC, g.horario_inicio ASC NULLS LAST
-    `);
+    try {
+      return await this.dataSource.query(`
+        SELECT g.*,
+          COALESCE(t.nome, g.nome_turma) AS nome_turma,
+          COALESCE(p.nome, u.nome, f.nome, g.nome_professor) AS nome_professor
+        FROM grade_horaria g
+        LEFT JOIN turmas t ON t.id::text = g.turma_id
+        LEFT JOIN professores p ON p.id::text = t.professor_id::text
+        LEFT JOIN usuarios u ON u.id::text = t.professor_id::text
+        LEFT JOIN funcionarios f ON f.id::text = t.professor_id::text
+        ORDER BY g.dia_semana ASC, g.horario_inicio ASC NULLS LAST
+      `);
+    } catch (err: any) {
+      this.logger.error(`[listarGrade] ERRO SQL: ${err.message} | detail: ${err.detail} | hint: ${err.hint}`);
+      throw err;
+    }
   }
 
   async criarCardGrade(dto: Partial<GradeHoraria>) {
