@@ -41,7 +41,7 @@ interface PresencaSessao { id: string; turma_id: string; turma_nome?: string; da
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
-const DIAS_SEMANA = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+const DIAS_SEMANA = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta'];
 
 const HORARIOS: Array<{ label: string; value?: string; lanche?: boolean }> = [
   { label: '8:30',   value: '08:30' },
@@ -516,8 +516,8 @@ function GradeTab({ podeEditar, turmas }: { podeEditar: boolean; turmas: Turma[]
                                   <Clock size={6} className="shrink-0 opacity-70"/>
                                   {card.horario_inicio?.slice(0,5)}–{card.horario_fim?.slice(0,5)}
                                 </div>
-                                {height > 66 && card.nome_professor && cols === 1 && (
-                                  <div className="text-[8px] text-white/70 truncate flex items-center gap-0.5 mt-auto">
+                                {card.nome_professor && (
+                                  <div className={`text-white/80 truncate flex items-center gap-0.5 mt-0.5 ${cols > 1 ? 'text-[7px]' : 'text-[8px]'}`}>
                                     <User size={6} className="shrink-0 opacity-60"/>
                                     {card.nome_professor}
                                   </div>
@@ -1828,7 +1828,7 @@ interface UsuarioProf { id: string; nome: string; email?: string; grupo_nome?: s
 interface HorarioDia { ativo: boolean; hora_inicio: string; hora_fim: string; }
 const DIAS_GRADE = [
   { idx: 1, label: 'Segunda' }, { idx: 2, label: 'Terça' }, { idx: 3, label: 'Quarta' },
-  { idx: 4, label: 'Quinta' }, { idx: 5, label: 'Sexta' }, { idx: 6, label: 'Sábado' },
+  { idx: 4, label: 'Quinta' }, { idx: 5, label: 'Sexta' },
 ];
 
 function TurmasTab({ cursos, professores, alunos }: { cursos: Curso[]; professores: Professor[]; alunos: Aluno[] }) {
