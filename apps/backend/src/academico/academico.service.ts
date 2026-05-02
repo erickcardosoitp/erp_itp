@@ -184,15 +184,15 @@ export class AcademicoService {
       return await this.dataSource.query(`
         SELECT g.*,
           COALESCE(
-            (SELECT nome FROM turmas WHERE id::text = g.turma_id LIMIT 1),
+            (SELECT nome FROM turmas WHERE id::text = g.turma_id::text LIMIT 1),
             g.nome_turma
           ) AS nome_turma,
           COALESCE(
             (SELECT nome FROM usuarios WHERE id::text = (
-              SELECT professor_id::text FROM turmas WHERE id::text = g.turma_id LIMIT 1
+              SELECT professor_id::text FROM turmas WHERE id::text = g.turma_id::text LIMIT 1
             ) LIMIT 1),
             (SELECT nome FROM funcionarios WHERE id::text = (
-              SELECT professor_id::text FROM turmas WHERE id::text = g.turma_id LIMIT 1
+              SELECT professor_id::text FROM turmas WHERE id::text = g.turma_id::text LIMIT 1
             ) LIMIT 1),
             g.nome_professor
           ) AS nome_professor
