@@ -163,7 +163,9 @@ export class AcademicoService {
     // Sanitize: empty string em campos UUID deve virar null (evita erro no PostgreSQL)
     if (dto.professor_id === '') (dto as any).professor_id = null;
     if (dto.curso_id === '') (dto as any).curso_id = null;
-    await this.turmaRepo.update(id, dto);
+    // Remove campos virtuais que não existem na entidade
+    const { total_alunos: _ta, ...dtoLimpo } = dto as any;
+    await this.turmaRepo.update(id, dtoLimpo);
     return this.turmaRepo.findOneByOrFail({ id });
   }
 
@@ -181,17 +183,24 @@ export class AcademicoService {
     try {
       return await this.dataSource.query(`
         SELECT g.*,
-          COALESCE(t.nome, g.nome_turma) AS nome_turma,
-          COALESCE(p.nome, u.nome, f.nome, g.nome_professor) AS nome_professor
+          COALESCE(
+            (SELECT nome FROM turmas WHERE id::text = g.turma_id LIMIT 1),
+            g.nome_turma
+          ) AS nome_turma,
+          COALESCE(
+            (SELECT nome FROM usuarios WHERE id::text = (
+              SELECT professor_id::text FROM turmas WHERE id::text = g.turma_id LIMIT 1
+            ) LIMIT 1),
+            (SELECT nome FROM funcionarios WHERE id::text = (
+              SELECT professor_id::text FROM turmas WHERE id::text = g.turma_id LIMIT 1
+            ) LIMIT 1),
+            g.nome_professor
+          ) AS nome_professor
         FROM grade_horaria g
-        LEFT JOIN turmas t ON t.id::text = g.turma_id
-        LEFT JOIN professores p ON p.id::text = t.professor_id::text
-        LEFT JOIN usuarios u ON u.id::text = t.professor_id::text
-        LEFT JOIN funcionarios f ON f.id::text = t.professor_id::text
         ORDER BY g.dia_semana ASC, g.horario_inicio ASC NULLS LAST
       `);
     } catch (err: any) {
-      this.logger.error(`[listarGrade] ERRO SQL: ${err.message} | detail: ${err.detail} | hint: ${err.hint}`);
+      this.logger.error(`[listarGrade] ERRO SQL: ${err.message}`);
       throw err;
     }
   }
