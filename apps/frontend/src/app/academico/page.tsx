@@ -203,6 +203,40 @@ function timeToMinsGrade(t: string) {
   return h * 60 + m;
 }
 
+/** Agrupa cards sobrepostos e retorna col/cols para posicionamento lado a lado. */
+function computeCardLayout(cards: GradeCard[]): Map<string, { col: number; cols: number }> {
+  const result = new Map<string, { col: number; cols: number }>();
+  if (!cards.length) return result;
+
+  const sorted = [...cards]
+    .filter(c => c.horario_inicio)
+    .sort((a, b) => timeToMinsGrade(a.horario_inicio) - timeToMinsGrade(b.horario_inicio));
+
+  // Agrupa em clusters: cards que se sobrepõem com qualquer card do cluster
+  const clusters: { cards: GradeCard[]; maxEnd: number }[] = [];
+  for (const card of sorted) {
+    const start = timeToMinsGrade(card.horario_inicio);
+    const end   = card.horario_fim ? timeToMinsGrade(card.horario_fim) : start + 60;
+    const cluster = [...clusters].reverse().find(c => c.maxEnd > start);
+    if (cluster) { cluster.cards.push(card); cluster.maxEnd = Math.max(cluster.maxEnd, end); }
+    else clusters.push({ cards: [card], maxEnd: end });
+  }
+
+  // Distribui colunas dentro de cada cluster (greedy)
+  for (const { cards: cc } of clusters) {
+    const colEnds: number[] = [];
+    for (const card of cc) {
+      const start = timeToMinsGrade(card.horario_inicio);
+      const end   = card.horario_fim ? timeToMinsGrade(card.horario_fim) : start + 60;
+      let col = colEnds.findIndex(e => e <= start);
+      if (col === -1) col = colEnds.length;
+      colEnds[col] = end;
+      result.set(card.id, { col, cols: cc.length });
+    }
+  }
+  return result;
+}
+
 /**
  * Converte um horário (HH:MM ou HH:MM:SS) em pixels Y dentro da grade.
  * Interpola para horários que não estejam exatamente no array HORARIOS.
@@ -438,51 +472,67 @@ function GradeTab({ podeEditar, turmas }: { podeEditar: boolean; turmas: Turma[]
                         />
                       ))}
 
-                      {cardsForDay.filter(card => card.horario_inicio).map(card => {
-                        const topY   = timeToPixelGrade(card.horario_inicio!);
-                        const endY   = card.horario_fim ? timeToPixelGrade(card.horario_fim) : topY + GRADE_ROW_H;
-                        const top    = topY + 3;
-                        const height = Math.max(endY - topY, GRADE_ROW_H - 6) - 6;
-                        const isDragging = dragCard?.id === card.id;
-                        return (
-                          <div key={card.id}
-                            draggable={podeEditar}
-                            onDragStart={() => setDragCard(card)}
-                            onDragEnd={() => setDragCard(null)}
-                            className={`absolute rounded-xl text-white z-10 group/card overflow-hidden transition-all duration-150
-                              ${isDragging ? 'opacity-40 scale-95' : 'hover:z-50 hover:shadow-xl hover:scale-[1.03] hover:-translate-y-0.5 shadow-md shadow-black/10'}`}
-                            style={{
-                              top, height, left: '3px', right: '3px',
-                              backgroundColor: card.cor || '#7c3aed',
-                              cursor: podeEditar ? 'grab' : 'default',
-                              backgroundImage: `linear-gradient(160deg, color-mix(in srgb, ${card.cor || '#7c3aed'} 80%, white) 0%, ${card.cor || '#7c3aed'} 60%)`,
-                            }}>
-                            <div className="absolute inset-x-0 top-0 h-px bg-white/30" />
-                            {podeEditar && (
-                              <button onClick={() => handleDeletar(card.id)}
-                                className="absolute top-1.5 right-1.5 bg-black/20 hover:bg-black/40 rounded-full p-0.5 opacity-0 group-hover/card:opacity-100 transition-all z-20">
-                                <X size={8}/>
-                              </button>
-                            )}
-                            <div className="p-2 h-full flex flex-col gap-0.5">
-                              <div className="text-[10px] font-black leading-tight line-clamp-2 drop-shadow-sm">
-                                {card.nome_turma || card.nome_curso || '–'}
-                              </div>
-                              <div className="text-[9px] font-semibold text-white/70 tabular-nums flex items-center gap-1 mt-0.5">
-                                <Clock size={7} className="shrink-0 opacity-70"/>
-                                {card.horario_inicio?.slice(0,5)}–{card.horario_fim?.slice(0,5)}
-                                {card.sala && <span className="text-white/50 ml-0.5">· {card.sala}</span>}
-                              </div>
-                              {height > 66 && card.nome_professor && (
-                                <div className="text-[9px] text-white/75 truncate flex items-center gap-1 mt-auto">
-                                  <User size={7} className="shrink-0 opacity-60"/>
-                                  {card.nome_professor}
-                                </div>
+                      {(() => {
+                        const validCards = cardsForDay.filter(c => c.horario_inicio);
+                        const layout = computeCardLayout(validCards);
+                        return validCards.map(card => {
+                          const topY  = timeToPixelGrade(card.horario_inicio!);
+                          const endY  = card.horario_fim ? timeToPixelGrade(card.horario_fim) : topY + GRADE_ROW_H;
+                          const top   = topY + 3;
+                          const height = Math.max(endY - topY, GRADE_ROW_H - 6) - 6;
+                          const isDragging = dragCard?.id === card.id;
+                          const { col, cols } = layout.get(card.id) ?? { col: 0, cols: 1 };
+                          const GAP = 3;
+                          const colW = `calc(${100 / cols}% - ${GAP * (1 + 1 / cols)}px)`;
+                          const leftPx = `calc(${(col / cols) * 100}% + ${GAP}px)`;
+                          return (
+                            <div key={card.id}
+                              draggable={podeEditar}
+                              onDragStart={() => setDragCard(card)}
+                              onDragEnd={() => setDragCard(null)}
+                              title={`${card.nome_turma || card.nome_curso || ''}${card.nome_professor ? ' · ' + card.nome_professor : ''}${card.sala ? ' · Sala ' + card.sala : ''}`}
+                              className={`absolute rounded-xl text-white z-10 group/card overflow-hidden transition-all duration-150
+                                ${isDragging ? 'opacity-40 scale-95' : 'hover:z-50 hover:shadow-xl hover:scale-[1.02] hover:-translate-y-0.5 shadow-md shadow-black/10'}`}
+                              style={{
+                                top, height,
+                                left: leftPx,
+                                width: colW,
+                                backgroundColor: card.cor || '#7c3aed',
+                                cursor: podeEditar ? 'grab' : 'default',
+                                backgroundImage: `linear-gradient(160deg, color-mix(in srgb, ${card.cor || '#7c3aed'} 80%, white) 0%, ${card.cor || '#7c3aed'} 60%)`,
+                              }}>
+                              <div className="absolute inset-x-0 top-0 h-px bg-white/30" />
+                              {podeEditar && (
+                                <button onClick={() => handleDeletar(card.id)}
+                                  className="absolute top-1 right-1 bg-black/20 hover:bg-black/40 rounded-full p-0.5 opacity-0 group-hover/card:opacity-100 transition-all z-20">
+                                  <X size={8}/>
+                                </button>
                               )}
+                              <div className="p-1.5 h-full flex flex-col gap-0.5 overflow-hidden">
+                                <div className={`font-black leading-tight drop-shadow-sm ${cols > 1 ? 'text-[9px] line-clamp-1' : 'text-[10px] line-clamp-2'}`}>
+                                  {card.nome_turma || card.nome_curso || '–'}
+                                </div>
+                                <div className="text-[8px] font-semibold text-white/75 tabular-nums flex items-center gap-0.5 mt-0.5">
+                                  <Clock size={6} className="shrink-0 opacity-70"/>
+                                  {card.horario_inicio?.slice(0,5)}–{card.horario_fim?.slice(0,5)}
+                                </div>
+                                {height > 66 && card.nome_professor && cols === 1 && (
+                                  <div className="text-[8px] text-white/70 truncate flex items-center gap-0.5 mt-auto">
+                                    <User size={6} className="shrink-0 opacity-60"/>
+                                    {card.nome_professor}
+                                  </div>
+                                )}
+                                {card.sala && cols === 1 && height > 50 && (
+                                  <div className="text-[8px] text-white/60 truncate flex items-center gap-0.5">
+                                    <MapPin size={6} className="shrink-0 opacity-60"/>
+                                    {card.sala}
+                                  </div>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        );
-                      })}
+                          );
+                        });
+                      })()}
                     </div>
                   </div>
                 );
