@@ -259,6 +259,37 @@ export class AppModule implements OnModuleInit {
 
       // ── Tabelas do módulo Acadêmico ───────────────────────────────────────
       await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS professores (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          nome TEXT NOT NULL,
+          especialidade TEXT,
+          email TEXT,
+          cpf TEXT,
+          data_nascimento DATE,
+          celular TEXT,
+          sexo TEXT,
+          raca_cor TEXT,
+          escolaridade TEXT,
+          cep TEXT,
+          numero_residencia TEXT,
+          complemento TEXT,
+          estado TEXT,
+          telefone_emergencia_1 TEXT,
+          telefone_emergencia_2 TEXT,
+          possui_deficiencia BOOLEAN DEFAULT false,
+          deficiencia_descricao TEXT,
+          possui_alergias BOOLEAN DEFAULT false,
+          alergias_descricao TEXT,
+          usa_medicamentos BOOLEAN DEFAULT false,
+          medicamentos_descricao TEXT,
+          interesse_cursos BOOLEAN DEFAULT false,
+          ativo BOOLEAN DEFAULT true,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `);
+      this.logger.log('✅ Tabela professores criada (IF NOT EXISTS)');
+      await this.dataSource.query(`
         CREATE TABLE IF NOT EXISTS grade_horaria (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           dia_semana INT,
