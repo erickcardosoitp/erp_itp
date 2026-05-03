@@ -1202,6 +1202,127 @@ export class AcademicoService {
     }));
   }
 
+  /**
+   * Diário de Classe — matriz aluno × sessão para uma turma.
+   * Cada célula recebe um código: P=presente, F=falta, J=justificada, I=isento, '-'=sem registro.
+   */
+  async diarioDeClasseTurma(turmaId: string, filtros: { data_ini?: string; data_fim?: string }) {
+    this.logger.log(`Diário de classe turma=${turmaId}`);
+
+    // 1. Turma + curso + professor (consulta única, tolerante a coluna inexistente)
+    const turmaRows = await this.dataSource.query(
+      `SELECT t.id::text AS id, t.nome, t.turno, t.ano, t.cor,
+              c.nome AS curso_nome,
+              COALESCE(u.nome, p.nome, f.nome, t.nome_professor) AS professor_nome
+         FROM turmas t
+    LEFT JOIN cursos c       ON c.id::text = t.curso_id::text
+    LEFT JOIN usuarios u     ON u.id::text = t.professor_id::text
+    LEFT JOIN professores p  ON p.id::text = t.professor_id::text
+    LEFT JOIN funcionarios f ON f.id::text = t.professor_id::text
+        WHERE t.id::text = $1
+        LIMIT 1`,
+      [turmaId],
+    ).catch(async () => {
+      // Fallback caso alguma coluna não exista no schema atual
+      return this.dataSource.query(
+        `SELECT t.id::text AS id, t.nome, t.turno, t.ano FROM turmas t WHERE t.id::text = $1 LIMIT 1`,
+        [turmaId],
+      );
+    });
+    const turma = turmaRows[0];
+    if (!turma) throw new NotFoundException('Turma não encontrada');
+
+    // 2. Alunos atuais da turma (status='ativo')
+    const alunos = await this.dataSource.query(
+      `SELECT a.id::text AS id, a.nome_completo, a.numero_matricula, a.foto_url
+         FROM turma_alunos ta
+         JOIN alunos a ON a.id::text = ta.aluno_id::text
+        WHERE ta.turma_id::text = $1 AND ta.status = 'ativo'
+        ORDER BY a.nome_completo ASC`,
+      [turmaId],
+    ).catch(() => this.dataSource.query(
+      `SELECT a.id::text AS id, a.nome_completo, a.numero_matricula
+         FROM turma_alunos ta
+         JOIN alunos a ON a.id::text = ta.aluno_id::text
+        WHERE ta.turma_id::text = $1 AND ta.status = 'ativo'
+        ORDER BY a.nome_completo ASC`,
+      [turmaId],
+    ));
+
+    // 3. Sessões da turma (com filtros de data)
+    const sParams: any[] = [turmaId];
+    let sWhere = `s.turma_id::text = $1`;
+    if (filtros.data_ini) { sParams.push(filtros.data_ini); sWhere += ` AND s.data >= $${sParams.length}`; }
+    if (filtros.data_fim) { sParams.push(filtros.data_fim); sWhere += ` AND s.data <= $${sParams.length}`; }
+    const sessoes = await this.dataSource.query(
+      `SELECT s.id::text AS id, s.data, s.tema_aula, s.conteudo_abordado, s.usuario_nome,
+              s.total_presentes, s.total_ausentes
+         FROM presenca_sessoes s
+        WHERE ${sWhere}
+        ORDER BY s.data ASC, s.created_at ASC`,
+      sParams,
+    );
+
+    // 4. Registros de presença para essas sessões
+    const sessaoIds = sessoes.map((s: any) => s.id);
+    const presencas: Record<string, Record<string, 'P' | 'F' | 'J' | 'I'>> = {};
+    if (sessaoIds.length > 0) {
+      const regs = await this.dataSource.query(
+        `SELECT sessao_id::text AS sessao_id, aluno_id::text AS aluno_id, descricao, isento, justificada
+           FROM diario_academico
+          WHERE tipo = 'Presença' AND sessao_id::text = ANY($1::text[])`,
+        [sessaoIds],
+      );
+      for (const r of regs) {
+        if (!r.aluno_id) continue;
+        let codigo: 'P' | 'F' | 'J' | 'I' = 'F';
+        if (r.isento)             codigo = 'I';
+        else if (r.justificada)   codigo = 'J';
+        else if (r.descricao === 'Presente') codigo = 'P';
+        else                      codigo = 'F';
+        if (!presencas[r.sessao_id]) presencas[r.sessao_id] = {};
+        presencas[r.sessao_id][r.aluno_id] = codigo;
+      }
+    }
+
+    // 5. Estatísticas por aluno
+    const stats: Record<string, { p: number; f: number; j: number; i: number; total: number }> = {};
+    for (const a of alunos) {
+      stats[a.id] = { p: 0, f: 0, j: 0, i: 0, total: 0 };
+    }
+    for (const sid of sessaoIds) {
+      const cells = presencas[sid] || {};
+      for (const a of alunos) {
+        const c = cells[a.id];
+        if (!c) continue;
+        stats[a.id].total++;
+        if (c === 'P') stats[a.id].p++;
+        else if (c === 'F') stats[a.id].f++;
+        else if (c === 'J') stats[a.id].j++;
+        else if (c === 'I') stats[a.id].i++;
+      }
+    }
+
+    return {
+      turma,
+      alunos: alunos.map((a: any) => ({
+        ...a,
+        presencas: stats[a.id].p,
+        faltas: stats[a.id].f,
+        justificadas: stats[a.id].j,
+        isentos: stats[a.id].i,
+        total_aulas: stats[a.id].total,
+        pct_presenca: stats[a.id].total > 0
+          ? Math.round(100 * stats[a.id].p / Math.max(1, stats[a.id].total - stats[a.id].i))
+          : null,
+      })),
+      sessoes: sessoes.map((s: any) => ({
+        ...s,
+        presencas: presencas[s.id] || {},
+      })),
+    };
+  }
+
   // ── CHAMADA PÚBLICA (via link sem autenticação JWT) ───────────────────────
 
   validarTokenChamada(token?: string) {

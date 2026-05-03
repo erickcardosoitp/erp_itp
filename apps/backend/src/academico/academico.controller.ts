@@ -336,6 +336,12 @@ export class AcademicoController {
   @ModuloPerm('academico', 'visualizar')
   getRegistrosSessao(@Param('id') id: string) { return this.svc.listarRegistrosSessao(id); }
 
+  @Get('presenca/diario-turma/:turmaId')
+  @ModuloPerm('academico', 'visualizar')
+  diarioDeClasseTurma(@Param('turmaId') turmaId: string, @Query() q: any) {
+    return this.svc.diarioDeClasseTurma(turmaId, { data_ini: q.data_ini, data_fim: q.data_fim });
+  }
+
   @Get('presenca')
   @ModuloPerm('academico', 'visualizar')
   getPresenca(@Query() q: any) { return this.svc.listarPresenca(q); }
