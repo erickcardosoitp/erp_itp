@@ -430,6 +430,12 @@ export class AcademicoService {
     if (cpfLimpo) {
       const duplicado = await this.alunoRepo.findOneBy({ cpf: cpfLimpo });
       if (duplicado) throw new ConflictException(`CPF já cadastrado para o aluno: ${duplicado.nome_completo}`);
+    } else if (dto.nome_completo && dto.data_nascimento) {
+      const [dup] = await this.dataSource.query(
+        `SELECT id, nome_completo FROM alunos WHERE LOWER(TRIM(nome_completo)) = LOWER(TRIM($1)) AND data_nascimento = $2 AND ativo = true LIMIT 1`,
+        [dto.nome_completo, dto.data_nascimento],
+      );
+      if (dup) throw new ConflictException(`Aluno com mesmo nome e data de nascimento já cadastrado: ${dup.nome_completo}`);
     }
 
     // Insere apenas os campos escalares — sem spread de relações do TypeORM
@@ -1180,6 +1186,34 @@ export class AcademicoService {
       cargo_minimo: 8,
     }).catch(() => {});
     return aluno;
+  }
+
+  async detectarDuplicados() {
+    const [porCpf, porNome] = await Promise.all([
+      this.dataSource.query(`
+        SELECT cpf,
+               json_agg(json_build_object('id', id, 'nome', nome_completo, 'matricula', numero_matricula,
+                 'ativo', ativo, 'created_at', "createdAt"::text) ORDER BY "createdAt") AS alunos
+        FROM alunos
+        WHERE cpf IS NOT NULL AND cpf <> ''
+        GROUP BY cpf HAVING COUNT(*) > 1
+      `),
+      this.dataSource.query(`
+        SELECT LOWER(TRIM(nome_completo)) AS nome_chave,
+               data_nascimento::text AS data_nascimento,
+               json_agg(json_build_object('id', id, 'nome', nome_completo, 'matricula', numero_matricula,
+                 'ativo', ativo, 'cpf', cpf, 'created_at', "createdAt"::text) ORDER BY "createdAt") AS alunos
+        FROM alunos
+        WHERE data_nascimento IS NOT NULL
+        GROUP BY LOWER(TRIM(nome_completo)), data_nascimento HAVING COUNT(*) > 1
+      `),
+    ]);
+    const parse = (r: any) => typeof r.alunos === 'string' ? JSON.parse(r.alunos) : r.alunos;
+    return {
+      por_cpf:  porCpf.map((r: any)  => ({ tipo: 'cpf',  chave: r.cpf, alunos: parse(r) })),
+      por_nome: porNome.map((r: any) => ({ tipo: 'nome', chave: `${r.nome_chave} / ${r.data_nascimento}`, alunos: parse(r) })),
+      total:    porCpf.length + porNome.length,
+    };
   }
 
   async listarAlunosPendentes() {

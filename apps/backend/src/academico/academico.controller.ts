@@ -243,6 +243,10 @@ export class AcademicoController {
   @ModuloPerm('academico', 'visualizar')
   getPendentes() { return this.svc.listarAlunosPendentes(); }
 
+  @Get('alunos/duplicados')
+  @ModuloPerm('academico', 'visualizar')
+  getDuplicados() { return this.svc.detectarDuplicados(); }
+
   @Get('documentos/acervo')
   @ModuloPerm('academico', 'visualizar')
   acervoDocumentos() { return this.svc.acervoDocumentos(); }

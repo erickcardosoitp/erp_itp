@@ -808,6 +808,9 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
   const [buscandoCepFicha, setBuscandoCepFicha] = useState(false);
   const [pendentes, setPendentes] = useState<any[]>([]);
   const [showPendentes, setShowPendentes] = useState(true);
+  const [duplicados, setDuplicados] = useState<{ por_cpf: any[]; por_nome: any[]; total: number } | null>(null);
+  const [showDuplicados, setShowDuplicados] = useState(false);
+  const [inativandoDupId, setInativandoDupId] = useState<string | null>(null);
 
   const buscarCepFicha = useCallback(async (cep: string) => {
     const limpo = cep.replace(/\D/g, '');
@@ -875,6 +878,7 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
 
   useEffect(() => {
     api.get('/academico/alunos/pendentes').then(r => setPendentes(r.data)).catch(() => {});
+    api.get('/academico/alunos/duplicados').then(r => setDuplicados(r.data)).catch(() => {});
   }, []);
 
   const verFicha = async (id: string) => {
@@ -1047,6 +1051,62 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
                   </div>
                 );
               })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Cadastros Duplicados ─────────────────────────────────────────────── */}
+      {duplicados && duplicados.total > 0 && (
+        <div className="bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800/40 rounded-2xl overflow-hidden">
+          <button onClick={() => setShowDuplicados(v => !v)}
+            className="w-full flex items-center gap-3 px-5 py-3 text-left hover:bg-red-100/50 dark:hover:bg-red-900/20 transition-colors">
+            <AlertCircle size={14} className="text-red-500 shrink-0" />
+            <span className="font-black text-xs uppercase text-red-700 dark:text-red-300 flex-1">Cadastros Duplicados</span>
+            <span className="bg-red-500 text-white text-[10px] font-black px-2.5 py-0.5 rounded-full">{duplicados.total}</span>
+            <ChevronDown size={14} className={`text-red-400 transition-transform ${showDuplicados ? 'rotate-180' : ''}`} />
+          </button>
+          {showDuplicados && (
+            <div className="border-t border-red-200 dark:border-red-800/40 divide-y divide-red-100 dark:divide-red-900/30">
+              {[...duplicados.por_cpf, ...duplicados.por_nome].map((grupo: any, gi: number) => (
+                <div key={gi} className="px-5 py-3">
+                  <p className="text-[10px] font-bold text-red-500 uppercase mb-2">
+                    {grupo.tipo === 'cpf' ? `CPF duplicado: ${grupo.chave}` : `Nome/Data: ${grupo.chave}`}
+                  </p>
+                  <div className="flex flex-col gap-1.5">
+                    {(grupo.alunos as any[]).map((a: any) => (
+                      <div key={a.id} className="flex items-center gap-3 bg-white dark:bg-slate-800 rounded-xl px-3 py-2 border border-red-100 dark:border-red-900/30">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">{a.nome}</p>
+                          <p className="text-[10px] text-slate-400 font-mono">{a.matricula} · {a.ativo ? 'Ativo' : 'Inativo'}</p>
+                        </div>
+                        <button onClick={() => verFicha(a.id)}
+                          className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 whitespace-nowrap">
+                          Ver ficha
+                        </button>
+                        {podeEditar && a.ativo && (
+                          <button disabled={inativandoDupId === a.id}
+                            onClick={async () => {
+                              if (!confirm(`Inativar ${a.nome}?`)) return;
+                              setInativandoDupId(a.id);
+                              try {
+                                await api.delete(`/academico/alunos/${a.id}`);
+                                toast.success('Aluno inativado.');
+                                const r = await api.get('/academico/alunos/duplicados');
+                                setDuplicados(r.data);
+                              } catch (e: any) {
+                                toast.error(e?.response?.data?.message || 'Erro ao inativar.');
+                              } finally { setInativandoDupId(null); }
+                            }}
+                            className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-red-100 hover:bg-red-200 dark:bg-red-900/30 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 whitespace-nowrap disabled:opacity-50">
+                            {inativandoDupId === a.id ? '...' : 'Inativar'}
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
