@@ -17,6 +17,7 @@ import {
 import api from '@/services/api';
 import { useAuth } from '@/context/auth-context';
 import { usePermissions } from '@/hooks/use-permissions';
+import { toast } from 'sonner';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
