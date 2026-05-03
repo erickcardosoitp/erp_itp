@@ -1061,14 +1061,16 @@ export class AcademicoService {
   }
 
   async mapaAlunos() {
-    // Normalização: minúsculo + sem acentos + colapsa espaços + expande "Av." → "Avenida", "Tv." → "Travessa", "R." → "Rua"
+    // Chave de agrupamento: CEP (8 dígitos) tem prioridade; fallback = logradouro normalizado + bairro
     const rows = await this.dataSource.query(`
-      WITH alunos_norm AS (
+      WITH alunos_prep AS (
         SELECT
           a.id, a.nome_completo,
-          NULLIF(TRIM(a.logradouro), '') AS log_orig,
-          NULLIF(TRIM(a.bairro), '')     AS bai_orig,
-          NULLIF(TRIM(a.cidade), '')     AS cid_orig,
+          REGEXP_REPLACE(COALESCE(a.cep, ''), '[^0-9]', '', 'g')     AS cep_limpo,
+          NULLIF(TRIM(a.cep), '')                                     AS cep_orig,
+          NULLIF(TRIM(a.logradouro), '')                              AS log_orig,
+          NULLIF(TRIM(a.bairro), '')                                  AS bai_orig,
+          NULLIF(TRIM(a.cidade), '')                                  AS cid_orig,
           LOWER(REGEXP_REPLACE(
             REGEXP_REPLACE(
               REGEXP_REPLACE(
@@ -1093,32 +1095,46 @@ export class AcademicoService {
               'aaaaaeeeeiiiiooooouuuucAAAAAEEEEIIIIOOOOOUUUUC'
             ),
             '[[:space:]]+', ' ', 'g'
-          )) AS bai_norm,
-          LOWER(TRIM(COALESCE(a.cidade, ''))) AS cid_norm
+          )) AS bai_norm
         FROM alunos a
         WHERE a.ativo = true
-          AND (NULLIF(TRIM(a.logradouro), '') IS NOT NULL OR NULLIF(TRIM(a.bairro), '') IS NOT NULL)
+          AND (
+            REGEXP_REPLACE(COALESCE(a.cep, ''), '[^0-9]', '', 'g') ~ '^[0-9]{8}$'
+            OR NULLIF(TRIM(a.logradouro), '') IS NOT NULL
+            OR NULLIF(TRIM(a.bairro), '') IS NOT NULL
+          )
+      ),
+      -- Chave: CEP de 8 dígitos quando válido; do contrário logradouro_norm|bairro_norm
+      alunos_chave AS (
+        SELECT *,
+          CASE
+            WHEN cep_limpo ~ '^[0-9]{8}$' THEN cep_limpo
+            ELSE log_norm || '|' || bai_norm
+          END AS chave,
+          (cep_limpo ~ '^[0-9]{8}$') AS tem_cep
+        FROM alunos_prep
       )
       SELECT
-        MODE() WITHIN GROUP (ORDER BY an.log_orig)                            AS logradouro,
-        COALESCE(MODE() WITHIN GROUP (ORDER BY an.bai_orig), 'Não informado') AS bairro,
-        COALESCE(MODE() WITHIN GROUP (ORDER BY an.cid_orig), 'Rio de Janeiro') AS cidade,
-        COUNT(*) AS total,
+        MODE() WITHIN GROUP (ORDER BY ac.cep_orig)  AS cep,
+        MODE() WITHIN GROUP (ORDER BY ac.log_orig)  AS logradouro,
+        COALESCE(MODE() WITHIN GROUP (ORDER BY ac.bai_orig), 'Não informado') AS bairro,
+        COALESCE(MODE() WITHIN GROUP (ORDER BY ac.cid_orig), 'Rio de Janeiro') AS cidade,
+        BOOL_OR(ac.tem_cep)                          AS tem_cep,
+        COUNT(*)                                     AS total,
         json_agg(json_build_object(
-          'id',       an.id::text,
-          'nome',     an.nome_completo,
+          'id',       ac.id::text,
+          'nome',     ac.nome_completo,
           'foto_url', doc.url_arquivo
-        ) ORDER BY an.nome_completo) AS alunos
-      FROM alunos_norm an
+        ) ORDER BY ac.nome_completo) AS alunos
+      FROM alunos_chave ac
       LEFT JOIN LATERAL (
         SELECT d.url_arquivo
         FROM inscricoes i
         JOIN documentos_inscricao d ON d.inscricao_id = i.id AND d.tipo = 'foto_aluno'
-        WHERE i.aluno_id::text = an.id::text
+        WHERE i.aluno_id::text = ac.id::text
         LIMIT 1
       ) doc ON true
-      GROUP BY an.log_norm, an.bai_norm, an.cid_norm
-      HAVING an.log_norm <> '' OR an.bai_norm <> ''
+      GROUP BY ac.chave
       ORDER BY total DESC
       LIMIT 120
     `);

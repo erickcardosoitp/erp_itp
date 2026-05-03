@@ -893,16 +893,33 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
     }
   };
 
+  // Retorna lista de campos obrigatórios faltando para o aluno
+  const camposFaltando = (aluno: Partial<Aluno>): string[] => {
+    const faltam: string[] = [];
+    if (!aluno.cep?.trim()) faltam.push('CEP');
+    if (!aluno.celular?.trim()) faltam.push('Celular');
+    const menor = aluno.maior_18_anos === false ||
+      (aluno.data_nascimento ? new Date().getFullYear() - new Date(aluno.data_nascimento).getFullYear() < 18 : false);
+    if (menor && !aluno.telefone_alternativo?.trim()) faltam.push('Tel. Responsável');
+    return faltam;
+  };
+
   const salvarFicha = async () => {
     if (!fichaAluno?.aluno?.id) return;
+    // Aviso sobre campos obrigatórios (não bloqueia — permite salvar dados parciais)
+    const faltam = camposFaltando(fichaForm);
+    if (faltam.length > 0) {
+      setFichaEditErro(`Atenção: campos obrigatórios não preenchidos — ${faltam.join(', ')}. Salvo mesmo assim, mas complete o quanto antes.`);
+    } else {
+      setFichaEditErro(null);
+    }
     setFichaEditSalvando(true);
-    setFichaEditErro(null);
     try {
       await api.patch(`/academico/alunos/${fichaAluno.aluno.id}`, fichaForm);
       const r = await api.get(`/academico/alunos/${fichaAluno.aluno.id}/ficha`);
       setFichaAluno(r.data);
-      setFichaEditando(false);
-      load(); // recarrega a lista para refletir alterações
+      if (!faltam.length) setFichaEditando(false);
+      load();
     } catch (err: any) {
       const msg = err?.response?.data?.message || err?.message || 'Erro ao salvar.';
       setFichaEditErro(Array.isArray(msg) ? msg.join(', ') : msg);
@@ -1146,6 +1163,12 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
                         <div>
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="font-bold text-slate-800">{a.nome_completo}</span>
+                            {camposFaltando(a).length > 0 && (
+                              <span title={`Faltando: ${camposFaltando(a).join(', ')}`}
+                                className="text-[8px] font-black uppercase px-1.5 py-0.5 rounded-full border bg-amber-100 text-amber-700 border-amber-200 cursor-help">
+                                ⚠ incompleto
+                              </span>
+                            )}
                             {a.cuidado_especial && a.cuidado_especial !== 'Não' && (() => {
                               const b = CUIDADO_BADGE[a.cuidado_especial] || { label: 'Cuidado Espec.', color: 'bg-pink-100 text-pink-700 border-pink-200' };
                               return <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded-full border ${b.color}`}>{b.label}</span>;
@@ -1374,6 +1397,27 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
               {/* ── OVERLAP STRIP ────────────────────────────────────────────── */}
               <div className="shrink-0 -mt-4 px-5 z-10 space-y-2">
 
+                {/* Alerta de dados obrigatórios faltando */}
+                {!fichaEditando && (() => {
+                  const faltam = camposFaltando(fichaAluno.aluno);
+                  if (!faltam.length) return null;
+                  return (
+                    <div className="flex items-start gap-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/40 rounded-2xl px-4 py-3 shadow-sm">
+                      <AlertTriangle size={15} className="text-amber-500 shrink-0 mt-0.5"/>
+                      <div>
+                        <p className="text-amber-700 dark:text-amber-400 font-black text-xs uppercase tracking-wide">Cadastro incompleto</p>
+                        <p className="text-amber-600 text-[10px] mt-0.5">
+                          Preencha: <span className="font-black">{faltam.join(' · ')}</span>
+                        </p>
+                      </div>
+                      <button onClick={() => { setFichaForm({ ...fichaAluno.aluno }); setFichaEditando(true); }}
+                        className="ml-auto text-[9px] font-black uppercase px-2.5 py-1 rounded-lg bg-amber-200 text-amber-800 hover:bg-amber-300 transition-colors shrink-0">
+                        Completar
+                      </button>
+                    </div>
+                  );
+                })()}
+
                 {/* LGPD alert */}
                 {!lgpdOk && !fichaEditando && (
                   <div className="flex items-center gap-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-700/40 rounded-2xl px-4 py-3 shadow-sm">
@@ -1420,13 +1464,34 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
                           <input value={fichaForm.nome_completo || ''} onChange={e => setFichaForm(p => ({ ...p, nome_completo: e.target.value }))}
                             className="w-full border border-slate-200 dark:border-slate-600 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400 dark:bg-slate-700 dark:text-white" />
                         </div>
-                        {([['CPF', 'cpf'], ['Celular', 'celular'], ['E-mail', 'email'], ['Tel. Alternativo', 'telefone_alternativo']] as [string, keyof Aluno][]).map(([label, field]) => (
+                        {([['CPF', 'cpf'], ['E-mail', 'email']] as [string, keyof Aluno][]).map(([label, field]) => (
                           <div key={field} className="space-y-1">
                             <label className="text-[9px] font-black uppercase text-slate-400">{label}</label>
                             <input value={(fichaForm[field] as string) || ''} onChange={e => setFichaForm(p => ({ ...p, [field]: e.target.value }))}
                               className="w-full border border-slate-200 dark:border-slate-600 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400 dark:bg-slate-700 dark:text-white" />
                           </div>
                         ))}
+                        <div className="space-y-1">
+                          <label className={`text-[9px] font-black uppercase ${!fichaForm.celular?.trim() ? 'text-rose-500' : 'text-slate-400'}`}>
+                            Celular {!fichaForm.celular?.trim() && <span className="normal-case">— obrigatório</span>}
+                          </label>
+                          <input value={(fichaForm.celular as string) || ''} onChange={e => setFichaForm(p => ({ ...p, celular: e.target.value }))}
+                            className={`w-full border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400 dark:bg-slate-700 dark:text-white ${!fichaForm.celular?.trim() ? 'border-rose-300 bg-rose-50/50' : 'border-slate-200 dark:border-slate-600'}`} />
+                        </div>
+                        {(() => {
+                          const menor = fichaForm.maior_18_anos === false ||
+                            (fichaForm.data_nascimento ? new Date().getFullYear() - new Date(fichaForm.data_nascimento).getFullYear() < 18 : false);
+                          const obrig = menor && !fichaForm.telefone_alternativo?.trim();
+                          return (
+                            <div className="space-y-1">
+                              <label className={`text-[9px] font-black uppercase ${obrig ? 'text-rose-500' : 'text-slate-400'}`}>
+                                Tel. Responsável {obrig && <span className="normal-case">— obrigatório (menor)</span>}
+                              </label>
+                              <input value={(fichaForm.telefone_alternativo as string) || ''} onChange={e => setFichaForm(p => ({ ...p, telefone_alternativo: e.target.value }))}
+                                className={`w-full border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400 dark:bg-slate-700 dark:text-white ${obrig ? 'border-rose-300 bg-rose-50/50' : 'border-slate-200 dark:border-slate-600'}`} />
+                            </div>
+                          );
+                        })()}
                         <div className="space-y-1">
                           <label className="text-[9px] font-black uppercase text-slate-400">Nascimento</label>
                           <input type="date" value={fichaForm.data_nascimento || ''} onChange={e => setFichaForm(p => ({ ...p, data_nascimento: e.target.value }))}
@@ -1466,11 +1531,13 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
                       </h4>
                       <div className="grid grid-cols-2 gap-2">
                         <div className="space-y-1">
-                          <label className="text-[9px] font-black uppercase text-slate-400">CEP</label>
+                          <label className={`text-[9px] font-black uppercase ${!fichaForm.cep?.trim() ? 'text-rose-500' : 'text-slate-400'}`}>
+                            CEP {!fichaForm.cep?.trim() && <span className="normal-case">— obrigatório</span>}
+                          </label>
                           <input value={fichaForm.cep || ''} placeholder="00000-000"
                             onChange={e => { setFichaForm(p => ({ ...p, cep: e.target.value })); if (e.target.value.replace(/\D/g, '').length === 8) buscarCepFicha(e.target.value); }}
                             onBlur={e => buscarCepFicha(e.target.value)}
-                            className="w-full border border-slate-200 dark:border-slate-600 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400 dark:bg-slate-700 dark:text-white" />
+                            className={`w-full border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400 dark:bg-slate-700 dark:text-white ${!fichaForm.cep?.trim() ? 'border-rose-300 bg-rose-50/50' : 'border-slate-200 dark:border-slate-600'}`} />
                         </div>
                         <div className="space-y-1">
                           <label className="text-[9px] font-black uppercase text-slate-400">Número</label>
@@ -3854,7 +3921,7 @@ function PresencaTab({ turmas, podeEditar }: { turmas: Turma[]; podeEditar: bool
 
 // Bairros da região de Madureira com posições relativas (x%, y%) no mapa
 interface AlunoMapa { id: string; nome: string; foto_url: string | null; }
-interface EnderecoGrupo { logradouro: string; bairro: string; cidade: string; total: number; alunos: AlunoMapa[]; }
+interface EnderecoGrupo { logradouro: string; bairro: string; cidade: string; cep?: string; tem_cep?: boolean; total: number; alunos: AlunoMapa[]; }
 
 function MapaLeaflet({ enderecos, totalAlunos }: { enderecos: EnderecoGrupo[]; totalAlunos?: number }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -3901,7 +3968,7 @@ function MapaLeaflet({ enderecos, totalAlunos }: { enderecos: EnderecoGrupo[]; t
       }).addTo(map);
       mapRef.current = { map, L };
 
-      const CACHE_KEY = 'itp_geo_v3'; // bump version — new geojson format
+      const CACHE_KEY = 'itp_geo_v4'; // bump: agora agrupa por CEP
       let cache: Record<string, any> = {};
       try { cache = JSON.parse(localStorage.getItem(CACHE_KEY) || '{}'); } catch {}
       const saveCache = () => { try { localStorage.setItem(CACHE_KEY, JSON.stringify(cache)); } catch {} };
@@ -3979,7 +4046,9 @@ function MapaLeaflet({ enderecos, totalAlunos }: { enderecos: EnderecoGrupo[]; t
 
       let queued = 0;
       enderecos.forEach(e => {
-        const key = `${e.logradouro}|${e.bairro}|${e.cidade}`;
+        // Chave de cache: CEP tem prioridade sobre endereço textual
+        const cepLimpo = (e.cep || '').replace(/\D/g, '');
+        const key = cepLimpo.length === 8 ? `cep:${cepLimpo}` : `${e.logradouro}|${e.bairro}|${e.cidade}`;
         const hit = cache[key];
         if (hit) {
           if (hit.type === 'line') drawLine(e, hit.geom);
@@ -3989,13 +4058,34 @@ function MapaLeaflet({ enderecos, totalAlunos }: { enderecos: EnderecoGrupo[]; t
         }
         queued++;
         setTimeout(async () => {
-          const q = [e.logradouro, e.bairro, e.cidade, 'RJ', 'Brasil'].filter(Boolean).join(', ');
           try {
-            const resp = await fetch(
-              `https://nominatim.openstreetmap.org/search?format=geojson&polygon_geojson=1&limit=1&q=${encodeURIComponent(q)}`
-            );
-            const data = await resp.json();
-            const feat = data.features?.[0];
+            let feat: any = null;
+            if (cepLimpo.length === 8) {
+              // Estratégia 1: ViaCEP para lat/lng precisos
+              try {
+                const vr = await fetch(`https://viacep.com.br/ws/${cepLimpo}/json/`);
+                const vd = await vr.json();
+                if (!vd.erro && vd.logradouro) {
+                  // Geocodifica o endereço completo retornado pelo ViaCEP — mais preciso
+                  const addr = [vd.logradouro, vd.bairro, vd.localidade, vd.uf, 'Brasil'].filter(Boolean).join(', ');
+                  const nr = await fetch(`https://nominatim.openstreetmap.org/search?format=geojson&polygon_geojson=1&limit=1&q=${encodeURIComponent(addr)}`);
+                  const nd = await nr.json();
+                  feat = nd.features?.[0];
+                }
+              } catch {}
+              // Fallback: buscar diretamente pelo CEP no Nominatim
+              if (!feat) {
+                const nr = await fetch(`https://nominatim.openstreetmap.org/search?format=geojson&polygon_geojson=1&limit=1&postalcode=${cepLimpo}&countrycodes=br`);
+                const nd = await nr.json();
+                feat = nd.features?.[0];
+              }
+            } else {
+              // Sem CEP: endereço textual
+              const q = [e.logradouro, e.bairro, e.cidade, 'RJ', 'Brasil'].filter(Boolean).join(', ');
+              const resp = await fetch(`https://nominatim.openstreetmap.org/search?format=geojson&polygon_geojson=1&limit=1&q=${encodeURIComponent(q)}`);
+              const data = await resp.json();
+              feat = data.features?.[0];
+            }
             if (feat) {
               const geom = feat.geometry;
               if (geom?.type === 'LineString' || geom?.type === 'MultiLineString') {
@@ -4003,7 +4093,6 @@ function MapaLeaflet({ enderecos, totalAlunos }: { enderecos: EnderecoGrupo[]; t
                 saveCache();
                 drawLine(e, geom);
               } else {
-                // Use bbox centroid
                 const bb = feat.bbox || [0, 0, 0, 0];
                 const lat = (bb[1] + bb[3]) / 2, lng = (bb[0] + bb[2]) / 2;
                 cache[key] = { type: 'circle', lat, lng };
@@ -4013,7 +4102,7 @@ function MapaLeaflet({ enderecos, totalAlunos }: { enderecos: EnderecoGrupo[]; t
             }
           } catch {}
           setGeocodedCount(c => c + 1);
-        }, queued * 1200);
+        }, queued * 1400); // 1.4s gap — respeita rate limit Nominatim (1 req/s)
       });
     });
 
