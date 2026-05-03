@@ -413,18 +413,26 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
   const toggleDia = (dia: string) =>
     setForm((f: any) => ({ ...f, dias_trabalho: (f.dias_trabalho || []).includes(dia) ? f.dias_trabalho.filter((d: string) => d !== dia) : [...(f.dias_trabalho || []), dia] }));
 
+  const geoErrMsg = (err: GeolocationPositionError) => {
+    if (err.code === 1) return 'Permissão negada. Verifique as configurações do navegador (Ajustes → Safari → Localização).';
+    if (err.code === 2) return 'Localização indisponível. Verifique o GPS do dispositivo.';
+    return 'Tempo esgotado ao obter localização. Tente novamente.';
+  };
+
   const usarGeo = () => {
-    navigator.geolocation?.getCurrentPosition(pos => {
+    if (!navigator.geolocation) { toast.error('Geolocalização não suportada neste navegador.'); return; }
+    navigator.geolocation.getCurrentPosition(pos => {
       setForm((f: any) => ({ ...f, latitude_permitida: pos.coords.latitude, longitude_permitida: pos.coords.longitude }));
       toast.success('Localização capturada!');
-    }, () => toast.error('Não foi possível obter localização.'), { enableHighAccuracy: true });
+    }, (err) => toast.error(geoErrMsg(err)), { enableHighAccuracy: true, timeout: 12000 });
   };
 
   const usarGeoLocal = () => {
-    navigator.geolocation?.getCurrentPosition(pos => {
+    if (!navigator.geolocation) { toast.error('Geolocalização não suportada neste navegador.'); return; }
+    navigator.geolocation.getCurrentPosition(pos => {
       setFormLocal((f: any) => ({ ...f, latitude: pos.coords.latitude, longitude: pos.coords.longitude }));
       toast.success('Localização capturada!');
-    }, () => toast.error('Não foi possível obter localização.'), { enableHighAccuracy: true });
+    }, (err) => toast.error(geoErrMsg(err)), { enableHighAccuracy: true, timeout: 12000 });
   };
 
   const carregarLocais = async (colaboradorId: string) => {

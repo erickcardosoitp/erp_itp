@@ -617,6 +617,7 @@ export default function PontoExternoPage() {
   const [loading, setLoading] = useState(false);
   const [geo, setGeo] = useState<{ lat: number; lon: number } | null>(null);
   const [geoErro, setGeoErro] = useState('');
+  const [geoNegado, setGeoNegado] = useState(false);
   const [tela, setTela] = useState<Tela>('login');
   const [agora, setAgora] = useState<Date | null>(null);
   const [pendentesConfirmacao, setPendentesConfirmacao] = useState<any[]>([]);
@@ -638,15 +639,48 @@ export default function PontoExternoPage() {
   }, []);
 
   const obterGeo = useCallback(() => {
-    if (!navigator.geolocation) { setGeoErro('Geolocalização não disponível.'); return; }
+    if (!navigator.geolocation) {
+      setGeoErro('Geolocalização não suportada neste navegador.');
+      return;
+    }
+    setGeoErro('');
     navigator.geolocation.getCurrentPosition(
-      pos => { setGeo({ lat: pos.coords.latitude, lon: pos.coords.longitude }); setGeoErro(''); },
-      () => setGeoErro('Não foi possível obter localização.'),
-      { enableHighAccuracy: true, timeout: 10000 },
+      pos => {
+        setGeo({ lat: pos.coords.latitude, lon: pos.coords.longitude });
+        setGeoErro('');
+        setGeoNegado(false);
+      },
+      (err) => {
+        if (err.code === 1) {
+          // PERMISSION_DENIED
+          setGeoNegado(true);
+          setGeoErro('Permissão negada.');
+        } else if (err.code === 2) {
+          setGeoErro('Localização indisponível. Verifique o GPS.');
+        } else {
+          setGeoErro('Tempo esgotado. Tente novamente.');
+        }
+      },
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 },
     );
   }, []);
 
-  useEffect(() => { obterGeo(); }, [obterGeo]);
+  // Tenta obter localização automaticamente apenas se não foi negada antes.
+  // No Safari iOS, a primeira requisição precisa vir de um gesto do usuário —
+  // mas tentamos silenciosamente; se negar, mostramos o botão e instruções.
+  useEffect(() => {
+    if (typeof navigator === 'undefined') return;
+    // Permissions API: se já negado, não tenta automaticamente (evita erro silencioso no iOS)
+    if (navigator.permissions) {
+      navigator.permissions.query({ name: 'geolocation' as PermissionName }).then(status => {
+        if (status.state !== 'denied') obterGeo();
+        else { setGeoNegado(true); setGeoErro('Permissão negada.'); }
+      }).catch(() => obterGeo()); // Permissions API não suportada → tenta direto
+    } else {
+      obterGeo();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const buscarColaborador = async () => {
     if (!identificador.trim()) { toast.error('Informe seu CPF ou matrícula.'); return; }
@@ -698,13 +732,41 @@ export default function PontoExternoPage() {
         {/* Tela: Login */}
         {tela === 'login' && (
           <>
-            <div className={`rounded-xl px-4 py-2 text-xs font-semibold mb-5 flex items-center gap-2 ${
-              geo ? 'bg-green-900/30 text-green-300 border border-green-700/40' : 'bg-orange-900/30 text-orange-300 border border-orange-700/40'
-            }`}>
-              <span>{geo ? '📍' : '⚠️'}</span>
-              <span>{geo ? `Localização obtida` : geoErro || 'Obtendo localização...'}</span>
-              {!geo && <button onClick={obterGeo} className="ml-auto text-orange-400 underline text-xs">Tentar novamente</button>}
-            </div>
+            {geoNegado ? (
+              <div className="rounded-xl px-4 py-3 text-xs mb-5 bg-red-950/50 border border-red-700/50 text-red-300 space-y-2">
+                <p className="font-bold flex items-center gap-1">🚫 Localização bloqueada</p>
+                <p>Para registrar o ponto, permita o acesso à localização:</p>
+                <p className="font-semibold text-red-200">iPhone/Safari:</p>
+                <ol className="list-decimal list-inside space-y-0.5 pl-1 text-red-300">
+                  <li>Ajustes → Privacidade e Segurança → Serviços de Localização → Safari → <strong>Ao usar</strong></li>
+                  <li>Volte nesta página e toque em <strong>Permitir Localização</strong></li>
+                </ol>
+                <p className="font-semibold text-red-200 pt-1">Android/Chrome:</p>
+                <ol className="list-decimal list-inside space-y-0.5 pl-1 text-red-300">
+                  <li>Toque no ícone de cadeado na barra de endereço</li>
+                  <li>Permissões → Localização → <strong>Permitir</strong></li>
+                </ol>
+                <button onClick={obterGeo}
+                  className="mt-2 w-full bg-yellow-400 text-purple-950 font-black uppercase tracking-widest rounded-xl py-2 text-xs hover:bg-yellow-300 transition">
+                  Permitir Localização
+                </button>
+              </div>
+            ) : (
+              <div className={`rounded-xl px-4 py-2 text-xs font-semibold mb-5 flex items-center gap-2 ${
+                geo ? 'bg-green-900/30 text-green-300 border border-green-700/40' : 'bg-orange-900/30 text-orange-300 border border-orange-700/40'
+              }`}>
+                <span>{geo ? '📍' : '⚠️'}</span>
+                <span>{geo ? 'Localização obtida' : geoErro || 'Obtendo localização…'}</span>
+                {!geo && !geoErro && (
+                  <span className="ml-auto flex gap-1 items-center text-orange-400">
+                    <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+                  </span>
+                )}
+                {!geo && geoErro && (
+                  <button onClick={obterGeo} className="ml-auto text-orange-400 underline text-xs">Tentar novamente</button>
+                )}
+              </div>
+            )}
             <div className="bg-white/5 border border-purple-700/40 rounded-2xl p-6 space-y-4">
               <label className="block text-purple-200 text-sm font-bold uppercase tracking-widest">CPF ou Matrícula</label>
               <input type="text" value={identificador} onChange={e => setIdentificador(e.target.value)}
