@@ -5436,8 +5436,16 @@ function ControlesTab({ podeEditar }: { podeEditar: boolean }) {
     if (rc.status === 'fulfilled') setControles(Array.isArray(rc.value.data) ? rc.value.data : []);
     else toast.error('Erro ao carregar controles: ' + (rc.reason?.response?.data?.message || rc.reason?.message || 'Erro desconhecido'));
     if (re.status === 'fulfilled') setEstoqueProdutos(Array.isArray(re.value.data) ? re.value.data : []);
-    if (ra.status === 'fulfilled') setAlunosCtrl(Array.isArray(ra.value.data) ? ra.value.data : []);
-    else toast.error('Erro ao carregar alunos: ' + (ra.reason?.response?.data?.message || ra.reason?.message || 'Erro desconhecido'));
+    if (ra.status === 'fulfilled') {
+      const todos = Array.isArray(ra.value.data) ? ra.value.data : [];
+      // Filtra apenas alunos matriculados em turmas com "futebol" no nome
+      const futebolistas = todos.filter((a: any) =>
+        Array.isArray(a.turmas) && a.turmas.some((t: any) => t.nome?.toLowerCase().includes('futebol'))
+      );
+      setAlunosCtrl(futebolistas.length > 0 ? futebolistas : todos);
+    } else {
+      toast.error('Erro ao carregar alunos: ' + (ra.reason?.response?.data?.message || ra.reason?.message || 'Erro desconhecido'));
+    }
     setLoading(false);
   }, []);
 

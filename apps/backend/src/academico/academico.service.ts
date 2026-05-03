@@ -1748,6 +1748,7 @@ export class AcademicoService {
   // ── CONTROLE FUTEBOL ──────────────────────────────────────────────────────
 
   async listarControleFutebol() {
+    try { await this.dataSource.query(`CREATE TABLE IF NOT EXISTS controles_futebol (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), aluno_id TEXT NOT NULL, tamanho_camisa TEXT, tamanho_short TEXT, numero_chuteira TEXT, estoque_uniforme_id TEXT, estoque_chuteira_id TEXT, uniforme_recebido BOOLEAN NOT NULL DEFAULT false, chuteira_recebida BOOLEAN NOT NULL DEFAULT false, status TEXT NOT NULL DEFAULT 'Pendente', observacoes TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now())`); } catch {}
     const rows = await this.dataSource.query(`
       SELECT
         cf.*,

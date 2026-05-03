@@ -151,6 +151,47 @@ export class AppModule implements OnModuleInit {
 
   private async runMigrations() {
     try {
+      // ── Tabelas críticas criadas PRIMEIRO (antes de qualquer outro await) ──
+      // Garante que existam mesmo se a request chegar durante a inicialização
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS chamados_academicos (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          titulo VARCHAR NOT NULL,
+          descricao TEXT,
+          tipo VARCHAR NOT NULL DEFAULT 'Social',
+          status VARCHAR NOT NULL DEFAULT 'aberto',
+          prioridade VARCHAR NOT NULL DEFAULT 'normal',
+          aluno_id UUID,
+          aluno_nome VARCHAR,
+          turma_id UUID,
+          turma_nome VARCHAR,
+          responsavel_nome VARCHAR,
+          criado_por_nome VARCHAR,
+          observacoes TEXT,
+          data_resolucao DATE,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `);
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS controles_futebol (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          aluno_id TEXT NOT NULL,
+          tamanho_camisa TEXT,
+          tamanho_short TEXT,
+          numero_chuteira TEXT,
+          estoque_uniforme_id TEXT,
+          estoque_chuteira_id TEXT,
+          uniforme_recebido BOOLEAN NOT NULL DEFAULT false,
+          chuteira_recebida BOOLEAN NOT NULL DEFAULT false,
+          status TEXT NOT NULL DEFAULT 'Pendente',
+          observacoes TEXT,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `);
+      this.logger.log('✅ Tabelas críticas (chamados_academicos, controles_futebol) garantidas');
+
       // Migrations idempotentes — executam na inicialização em produção ou dev
       await this.dataSource.query(`ALTER TABLE funcionarios ADD COLUMN IF NOT EXISTS matricula TEXT UNIQUE`);
       await this.dataSource.query(`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS matricula TEXT UNIQUE`);
