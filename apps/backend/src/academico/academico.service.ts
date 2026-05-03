@@ -102,9 +102,23 @@ export class AcademicoService {
 
   // ── PROFESSORES ───────────────────────────────────────────────────────────
 
-  listarProfessores() {
-    this.logger.log('Listando professores');
-    return this.professorRepo.find({ order: { nome: 'ASC' } });
+  async listarProfessores() {
+    this.logger.log('Listando professores via funcionarios');
+    const rows = await this.dataSource.query(`
+      SELECT
+        id::text       AS id,
+        nome,
+        cargo          AS especialidade,
+        email,
+        cpf,
+        celular,
+        ativo
+      FROM funcionarios
+      WHERE cargo ILIKE '%Professor%'
+        AND (ativo IS NOT FALSE)
+      ORDER BY nome ASC
+    `);
+    return rows;
   }
 
   async criarProfessor(dto: Partial<Professor>) {
@@ -841,7 +855,7 @@ export class AcademicoService {
         turma_id::text,
         data,
         total_presentes,
-        total_registros
+        (total_presentes + total_ausentes) AS total_registros
       FROM presenca_sessoes
       WHERE turma_id IS NOT NULL
         AND data >= NOW() - INTERVAL '60 days'
