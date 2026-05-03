@@ -3856,11 +3856,13 @@ function PresencaTab({ turmas, podeEditar }: { turmas: Turma[]; podeEditar: bool
 interface AlunoMapa { id: string; nome: string; foto_url: string | null; }
 interface EnderecoGrupo { logradouro: string; bairro: string; cidade: string; total: number; alunos: AlunoMapa[]; }
 
-function MapaLeaflet({ enderecos }: { enderecos: EnderecoGrupo[] }) {
+function MapaLeaflet({ enderecos, totalAlunos }: { enderecos: EnderecoGrupo[]; totalAlunos?: number }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef       = useRef<any>(null);
   const [geocodedCount, setGeocodedCount] = useState(0);
   const totalToGeocode = enderecos.length;
+  const alunosNoMapa   = enderecos.reduce((s, e) => s + (e.total || 0), 0);
+  const semEndereco    = totalAlunos != null ? Math.max(0, totalAlunos - alunosNoMapa) : 0;
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -4023,24 +4025,35 @@ function MapaLeaflet({ enderecos }: { enderecos: EnderecoGrupo[] }) {
 
   return (
     <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm p-5">
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
         <div className="flex items-center gap-2">
-          <MapPin size={14} className="text-purple-600" />
-          <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
-            Alunos por Rua — hover para ver os rostos
+          <MapPin size={16} className="text-purple-600" />
+          <p className="text-sm font-black tracking-tight text-slate-700 dark:text-slate-200">
+            Distribuição Geográfica de Alunos
           </p>
+          <span className="text-[10px] font-bold text-slate-400 hidden sm:inline">· passe o mouse para ver alunos</span>
         </div>
-        {pct < 100 && (
-          <div className="flex items-center gap-2">
-            <div className="w-28 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-              <div className="h-full bg-purple-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
+        <div className="flex items-center gap-3">
+          <span className="text-[10px] font-black bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-2.5 py-1 rounded-full">
+            {alunosNoMapa} aluno{alunosNoMapa !== 1 ? 's' : ''} · {enderecos.length} rua{enderecos.length !== 1 ? 's' : ''}
+          </span>
+          {semEndereco > 0 && (
+            <span className="text-[10px] font-black bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 px-2.5 py-1 rounded-full" title="Alunos sem rua/bairro cadastrado não aparecem no mapa">
+              {semEndereco} sem endereço
+            </span>
+          )}
+          {pct < 100 && (
+            <div className="flex items-center gap-2">
+              <div className="w-24 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                <div className="h-full bg-purple-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
+              </div>
+              <span className="text-[9px] text-slate-400 font-bold">{pct}%</span>
             </div>
-            <span className="text-[9px] text-slate-400 font-bold">{pct}% geocodificado</span>
-          </div>
-        )}
+          )}
+        </div>
       </div>
-      <div ref={containerRef} style={{ height: 480, borderRadius: 12, overflow: 'hidden', zIndex: 0 }} />
-      <p className="text-[9px] text-slate-400 mt-2 text-right">© OpenStreetMap · Nominatim · Pinte a rua, hover para alunos</p>
+      <div ref={containerRef} style={{ height: 520, borderRadius: 12, overflow: 'hidden', zIndex: 0 }} />
+      <p className="text-[9px] text-slate-400 mt-2 text-right">© OpenStreetMap · Nominatim</p>
     </div>
   );
 }
@@ -4165,100 +4178,47 @@ function MonitoramentoTab() {
         </div>
       )}
 
-      {/* Alerta faltas frequentes */}
-      {faltas_frequentes.length > 0 && (
-        <div className="bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 rounded-2xl p-5">
-          <div className="flex items-center gap-2 mb-3">
-            <AlertTriangle size={15} className="text-rose-600" />
-            <p className="text-[10px] font-black uppercase tracking-widest text-rose-600">
-              Alunos com Faltas Frequentes — últimos 60 dias
-            </p>
-          </div>
-          <div className="space-y-2">
-            {faltas_frequentes.map((a: any) => {
-              const turmas: { turma_nome: string; faltas: number; total_aulas: number }[] =
-                Array.isArray(a.turmas_detalhe) ? a.turmas_detalhe : [];
+      {/* MAPA — destaque principal, full width */}
+      <MapaLeaflet enderecos={mapa} totalAlunos={resumo.total_alunos} />
+
+      {/* Diário por tipo — barras horizontais lado a lado */}
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm p-5">
+        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4 flex items-center gap-2">
+          <History size={13} className="text-purple-600"/> Registros no Diário
+        </p>
+        {diario_por_tipo.length === 0 ? (
+          <p className="text-xs text-slate-400">Sem registros.</p>
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+            {diario_por_tipo.map((d: any) => {
+              const colors: Record<string, { bar: string; bg: string; text: string }> = {
+                'Avaliação':        { bar: 'bg-blue-500',  bg: 'bg-blue-50 dark:bg-blue-900/20',   text: 'text-blue-600' },
+                'Incidente':        { bar: 'bg-rose-500',  bg: 'bg-rose-50 dark:bg-rose-900/20',   text: 'text-rose-600' },
+                'Observação':       { bar: 'bg-amber-500', bg: 'bg-amber-50 dark:bg-amber-900/20', text: 'text-amber-600' },
+                'Comunicado':       { bar: 'bg-teal-500',  bg: 'bg-teal-50 dark:bg-teal-900/20',   text: 'text-teal-600' },
+                'Lista de Chamada': { bar: 'bg-green-500', bg: 'bg-green-50 dark:bg-green-900/20', text: 'text-green-600' },
+              };
+              const c = colors[d.tipo] || { bar: 'bg-purple-500', bg: 'bg-purple-50', text: 'text-purple-600' };
+              const total = diario_por_tipo.reduce((s: number, x: any) => s + x.total, 0) || 1;
+              const pct = Math.round(100 * d.total / total);
               return (
-                <div key={a.aluno_id} className="bg-white dark:bg-slate-900 rounded-xl px-4 py-3 border border-rose-100 dark:border-rose-900">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-xs font-bold text-slate-800 dark:text-slate-100">{a.nome_completo}</p>
-                      <p className="text-[9px] text-slate-400">{a.numero_matricula || '–'}</p>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      {a.celular && (
-                        <a href={`https://wa.me/55${a.celular.replace(/\D/g,'')}`} target="_blank" rel="noopener noreferrer"
-                          className="text-[9px] font-black uppercase px-2 py-1 rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors">
-                          WhatsApp
-                        </a>
-                      )}
-                    </div>
+                <div key={d.tipo} className={`${c.bg} rounded-xl p-3`}>
+                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">{d.tipo}</p>
+                  <p className={`text-2xl font-black mt-1 ${c.text}`}>{d.total}</p>
+                  <div className="h-1.5 bg-white/60 dark:bg-slate-800 rounded-full overflow-hidden mt-2">
+                    <div className={`h-full rounded-full ${c.bar}`} style={{ width: `${pct}%` }} />
                   </div>
-                  {turmas.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 mt-2">
-                      {turmas.map(t => (
-                        <span key={t.turma_nome} className="inline-flex items-center gap-1 bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-400 text-[10px] font-black px-2.5 py-1 rounded-full">
-                          {t.turma_nome}
-                          <span className="opacity-60">({t.faltas}/{t.total_aulas})</span>
-                        </span>
-                      ))}
-                    </div>
-                  )}
+                  <p className="text-[9px] text-slate-400 mt-1 font-bold">{pct}% do total</p>
                 </div>
               );
             })}
           </div>
-        </div>
-      )}
-
-      {/* Mapa + Diário por tipo */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-          <MapaLeaflet enderecos={mapa} />
-        </div>
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm p-5 space-y-3">
-          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-2">
-            <History size={13} className="text-purple-600"/> Registros no Diário
-          </p>
-          {diario_por_tipo.length === 0 && <p className="text-xs text-slate-400">Sem registros.</p>}
-          {diario_por_tipo.map((d: any) => {
-            const colors: Record<string, string> = {
-              'Avaliação': 'bg-blue-500', 'Incidente': 'bg-rose-500',
-              'Observação': 'bg-amber-500', 'Comunicado': 'bg-teal-500',
-              'Lista de Chamada': 'bg-green-500',
-            };
-            const total = diario_por_tipo.reduce((s: number, x: any) => s + x.total, 0) || 1;
-            const pct = Math.round(100 * d.total / total);
-            return (
-              <div key={d.tipo}>
-                <div className="flex justify-between text-xs mb-1">
-                  <span className="font-bold text-slate-700 dark:text-slate-300">{d.tipo}</span>
-                  <span className="font-black text-slate-500">{d.total}</span>
-                </div>
-                <div className="h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
-                  <div className={`h-full rounded-full ${colors[d.tipo] || 'bg-purple-500'}`} style={{ width: `${pct}%` }} />
-                </div>
-              </div>
-            );
-          })}
-          <div className="pt-3 border-t border-slate-100 dark:border-slate-700 space-y-1">
-            <div className="flex justify-between text-[9px]">
-              <span className="text-slate-400 uppercase font-black">Presenças</span>
-              <span className="font-black text-green-600">{resumo.total_presentes}</span>
-            </div>
-            <div className="flex justify-between text-[9px]">
-              <span className="text-slate-400 uppercase font-black">Faltas</span>
-              <span className="font-black text-red-500">{resumo.total_faltas}</span>
-            </div>
-            <div className="flex justify-between text-[9px]">
-              <span className="text-slate-400 uppercase font-black">Justificadas</span>
-              <span className="font-black text-amber-500">{resumo.total_justificadas}</span>
-            </div>
-            <div className="flex justify-between text-[9px]">
-              <span className="text-slate-400 uppercase font-black">Isentos</span>
-              <span className="font-black text-slate-500">{resumo.total_isentos}</span>
-            </div>
-          </div>
+        )}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4 pt-4 border-t border-slate-100 dark:border-slate-700">
+          <div><span className="text-[9px] text-slate-400 uppercase font-black">Presenças</span><p className="text-lg font-black text-green-600">{resumo.total_presentes}</p></div>
+          <div><span className="text-[9px] text-slate-400 uppercase font-black">Faltas</span><p className="text-lg font-black text-red-500">{resumo.total_faltas}</p></div>
+          <div><span className="text-[9px] text-slate-400 uppercase font-black">Justificadas</span><p className="text-lg font-black text-amber-500">{resumo.total_justificadas}</p></div>
+          <div><span className="text-[9px] text-slate-400 uppercase font-black">Isentos</span><p className="text-lg font-black text-slate-500">{resumo.total_isentos}</p></div>
         </div>
       </div>
 
@@ -4401,6 +4361,55 @@ function MonitoramentoTab() {
           </div>
         )}
       </div>
+
+      {/* Faltas Frequentes — alerta crítico ao final, requer ação */}
+      {faltas_frequentes.length > 0 && (
+        <div className="bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 rounded-2xl p-5">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <AlertTriangle size={15} className="text-rose-600" />
+              <p className="text-[10px] font-black uppercase tracking-widest text-rose-600">
+                Alunos com Faltas Frequentes — últimos 60 dias
+              </p>
+            </div>
+            <span className="text-[10px] font-black bg-rose-600 text-white px-2.5 py-1 rounded-full">
+              {faltas_frequentes.length} aluno{faltas_frequentes.length !== 1 ? 's' : ''}
+            </span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            {faltas_frequentes.map((a: any) => {
+              const turmas: { turma_nome: string; faltas: number; total_aulas: number }[] =
+                Array.isArray(a.turmas_detalhe) ? a.turmas_detalhe : [];
+              return (
+                <div key={a.aluno_id} className="bg-white dark:bg-slate-900 rounded-xl px-4 py-3 border border-rose-100 dark:border-rose-900">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">{a.nome_completo}</p>
+                      <p className="text-[9px] text-slate-400">{a.numero_matricula || '–'}</p>
+                    </div>
+                    {a.celular && (
+                      <a href={`https://wa.me/55${a.celular.replace(/\D/g,'')}`} target="_blank" rel="noopener noreferrer"
+                        className="text-[9px] font-black uppercase px-2 py-1 rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors shrink-0">
+                        WhatsApp
+                      </a>
+                    )}
+                  </div>
+                  {turmas.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {turmas.map(t => (
+                        <span key={t.turma_nome} className="inline-flex items-center gap-1 bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-400 text-[10px] font-black px-2.5 py-1 rounded-full">
+                          {t.turma_nome}
+                          <span className="opacity-60">({t.faltas}/{t.total_aulas})</span>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Botão atualizar */}
       <div className="flex justify-end">

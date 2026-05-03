@@ -1061,28 +1061,64 @@ export class AcademicoService {
   }
 
   async mapaAlunos() {
+    // Normalização: minúsculo + sem acentos + colapsa espaços + expande "Av." → "Avenida", "Tv." → "Travessa", "R." → "Rua"
     const rows = await this.dataSource.query(`
+      WITH alunos_norm AS (
+        SELECT
+          a.id, a.nome_completo,
+          NULLIF(TRIM(a.logradouro), '') AS log_orig,
+          NULLIF(TRIM(a.bairro), '')     AS bai_orig,
+          NULLIF(TRIM(a.cidade), '')     AS cid_orig,
+          LOWER(REGEXP_REPLACE(
+            REGEXP_REPLACE(
+              REGEXP_REPLACE(
+                REGEXP_REPLACE(
+                  TRANSLATE(
+                    TRIM(COALESCE(a.logradouro, '')),
+                    'áàâãäéèêëíìîïóòôõöúùûüçÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ',
+                    'aaaaaeeeeiiiiooooouuuucAAAAAEEEEIIIIOOOOOUUUUC'
+                  ),
+                  '[[:space:]]+', ' ', 'g'
+                ),
+                '^av\\.? +', 'avenida ', 'i'
+              ),
+              '^tv\\.? +', 'travessa ', 'i'
+            ),
+            '^r\\.? +', 'rua ', 'i'
+          )) AS log_norm,
+          LOWER(REGEXP_REPLACE(
+            TRANSLATE(
+              TRIM(COALESCE(a.bairro, '')),
+              'áàâãäéèêëíìîïóòôõöúùûüçÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ',
+              'aaaaaeeeeiiiiooooouuuucAAAAAEEEEIIIIOOOOOUUUUC'
+            ),
+            '[[:space:]]+', ' ', 'g'
+          )) AS bai_norm,
+          LOWER(TRIM(COALESCE(a.cidade, ''))) AS cid_norm
+        FROM alunos a
+        WHERE a.ativo = true
+          AND (NULLIF(TRIM(a.logradouro), '') IS NOT NULL OR NULLIF(TRIM(a.bairro), '') IS NOT NULL)
+      )
       SELECT
-        COALESCE(NULLIF(TRIM(a.logradouro), ''), '')          AS logradouro,
-        COALESCE(NULLIF(TRIM(a.bairro), ''), 'Não informado') AS bairro,
-        COALESCE(NULLIF(TRIM(a.cidade), ''), 'Rio de Janeiro') AS cidade,
-        COUNT(*)                                               AS total,
+        MODE() WITHIN GROUP (ORDER BY an.log_orig)                            AS logradouro,
+        COALESCE(MODE() WITHIN GROUP (ORDER BY an.bai_orig), 'Não informado') AS bairro,
+        COALESCE(MODE() WITHIN GROUP (ORDER BY an.cid_orig), 'Rio de Janeiro') AS cidade,
+        COUNT(*) AS total,
         json_agg(json_build_object(
-          'id',       a.id::text,
-          'nome',     a.nome_completo,
+          'id',       an.id::text,
+          'nome',     an.nome_completo,
           'foto_url', doc.url_arquivo
-        ) ORDER BY a.nome_completo)                            AS alunos
-      FROM alunos a
+        ) ORDER BY an.nome_completo) AS alunos
+      FROM alunos_norm an
       LEFT JOIN LATERAL (
         SELECT d.url_arquivo
         FROM inscricoes i
         JOIN documentos_inscricao d ON d.inscricao_id = i.id AND d.tipo = 'foto_aluno'
-        WHERE i.aluno_id::text = a.id::text
+        WHERE i.aluno_id::text = an.id::text
         LIMIT 1
       ) doc ON true
-      WHERE a.ativo = true
-        AND (TRIM(a.logradouro) != '' OR TRIM(a.bairro) != '')
-      GROUP BY TRIM(a.logradouro), TRIM(a.bairro), TRIM(a.cidade)
+      GROUP BY an.log_norm, an.bai_norm, an.cid_norm
+      HAVING an.log_norm <> '' OR an.bai_norm <> ''
       ORDER BY total DESC
       LIMIT 120
     `);
