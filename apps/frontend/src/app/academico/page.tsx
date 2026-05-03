@@ -5166,7 +5166,7 @@ function ChamadosTab({ alunos, turmas, podeEditar }: { alunos: Aluno[]; turmas: 
   }
 
   async function salvar() {
-    if (!form.titulo.trim()) return;
+    if (!form.titulo.trim()) { toast.error('Título é obrigatório.'); return; }
     setSalvando(true);
     try {
       const payload = {
@@ -5177,7 +5177,10 @@ function ChamadosTab({ alunos, turmas, podeEditar }: { alunos: Aluno[]; turmas: 
       else await api.post('/academico/chamados', payload);
       setShowModal(false);
       carregar();
-    } catch {}
+    } catch (e: any) {
+      const msg = e?.response?.data?.message || e?.message || 'Erro ao salvar chamado.';
+      toast.error(msg);
+    }
     setSalvando(false);
   }
 
@@ -5400,7 +5403,7 @@ interface ControleFutebol {
   chuteira_nome?: string;
 }
 
-interface EstoqueProduto { id: string; nome: string; categoria: string; quantidade_atual: number; }
+interface EstoqueProduto { id: string; nome: string; categoria?: string; quantidade_atual: number; }
 
 const STATUS_FUTEBOL = ['Pendente', 'Separado', 'Enviado', 'Entregue'];
 const STATUS_COLORS: Record<string, string> = {
@@ -5423,16 +5426,17 @@ function ControlesTab({ podeEditar }: { podeEditar: boolean }) {
 
   const carregar = useCallback(async () => {
     setLoading(true);
-    try {
-      const [rc, re, ra] = await Promise.all([
-        api.get('/academico/controle-futebol'),
-        api.get('/academico/estoque-produtos'),
-        api.get('/academico/alunos'),
-      ]);
-      setControles(Array.isArray(rc.data) ? rc.data : []);
-      setEstoqueProdutos(Array.isArray(re.data) ? re.data : []);
-      setAlunosCtrl(Array.isArray(ra.data) ? ra.data : []);
-    } catch {}
+    // Carrega cada fonte independentemente — falha em uma não bloqueia as outras
+    const [rc, re, ra] = await Promise.allSettled([
+      api.get('/academico/controle-futebol'),
+      api.get('/academico/estoque-produtos'),
+      api.get('/academico/alunos'),
+    ]);
+    if (rc.status === 'fulfilled') setControles(Array.isArray(rc.value.data) ? rc.value.data : []);
+    else toast.error('Erro ao carregar controles: ' + (rc.reason?.response?.data?.message || rc.reason?.message || 'Erro desconhecido'));
+    if (re.status === 'fulfilled') setEstoqueProdutos(Array.isArray(re.value.data) ? re.value.data : []);
+    if (ra.status === 'fulfilled') setAlunosCtrl(Array.isArray(ra.value.data) ? ra.value.data : []);
+    else toast.error('Erro ao carregar alunos: ' + (ra.reason?.response?.data?.message || ra.reason?.message || 'Erro desconhecido'));
     setLoading(false);
   }, []);
 
@@ -5449,6 +5453,7 @@ function ControlesTab({ podeEditar }: { podeEditar: boolean }) {
   const abrirEditar = (c: ControleFutebol) => { setForm({ ...c }); setModal({ aberto: true, item: c }); };
 
   const salvar = async () => {
+    if (!form.aluno_id && !modal.item) { toast.error('Selecione um aluno.'); return; }
     setSalvando('form');
     try {
       if (modal.item) {
@@ -5458,7 +5463,9 @@ function ControlesTab({ podeEditar }: { podeEditar: boolean }) {
       }
       setModal({ aberto: false, item: null });
       carregar();
-    } catch {}
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || e?.message || 'Erro ao salvar.');
+    }
     setSalvando(null);
   };
 
@@ -5705,7 +5712,17 @@ function ControlesTab({ podeEditar }: { podeEditar: boolean }) {
                   className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800"
                 >
                   <option value="">Nenhum</option>
-                  {estoqueProdutos.map(p => <option key={p.id} value={p.id}>{p.nome} (qtd: {p.quantidade_atual})</option>)}
+                  {estoqueProdutos
+                    .filter(p => p.nome.toUpperCase().includes('FUT') || p.categoria?.toUpperCase().includes('FUT'))
+                    .map(p => <option key={p.id} value={p.id}>{p.nome} (qtd: {p.quantidade_atual})</option>)}
+                  {estoqueProdutos.filter(p => !p.nome.toUpperCase().includes('FUT') && !p.categoria?.toUpperCase().includes('FUT')).length > 0 && (
+                    <>
+                      <option disabled>── Outros ──</option>
+                      {estoqueProdutos
+                        .filter(p => !p.nome.toUpperCase().includes('FUT') && !p.categoria?.toUpperCase().includes('FUT'))
+                        .map(p => <option key={p.id} value={p.id}>{p.nome} (qtd: {p.quantidade_atual})</option>)}
+                    </>
+                  )}
                 </select>
               </div>
 
@@ -5717,7 +5734,17 @@ function ControlesTab({ podeEditar }: { podeEditar: boolean }) {
                   className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800"
                 >
                   <option value="">Nenhum</option>
-                  {estoqueProdutos.map(p => <option key={p.id} value={p.id}>{p.nome} (qtd: {p.quantidade_atual})</option>)}
+                  {estoqueProdutos
+                    .filter(p => p.nome.toUpperCase().includes('FUT') || p.categoria?.toUpperCase().includes('FUT'))
+                    .map(p => <option key={p.id} value={p.id}>{p.nome} (qtd: {p.quantidade_atual})</option>)}
+                  {estoqueProdutos.filter(p => !p.nome.toUpperCase().includes('FUT') && !p.categoria?.toUpperCase().includes('FUT')).length > 0 && (
+                    <>
+                      <option disabled>── Outros ──</option>
+                      {estoqueProdutos
+                        .filter(p => !p.nome.toUpperCase().includes('FUT') && !p.categoria?.toUpperCase().includes('FUT'))
+                        .map(p => <option key={p.id} value={p.id}>{p.nome} (qtd: {p.quantidade_atual})</option>)}
+                    </>
+                  )}
                 </select>
               </div>
 
@@ -5770,7 +5797,7 @@ function ControlesTab({ podeEditar }: { podeEditar: boolean }) {
 export default function AcademicoPage() {
   const [activeTab, setActiveTab] = useState(() => {
     if (typeof window === 'undefined') return 'grade';
-    const VALID = ['grade','alunos','presenca','cursos','turmas','diario','acervo','chamados','monitoramento'];
+    const VALID = ['grade','alunos','presenca','cursos','turmas','diario','acervo','chamados','monitoramento','controles'];
     const tab = new URLSearchParams(window.location.search).get('tab') ?? 'grade';
     return VALID.includes(tab) ? tab : 'grade';
   });

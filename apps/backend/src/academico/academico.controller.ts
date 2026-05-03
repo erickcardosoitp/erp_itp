@@ -385,13 +385,13 @@ export class AcademicoController {
   listarChamados(@Query() q: any) { return this.svc.listarChamados(q); }
 
   @Post('chamados')
-  @ModuloPerm('academico', 'incluir')
+  @ModuloPerm('academico', 'visualizar') // qualquer staff (assist+) pode abrir chamado
   criarChamado(@Body() dto: any, @Req() req: any) {
-    return this.svc.criarChamado(dto, req.user?.email);
+    return this.svc.criarChamado(dto, req.user?.nome || req.user?.email);
   }
 
   @Patch('chamados/:id')
-  @ModuloPerm('academico', 'editar')
+  @ModuloPerm('academico', 'visualizar') // atualizar status também permitido para staff
   editarChamado(@Param('id') id: string, @Body() dto: any) {
     return this.svc.editarChamado(id, dto);
   }
