@@ -5387,6 +5387,8 @@ interface ControleFutebol {
   aluno_celular?: string;
   responsavel_nome?: string;
   responsavel_telefone?: string;
+  turma_nome?: string;
+  turma_id?: string;
   tamanho_camisa?: string;
   tamanho_short?: string;
   numero_chuteira?: string;
@@ -5482,6 +5484,18 @@ function ControlesTab({ podeEditar }: { podeEditar: boolean }) {
     if (!confirm('Remover este controle?')) return;
     await api.delete(`/academico/controle-futebol/${id}`);
     carregar();
+  };
+
+  const removerDaTurma = async (c: ControleFutebol) => {
+    if (!c.turma_id || !c.aluno_id) return;
+    if (!confirm(`Remover ${c.aluno_nome} da turma ${c.turma_nome}?`)) return;
+    try {
+      await api.patch(`/academico/turma-alunos/remover`, { aluno_id: c.aluno_id, turma_id: c.turma_id });
+      toast.success('Aluno removido da turma.');
+      carregar();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Erro ao remover da turma.');
+    }
   };
 
   const toggleField = async (c: ControleFutebol, field: 'uniforme_recebido' | 'chuteira_recebida') => {
@@ -5602,7 +5616,16 @@ function ControlesTab({ podeEditar }: { podeEditar: boolean }) {
                   return (
                     <tr key={c.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
                       <td className="px-4 py-3 font-medium text-slate-800 dark:text-white">
-                        {c.aluno_nome ?? '—'}
+                        <div>{c.aluno_nome ?? '—'}</div>
+                        {c.turma_nome && (
+                          <div className="flex items-center gap-1 mt-0.5">
+                            <span className="text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 px-1.5 py-0.5 rounded-md font-medium">{c.turma_nome}</span>
+                            {podeEditar && c.turma_id && (
+                              <button onClick={() => removerDaTurma(c)} title="Remover da turma"
+                                className="text-xs text-red-400 hover:text-red-600 px-1">✕</button>
+                            )}
+                          </div>
+                        )}
                         {c.aluno_celular && <div className="text-xs text-slate-400">{c.aluno_celular}</div>}
                       </td>
                       <td className="px-4 py-3 text-slate-500">{idade ?? '—'}</td>

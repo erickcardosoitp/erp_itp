@@ -211,6 +211,12 @@ export class AcademicoController {
     return this.svc.incluirAlunoNaTurma(dto.aluno_id, dto.turma_id);
   }
 
+  @Patch('turma-alunos/remover')
+  @ModuloPerm('academico', 'editar')
+  removerAlunoPorIds(@Body() dto: { aluno_id: string; turma_id: string }) {
+    return this.svc.removerAlunoDaTurmaPorIds(dto.aluno_id, dto.turma_id);
+  }
+
   @Patch('turma-alunos/:id/remover')
   @ModuloPerm('academico', 'editar')
   removerAluno(@Param('id') id: string) { return this.svc.removerAlunoDaTurma(id); }

@@ -590,6 +590,15 @@ export class AcademicoService {
     await this.turmaAlunoRepo.update(id, { turma_id: null, status: 'backlog' });
   }
 
+  async removerAlunoDaTurmaPorIds(alunoId: string, turmaId: string) {
+    this.logger.warn(`Removendo aluno ${alunoId} da turma ${turmaId}`);
+    const rec = await this.turmaAlunoRepo.findOne({
+      where: { aluno_id: alunoId, turma_id: turmaId, status: 'ativo' },
+    });
+    if (!rec) throw new NotFoundException('Vínculo ativo não encontrado');
+    await this.turmaAlunoRepo.update(rec.id, { turma_id: null, status: 'backlog' });
+  }
+
   /** Para uso interno pelo MatriculasService ao criar aluno */
   adicionarAoBacklog(alunoId: string) {
     this.logger.log(`Adicionando aluno ${alunoId} ao backlog`);
@@ -1755,10 +1764,18 @@ export class AcademicoService {
         a.nome_completo                               AS aluno_nome,
         a.data_nascimento::text                       AS aluno_data_nascimento,
         a.celular                                     AS aluno_celular,
-        -- responsável via inscrição mais recente
-        ins.nome_responsavel                          AS responsavel_nome,
-        ins.celular_responsavel                       AS responsavel_telefone,
-        -- documentos: verifica se tem os 5 obrigatórios + lgpd
+        a.nome_responsavel                            AS responsavel_nome,
+        a.telefone_alternativo                        AS responsavel_telefone,
+        a.lgpd_aceito                                 AS lgpd_aceito,
+        -- turma ativa do aluno
+        (SELECT t.nome FROM turma_alunos ta
+           JOIN turmas t ON t.id::text = ta.turma_id::text
+          WHERE ta.aluno_id::text = a.id::text AND ta.status = 'ativo'
+          LIMIT 1)                                    AS turma_nome,
+        (SELECT ta.turma_id::text FROM turma_alunos ta
+          WHERE ta.aluno_id::text = a.id::text AND ta.status = 'ativo'
+          LIMIT 1)                                    AS turma_id,
+        -- documentos obrigatórios
         COALESCE((
           SELECT COUNT(*) FROM documentos_inscricao di
           JOIN inscricoes i2 ON i2.id = di.inscricao_id
@@ -1772,18 +1789,11 @@ export class AcademicoService {
             AND di.obrigatorio = true
             AND di.arquivo IS NOT NULL AND di.arquivo <> ''
         ), 0)                                          AS docs_enviados,
-        COALESCE(ins.lgpd_aceito, false)              AS lgpd_aceito,
         -- estoque
         up.nome                                       AS uniforme_nome,
         cp.nome                                       AS chuteira_nome
       FROM controles_futebol cf
-      LEFT JOIN alunos a ON a.id::text = cf.aluno_id
-      LEFT JOIN LATERAL (
-        SELECT i.nome_responsavel, i.celular_responsavel, i.lgpd_aceito
-        FROM inscricoes i
-        WHERE i.aluno_id::text = a.id::text
-        ORDER BY i.created_at DESC LIMIT 1
-      ) ins ON true
+      LEFT JOIN alunos a ON a.id::text = cf.aluno_id AND (a.ativo IS NOT FALSE)
       LEFT JOIN estoque_produtos up ON up.id::text = cf.estoque_uniforme_id
       LEFT JOIN estoque_produtos cp ON cp.id::text = cf.estoque_chuteira_id
       ORDER BY a.nome_completo ASC
