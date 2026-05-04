@@ -12,6 +12,10 @@ import { AcademicoService } from './academico.service';
 export class ChamadosController {
   constructor(private readonly svc: AcademicoService) {}
 
+  @Get('responsaveis')
+  @ModuloPerm('chamados', 'visualizar')
+  responsaveis() { return this.svc.listarResponsaveis(); }
+
   @Get('stats')
   @ModuloPerm('chamados', 'visualizar')
   stats() { return this.svc.statsChamados(); }

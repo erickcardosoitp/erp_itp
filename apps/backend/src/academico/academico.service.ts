@@ -1629,9 +1629,21 @@ export class AcademicoService {
     return qb.getMany();
   }
 
+  async listarResponsaveis() {
+    return this.dataSource.query(
+      `SELECT id, nome, role FROM usuarios WHERE ativo IS NOT FALSE ORDER BY nome ASC`,
+    );
+  }
+
   async criarChamado(dto: Partial<ChamadoAcademico>, usuarioNome?: string) {
     if (!dto.titulo?.trim()) throw new BadRequestException('Título é obrigatório');
-    const chamado = this.chamadoRepo.create({ ...dto, criado_por_nome: usuarioNome ?? dto.criado_por_nome });
+    const chamado = this.chamadoRepo.create({
+      ...dto,
+      aluno_id:  dto.aluno_id  || null,
+      turma_id:  dto.turma_id  || null,
+      abertura:  new Date(),
+      criado_por_nome: usuarioNome ?? dto.criado_por_nome,
+    });
     const salvo = await this.chamadoRepo.save(chamado);
     await this.notificacoes.criar({
       tipo: 'novo_chamado',
@@ -1639,7 +1651,7 @@ export class AcademicoService {
       mensagem: `${salvo.tipo} · ${salvo.prioridade.toUpperCase()} · ${salvo.aluno_nome ? 'Aluno: ' + salvo.aluno_nome : 'Chamado geral'} · Por: ${salvo.criado_por_nome || '–'}`,
       referencia_id:   salvo.id,
       referencia_tipo: 'chamado',
-      cargo_minimo:    5, // adjunto e acima
+      cargo_minimo:    5,
     }).catch(() => {});
     return salvo;
   }
@@ -1648,9 +1660,14 @@ export class AcademicoService {
     const chamado = await this.chamadoRepo.findOneBy({ id });
     if (!chamado) throw new NotFoundException('Chamado não encontrado');
     const antigo_status = chamado.status;
-    Object.assign(chamado, dto);
-    if (dto.status === 'resolvido' && antigo_status !== 'resolvido' && !chamado.data_resolucao) {
-      chamado.data_resolucao = new Date().toISOString().slice(0, 10);
+    Object.assign(chamado, {
+      ...dto,
+      aluno_id: dto.aluno_id !== undefined ? (dto.aluno_id || null) : chamado.aluno_id,
+      turma_id: dto.turma_id !== undefined ? (dto.turma_id || null) : chamado.turma_id,
+    });
+    if (dto.status === 'resolvido' && antigo_status !== 'resolvido') {
+      chamado.data_resolucao = chamado.data_resolucao ?? new Date().toISOString().slice(0, 10);
+      (chamado as any).fechamento = new Date();
     }
     return this.chamadoRepo.save(chamado);
   }

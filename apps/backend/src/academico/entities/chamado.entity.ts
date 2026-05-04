@@ -48,6 +48,12 @@ export class ChamadoAcademico {
   @Column({ name: 'data_resolucao', type: 'date', nullable: true })
   data_resolucao: string | null;
 
+  @Column({ name: 'abertura', type: 'timestamptz', nullable: true })
+  abertura: Date | null;
+
+  @Column({ name: 'fechamento', type: 'timestamptz', nullable: true })
+  fechamento: Date | null;
+
   @CreateDateColumn({ name: 'created_at' })
   created_at: Date;
 
