@@ -362,6 +362,7 @@ const MODULOS_SISTEMA = [
   { key: 'cadastro_basico', label: 'Cadastro Básico' },
   { key: 'matriculas',      label: 'Matrículas' },
   { key: 'academico',       label: 'Acadêmico' },
+  { key: 'chamados',        label: 'Chamados' },
   { key: 'financeiro',      label: 'Financeiro' },
   { key: 'doacoes',         label: 'Doações' },
   { key: 'estoque',         label: 'Estoque' },
