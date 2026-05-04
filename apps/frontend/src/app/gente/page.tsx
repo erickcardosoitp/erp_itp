@@ -605,6 +605,30 @@ function ColaboradoresTab({ reload, colaboradores, carregarColaboradores }: { re
           <p className="text-xs text-slate-400">O ponto é liberado se o colaborador estiver dentro do raio de qualquer um dos locais acima.</p>
         </div>
       )}
+      {/* Home Office por dia fixo */}
+      <div className="space-y-1.5">
+        <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+          🏠 Dias de Home Office (fixos/semanais)
+        </label>
+        <div className="flex gap-2 flex-wrap">
+          {DIAS_OPT.map(d => {
+            const ativo = (form.dias_home_office || []).includes(d.k);
+            return (
+              <button key={d.k} type="button"
+                onClick={() => setForm((f: any) => ({
+                  ...f,
+                  dias_home_office: ativo
+                    ? (f.dias_home_office || []).filter((x: string) => x !== d.k)
+                    : [...(f.dias_home_office || []), d.k],
+                }))}
+                className={`px-3 py-1 rounded-lg text-xs font-bold border transition ${ativo ? 'bg-blue-600 text-white border-blue-600' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'}`}>
+                {d.l}
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-xs text-slate-400">Nestes dias o geofence é ignorado automaticamente — o colaborador registra de qualquer local.</p>
+      </div>
       {!editando && (
         <FL label="Geolocalização padrão">
           <div className="flex gap-2 items-center mb-2">

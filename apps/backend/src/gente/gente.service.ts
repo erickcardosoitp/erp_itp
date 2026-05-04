@@ -19,6 +19,10 @@ import { MovimentacaoFinanceira } from '../financeiro/entities/movimentacao-fina
 
 const PONTO_TOKEN = 'itp-ponto-2026';
 
+function getDiaPT(d: Date): string {
+  return ['dom','seg','ter','qua','qui','sex','sab'][d.getDay()];
+}
+
 function calcDistancia(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371000;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -68,6 +72,8 @@ export class GenteService {
     `);
     await run(`ALTER TABLE gente_colaborador_documentos ADD COLUMN IF NOT EXISTS categoria TEXT DEFAULT 'pessoal'`);
     await run(`ALTER TABLE IF EXISTS gente_vales ADD COLUMN IF NOT EXISTS ficha_url TEXT`);
+    await run(`ALTER TABLE IF EXISTS gente_colaboradores ADD COLUMN IF NOT EXISTS dias_home_office JSONB`);
+    await run(`ALTER TABLE IF EXISTS gente_ponto ADD COLUMN IF NOT EXISTS modalidade TEXT DEFAULT 'presencial'`);
     await run(`
       CREATE TABLE IF NOT EXISTS gente_feriados (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -265,7 +271,8 @@ export class GenteService {
   async editarColaborador(id: string, dto: any) {
     const colunas = ['tipo','horario_entrada','horario_saida','dias_trabalho',
       'latitude_permitida','longitude_permitida','raio_metros','ativo',
-      'jornada_flexivel','horas_dia_flex','horario_flexivel_semana','valor_passagem'];
+      'jornada_flexivel','horas_dia_flex','horario_flexivel_semana','valor_passagem',
+      'dias_home_office','pagamento_isento'];
     const payload: any = {};
     colunas.forEach(k => { if (dto[k] !== undefined) payload[k] = dto[k]; });
     if (Object.keys(payload).length) await this.colaboradorRepo.update(id, payload);
@@ -988,7 +995,8 @@ export class GenteService {
         const externo = await this.trabalhoExternoRepo.findOne({
           where: { colaborador_id: col.id, data: hoje, ativo: true },
         });
-        if (externo) {
+        const ehHomeOffice = Array.isArray(col.dias_home_office) && col.dias_home_office.includes(getDiaPT(new Date()));
+        if (externo || ehHomeOffice) {
           dentro_area = true;
           distancia_metros = 0;
         } else {
@@ -1026,11 +1034,19 @@ export class GenteService {
     const col = await this.colaboradorRepo.findOne({ where: { funcionario_id: func.func_id } });
     if (!col) throw new NotFoundException('Funcionário não cadastrado no módulo Gente.');
 
-    // ── Validação de geofence obrigatória para registros externos ─────────────
+    // ── Validação de geofence ─────────────────────────────────────────────────
     const hoje = new Date().toISOString().split('T')[0];
+    const diaPT = getDiaPT(new Date());
+    const ehHomeOffice = Array.isArray(col.dias_home_office) && col.dias_home_office.includes(diaPT);
     const externo = await this.trabalhoExternoRepo.findOne({ where: { colaborador_id: col.id, data: hoje, ativo: true } });
 
-    if (!externo) {
+    let modalidade: string;
+    if (ehHomeOffice) {
+      modalidade = 'home_office';
+    } else if (externo) {
+      modalidade = 'remoto';
+    } else {
+      modalidade = 'presencial';
       const locais = await this.localRepo.find({ where: { colaborador_id: col.id } });
       const temGeofence = locais.length > 0 || (col.latitude_permitida && col.longitude_permitida);
 
@@ -1054,7 +1070,7 @@ export class GenteService {
       }
     }
 
-    return this.registrarPonto({ colaborador_id: col.id, tipo, latitude, longitude, observacao, assinatura }, 'self');
+    return this.registrarPonto({ colaborador_id: col.id, tipo, latitude, longitude, observacao, assinatura, modalidade }, 'self');
   }
 
   async verificarColaboradorExterno(token: string, cpf_ou_matricula: string) {
@@ -1071,7 +1087,9 @@ export class GenteService {
     if (!col) throw new NotFoundException('Funcionário não habilitado para ponto.');
     const ultimoPonto = await this.pontoRepo.findOne({ where: { colaborador_id: col.id }, order: { data_hora: 'DESC' } });
     const locais = await this.localRepo.find({ where: { colaborador_id: col.id }, order: { createdAt: 'ASC' } });
-    return { colaborador_id: col.id, nome: func.nome, matricula: func.matricula, cargo: func.cargo ?? null, foto: func.foto ?? null, horario_entrada: col.horario_entrada, horario_saida: col.horario_saida, jornada_flexivel: col.jornada_flexivel ?? false, horas_dia_flex: col.horas_dia_flex ?? null, latitude_permitida: col.latitude_permitida, longitude_permitida: col.longitude_permitida, raio_metros: col.raio_metros, locais, ultimo_ponto: ultimoPonto ?? null };
+    const diasHomeOffice = col.dias_home_office ?? [];
+    const ehHomeOfficehoje = diasHomeOffice.includes(getDiaPT(new Date()));
+    return { colaborador_id: col.id, nome: func.nome, matricula: func.matricula, cargo: func.cargo ?? null, foto: func.foto ?? null, horario_entrada: col.horario_entrada, horario_saida: col.horario_saida, jornada_flexivel: col.jornada_flexivel ?? false, horas_dia_flex: col.horas_dia_flex ?? null, latitude_permitida: col.latitude_permitida, longitude_permitida: col.longitude_permitida, raio_metros: col.raio_metros, locais, ultimo_ponto: ultimoPonto ?? null, dias_home_office: diasHomeOffice, eh_home_office_hoje: ehHomeOfficehoje };
   }
 
   async deletarPonto(id: string) { await this.pontoRepo.delete(id); return { ok: true }; }

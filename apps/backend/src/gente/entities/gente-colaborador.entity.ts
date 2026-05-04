@@ -47,6 +47,9 @@ export class GenteColaborador {
   @Column({ type: 'numeric', nullable: true, precision: 10, scale: 2 })
   valor_passagem: number;
 
+  @Column({ type: 'jsonb', nullable: true })
+  dias_home_office: string[]; // ['seg','ter','qua','qui','sex','sab','dom']
+
   @Column({ type: 'boolean', default: false })
   pagamento_isento: boolean;
 

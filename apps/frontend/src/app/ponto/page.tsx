@@ -14,7 +14,8 @@ function calcDistanciaM(lat1: number, lon1: number, lat2: number, lon2: number):
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-function calcStatusGeofence(geo: { lat: number; lon: number } | null, colaborador: ColaboradorInfo): { dentro: boolean | null; distancia: number | null; local: string | null } {
+function calcStatusGeofence(geo: { lat: number; lon: number } | null, colaborador: ColaboradorInfo, ehHomeOffice = false): { dentro: boolean | null; distancia: number | null; local: string | null; homeOffice?: boolean } {
+  if (ehHomeOffice) return { dentro: true, distancia: null, local: 'Home Office', homeOffice: true };
   if (!geo) return { dentro: null, distancia: null, local: null };
   const locais = colaborador.locais ?? [];
   if (locais.length > 0) {
@@ -52,6 +53,8 @@ interface ColaboradorInfo {
   raio_metros: number;
   locais: LocalPermitido[];
   ultimo_ponto: { tipo: string; data_hora: string } | null;
+  dias_home_office: string[];
+  eh_home_office_hoje: boolean;
 }
 
 // ── Pad de assinatura ─────────────────────────────────────────────────────
@@ -238,12 +241,14 @@ function TelaHistorico({ colaborador, onVoltar }: { colaborador: ColaboradorInfo
             const { data, hora } = fmtDH(r.data_hora);
             return (
               <div key={r.id} className="flex items-center gap-3 bg-white/5 border border-purple-700/30 rounded-xl px-4 py-2.5">
-                <span className={`text-lg ${r.tipo === 'entrada' ? '✅' : '🔴'}`}>{r.tipo === 'entrada' ? '✅' : '🔴'}</span>
+                <span className="text-lg">{r.tipo === 'entrada' ? '✅' : '🔴'}</span>
                 <div className="flex-1">
                   <span className={`text-sm font-bold ${r.tipo === 'entrada' ? 'text-green-400' : 'text-red-400'}`}>{r.tipo.toUpperCase()}</span>
                   <span className="text-purple-400 text-xs ml-2">{data} · {hora}</span>
+                  {r.modalidade === 'home_office' && <span className="ml-2 text-xs text-blue-400">🏠 Home Office</span>}
+                  {r.modalidade === 'remoto' && <span className="ml-2 text-xs text-yellow-400">🌍 Remoto</span>}
                 </div>
-                {r.dentro_area !== null && (
+                {r.dentro_area !== null && r.modalidade !== 'home_office' && r.modalidade !== 'remoto' && (
                   <span className={`text-xs ${r.dentro_area ? 'text-green-500' : 'text-orange-400'}`}>{r.dentro_area ? '📍' : '⚠️'}</span>
                 )}
               </div>
@@ -486,6 +491,8 @@ function TelaMarcarPonto({
   const [tipoSelecionado, setTipoSelecionado] = useState<'entrada' | 'saida' | null>(null);
   const [registrando, setRegistrando] = useState(false);
   const tipoProximo = colaborador.ultimo_ponto?.tipo === 'entrada' ? 'saida' : 'entrada';
+  const DIAS_PT: Record<number, string> = { 0:'dom',1:'seg',2:'ter',3:'qua',4:'qui',5:'sex',6:'sab' };
+  const ehHomeOffice = colaborador.eh_home_office_hoje || (Array.isArray(colaborador.dias_home_office) && colaborador.dias_home_office.includes(DIAS_PT[new Date().getDay()]));
   const [agora, setAgora] = useState<Date | null>(null);
 
   useEffect(() => {
@@ -538,8 +545,16 @@ function TelaMarcarPonto({
         </div>
       </div>
 
-      {(() => {
-        const status = calcStatusGeofence(geo, colaborador);
+      {ehHomeOffice ? (
+        <div className="bg-blue-900/40 border border-blue-500/60 rounded-xl px-3 py-2.5 text-xs font-semibold flex items-center gap-2">
+          <span>🏠</span>
+          <div>
+            <span className="text-blue-200 font-bold">Home Office hoje</span>
+            <span className="text-blue-400 block text-xs">Geofence liberado — ponto aceito de qualquer localização</span>
+          </div>
+        </div>
+      ) : (() => {
+        const status = calcStatusGeofence(geo, colaborador, false);
         if (!geo) return (
           <div className="bg-orange-900/30 text-orange-300 border border-orange-700/40 rounded-xl px-3 py-2 text-xs font-semibold flex items-center gap-2">
             <span>⚠️</span>

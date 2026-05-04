@@ -31,6 +31,9 @@ export class GentePonto {
   @Column({ type: 'text', nullable: true })
   observacao: string;
 
+  @Column({ type: 'text', nullable: true, default: 'presencial' })
+  modalidade: string; // 'presencial' | 'home_office' | 'remoto'
+
   @Column({ type: 'text', nullable: true, default: 'system' })
   registrado_por: string; // 'self' | 'gestor' | 'system'
 
