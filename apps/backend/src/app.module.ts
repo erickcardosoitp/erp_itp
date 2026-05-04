@@ -956,6 +956,42 @@ export class AppModule implements OnModuleInit {
       `);
       this.logger.log('✅ Coluna inscricoes.lgpd_user_agent aplicada (IF NOT EXISTS)');
 
+      // ── Permissões: módulo chamados + fix academico.incluir ───────────────
+      // Adiciona 'chamados' a todos os grupos que têm 'academico' configurado
+      await this.dataSource.query(`
+        UPDATE grupos
+        SET grupo_permissoes = jsonb_set(
+          jsonb_set(
+            grupo_permissoes,
+            '{permissoes,chamados}',
+            '{"visualizar":true,"incluir":true,"editar":true,"excluir":false}'::jsonb,
+            true
+          ),
+          '{modulos_visiveis,chamados}',
+          'true'::jsonb,
+          true
+        )
+        WHERE grupo_permissoes->'permissoes' ? 'academico'
+          AND NOT (grupo_permissoes->'permissoes' ? 'chamados')
+      `);
+      // Garante academico.incluir e academico.editar para grupos que podem visualizar academico
+      await this.dataSource.query(`
+        UPDATE grupos
+        SET grupo_permissoes = jsonb_set(
+          jsonb_set(
+            grupo_permissoes,
+            '{permissoes,academico,incluir}',
+            'true'::jsonb,
+            true
+          ),
+          '{permissoes,academico,editar}',
+          'true'::jsonb,
+          true
+        )
+        WHERE grupo_permissoes->'permissoes'->'academico'->>'visualizar' = 'true'
+      `);
+      this.logger.log('✅ Permissões grupos: chamados adicionado + academico.incluir/editar garantidos');
+
     } catch (err: any) {
       this.logger.error(`❌ Erro nas migrations automáticas: ${err.message}`);
     }
