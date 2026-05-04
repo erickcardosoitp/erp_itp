@@ -1927,4 +1927,119 @@ export class AcademicoService {
       `SELECT id, nome, categoria, quantidade_atual FROM estoque_produtos WHERE ativo = true ORDER BY nome ASC`,
     );
   }
+
+  // ── CONTROLE BALLET ───────────────────────────────────────────────────────
+
+  async listarControleBallet() {
+    const rows = await this.dataSource.query(`
+      SELECT
+        cb.*,
+        a.nome_completo                               AS aluno_nome,
+        a.data_nascimento::text                       AS aluno_data_nascimento,
+        a.celular                                     AS aluno_celular,
+        a.nome_responsavel                            AS responsavel_nome,
+        a.telefone_alternativo                        AS responsavel_telefone,
+        (SELECT t.nome FROM turma_alunos ta
+           JOIN turmas t ON t.id::text = ta.turma_id::text
+          WHERE ta.aluno_id::text = a.id::text AND ta.status = 'ativo'
+          LIMIT 1)                                    AS turma_nome,
+        rp.nome                                       AS roupa_nome,
+        sp.nome                                       AS sapatilha_nome
+      FROM controles_ballet cb
+      LEFT JOIN alunos a ON a.id::text = cb.aluno_id AND (a.ativo IS NOT FALSE)
+      LEFT JOIN estoque_produtos rp ON rp.id::text = cb.estoque_roupa_id
+      LEFT JOIN estoque_produtos sp ON sp.id::text = cb.estoque_sapatilha_id
+      ORDER BY a.nome_completo ASC
+    `);
+    return rows;
+  }
+
+  async criarControleBallet(dto: any) {
+    const id = (await this.dataSource.query(
+      `INSERT INTO controles_ballet
+        (id, aluno_id, tamanho_roupa, numero_sapatilha, tamanho_meia,
+         estoque_roupa_id, estoque_sapatilha_id,
+         roupa_encomendada, sapatilha_encomendada,
+         roupa_entregue, sapatilha_entregue, status, observacoes,
+         created_at, updated_at)
+       VALUES (gen_random_uuid(),$1,$2,$3,$4,$5,$6,false,false,false,false,$7,$8,now(),now())
+       RETURNING id`,
+      [
+        dto.aluno_id,
+        dto.tamanho_roupa ?? null,
+        dto.numero_sapatilha ?? null,
+        dto.tamanho_meia ?? null,
+        dto.estoque_roupa_id ?? null,
+        dto.estoque_sapatilha_id ?? null,
+        dto.status ?? 'Pendente',
+        dto.observacoes ?? null,
+      ],
+    ))[0];
+    return this.dataSource.query(`SELECT * FROM controles_ballet WHERE id = $1`, [id.id]).then(r => r[0]);
+  }
+
+  async atualizarControleBallet(id: string, dto: any, usuarioNome?: string) {
+    const [current] = await this.dataSource.query(`SELECT * FROM controles_ballet WHERE id = $1`, [id]);
+    if (!current) throw new Error('Controle ballet não encontrado');
+
+    if (dto.roupa_entregue && !current.roupa_entregue && dto.estoque_roupa_id) {
+      await this.dataSource.query(
+        `UPDATE estoque_produtos SET quantidade_atual = quantidade_atual - 1 WHERE id = $1`,
+        [dto.estoque_roupa_id],
+      );
+      await this.dataSource.query(
+        `INSERT INTO estoque_movimentos (id, produto_id, tipo, quantidade, observacao, usuario_nome, "createdAt")
+         VALUES (gen_random_uuid(),$1,'baixa',1,$2,$3,now())`,
+        [dto.estoque_roupa_id, 'Roupa entregue ao aluno (Controle Ballet)', usuarioNome ?? 'Sistema'],
+      );
+    }
+    if (dto.sapatilha_entregue && !current.sapatilha_entregue && dto.estoque_sapatilha_id) {
+      await this.dataSource.query(
+        `UPDATE estoque_produtos SET quantidade_atual = quantidade_atual - 1 WHERE id = $1`,
+        [dto.estoque_sapatilha_id],
+      );
+      await this.dataSource.query(
+        `INSERT INTO estoque_movimentos (id, produto_id, tipo, quantidade, observacao, usuario_nome, "createdAt")
+         VALUES (gen_random_uuid(),$1,'baixa',1,$2,$3,now())`,
+        [dto.estoque_sapatilha_id, 'Sapatilha entregue ao aluno (Controle Ballet)', usuarioNome ?? 'Sistema'],
+      );
+    }
+
+    await this.dataSource.query(
+      `UPDATE controles_ballet SET
+        tamanho_roupa       = COALESCE($1, tamanho_roupa),
+        numero_sapatilha    = COALESCE($2, numero_sapatilha),
+        tamanho_meia        = COALESCE($3, tamanho_meia),
+        estoque_roupa_id    = COALESCE($4, estoque_roupa_id),
+        estoque_sapatilha_id= COALESCE($5, estoque_sapatilha_id),
+        roupa_encomendada   = $6,
+        sapatilha_encomendada = $7,
+        roupa_entregue      = $8,
+        sapatilha_entregue  = $9,
+        status              = COALESCE($10, status),
+        observacoes         = COALESCE($11, observacoes),
+        updated_at          = now()
+       WHERE id = $12`,
+      [
+        dto.tamanho_roupa ?? null,
+        dto.numero_sapatilha ?? null,
+        dto.tamanho_meia ?? null,
+        dto.estoque_roupa_id ?? null,
+        dto.estoque_sapatilha_id ?? null,
+        dto.roupa_encomendada ?? current.roupa_encomendada,
+        dto.sapatilha_encomendada ?? current.sapatilha_encomendada,
+        dto.roupa_entregue ?? current.roupa_entregue,
+        dto.sapatilha_entregue ?? current.sapatilha_entregue,
+        dto.status ?? null,
+        dto.observacoes ?? null,
+        id,
+      ],
+    );
+    return this.dataSource.query(`SELECT * FROM controles_ballet WHERE id = $1`, [id]).then(r => r[0]);
+  }
+
+  async deletarControleBallet(id: string) {
+    await this.dataSource.query(`DELETE FROM controles_ballet WHERE id = $1`, [id]);
+    return { ok: true };
+  }
 }

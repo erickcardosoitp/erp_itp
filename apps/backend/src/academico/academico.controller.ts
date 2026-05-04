@@ -433,4 +433,24 @@ export class AcademicoController {
   @Get('estoque-produtos')
   @ModuloPerm('academico', 'visualizar')
   listarEstoqueProdutos() { return this.svc.listarEstoqueProdutos(); }
+
+  // ── CONTROLE BALLET ────────────────────────────────────────────────────────
+
+  @Get('controle-ballet')
+  @ModuloPerm('academico', 'visualizar')
+  listarControleBallet() { return this.svc.listarControleBallet(); }
+
+  @Post('controle-ballet')
+  @ModuloPerm('academico', 'incluir')
+  criarControleBallet(@Body() dto: any) { return this.svc.criarControleBallet(dto); }
+
+  @Patch('controle-ballet/:id')
+  @ModuloPerm('academico', 'editar')
+  atualizarControleBallet(@Param('id') id: string, @Body() dto: any, @Req() req: any) {
+    return this.svc.atualizarControleBallet(id, dto, req.user?.nome || req.user?.email);
+  }
+
+  @Delete('controle-ballet/:id')
+  @ModuloPerm('academico', 'excluir')
+  deletarControleBallet(@Param('id') id: string) { return this.svc.deletarControleBallet(id); }
 }

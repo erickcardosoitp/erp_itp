@@ -5476,7 +5476,29 @@ const STATUS_COLORS: Record<string, string> = {
   Entregue: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
 };
 
+interface ControleBallet {
+  id: string; aluno_id: string; aluno_nome?: string; aluno_data_nascimento?: string;
+  aluno_celular?: string; responsavel_nome?: string; responsavel_telefone?: string; turma_nome?: string;
+  tamanho_roupa?: string; numero_sapatilha?: string; tamanho_meia?: string;
+  estoque_roupa_id?: string; estoque_sapatilha_id?: string;
+  roupa_encomendada: boolean; sapatilha_encomendada: boolean;
+  roupa_entregue: boolean; sapatilha_entregue: boolean;
+  status: string; observacoes?: string;
+  roupa_nome?: string; sapatilha_nome?: string;
+}
+
+const STATUS_BALLET = ['Pendente', 'Encomendado', 'Separado', 'Entregue'];
+const STATUS_BALLET_COLORS: Record<string, string> = {
+  Pendente:    'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
+  Encomendado: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
+  Separado:    'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300',
+  Entregue:    'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
+};
+
 function ControlesTab({ podeEditar }: { podeEditar: boolean }) {
+  const [subTab, setSubTab] = useState<'futebol' | 'ballet'>('futebol');
+
+  // ── Futebol state ──
   const [controles, setControles] = useState<ControleFutebol[]>([]);
   const [estoqueProdutos, setEstoqueProdutos] = useState<EstoqueProduto[]>([]);
   const [alunos, setAlunosCtrl] = useState<Aluno[]>([]);
@@ -5487,9 +5509,18 @@ function ControlesTab({ podeEditar }: { podeEditar: boolean }) {
   const [form, setForm] = useState<Partial<ControleFutebol>>({});
   const [salvando, setSalvando] = useState<string | null>(null);
 
+  // ── Ballet state ──
+  const [controlesBallet, setControlesBallet] = useState<ControleBallet[]>([]);
+  const [loadingBallet, setLoadingBallet] = useState(true);
+  const [buscaBallet, setBuscaBallet] = useState('');
+  const [filtroStatusBallet, setFiltroStatusBallet] = useState('');
+  const [modalBallet, setModalBallet] = useState<{ aberto: boolean; item: ControleBallet | null }>({ aberto: false, item: null });
+  const [formBallet, setFormBallet] = useState<Partial<ControleBallet>>({});
+  const [salvandoBallet, setSalvandoBallet] = useState<string | null>(null);
+  const [alunosBallet, setAlunosBallet] = useState<Aluno[]>([]);
+
   const carregar = useCallback(async () => {
     setLoading(true);
-    // Carrega cada fonte independentemente — falha em uma não bloqueia as outras
     const [rc, re, ra] = await Promise.allSettled([
       api.get('/academico/controle-futebol'),
       api.get('/academico/estoque-produtos'),
@@ -5500,19 +5531,35 @@ function ControlesTab({ podeEditar }: { podeEditar: boolean }) {
     if (re.status === 'fulfilled') setEstoqueProdutos(Array.isArray(re.value.data) ? re.value.data : []);
     if (ra.status === 'fulfilled') {
       const todos = Array.isArray(ra.value.data) ? ra.value.data : [];
-      // Filtra apenas alunos matriculados em turmas com "futebol" no nome
       const futebolistas = todos.filter((a: any) =>
         Array.isArray(a.turmas) && a.turmas.some((t: any) => t.nome?.toLowerCase().includes('futebol'))
       );
       setAlunosCtrl(futebolistas.length > 0 ? futebolistas : todos);
+      const bailarinas = todos.filter((a: any) =>
+        Array.isArray(a.turmas) && a.turmas.some((t: any) => t.nome?.toLowerCase().includes('ballet') || t.nome?.toLowerCase().includes('balé') || t.nome?.toLowerCase().includes('dança'))
+      );
+      setAlunosBallet(bailarinas.length > 0 ? bailarinas : todos);
     } else {
       toast.error('Erro ao carregar alunos: ' + (ra.reason?.response?.data?.message || ra.reason?.message || 'Erro desconhecido'));
     }
     setLoading(false);
   }, []);
 
-  useEffect(() => { carregar(); }, [carregar]);
+  const carregarBallet = useCallback(async () => {
+    setLoadingBallet(true);
+    try {
+      const r = await api.get('/academico/controle-ballet');
+      setControlesBallet(Array.isArray(r.data) ? r.data : []);
+    } catch (e: any) {
+      toast.error('Erro ao carregar ballet: ' + (e?.response?.data?.message || e?.message || 'Erro'));
+    }
+    setLoadingBallet(false);
+  }, []);
 
+  useEffect(() => { carregar(); }, [carregar]);
+  useEffect(() => { carregarBallet(); }, [carregarBallet]);
+
+  // ── Futebol funcs ──
   const filtrados = controles.filter(c => {
     const q = busca.toLowerCase();
     const matchBusca = !q || (c.aluno_nome ?? '').toLowerCase().includes(q) || (c.responsavel_nome ?? '').toLowerCase().includes(q);
@@ -5583,6 +5630,64 @@ function ControlesTab({ podeEditar }: { podeEditar: boolean }) {
     setSalvando(null);
   };
 
+  // ── Ballet funcs ──
+  const filtradosBallet = controlesBallet.filter(c => {
+    const q = buscaBallet.toLowerCase();
+    const matchBusca = !q || (c.aluno_nome ?? '').toLowerCase().includes(q) || (c.responsavel_nome ?? '').toLowerCase().includes(q);
+    const matchStatus = !filtroStatusBallet || c.status === filtroStatusBallet;
+    return matchBusca && matchStatus;
+  });
+
+  const abrirCriarBallet = () => { setFormBallet({}); setModalBallet({ aberto: true, item: null }); };
+  const abrirEditarBallet = (c: ControleBallet) => { setFormBallet({ ...c }); setModalBallet({ aberto: true, item: c }); };
+
+  const salvarBallet = async () => {
+    if (!formBallet.aluno_id && !modalBallet.item) { toast.error('Selecione um aluno.'); return; }
+    setSalvandoBallet('form');
+    try {
+      if (modalBallet.item) {
+        await api.patch(`/academico/controle-ballet/${modalBallet.item.id}`, formBallet);
+      } else {
+        await api.post('/academico/controle-ballet', formBallet);
+      }
+      setModalBallet({ aberto: false, item: null });
+      carregarBallet();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || e?.message || 'Erro ao salvar.');
+    }
+    setSalvandoBallet(null);
+  };
+
+  const deletarBallet = async (id: string) => {
+    if (!confirm('Remover este controle?')) return;
+    await api.delete(`/academico/controle-ballet/${id}`);
+    carregarBallet();
+  };
+
+  const toggleBallet = async (c: ControleBallet, field: 'roupa_encomendada' | 'sapatilha_encomendada' | 'roupa_entregue' | 'sapatilha_entregue') => {
+    if (!podeEditar) return;
+    setSalvandoBallet(c.id + field);
+    try {
+      await api.patch(`/academico/controle-ballet/${c.id}`, {
+        [field]: !c[field],
+        estoque_roupa_id: c.estoque_roupa_id,
+        estoque_sapatilha_id: c.estoque_sapatilha_id,
+      });
+      carregarBallet();
+    } catch {}
+    setSalvandoBallet(null);
+  };
+
+  const mudarStatusBallet = async (c: ControleBallet, novoStatus: string) => {
+    if (!podeEditar) return;
+    setSalvandoBallet(c.id + 'status');
+    try {
+      await api.patch(`/academico/controle-ballet/${c.id}`, { status: novoStatus });
+      setControlesBallet(prev => prev.map(x => x.id === c.id ? { ...x, status: novoStatus } : x));
+    } catch {}
+    setSalvandoBallet(null);
+  };
+
   const stats = {
     total: controles.length,
     uniforme: controles.filter(c => c.uniforme_recebido).length,
@@ -5590,15 +5695,248 @@ function ControlesTab({ podeEditar }: { podeEditar: boolean }) {
     docsOk: controles.filter(c => c.docs_ok).length,
     entregues: controles.filter(c => c.status === 'Entregue').length,
   };
+  const statsBallet = {
+    total: controlesBallet.length,
+    roupaEncomendada: controlesBallet.filter(c => c.roupa_encomendada).length,
+    sapatilhaEncomendada: controlesBallet.filter(c => c.sapatilha_encomendada).length,
+    roupaEntregue: controlesBallet.filter(c => c.roupa_entregue).length,
+    entregues: controlesBallet.filter(c => c.status === 'Entregue').length,
+  };
 
   return (
     <div className="space-y-6">
       {/* Sub-navegação */}
       <div className="flex gap-2 bg-white dark:bg-slate-900 rounded-2xl p-1.5 border border-slate-100 dark:border-slate-800 w-fit">
-        <button className="px-4 py-1.5 rounded-xl bg-green-600 text-white text-sm font-bold flex items-center gap-2">
+        <button onClick={() => setSubTab('futebol')}
+          className={`px-4 py-1.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-colors ${subTab === 'futebol' ? 'bg-green-600 text-white' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>
           <Star size={14} /> Futebol
         </button>
+        <button onClick={() => setSubTab('ballet')}
+          className={`px-4 py-1.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-colors ${subTab === 'ballet' ? 'bg-pink-500 text-white' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>
+          <Heart size={14} /> Ballet
+        </button>
       </div>
+
+      {/* ── BALLET ──────────────────────────────────────────────────────────── */}
+      {subTab === 'ballet' && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            {[
+              { label: 'Total', valor: statsBallet.total },
+              { label: 'Roupa Enc.', valor: statsBallet.roupaEncomendada },
+              { label: 'Sapat. Enc.', valor: statsBallet.sapatilhaEncomendada },
+              { label: 'Roupa Ent.', valor: statsBallet.roupaEntregue },
+              { label: 'Entregues', valor: statsBallet.entregues },
+            ].map(k => (
+              <div key={k.label} className="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-100 dark:border-slate-800 text-center">
+                <div className="text-2xl font-black text-slate-800 dark:text-white">{k.valor}</div>
+                <div className="text-xs text-slate-500 mt-1">{k.label}</div>
+              </div>
+            ))}
+          </div>
+
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 overflow-hidden">
+            <div className="p-4 flex flex-wrap gap-3 items-center justify-between border-b border-slate-100 dark:border-slate-800">
+              <div className="flex gap-2 flex-wrap flex-1">
+                <div className="relative flex-1 min-w-[180px]">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input value={buscaBallet} onChange={e => setBuscaBallet(e.target.value)} placeholder="Buscar aluno..."
+                    className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-pink-400" />
+                </div>
+                <select value={filtroStatusBallet} onChange={e => setFiltroStatusBallet(e.target.value)}
+                  className="px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800">
+                  <option value="">Todos os status</option>
+                  {STATUS_BALLET.map(s => <option key={s}>{s}</option>)}
+                </select>
+              </div>
+              {podeEditar && (
+                <button onClick={abrirCriarBallet}
+                  className="flex items-center gap-2 px-4 py-2 bg-pink-500 text-white rounded-xl text-sm font-semibold hover:bg-pink-600 transition-colors">
+                  <Plus size={14} /> Adicionar
+                </button>
+              )}
+            </div>
+
+            {loadingBallet ? (
+              <div className="p-8 text-center text-slate-400 text-sm">Carregando...</div>
+            ) : filtradosBallet.length === 0 ? (
+              <div className="p-8 text-center text-slate-400 text-sm">Nenhum registro encontrado.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 dark:bg-slate-800 text-xs uppercase text-slate-500">
+                    <tr>
+                      <th className="px-4 py-3 text-left">Aluna</th>
+                      <th className="px-4 py-3 text-center">Tam. Roupa</th>
+                      <th className="px-4 py-3 text-center">Nº Sapatilha</th>
+                      <th className="px-4 py-3 text-center">Tam. Meia</th>
+                      <th className="px-4 py-3 text-center">Roupa Enc.</th>
+                      <th className="px-4 py-3 text-center">Sapatilha Enc.</th>
+                      <th className="px-4 py-3 text-center">Roupa Ent.</th>
+                      <th className="px-4 py-3 text-center">Sapatilha Ent.</th>
+                      <th className="px-4 py-3 text-center">Status</th>
+                      <th className="px-4 py-3 text-center">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {filtradosBallet.map(c => (
+                      <tr key={c.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                        <td className="px-4 py-3 font-medium text-slate-800 dark:text-white">
+                          <div>{c.aluno_nome ?? '—'}</div>
+                          {c.turma_nome && <div className="text-xs bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-300 px-1.5 py-0.5 rounded-md font-medium mt-0.5 w-fit">{c.turma_nome}</div>}
+                          {c.responsavel_nome && <div className="text-xs text-slate-400 mt-0.5">{c.responsavel_nome}</div>}
+                        </td>
+                        <td className="px-4 py-3 text-center text-slate-600 dark:text-slate-300">{c.tamanho_roupa ?? '—'}</td>
+                        <td className="px-4 py-3 text-center text-slate-600 dark:text-slate-300">{c.numero_sapatilha ?? '—'}</td>
+                        <td className="px-4 py-3 text-center text-slate-600 dark:text-slate-300">{c.tamanho_meia ?? '—'}</td>
+                        {(['roupa_encomendada','sapatilha_encomendada','roupa_entregue','sapatilha_entregue'] as const).map(field => (
+                          <td key={field} className="px-4 py-3 text-center">
+                            <button disabled={!podeEditar || salvandoBallet === c.id + field}
+                              onClick={() => toggleBallet(c, field)}
+                              className={`px-2 py-1 rounded-lg text-xs font-semibold border transition-colors ${c[field] ? 'bg-pink-100 border-pink-300 text-pink-700 dark:bg-pink-900/30 dark:text-pink-300' : 'bg-slate-100 border-slate-300 text-slate-500 dark:bg-slate-800 dark:text-slate-400'}`}>
+                              {c[field] ? '✓ Sim' : 'Não'}
+                            </button>
+                          </td>
+                        ))}
+                        <td className="px-4 py-3 text-center">
+                          {podeEditar ? (
+                            <select value={c.status} disabled={salvandoBallet === c.id + 'status'}
+                              onChange={e => mudarStatusBallet(c, e.target.value)}
+                              className={`px-2 py-1 rounded-lg text-xs font-semibold border-0 ${STATUS_BALLET_COLORS[c.status] ?? 'bg-slate-100'}`}>
+                              {STATUS_BALLET.map(s => <option key={s}>{s}</option>)}
+                            </select>
+                          ) : (
+                            <span className={`px-2 py-1 rounded-lg text-xs font-semibold ${STATUS_BALLET_COLORS[c.status] ?? 'bg-slate-100'}`}>{c.status}</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <div className="flex justify-center gap-1">
+                            {podeEditar && (
+                              <>
+                                <button onClick={() => abrirEditarBallet(c)} className="p-1.5 rounded-lg hover:bg-pink-50 dark:hover:bg-pink-900/20 text-pink-500"><Edit3 size={13}/></button>
+                                <button onClick={() => deletarBallet(c.id)} className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500"><Trash2 size={13}/></button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Modal Ballet */}
+          {modalBallet.aberto && (
+            <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+              <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 w-full max-w-lg space-y-4 shadow-2xl overflow-y-auto max-h-[90vh]">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-lg font-bold text-slate-800 dark:text-white">
+                    {modalBallet.item ? 'Editar Controle Ballet' : 'Novo Controle — Ballet'}
+                  </h3>
+                  <button onClick={() => setModalBallet({ aberto: false, item: null })} className="text-slate-400 hover:text-slate-700"><X size={18}/></button>
+                </div>
+                <div className="grid grid-cols-1 gap-3">
+                  {!modalBallet.item && (
+                    <div>
+                      <label className="text-xs font-semibold text-slate-500 mb-1 block">Aluna *</label>
+                      <select value={formBallet.aluno_id ?? ''} onChange={e => setFormBallet(f => ({ ...f, aluno_id: e.target.value }))}
+                        className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800">
+                        <option value="">Selecione...</option>
+                        {alunosBallet.map(a => <option key={a.id} value={a.id}>{a.nome_completo}</option>)}
+                      </select>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-3 gap-3">
+                    {[
+                      { key: 'tamanho_roupa', label: 'Tam. Roupa', ph: 'P, M, G...' },
+                      { key: 'numero_sapatilha', label: 'Nº Sapatilha', ph: '35, 36...' },
+                      { key: 'tamanho_meia', label: 'Tam. Meia', ph: 'P, M, G...' },
+                    ].map(f => (
+                      <div key={f.key}>
+                        <label className="text-xs font-semibold text-slate-500 mb-1 block">{f.label}</label>
+                        <input value={(formBallet as any)[f.key] ?? ''} onChange={e => setFormBallet(p => ({ ...p, [f.key]: e.target.value }))} placeholder={f.ph}
+                          className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800" />
+                      </div>
+                    ))}
+                  </div>
+                  {[
+                    { id: 'estoque_roupa_id', label: 'Item Estoque — Roupa' },
+                    { id: 'estoque_sapatilha_id', label: 'Item Estoque — Sapatilha' },
+                  ].map(f => (
+                    <div key={f.id}>
+                      <label className="text-xs font-semibold text-slate-500 mb-1 block">{f.label}</label>
+                      <select value={(formBallet as any)[f.id] ?? ''} onChange={e => setFormBallet(p => ({ ...p, [f.id]: e.target.value || undefined }))}
+                        className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800">
+                        <option value="">Nenhum</option>
+                        {estoqueProdutos.map(p => <option key={p.id} value={p.id}>{p.nome} (qtd: {p.quantidade_atual})</option>)}
+                      </select>
+                    </div>
+                  ))}
+                  <div>
+                    <label className="text-xs font-semibold text-slate-500 mb-1 block">Status</label>
+                    <select value={formBallet.status ?? 'Pendente'} onChange={e => setFormBallet(f => ({ ...f, status: e.target.value }))}
+                      className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800">
+                      {STATUS_BALLET.map(s => <option key={s}>{s}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-slate-500 mb-1 block">Pedidos (Encomendas)</label>
+                    <div className="flex gap-4">
+                      {[
+                        { key: 'roupa_encomendada', label: 'Roupa encomendada' },
+                        { key: 'sapatilha_encomendada', label: 'Sapatilha encomendada' },
+                      ].map(f => (
+                        <label key={f.key} className="flex items-center gap-2 text-sm cursor-pointer">
+                          <input type="checkbox" checked={!!(formBallet as any)[f.key]}
+                            onChange={e => setFormBallet(p => ({ ...p, [f.key]: e.target.checked }))}
+                            className="rounded accent-pink-500" />
+                          {f.label}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-slate-500 mb-1 block">Entregas</label>
+                    <div className="flex gap-4">
+                      {[
+                        { key: 'roupa_entregue', label: 'Roupa entregue' },
+                        { key: 'sapatilha_entregue', label: 'Sapatilha entregue' },
+                      ].map(f => (
+                        <label key={f.key} className="flex items-center gap-2 text-sm cursor-pointer">
+                          <input type="checkbox" checked={!!(formBallet as any)[f.key]}
+                            onChange={e => setFormBallet(p => ({ ...p, [f.key]: e.target.checked }))}
+                            className="rounded accent-pink-500" />
+                          {f.label}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-slate-500 mb-1 block">Observações</label>
+                    <textarea value={formBallet.observacoes ?? ''} onChange={e => setFormBallet(f => ({ ...f, observacoes: e.target.value }))} rows={2}
+                      className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800 resize-none" />
+                  </div>
+                </div>
+                <div className="flex gap-3 pt-2">
+                  <button onClick={salvarBallet} disabled={salvandoBallet === 'form'}
+                    className="flex-1 py-2.5 bg-pink-500 text-white rounded-xl font-semibold text-sm hover:bg-pink-600 disabled:opacity-60">
+                    {salvandoBallet === 'form' ? 'Salvando...' : 'Salvar'}
+                  </button>
+                  <button onClick={() => setModalBallet({ aberto: false, item: null })}
+                    className="px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50">
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ── FUTEBOL ─────────────────────────────────────────────────────────── */}
+      {subTab !== 'ballet' && (<>
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
@@ -5880,6 +6218,7 @@ function ControlesTab({ podeEditar }: { podeEditar: boolean }) {
           </div>
         </div>
       )}
+      </>)}
     </div>
   );
 }

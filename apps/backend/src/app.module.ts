@@ -909,6 +909,28 @@ export class AppModule implements OnModuleInit {
       `);
       this.logger.log('✅ Tabela controles_futebol criada (IF NOT EXISTS)');
 
+      // ── Controle Ballet ──────────────────────────────────────────────────────
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS controles_ballet (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          aluno_id TEXT NOT NULL,
+          tamanho_roupa TEXT,
+          numero_sapatilha TEXT,
+          tamanho_meia TEXT,
+          estoque_roupa_id TEXT,
+          estoque_sapatilha_id TEXT,
+          roupa_encomendada BOOLEAN NOT NULL DEFAULT false,
+          sapatilha_encomendada BOOLEAN NOT NULL DEFAULT false,
+          roupa_entregue BOOLEAN NOT NULL DEFAULT false,
+          sapatilha_entregue BOOLEAN NOT NULL DEFAULT false,
+          status TEXT NOT NULL DEFAULT 'Pendente',
+          observacoes TEXT,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `);
+      this.logger.log('✅ Tabela controles_ballet criada (IF NOT EXISTS)');
+
       // ── Boletos a Receber ────────────────────────────────────────────────────
       await this.dataSource.query(`
         CREATE TABLE IF NOT EXISTS boletos (

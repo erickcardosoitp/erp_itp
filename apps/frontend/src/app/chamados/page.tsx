@@ -91,7 +91,7 @@ function FieldSelect({ label, value, onChange, options }: { label: string; value
 
 export default function ChamadosPage() {
   const { user } = useAuth();
-  const { canWrite } = usePermissions(user?.role);
+  const { canWrite } = usePermissions(user);
 
   const [chamados, setChamados] = useState<Chamado[]>([]);
   const [stats, setStats] = useState<{ abertos: number; em_andamento: number; resolvidos: number; urgentes: number } | null>(null);
