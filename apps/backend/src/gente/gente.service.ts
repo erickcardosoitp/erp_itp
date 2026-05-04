@@ -74,6 +74,22 @@ export class GenteService {
     await run(`ALTER TABLE IF EXISTS gente_vales ADD COLUMN IF NOT EXISTS ficha_url TEXT`);
     await run(`ALTER TABLE IF EXISTS gente_colaboradores ADD COLUMN IF NOT EXISTS dias_home_office JSONB`);
     await run(`ALTER TABLE IF EXISTS gente_ponto ADD COLUMN IF NOT EXISTS modalidade TEXT DEFAULT 'presencial'`);
+
+    // Reset banco de horas: apaga pontos de abril/anteriores exceto colaboradores fixos
+    await run(`
+      DELETE FROM gente_ponto
+      WHERE data_hora < '2026-05-01T00:00:00Z'
+        AND colaborador_id NOT IN (
+          SELECT gc.id
+          FROM gente_colaboradores gc
+          JOIN funcionarios f ON f.id = gc.funcionario_id
+          WHERE f.nome ILIKE '%Danielly%'
+             OR f.nome ILIKE '%Erick%'
+             OR f.nome ILIKE '%Fernanda%'
+             OR f.nome ILIKE '%Josemilda%'
+             OR (f.nome ILIKE '%Leandro%' AND f.nome ILIKE '%Alves%')
+        )
+    `);
     await run(`
       CREATE TABLE IF NOT EXISTS gente_feriados (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1375,8 +1391,8 @@ export class GenteService {
       order: { data_hora: 'ASC' },
     });
 
-    // Filter pontos for this month with 3h BRT buffer on end boundary
-    const BRT_OFFSET_MS = 3 * 3600 * 1000;
+    // 6h buffer: cobre saídas de virada de noite até 03:00 BRT do dia seguinte ao fim do mês
+    const BRT_OFFSET_MS = 6 * 3600 * 1000;
     const pontosMes = pontos.filter(p => {
       const t = new Date(p.data_hora).getTime();
       return t >= inicioMs && t <= fimMs + BRT_OFFSET_MS;
@@ -1833,9 +1849,11 @@ export class GenteService {
   // ── Relatório de Ponto ─────────────────────────────────────────────────────
 
   async relatorioPonto(data_inicio: string, data_fim: string) {
+    const BRT_MS = 3 * 3600000;
     const inicioUTC = new Date(data_inicio + 'T00:00:00.000Z');
     const fimUTC = new Date(data_fim + 'T23:59:59.999Z');
 
+    // Buffer: 6h antes (captura entradas do dia anterior) e 6h depois (captura saídas de virada de noite)
     const rows: any[] = await this.dataSource.query(
       `SELECT p.id, p.colaborador_id, p.tipo, p.data_hora,
               (p.data_hora AT TIME ZONE 'America/Sao_Paulo') as hora_brt,
@@ -1845,49 +1863,65 @@ export class GenteService {
        JOIN funcionarios f ON f.id = gc.funcionario_id
        WHERE p.data_hora >= $1 AND p.data_hora <= $2
        ORDER BY f.nome, p.data_hora`,
-      [inicioUTC.toISOString(), fimUTC.toISOString()],
+      [
+        new Date(inicioUTC.getTime() - BRT_MS).toISOString(),
+        new Date(fimUTC.getTime() + 6 * 3600000).toISOString(),
+      ],
     );
 
-    // Group by colaborador_id → date (BRT) → records
-    const colMap: Record<string, { colaborador_id: string; nome: string; dias: Record<string, any[]> }> = {};
-
+    // Agrupa pontos brutos por colaborador (com timestamp para ordenação)
+    const colMap: Record<string, { colaborador_id: string; nome: string; pontos: any[] }> = {};
     for (const row of rows) {
       if (!colMap[row.colaborador_id]) {
-        colMap[row.colaborador_id] = { colaborador_id: row.colaborador_id, nome: row.funcionario_nome, dias: {} };
+        colMap[row.colaborador_id] = { colaborador_id: row.colaborador_id, nome: row.funcionario_nome, pontos: [] };
       }
-      // hora_brt is a JS Date (PostgreSQL returns it parsed)
       const horaBrt = new Date(row.hora_brt);
       const dataBrt = `${horaBrt.getUTCFullYear()}-${String(horaBrt.getUTCMonth() + 1).padStart(2, '0')}-${String(horaBrt.getUTCDate()).padStart(2, '0')}`;
       const hora = `${String(horaBrt.getUTCHours()).padStart(2, '0')}:${String(horaBrt.getUTCMinutes()).padStart(2, '0')}`;
-      if (!colMap[row.colaborador_id].dias[dataBrt]) colMap[row.colaborador_id].dias[dataBrt] = [];
-      colMap[row.colaborador_id].dias[dataBrt].push({ id: row.id, tipo: row.tipo, hora });
+      colMap[row.colaborador_id].pontos.push({ id: row.id, tipo: row.tipo, dataBrt, hora, ts: new Date(row.data_hora).getTime() });
     }
 
     const resultado = Object.values(colMap).map(col => {
-      let totalMinutosCol = 0;
-      const dias = Object.entries(col.dias)
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([data, registros]) => {
-          // Calculate minutos trabalhados: pair entrada→saida
-          const sorted = [...registros].sort((a, b) => a.hora.localeCompare(b.hora));
-          let minutos = 0;
-          let entrada: string | null = null;
-          for (const r of sorted) {
-            if (r.tipo === 'entrada') {
-              entrada = r.hora;
-            } else if (r.tipo === 'saida' && entrada) {
-              const [eh, em] = entrada.split(':').map(Number);
-              const [sh, sm] = r.hora.split(':').map(Number);
-              const diff = (sh * 60 + sm) - (eh * 60 + em);
-              if (diff > 0 && diff < 1440) minutos += diff;
-              entrada = null;
-            }
+      // Pareia entrada→saída cronologicamente (cross-midnight: saída pertence ao dia da entrada)
+      const sorted = [...col.pontos].sort((a, b) => a.ts - b.ts);
+      const dayMap: Record<string, { registros: { id: string; tipo: string; hora: string }[]; minutos: number }> = {};
+
+      const addReg = (dataBrt: string, reg: { id: string; tipo: string; hora: string }) => {
+        if (!dayMap[dataBrt]) dayMap[dataBrt] = { registros: [], minutos: 0 };
+        dayMap[dataBrt].registros.push(reg);
+      };
+
+      let pend: typeof sorted[0] | null = null;
+      for (const p of sorted) {
+        if (p.tipo === 'entrada') {
+          if (pend) addReg(pend.dataBrt, { id: pend.id, tipo: 'entrada', hora: pend.hora }); // entrada órfã
+          pend = p;
+        } else {
+          if (pend) {
+            const diffMin = Math.round((p.ts - pend.ts) / 60000);
+            const min = diffMin > 0 && diffMin < 1440 ? diffMin : 0;
+            if (!dayMap[pend.dataBrt]) dayMap[pend.dataBrt] = { registros: [], minutos: 0 };
+            dayMap[pend.dataBrt].registros.push({ id: pend.id, tipo: 'entrada', hora: pend.hora });
+            dayMap[pend.dataBrt].registros.push({ id: p.id, tipo: 'saida', hora: p.hora });
+            dayMap[pend.dataBrt].minutos += min;
+            pend = null;
+          } else {
+            addReg(p.dataBrt, { id: p.id, tipo: 'saida', hora: p.hora }); // saída órfã
           }
-          totalMinutosCol += minutos;
-          const temEntrada = sorted.some(r => r.tipo === 'entrada');
-          const temSaida = sorted.some(r => r.tipo === 'saida');
-          const completo = temEntrada && temSaida;
-          return { data, registros: sorted.map(({ id, tipo, hora }) => ({ id, tipo, hora })), minutos_trabalhados: minutos, completo };
+        }
+      }
+      if (pend) addReg(pend.dataBrt, { id: pend.id, tipo: 'entrada', hora: pend.hora });
+
+      // Filtra apenas dias dentro do intervalo solicitado
+      let totalMinutosCol = 0;
+      const dias = Object.entries(dayMap)
+        .filter(([data]) => data >= data_inicio && data <= data_fim)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([data, day]) => {
+          totalMinutosCol += day.minutos;
+          const temEntrada = day.registros.some(r => r.tipo === 'entrada');
+          const temSaida = day.registros.some(r => r.tipo === 'saida');
+          return { data, registros: day.registros, minutos_trabalhados: day.minutos, completo: temEntrada && temSaida };
         });
 
       return { colaborador_id: col.colaborador_id, nome: col.nome, dias, total_minutos: totalMinutosCol };
