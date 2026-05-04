@@ -858,6 +858,8 @@ export class AppModule implements OnModuleInit {
           criado_por_nome VARCHAR,
           observacoes TEXT,
           data_resolucao DATE,
+          abertura   TIMESTAMPTZ,
+          fechamento TIMESTAMPTZ,
           created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
           updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
         )

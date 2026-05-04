@@ -1631,7 +1631,7 @@ export class AcademicoService {
 
   async listarResponsaveis() {
     return this.dataSource.query(
-      `SELECT id, nome, role FROM usuarios WHERE ativo IS NOT FALSE ORDER BY nome ASC`,
+      `SELECT id, nome, role FROM usuarios ORDER BY nome ASC`,
     );
   }
 
