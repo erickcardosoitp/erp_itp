@@ -1872,19 +1872,19 @@ export class AcademicoService {
         (SELECT ta.turma_id::text FROM turma_alunos ta
           WHERE ta.aluno_id::text = a.id::text AND ta.status = 'ativo'
           LIMIT 1)                                    AS turma_id,
-        -- documentos obrigatórios
+        -- documentos obrigatórios (tipos fixos, excluindo 'extra')
         COALESCE((
           SELECT COUNT(*) FROM documentos_inscricao di
           JOIN inscricoes i2 ON i2.id = di.inscricao_id
           WHERE i2.aluno_id::text = a.id::text
-            AND di.obrigatorio = true
+            AND di.tipo IN ('foto_aluno','identidade','comprovante_residencia','certidao_nascimento','identidade_responsavel','declaracao_escolaridade')
         ), 0)                                          AS docs_total_obrig,
         COALESCE((
           SELECT COUNT(*) FROM documentos_inscricao di
           JOIN inscricoes i2 ON i2.id = di.inscricao_id
           WHERE i2.aluno_id::text = a.id::text
-            AND di.obrigatorio = true
-            AND di.arquivo IS NOT NULL AND di.arquivo <> ''
+            AND di.tipo IN ('foto_aluno','identidade','comprovante_residencia','certidao_nascimento','identidade_responsavel','declaracao_escolaridade')
+            AND di.url_arquivo IS NOT NULL AND di.url_arquivo <> ''
         ), 0)                                          AS docs_enviados,
         -- estoque
         up.nome                                       AS uniforme_nome,
