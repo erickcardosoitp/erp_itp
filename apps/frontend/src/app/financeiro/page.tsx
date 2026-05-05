@@ -655,7 +655,7 @@ function BoletosTab({ podeEscrever, podeEditar, podeExcluir }: { podeEscrever: b
     setSalvando(true);
     try {
       const valorNum = parseFloat(String(form.valor).replace(',', '.'));
-      let parcelasPayload: { valor: number; data_vencimento: string }[] = [];
+      let parcelasPayload: { valor: number; data_vencimento: string; cod_barras?: string | null }[] = [];
       if (form.parcelado && parcelas.length > 0) {
         parcelasPayload = parcelas.map(p => ({ valor: parseFloat(p.valor), data_vencimento: p.data_vencimento, cod_barras: p.cod_barras || null }));
       } else if (!form.parcelado && form.data_vencimento) {
