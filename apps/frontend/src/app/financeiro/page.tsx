@@ -626,19 +626,19 @@ function BoletosTab({ podeEscrever, podeEditar, podeExcluir }: { podeEscrever: b
     return matchBusca && matchStatus;
   });
 
-  const gerarParcelas = (qtd: number, valorTotal: number, dataEmissao: string) => {
-    const valorParcela = Math.round((valorTotal / qtd) * 100) / 100;
-    return Array.from({ length: qtd }, (_, i) => {
-      const d = new Date(dataEmissao);
-      d.setMonth(d.getMonth() + i + 1);
-      return { valor: String(valorParcela), data_vencimento: d.toISOString().slice(0, 10), cod_barras: '' };
-    });
-  };
-
   const handleQtdParcelas = (qtd: number) => {
     setForm((f: any) => ({ ...f, qtd_parcelas: qtd }));
-    if (qtd > 1) setParcelas(gerarParcelas(qtd, parseFloat(form.valor) || 0, form.data_emissao));
-    else setParcelas([]);
+    if (qtd < 2) { setParcelas([]); return; }
+    const v = parseFloat(form.valor) || 0;
+    const vp = Math.round((v / qtd) * 100) / 100;
+    setParcelas(prev => {
+      const base = prev.map(p => ({ ...p, valor: String(vp) }));
+      if (qtd > base.length) {
+        const extras = Array.from({ length: qtd - base.length }, () => ({ valor: String(vp), data_vencimento: '', cod_barras: '' }));
+        return [...base, ...extras];
+      }
+      return base.slice(0, qtd);
+    });
   };
 
   const handleArquivo = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -657,6 +657,8 @@ function BoletosTab({ podeEscrever, podeEditar, podeExcluir }: { podeEscrever: b
       const valorNum = parseFloat(String(form.valor).replace(',', '.'));
       let parcelasPayload: { valor: number; data_vencimento: string; cod_barras?: string | null }[] = [];
       if (form.parcelado && parcelas.length > 0) {
+        const semVenc = parcelas.findIndex(p => !p.data_vencimento);
+        if (semVenc >= 0) { toast.error(`Informe o vencimento da parcela ${semVenc + 1}.`); setSalvando(false); return; }
         parcelasPayload = parcelas.map(p => ({ valor: parseFloat(p.valor), data_vencimento: p.data_vencimento, cod_barras: p.cod_barras || null }));
       } else if (!form.parcelado && form.data_vencimento) {
         // à vista com vencimento extraído do código de barras
@@ -1031,8 +1033,10 @@ function BoletosTab({ podeEscrever, podeEditar, podeExcluir }: { podeEscrever: b
                     if (!checked) { setParcelas([]); }
                     else {
                       const qtd = form.qtd_parcelas > 1 ? form.qtd_parcelas : 2;
+                      const v = parseFloat(form.valor) || 0;
+                      const vp = Math.round((v / qtd) * 100) / 100;
                       setForm((f: any) => ({ ...f, parcelado: true, qtd_parcelas: qtd }));
-                      setParcelas(gerarParcelas(qtd, parseFloat(form.valor) || 0, form.data_emissao));
+                      setParcelas(Array.from({ length: qtd }, () => ({ valor: String(vp), data_vencimento: '', cod_barras: '' })));
                     }
                   }}
                     className="rounded border-slate-300" />
