@@ -658,7 +658,7 @@ function BoletosTab({ podeEscrever, podeEditar, podeExcluir }: { podeEscrever: b
       let parcelasPayload: { valor: number; data_vencimento: string; cod_barras?: string | null }[] = [];
       if (form.parcelado && parcelas.length > 0) {
         const semVenc = parcelas.findIndex(p => !p.data_vencimento);
-        if (semVenc >= 0) { toast.error(`Informe o vencimento da parcela ${semVenc + 1}.`); setSalvando(false); return; }
+        if (semVenc >= 0) { alert(`Informe o vencimento da parcela ${semVenc + 1}.`); setSalvando(false); return; }
         parcelasPayload = parcelas.map(p => ({ valor: parseFloat(p.valor), data_vencimento: p.data_vencimento, cod_barras: p.cod_barras || null }));
       } else if (!form.parcelado && form.data_vencimento) {
         // à vista com vencimento extraído do código de barras
