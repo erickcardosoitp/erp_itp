@@ -1517,6 +1517,7 @@ function RecibosTab({ reload, colaboradores }: { reload: number; colaboradores: 
   const [recibos, setRecibos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filtroCol, setFiltroCol] = useState('');
+  const [filtroMes, setFiltroMes] = useState(() => new Date().toISOString().slice(0, 7));
   const [calculando, setCalculando] = useState(false);
   const [mesCalculo, setMesCalculo] = useState(() => new Date().toISOString().slice(0, 7));
   const [reciboImpresso, setReciboImpresso] = useState<any | null>(null);
@@ -1532,12 +1533,14 @@ function RecibosTab({ reload, colaboradores }: { reload: number; colaboradores: 
 
   const carregar = useCallback(async () => {
     setLoading(true);
-    const params = filtroCol ? `?colaborador_id=${filtroCol}` : '';
-    const r = await fetch(`${API}/gente/recibos${params}`, { credentials: 'include' });
+    const p = new URLSearchParams();
+    if (filtroCol) p.set('colaborador_id', filtroCol);
+    if (filtroMes) p.set('mes_referencia', filtroMes);
+    const r = await fetch(`${API}/gente/recibos?${p.toString()}`, { credentials: 'include' });
     const recData = await r.json();
     setRecibos(Array.isArray(recData) ? recData : []);
     setLoading(false);
-  }, [filtroCol]);
+  }, [filtroCol, filtroMes]);
 
   useEffect(() => { carregar(); }, [carregar, reload]);
 
@@ -1636,6 +1639,7 @@ function RecibosTab({ reload, colaboradores }: { reload: number; colaboradores: 
       )}
 
       <div className="flex flex-col sm:flex-row gap-3 mb-5 flex-wrap">
+        <input type="month" value={filtroMes} onChange={e => setFiltroMes(e.target.value)} className={`${ic} w-38`} title="Filtrar por mês" />
         <select value={filtroCol} onChange={e => setFiltroCol(e.target.value)} className={`${ic} flex-1`}>
           <option value="">Todos colaboradores</option>
           {colaboradores.map(c => <option key={c.id} value={c.id}>{c.funcionario?.nome ?? c.id}</option>)}
@@ -3072,9 +3076,8 @@ function FinanceiroTab({ reload }: { reload: number }) {
                           : <span className="text-slate-400">—</span>}
                       </td>
                       <td className="px-4 py-3 font-black">
-                        {c.pagamento_isento
-                          ? <span className="text-xs font-bold text-orange-600 bg-orange-50 border border-orange-200 rounded-lg px-2 py-1">Isento</span>
-                          : <span className="text-emerald-600 dark:text-emerald-400">{fmt.moeda(c.liquido)}</span>}
+                        <span className="text-emerald-600 dark:text-emerald-400">{fmt.moeda(c.liquido)}</span>
+                        {c.pagamento_isento && <span className="ml-1 text-[10px] font-bold text-orange-500 bg-orange-50 border border-orange-200 rounded px-1">Isento</span>}
                       </td>
                       <td className="px-4 py-3">
                         {c.recibo_status

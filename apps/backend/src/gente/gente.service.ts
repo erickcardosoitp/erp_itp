@@ -352,27 +352,6 @@ export class GenteService {
         `SELECT id, nome, cargo, foto FROM funcionarios WHERE id = $1`, [col.funcionario_id]);
       if (!func) return null;
 
-      // Colaborador isento de pagamento — aparece na folha com líquido 0
-      if (col.pagamento_isento) {
-        return {
-          colaborador_id: col.id,
-          nome: func.nome,
-          cargo: func.cargo,
-          foto: func.foto,
-          total_vr: 0,
-          total_proventos: 0,
-          vales_pendentes: 0,
-          qtd_vales_pendentes: 0,
-          outros_descontos: 0,
-          qtd_outros_descontos: 0,
-          total_descontos: 0,
-          liquido: 0,
-          recibo_id: null,
-          recibo_status: null,
-          pagamento_isento: true,
-        };
-      }
-
       const codigosCol = await this.listarCodigosColaborador(col.id);
       const totalVR = codigosCol.reduce((s, cc) => s + Number(cc.valor_efetivo ?? 0), 0);
       const totalProventos = totalVR;
@@ -444,6 +423,7 @@ export class GenteService {
         liquido: totalProventos - totalVales - totalOutrosDescontos,
         recibo_id: recibo[0]?.id ?? null,
         recibo_status: recibo[0]?.status ?? null,
+        pagamento_isento: !!col.pagamento_isento,
       };
     }));
 
@@ -1129,9 +1109,10 @@ export class GenteService {
 
   // ── Recibos ───────────────────────────────────────────────────────────────
 
-  async listarRecibos(colaborador_id?: string) {
+  async listarRecibos(colaborador_id?: string, mes_referencia?: string) {
     const where: any = {};
     if (colaborador_id) where.colaborador_id = colaborador_id;
+    if (mes_referencia) where.mes_referencia = mes_referencia;
     return this.reciboRepo.find({ where, order: { createdAt: 'DESC' } });
   }
 

@@ -169,7 +169,7 @@ export class GenteController {
 
   @Get('recibos')
   @ModuloPerm('gente', 'visualizar')
-  listarRecibos(@Query('colaborador_id') colaborador_id?: string) { return this.svc.listarRecibos(colaborador_id); }
+  listarRecibos(@Query('colaborador_id') colaborador_id?: string, @Query('mes_referencia') mes_referencia?: string) { return this.svc.listarRecibos(colaborador_id, mes_referencia); }
 
   @Get('recibos/:id/completo')
   @ModuloPerm('gente', 'visualizar')
