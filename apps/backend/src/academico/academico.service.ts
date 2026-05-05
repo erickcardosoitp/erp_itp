@@ -351,13 +351,33 @@ export class AcademicoService {
       this.logger.warn(`[listarAlunos] fotos falhou: ${e?.message}`);
     }
 
-    return alunos.map(a => ({
-      ...a,
-      turmas: turmaMap[a.id] ?? [],
-      foto_url: fotoMap[a.id] ?? null,
-      turma_status: (turmaMap[a.id] ?? []).find((t: any) => t.status === 'ativo') ? 'ativo' : ((turmaMap[a.id] ?? []).length ? 'backlog' : 'sem_turma'),
-      turma_nome: (turmaMap[a.id] ?? []).find((t: any) => t.status === 'ativo')?.nome ?? null,
-    }));
+    // Fallback: preenche CPF (e email/celular) de inscricoes para alunos com campos vazios
+    let inscMap: Record<string, any> = {};
+    try {
+      const inscRows = await this.dataSource.query(
+        `SELECT i.aluno_id::text, i.cpf, i.email, i.celular, i.data_nascimento
+         FROM inscricoes i
+         WHERE i.aluno_id::text IN (${alunoIds})`,
+      );
+      inscRows.forEach((r: any) => { inscMap[r.aluno_id] = r; });
+    } catch (e: any) {
+      this.logger.warn(`[listarAlunos] inscricoes fallback falhou: ${e?.message}`);
+    }
+
+    return alunos.map(a => {
+      const insc = inscMap[a.id];
+      return {
+        ...a,
+        cpf:            a.cpf            || insc?.cpf            || null,
+        email:          a.email          || insc?.email          || null,
+        celular:        a.celular        || insc?.celular        || null,
+        data_nascimento: a.data_nascimento || insc?.data_nascimento || null,
+        turmas: turmaMap[a.id] ?? [],
+        foto_url: fotoMap[a.id] ?? null,
+        turma_status: (turmaMap[a.id] ?? []).find((t: any) => t.status === 'ativo') ? 'ativo' : ((turmaMap[a.id] ?? []).length ? 'backlog' : 'sem_turma'),
+        turma_nome: (turmaMap[a.id] ?? []).find((t: any) => t.status === 'ativo')?.nome ?? null,
+      };
+    });
   }
 
   async fichaAluno(id: string) {
@@ -407,6 +427,32 @@ export class AcademicoService {
       );
       foto_url = fotoRow?.url_arquivo ?? null;
     } catch { /* sem foto */ }
+
+    // Fallback: preenche campos vazios do aluno com dados da inscrição original
+    if (inscricao_id) {
+      try {
+        const [insc] = await this.dataSource.query(
+          `SELECT cpf, email, celular, data_nascimento, nome_responsavel, cpf_responsavel,
+                  email_responsavel, grau_parentesco, nome_completo,
+                  logradouro, numero, complemento, bairro, cidade, estado_uf, cep,
+                  possui_alergias, alergias_descricao, cuidado_especial, detalhes_cuidado,
+                  uso_medicamento, medicamentos_descricao, sexo
+           FROM inscricoes WHERE id = $1 LIMIT 1`,
+          [inscricao_id],
+        );
+        if (insc) {
+          const fields = [
+            'cpf','email','celular','data_nascimento','nome_responsavel','cpf_responsavel',
+            'email_responsavel','grau_parentesco','logradouro','numero','complemento',
+            'bairro','cidade','estado_uf','cep','possui_alergias','alergias_descricao',
+            'cuidado_especial','detalhes_cuidado','uso_medicamento','medicamentos_descricao','sexo',
+          ];
+          for (const f of fields) {
+            if ((aluno as any)[f] == null && insc[f] != null) (aluno as any)[f] = insc[f];
+          }
+        }
+      } catch { /* sem inscricao, ok */ }
+    }
 
     this.logger.log(`Ficha do aluno ${aluno.nome_completo}: ${historico.length} registros no diário, inscricao_id=${inscricao_id}`);
     return { aluno, inscricao_id, frequencia, historico, turmaInfo, turmasDoAluno, totalPresencas, totalFaltas, foto_url };
