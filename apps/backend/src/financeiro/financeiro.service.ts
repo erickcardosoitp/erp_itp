@@ -305,6 +305,7 @@ export class FinanceiroService {
           data_pagamento: null,
           pago: false,
           movimentacao_id: mov.id,
+          cod_barras: pc.cod_barras ?? null,
         }));
         parcelas.push(p);
       }

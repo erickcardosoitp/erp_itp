@@ -26,6 +26,9 @@ export class BoletoParcela {
   @Column({ type: 'uuid', nullable: true })
   movimentacao_id: string | null;
 
+  @Column({ type: 'text', nullable: true })
+  cod_barras: string | null;
+
   @CreateDateColumn({ name: 'created_at' })
   created_at: Date;
 

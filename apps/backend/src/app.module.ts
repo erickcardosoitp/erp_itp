@@ -980,6 +980,11 @@ export class AppModule implements OnModuleInit {
       `);
       this.logger.log('✅ Colunas boletos (pessoa_nome, pessoa_tipo) aplicadas (IF NOT EXISTS)');
       await this.dataSource.query(`
+        ALTER TABLE IF EXISTS boleto_parcelas
+          ADD COLUMN IF NOT EXISTS cod_barras TEXT
+      `);
+      this.logger.log('✅ Coluna boleto_parcelas.cod_barras aplicada (IF NOT EXISTS)');
+      await this.dataSource.query(`
         ALTER TABLE IF EXISTS inscricoes
           ADD COLUMN IF NOT EXISTS lgpd_user_agent TEXT
       `);

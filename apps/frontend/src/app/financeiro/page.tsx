@@ -572,6 +572,7 @@ interface BoletoParcela {
   data_pagamento?: string | null;
   pago: boolean;
   movimentacao_id?: string;
+  cod_barras?: string | null;
 }
 
 function BoletosTab({ podeEscrever, podeEditar, podeExcluir }: { podeEscrever: boolean; podeEditar: boolean; podeExcluir: boolean }) {
@@ -582,7 +583,7 @@ function BoletosTab({ podeEscrever, podeEditar, podeExcluir }: { podeEscrever: b
   const [expandido, setExpandido] = useState<string | null>(null);
   const [modal, setModal] = useState(false);
   const [form, setForm] = useState<any>({ parcelado: false, qtd_parcelas: 1, status: 'Pendente', data_emissao: new Date().toISOString().slice(0, 10), data_vencimento: '' });
-  const [parcelas, setParcelas] = useState<{ valor: string; data_vencimento: string }[]>([]);
+  const [parcelas, setParcelas] = useState<{ valor: string; data_vencimento: string; cod_barras: string }[]>([]);
   const [salvando, setSalvando] = useState(false);
   const [pagandoParcela, setPagandoParcela] = useState<string | null>(null);
 
@@ -630,7 +631,7 @@ function BoletosTab({ podeEscrever, podeEditar, podeExcluir }: { podeEscrever: b
     return Array.from({ length: qtd }, (_, i) => {
       const d = new Date(dataEmissao);
       d.setMonth(d.getMonth() + i + 1);
-      return { valor: String(valorParcela), data_vencimento: d.toISOString().slice(0, 10) };
+      return { valor: String(valorParcela), data_vencimento: d.toISOString().slice(0, 10), cod_barras: '' };
     });
   };
 
@@ -656,15 +657,15 @@ function BoletosTab({ podeEscrever, podeEditar, podeExcluir }: { podeEscrever: b
       const valorNum = parseFloat(String(form.valor).replace(',', '.'));
       let parcelasPayload: { valor: number; data_vencimento: string }[] = [];
       if (form.parcelado && parcelas.length > 0) {
-        parcelasPayload = parcelas.map(p => ({ valor: parseFloat(p.valor), data_vencimento: p.data_vencimento }));
+        parcelasPayload = parcelas.map(p => ({ valor: parseFloat(p.valor), data_vencimento: p.data_vencimento, cod_barras: p.cod_barras || null }));
       } else if (!form.parcelado && form.data_vencimento) {
         // à vista com vencimento extraído do código de barras
-        parcelasPayload = [{ valor: valorNum, data_vencimento: form.data_vencimento }];
+        parcelasPayload = [{ valor: valorNum, data_vencimento: form.data_vencimento, cod_barras: form.cod_barras || null }];
       }
       const payload = { ...form, valor: valorNum, parcelas: parcelasPayload };
       await api.post('/financeiro/boletos', payload);
       setModal(false);
-      setForm({ parcelado: false, qtd_parcelas: 1, status: 'Pendente', data_emissao: new Date().toISOString().slice(0, 10), data_vencimento: '', pessoa_nome: '', pessoa_tipo: '' });
+      setForm({ parcelado: false, qtd_parcelas: 1, status: 'Pendente', data_emissao: new Date().toISOString().slice(0, 10), data_vencimento: '', pessoa_nome: '', pessoa_tipo: '', cod_barras: '' });
       setParcelas([]);
       setPessoaBusca('');
       carregar();
@@ -853,6 +854,15 @@ function BoletosTab({ podeEscrever, podeEditar, podeExcluir }: { podeEscrever: b
                           <span className="font-semibold text-slate-800 dark:text-white">{moeda(p.valor)}</span>
                           <span className="text-xs text-slate-500">Venc.: {dataFmt(p.data_vencimento)}</span>
                           {p.pago && p.data_pagamento && <span className="text-xs text-emerald-600">Pago em {dataFmt(p.data_pagamento)}</span>}
+                          {p.cod_barras && (
+                            <button
+                              onClick={() => navigator.clipboard.writeText(p.cod_barras!)}
+                              title={p.cod_barras}
+                              className="text-[10px] font-mono text-slate-400 hover:text-slate-700 underline underline-offset-2 max-w-[140px] truncate"
+                            >
+                              {p.cod_barras.length > 20 ? p.cod_barras.slice(0, 20) + '…' : p.cod_barras}
+                            </button>
+                          )}
                         </div>
                         <div>
                           {p.pago ? (
@@ -1021,21 +1031,30 @@ function BoletosTab({ podeEscrever, podeEditar, podeExcluir }: { podeEscrever: b
                 )}
               </div>
               {form.parcelado && parcelas.length > 0 && (
-                <div className="col-span-2 space-y-2">
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Parcelas (edite se necessário)</p>
+                <div className="col-span-2 space-y-3">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Parcelas</p>
                   {parcelas.map((p, i) => (
-                    <div key={i} className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-xs text-slate-400">Parcela {i + 1} — Valor</label>
-                        <input type="number" step="0.01" value={p.valor}
-                          onChange={e => setParcelas(prev => prev.map((x, j) => j === i ? { ...x, valor: e.target.value } : x))}
-                          className="w-full px-2 py-1 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-800" />
+                    <div key={i} className="rounded-xl border border-slate-200 dark:border-slate-700 p-3 space-y-2 bg-slate-50 dark:bg-slate-800/50">
+                      <p className="text-[10px] font-black text-slate-400 uppercase">Parcela {i + 1}/{parcelas.length}</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] text-slate-400">Valor (R$)</label>
+                          <input type="number" step="0.01" value={p.valor}
+                            onChange={e => setParcelas(prev => prev.map((x, j) => j === i ? { ...x, valor: e.target.value } : x))}
+                            className="w-full px-2 py-1 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800" />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-slate-400">Vencimento</label>
+                          <input type="date" value={p.data_vencimento}
+                            onChange={e => setParcelas(prev => prev.map((x, j) => j === i ? { ...x, data_vencimento: e.target.value } : x))}
+                            className="w-full px-2 py-1 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800" />
+                        </div>
                       </div>
                       <div>
-                        <label className="text-xs text-slate-400">Vencimento</label>
-                        <input type="date" value={p.data_vencimento}
-                          onChange={e => setParcelas(prev => prev.map((x, j) => j === i ? { ...x, data_vencimento: e.target.value } : x))}
-                          className="w-full px-2 py-1 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-800" />
+                        <label className="text-[10px] text-slate-400">Código de barras / chave (opcional)</label>
+                        <input type="text" value={p.cod_barras} placeholder="Cole o código ou chave PIX desta parcela"
+                          onChange={e => setParcelas(prev => prev.map((x, j) => j === i ? { ...x, cod_barras: e.target.value } : x))}
+                          className="w-full px-2 py-1 text-xs border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 font-mono" />
                       </div>
                     </div>
                   ))}
