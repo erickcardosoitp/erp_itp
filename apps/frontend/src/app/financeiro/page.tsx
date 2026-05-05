@@ -637,7 +637,7 @@ function BoletosTab({ podeEscrever, podeEditar, podeExcluir }: { podeEscrever: b
 
   const handleQtdParcelas = (qtd: number) => {
     setForm((f: any) => ({ ...f, qtd_parcelas: qtd }));
-    if (form.valor && qtd > 1) setParcelas(gerarParcelas(qtd, parseFloat(form.valor), form.data_emissao));
+    if (qtd > 1) setParcelas(gerarParcelas(qtd, parseFloat(form.valor) || 0, form.data_emissao));
     else setParcelas([]);
   };
 
@@ -967,7 +967,15 @@ function BoletosTab({ podeEscrever, podeEditar, podeExcluir }: { podeEscrever: b
               </div>
               <div>
                 <label className="text-xs font-semibold text-slate-500 mb-1 block">Valor Total (R$) *</label>
-                <input type="number" step="0.01" value={form.valor ?? ''} onChange={e => setForm((f: any) => ({ ...f, valor: e.target.value }))}
+                <input type="number" step="0.01" value={form.valor ?? ''} onChange={e => {
+                  const val = e.target.value;
+                  setForm((f: any) => ({ ...f, valor: val }));
+                  if (form.parcelado && form.qtd_parcelas > 1) {
+                    const v = parseFloat(val) || 0;
+                    const vp = Math.round((v / form.qtd_parcelas) * 100) / 100;
+                    setParcelas(prev => prev.map(p => ({ ...p, valor: String(vp) })));
+                  }
+                }}
                   className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-800" />
               </div>
               <div>
@@ -1017,7 +1025,16 @@ function BoletosTab({ podeEscrever, podeEditar, podeExcluir }: { podeEscrever: b
               )}
               <div className="col-span-2 flex items-center gap-3">
                 <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={form.parcelado ?? false} onChange={e => { setForm((f: any) => ({ ...f, parcelado: e.target.checked })); if (!e.target.checked) setParcelas([]); }}
+                  <input type="checkbox" checked={form.parcelado ?? false} onChange={e => {
+                    const checked = e.target.checked;
+                    setForm((f: any) => ({ ...f, parcelado: checked }));
+                    if (!checked) { setParcelas([]); }
+                    else {
+                      const qtd = form.qtd_parcelas > 1 ? form.qtd_parcelas : 2;
+                      setForm((f: any) => ({ ...f, parcelado: true, qtd_parcelas: qtd }));
+                      setParcelas(gerarParcelas(qtd, parseFloat(form.valor) || 0, form.data_emissao));
+                    }
+                  }}
                     className="rounded border-slate-300" />
                   <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Parcelado</span>
                 </label>
