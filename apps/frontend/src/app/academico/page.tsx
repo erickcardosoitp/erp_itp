@@ -9,6 +9,7 @@ import {
   ChevronDown, ChevronUp, FileText, Eye, Smartphone, Copy, Check, Save,
   Clock, User, Calendar, MapPin, Mail, Shield, ShieldCheck, AlertTriangle,
   Heart, Phone, BadgeCheck, Activity, TrendingDown, TrendingUp, Star, Zap,
+  UserMinus,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
@@ -1992,6 +1993,7 @@ function TurmasTab({ cursos, professores, alunos }: { cursos: Curso[]; professor
   const [turmaSelecionada, setTurmaSelecionada] = useState<Turma | null>(null);
   const [alunosDaTurma, setAlunosDaTurma] = useState<any[]>([]);
   const [loadingAlunosTurma, setLoadingAlunosTurma] = useState(false);
+  const [removendoAlunoId, setRemovendoAlunoId] = useState<string | null>(null);
   // ── Histórico de presença por turma ──────────────────────────────────────────
   const [showHistPresenca, setShowHistPresenca] = useState(false);
   const [turmaPresenca, setTurmaPresenca] = useState<Turma | null>(null);
@@ -2184,6 +2186,21 @@ function TurmasTab({ cursos, professores, alunos }: { cursos: Curso[]; professor
       setAlunosDaTurma(Array.isArray(r.data) ? r.data : []);
     } catch { setAlunosDaTurma([]); }
     setLoadingAlunosTurma(false);
+  };
+
+  const retirarAlunoDaTurma = async (a: any) => {
+    if (!turmaSelecionada) return;
+    if (!confirm(`Retirar ${a.nome_completo} da turma? O aluno voltará para o backlog.`)) return;
+    setRemovendoAlunoId(a.id);
+    try {
+      await api.patch('/academico/turma-alunos/remover', { aluno_id: a.id, turma_id: turmaSelecionada.id });
+      setAlunosDaTurma(prev => prev.filter(x => x.id !== a.id));
+      await load();
+    } catch (e: any) {
+      alert(e?.response?.data?.message || 'Erro ao retirar aluno da turma.');
+    } finally {
+      setRemovendoAlunoId(null);
+    }
   };
 
   const abrirHistPresenca = async (t: Turma) => {
@@ -2596,6 +2613,7 @@ function TurmasTab({ cursos, professores, alunos }: { cursos: Curso[]; professor
                       <th className="text-left px-4 py-3">CPF</th>
                       <th className="text-left px-4 py-3">Contato</th>
                       <th className="text-left px-4 py-3">Vinculado em</th>
+                      <th className="px-4 py-3" />
                     </tr>
                   </thead>
                   <tbody>
@@ -2616,6 +2634,15 @@ function TurmasTab({ cursos, professores, alunos }: { cursos: Curso[]; professor
                         <td className="px-4 py-3 text-slate-500 font-mono text-[10px]">{a.cpf || '–'}</td>
                         <td className="px-4 py-3 text-slate-500 text-[10px]">{a.celular || a.email || '–'}</td>
                         <td className="px-4 py-3 text-slate-400 text-[10px]">{a.vinculado_em ? new Date(a.vinculado_em).toLocaleDateString('pt-BR') : '–'}</td>
+                        <td className="px-4 py-3">
+                          <button
+                            onClick={() => retirarAlunoDaTurma(a)}
+                            disabled={removendoAlunoId === a.id}
+                            title="Retirar da turma"
+                            className="flex items-center gap-1 px-2 py-1 text-[9px] font-black uppercase text-red-600 bg-red-50 hover:bg-red-100 rounded-lg disabled:opacity-40 transition-colors">
+                            {removendoAlunoId === a.id ? '...' : <><UserMinus size={10}/> Retirar</>}
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>

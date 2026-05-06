@@ -186,7 +186,9 @@ export class AcademicoService {
   async deletarTurma(id: string) {
     this.logger.warn(`Deletando turma id=${id}`);
     const alunosNaTurma = await this.turmaAlunoRepo.count({ where: { turma_id: id, status: 'ativo' } });
-    if (alunosNaTurma > 0) throw new ConflictException('Não é possível excluir uma turma com alunos ativos');
+    if (alunosNaTurma > 0) throw new ConflictException('Não é possível excluir uma turma com alunos ativos. Retire todos os alunos antes de excluir.');
+    await this.dataSource.query(`DELETE FROM grade_horaria WHERE turma_id::text = $1`, [id]);
+    await this.dataSource.query(`UPDATE turma_alunos SET turma_id = NULL, status = 'backlog' WHERE turma_id::text = $1`, [id]);
     await this.turmaRepo.delete(id);
   }
 
