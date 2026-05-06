@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Plus, Trash2, Search, X, Edit3,
   User, Users, Calendar, Shield, CheckSquare, Clock,
+  NotebookPen, FileImage,
 } from 'lucide-react';
 import api from '@/services/api';
 import { useAuth } from '@/context/auth-context';
@@ -17,7 +18,7 @@ interface Chamado {
   status: string; prioridade: string; aluno_id?: string | null; aluno_nome?: string | null;
   turma_id?: string | null; turma_nome?: string | null; responsavel_nome?: string | null;
   criado_por_nome?: string | null; observacoes?: string | null; data_resolucao?: string | null;
-  abertura?: string | null; fechamento?: string | null;
+  abertura?: string | null; fechamento?: string | null; acompanhamento?: string | null;
   created_at: string; updated_at: string;
 }
 interface Aluno { id: string; nome_completo: string; turma_nome?: string; turmas?: any[]; }
@@ -77,6 +78,189 @@ function calcSLA(abertura?: string | null, fechamento?: string | null): string |
   return `${m}m`;
 }
 
+// ─── Rich Text Editor ─────────────────────────────────────────────────────────
+
+function ToolBtn({ onClick, title, children }: { onClick: () => void; title?: string; children: React.ReactNode }) {
+  return (
+    <button type="button" onClick={onClick} title={title}
+      className="w-7 h-7 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center transition-colors text-slate-600 dark:text-slate-300 shrink-0">
+      {children}
+    </button>
+  );
+}
+
+function RichTextEditor({ value, onChange }: { value: string; onChange: (html: string) => void }) {
+  const editorRef = useRef<HTMLDivElement>(null);
+  const ready = useRef(false);
+
+  useEffect(() => {
+    if (editorRef.current && !ready.current) {
+      editorRef.current.innerHTML = value || '';
+      ready.current = true;
+    }
+  }, [value]);
+
+  const exec = (cmd: string, val?: string) => {
+    editorRef.current?.focus();
+    document.execCommand(cmd, false, val);
+  };
+
+  const insertImg = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = ev => {
+      exec('insertHTML', `<img src="${ev.target?.result as string}" style="max-width:100%;border-radius:8px;margin:6px 0;display:block;" />`);
+      onChange(editorRef.current?.innerHTML ?? '');
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
+    const imgItem = Array.from(e.clipboardData?.items ?? []).find(i => i.type.startsWith('image/'));
+    if (imgItem) {
+      e.preventDefault();
+      const file = imgItem.getAsFile();
+      if (file) insertImg(file);
+    }
+  };
+
+  return (
+    <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
+      {/* Toolbar */}
+      <div className="flex items-center gap-0.5 px-2 py-1.5 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex-wrap">
+        <ToolBtn onClick={() => exec('bold')} title="Negrito (Ctrl+B)">
+          <span className="font-black text-sm leading-none">B</span>
+        </ToolBtn>
+        <ToolBtn onClick={() => exec('italic')} title="Itálico (Ctrl+I)">
+          <span className="italic text-sm leading-none">I</span>
+        </ToolBtn>
+        <ToolBtn onClick={() => exec('underline')} title="Sublinhado (Ctrl+U)">
+          <span className="underline text-sm leading-none">U</span>
+        </ToolBtn>
+        <div className="w-px h-5 bg-slate-200 dark:bg-slate-600 mx-1" />
+        <ToolBtn onClick={() => exec('formatBlock', 'h1')} title="Título grande">
+          <span className="text-[11px] font-black leading-none">T1</span>
+        </ToolBtn>
+        <ToolBtn onClick={() => exec('formatBlock', 'h2')} title="Título médio">
+          <span className="text-[11px] font-bold leading-none">T2</span>
+        </ToolBtn>
+        <ToolBtn onClick={() => exec('formatBlock', 'h3')} title="Título pequeno">
+          <span className="text-[11px] leading-none">T3</span>
+        </ToolBtn>
+        <ToolBtn onClick={() => exec('formatBlock', 'p')} title="Parágrafo normal">
+          <span className="text-[9px] text-slate-400 leading-none">¶</span>
+        </ToolBtn>
+        <div className="w-px h-5 bg-slate-200 dark:bg-slate-600 mx-1" />
+        <ToolBtn onClick={() => exec('insertUnorderedList')} title="Lista com marcadores">
+          <span className="text-sm leading-none">•≡</span>
+        </ToolBtn>
+        <ToolBtn onClick={() => exec('insertOrderedList')} title="Lista numerada">
+          <span className="text-[10px] leading-none">1.</span>
+        </ToolBtn>
+        <div className="w-px h-5 bg-slate-200 dark:bg-slate-600 mx-1" />
+        <label className="w-7 h-7 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center cursor-pointer text-slate-500 transition-colors shrink-0" title="Inserir imagem (ou cole com Ctrl+V)">
+          <FileImage size={13} />
+          <input type="file" accept="image/*" className="hidden" onChange={e => {
+            const f = e.target.files?.[0];
+            if (f) insertImg(f);
+            e.target.value = '';
+          }} />
+        </label>
+      </div>
+      {/* Editable area */}
+      <div
+        ref={editorRef}
+        contentEditable
+        suppressContentEditableWarning
+        onPaste={handlePaste}
+        onInput={() => onChange(editorRef.current?.innerHTML ?? '')}
+        className="min-h-[240px] p-4 text-sm focus:outline-none dark:text-slate-100 dark:bg-slate-900
+          [&_h1]:text-2xl [&_h1]:font-black [&_h1]:mb-2 [&_h1]:mt-1
+          [&_h2]:text-xl [&_h2]:font-black [&_h2]:mb-1 [&_h2]:mt-1
+          [&_h3]:text-base [&_h3]:font-bold [&_h3]:mb-1
+          [&_strong]:font-bold [&_em]:italic [&_u]:underline
+          [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:mb-2
+          [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:mb-2
+          [&_li]:mb-0.5 [&_p]:mb-1
+          [&_img]:max-w-full [&_img]:rounded-lg [&_img]:my-2"
+      />
+    </div>
+  );
+}
+
+// ─── Acompanhamento Modal ──────────────────────────────────────────────────────
+
+function AcompModal({
+  chamado, onClose, onSave,
+}: { chamado: Chamado; onClose: () => void; onSave: (html: string) => Promise<void> }) {
+  const [html, setHtml] = useState(chamado.acompanhamento ?? '');
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    await onSave(html);
+    setSaving(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[300] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={onClose}>
+      <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col"
+        onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div className="flex items-start justify-between px-6 pt-5 pb-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
+          <div className="min-w-0 flex-1 pr-4">
+            <div className="flex flex-wrap items-center gap-2 mb-1">
+              <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${COR_STATUS[chamado.status] ?? ''}`}>
+                {LABEL_STATUS[chamado.status] ?? chamado.status}
+              </span>
+              <span className="text-[10px] font-bold text-slate-400 uppercase">{chamado.tipo}</span>
+              <span className="text-[10px] font-bold text-slate-300">·</span>
+              <span className={`text-[10px] font-black flex items-center gap-0.5 ${chamado.prioridade === 'urgente' ? 'text-red-500' : chamado.prioridade === 'alta' ? 'text-orange-500' : 'text-slate-400'}`}>
+                {LABEL_PRIO[chamado.prioridade] ?? chamado.prioridade}
+              </span>
+            </div>
+            <h3 className="font-black text-sm text-slate-800 dark:text-slate-100 truncate">{chamado.titulo}</h3>
+            {chamado.aluno_nome && (
+              <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
+                <User size={10} />{chamado.aluno_nome}
+              </p>
+            )}
+          </div>
+          <button onClick={onClose}
+            className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 shrink-0">
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Editor */}
+        <div className="flex-1 overflow-y-auto px-6 py-4">
+          <p className="text-[10px] font-black uppercase text-slate-500 flex items-center gap-1.5 mb-2">
+            <NotebookPen size={11} /> Acompanhamento
+          </p>
+          <RichTextEditor key={chamado.id} value={html} onChange={setHtml} />
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between px-6 py-3 border-t border-slate-100 dark:border-slate-800 shrink-0">
+          <p className="text-[10px] text-slate-400">Cole imagens com <kbd className="px-1 py-0.5 bg-slate-100 dark:bg-slate-700 rounded text-[9px] font-mono">Ctrl+V</kbd> direto no editor</p>
+          <div className="flex gap-2">
+            <button onClick={onClose}
+              className="px-4 py-2 text-xs font-black rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 dark:text-slate-300">
+              Fechar
+            </button>
+            <button onClick={handleSave} disabled={saving}
+              className="px-4 py-2 text-xs font-black rounded-xl bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-60 transition-colors">
+              {saving ? 'Salvando...' : 'Salvar'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Modal helper ─────────────────────────────────────────────────────────────
+
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
     <div className="fixed inset-0 z-[300] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
@@ -109,6 +293,7 @@ export default function ChamadosPage() {
   const [showModal, setShowModal] = useState(false);
   const [editando, setEditando] = useState<Chamado | null>(null);
   const [salvando, setSalvando] = useState(false);
+  const [acampChamado, setAcampChamado] = useState<Chamado | null>(null);
   const [alunoSearch, setAlunoSearch] = useState('');
   const [todoInstituto, setTodoInstituto] = useState(false);
   const [modoResponsavel, setModoResponsavel] = useState<'usuario' | 'equipe'>('usuario');
@@ -215,6 +400,18 @@ export default function ChamadosPage() {
   async function deletar(id: string) {
     if (!confirm('Excluir este chamado?')) return;
     try { await api.delete(`/chamados/${id}`); carregar(); } catch {}
+  }
+
+  async function salvarAcomp(html: string) {
+    if (!acampChamado) return;
+    try {
+      await api.patch(`/chamados/${acampChamado.id}`, { acompanhamento: html });
+      setChamados(prev => prev.map(c => c.id === acampChamado.id ? { ...c, acompanhamento: html } : c));
+      setAcampChamado(prev => prev ? { ...prev, acompanhamento: html } : prev);
+      toast.success('Acompanhamento salvo.');
+    } catch {
+      toast.error('Erro ao salvar acompanhamento.');
+    }
   }
 
   const upd = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
@@ -325,6 +522,11 @@ export default function ChamadosPage() {
                           Resolver
                         </button>
                       )}
+                      <button onClick={() => setAcampChamado(c)}
+                        title="Acompanhamento"
+                        className={`p-1.5 rounded-lg border transition-colors ${c.acompanhamento ? 'bg-purple-50 dark:bg-purple-950 text-purple-600 border-purple-200 dark:border-purple-800 hover:bg-purple-100' : 'bg-slate-50 dark:bg-slate-800 text-slate-400 hover:bg-purple-50 hover:text-purple-600 border-slate-200 dark:border-slate-700'}`}>
+                        <NotebookPen size={12} />
+                      </button>
                       {canWrite && (
                         <button onClick={() => abrirEditar(c)}
                           className="p-1.5 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-500 hover:bg-purple-50 hover:text-purple-600 border border-slate-200 dark:border-slate-700 transition-colors">
@@ -343,6 +545,21 @@ export default function ChamadosPage() {
                     <div className="mt-3 p-3 bg-slate-50 dark:bg-slate-800 rounded-xl text-xs text-slate-600 dark:text-slate-300 border border-slate-100 dark:border-slate-700">
                       <span className="font-black text-[10px] uppercase text-slate-400 block mb-1">Observações</span>
                       {c.observacoes}
+                    </div>
+                  )}
+                  {c.acompanhamento && (
+                    <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                      <span className="text-[9px] font-black uppercase text-purple-500 flex items-center gap-1 mb-1.5">
+                        <NotebookPen size={9} /> Acompanhamento
+                      </span>
+                      <div
+                        className="text-xs text-slate-600 dark:text-slate-300 line-clamp-3 [&_img]:hidden [&_h1]:text-xs [&_h1]:font-black [&_h2]:text-xs [&_h2]:font-bold [&_h3]:text-xs [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4"
+                        dangerouslySetInnerHTML={{ __html: c.acompanhamento }}
+                      />
+                      <button onClick={() => setAcampChamado(c)}
+                        className="text-[9px] font-black text-purple-500 hover:text-purple-700 mt-1 underline">
+                        Ver / editar →
+                      </button>
                     </div>
                   )}
                 </div>
@@ -490,6 +707,16 @@ export default function ChamadosPage() {
             </div>
           </div>
         </Modal>
+      )}
+
+      {/* Acompanhamento */}
+      {acampChamado && (
+        <AcompModal
+          key={acampChamado.id}
+          chamado={acampChamado}
+          onClose={() => setAcampChamado(null)}
+          onSave={salvarAcomp}
+        />
       )}
     </div>
   );

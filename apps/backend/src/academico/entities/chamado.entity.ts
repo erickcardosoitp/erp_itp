@@ -45,6 +45,10 @@ export class ChamadoAcademico {
   @Column({ type: 'text', nullable: true })
   observacoes: string | null;
 
+  /** Editor rico de acompanhamento (HTML) — pode conter formatação e imagens em base64 */
+  @Column({ type: 'text', nullable: true })
+  acompanhamento: string | null;
+
   @Column({ name: 'data_resolucao', type: 'date', nullable: true })
   data_resolucao: string | null;
 

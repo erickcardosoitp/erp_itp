@@ -867,8 +867,9 @@ export class AppModule implements OnModuleInit {
       this.logger.log('✅ Tabela chamados_academicos criada (IF NOT EXISTS)');
       await this.dataSource.query(`
         ALTER TABLE IF EXISTS chamados_academicos
-          ADD COLUMN IF NOT EXISTS abertura   TIMESTAMPTZ,
-          ADD COLUMN IF NOT EXISTS fechamento TIMESTAMPTZ
+          ADD COLUMN IF NOT EXISTS abertura        TIMESTAMPTZ,
+          ADD COLUMN IF NOT EXISTS fechamento      TIMESTAMPTZ,
+          ADD COLUMN IF NOT EXISTS acompanhamento  TEXT
       `);
 
       // Fire-and-forget: não bloqueia o bootstrap (evita timeout Vercel 30s)
