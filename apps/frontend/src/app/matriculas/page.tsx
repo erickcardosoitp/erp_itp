@@ -7,7 +7,7 @@ import {
   Search, Download, UserCheck, ChevronDown, Filter,
   Users, Clock, ShieldAlert, CheckCircle2, FilterX, ChevronsUpDown, ChevronUp,
   FileText, FileCheck2, AlertCircle, UserX, Ban, ChevronRight, RefreshCw,
-  GraduationCap, X
+  GraduationCap, X, ExternalLink
 } from 'lucide-react';
 
 // Formata datas com segurança (evita "Invalid Date")
@@ -394,6 +394,15 @@ export default function GestaoMatriculas() {
             >
               <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
             </button>
+            <a
+              href="https://itp.institutotiapretinha.org/inscricao"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 px-5 py-3 rounded-xl font-black text-xs uppercase tracking-widest text-white shadow-lg bg-emerald-500 hover:bg-emerald-600 transition-all"
+              title="Abrir formulário público de inscrição (link externo)"
+            >
+              <ExternalLink size={15} /> Link de Inscrição
+            </a>
             <button
               onClick={abrirCadastroDireto}
               className="flex items-center gap-2 px-5 py-3 rounded-xl font-black text-xs uppercase tracking-widest text-white shadow-lg bg-green-600 hover:bg-green-700 transition-all"

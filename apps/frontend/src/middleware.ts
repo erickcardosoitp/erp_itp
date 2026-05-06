@@ -69,6 +69,7 @@ export function middleware(request: NextRequest) {
   if (pathname.startsWith('/esqueci-senha'))   return NextResponse.next();
   if (pathname.startsWith('/reset-senha'))     return NextResponse.next();
   if (pathname.startsWith('/lgpd'))            return NextResponse.next();
+  if (pathname.startsWith('/inscricao'))      return NextResponse.next();
   // Página de troca obrigatória de senha (requer cookie, mas não bloqueia redirect)
   if (pathname.startsWith('/trocar-senha'))    return NextResponse.next();
 
