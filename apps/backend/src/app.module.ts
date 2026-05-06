@@ -173,6 +173,13 @@ export class AppModule implements OnModuleInit {
           updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
         )
       `);
+      // Colunas adicionadas após criação inicial — garantidas aqui no bloco crítico
+      await this.dataSource.query(`
+        ALTER TABLE chamados_academicos
+          ADD COLUMN IF NOT EXISTS abertura       TIMESTAMPTZ,
+          ADD COLUMN IF NOT EXISTS fechamento     TIMESTAMPTZ,
+          ADD COLUMN IF NOT EXISTS acompanhamento TEXT
+      `);
       await this.dataSource.query(`
         CREATE TABLE IF NOT EXISTS controles_futebol (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
