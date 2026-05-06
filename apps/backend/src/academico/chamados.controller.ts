@@ -39,4 +39,22 @@ export class ChamadosController {
   @Delete(':id')
   @ModuloPerm('chamados', 'excluir')
   deletar(@Param('id') id: string) { return this.svc.deletarChamado(id); }
+
+  // ── Acompanhamentos ────────────────────────────────────────────────────────
+
+  @Get(':chamadoId/acompanhamentos')
+  @ModuloPerm('chamados', 'visualizar')
+  listarAcomp(@Param('chamadoId') chamadoId: string) {
+    return this.svc.listarAcompanhamentos(chamadoId);
+  }
+
+  @Post(':chamadoId/acompanhamentos')
+  @ModuloPerm('chamados', 'editar')
+  criarAcomp(@Param('chamadoId') chamadoId: string, @Body() dto: { conteudo: string }, @Req() req: any) {
+    return this.svc.criarAcompanhamento(chamadoId, dto.conteudo, req.user?.nome || req.user?.email);
+  }
+
+  @Delete('acompanhamentos/:id')
+  @ModuloPerm('chamados', 'excluir')
+  deletarAcomp(@Param('id') id: string) { return this.svc.deletarAcompanhamento(id); }
 }

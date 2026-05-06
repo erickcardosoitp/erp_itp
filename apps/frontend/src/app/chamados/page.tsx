@@ -18,8 +18,11 @@ interface Chamado {
   status: string; prioridade: string; aluno_id?: string | null; aluno_nome?: string | null;
   turma_id?: string | null; turma_nome?: string | null; responsavel_nome?: string | null;
   criado_por_nome?: string | null; observacoes?: string | null; data_resolucao?: string | null;
-  abertura?: string | null; fechamento?: string | null; acompanhamento?: string | null;
+  abertura?: string | null; fechamento?: string | null; _total_acomp?: number;
   created_at: string; updated_at: string;
+}
+interface Acompanhamento {
+  id: string; chamado_id: string; conteudo: string; autor_nome?: string | null; created_at: string;
 }
 interface Aluno { id: string; nome_completo: string; turma_nome?: string; turmas?: any[]; }
 interface Turma { id: string; nome: string; }
@@ -189,68 +192,145 @@ function RichTextEditor({ value, onChange }: { value: string; onChange: (html: s
 
 // ─── Acompanhamento Modal ──────────────────────────────────────────────────────
 
-function AcompModal({
-  chamado, onClose, onSave,
-}: { chamado: Chamado; onClose: () => void; onSave: (html: string) => Promise<void> }) {
-  const [html, setHtml] = useState(chamado.acompanhamento ?? '');
-  const [saving, setSaving] = useState(false);
+function AcompModal({ chamado, onClose, onAdded }: {
+  chamado: Chamado;
+  onClose: () => void;
+  onAdded: () => void;
+}) {
+  const [entries, setEntries] = useState<Acompanhamento[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [novoHtml, setNovoHtml] = useState('');
+  const [publishing, setPublishing] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
 
-  const handleSave = async () => {
-    setSaving(true);
-    await onSave(html);
-    setSaving(false);
+  useEffect(() => {
+    api.get(`/chamados/${chamado.id}/acompanhamentos`)
+      .then(r => setEntries(r.data ?? []))
+      .catch(() => setEntries([]))
+      .finally(() => setLoading(false));
+  }, [chamado.id]);
+
+  const publicar = async () => {
+    if (!novoHtml.trim() || novoHtml === '<br>') return;
+    setPublishing(true);
+    try {
+      const r = await api.post(`/chamados/${chamado.id}/acompanhamentos`, { conteudo: novoHtml });
+      setEntries(prev => [...prev, r.data]);
+      setNovoHtml('');
+      onAdded();
+      setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+    } catch { toast.error('Erro ao publicar acompanhamento.'); }
+    setPublishing(false);
+  };
+
+  const deletar = async (id: string) => {
+    if (!confirm('Excluir este acompanhamento?')) return;
+    setDeletingId(id);
+    try {
+      await api.delete(`/chamados/acompanhamentos/${id}`);
+      setEntries(prev => prev.filter(e => e.id !== id));
+      onAdded();
+    } catch { toast.error('Erro ao excluir.'); }
+    setDeletingId(null);
   };
 
   return (
-    <div className="fixed inset-0 z-[300] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
+    <div className="fixed inset-0 z-[300] bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4"
       onClick={onClose}>
-      <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col"
+      <div className="bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-3xl shadow-2xl w-full max-w-3xl h-[92vh] sm:max-h-[92vh] flex flex-col"
         onClick={e => e.stopPropagation()}>
+
         {/* Header */}
-        <div className="flex items-start justify-between px-6 pt-5 pb-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
-          <div className="min-w-0 flex-1 pr-4">
-            <div className="flex flex-wrap items-center gap-2 mb-1">
-              <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${COR_STATUS[chamado.status] ?? ''}`}>
+        <div className="flex items-start justify-between px-5 pt-5 pb-3 border-b border-slate-100 dark:border-slate-800 shrink-0">
+          <div className="min-w-0 flex-1 pr-3">
+            <div className="flex flex-wrap items-center gap-1.5 mb-0.5">
+              <span className={`text-[9px] font-black px-2 py-0.5 rounded-full border ${COR_STATUS[chamado.status] ?? ''}`}>
                 {LABEL_STATUS[chamado.status] ?? chamado.status}
               </span>
-              <span className="text-[10px] font-bold text-slate-400 uppercase">{chamado.tipo}</span>
-              <span className="text-[10px] font-bold text-slate-300">·</span>
-              <span className={`text-[10px] font-black flex items-center gap-0.5 ${chamado.prioridade === 'urgente' ? 'text-red-500' : chamado.prioridade === 'alta' ? 'text-orange-500' : 'text-slate-400'}`}>
-                {LABEL_PRIO[chamado.prioridade] ?? chamado.prioridade}
+              <span className="text-[9px] font-bold text-slate-400 uppercase">{chamado.tipo}</span>
+              <span className={`text-[9px] font-black ${chamado.prioridade === 'urgente' ? 'text-red-500' : chamado.prioridade === 'alta' ? 'text-orange-500' : 'text-slate-400'}`}>
+                · {LABEL_PRIO[chamado.prioridade]}
               </span>
             </div>
-            <h3 className="font-black text-sm text-slate-800 dark:text-slate-100 truncate">{chamado.titulo}</h3>
+            <h3 className="font-black text-sm text-slate-800 dark:text-slate-100">{chamado.titulo}</h3>
             {chamado.aluno_nome && (
-              <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
-                <User size={10} />{chamado.aluno_nome}
-              </p>
+              <p className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1"><User size={9} />{chamado.aluno_nome}</p>
             )}
           </div>
-          <button onClick={onClose}
-            className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 shrink-0">
-            <X size={16} />
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-[10px] font-black text-purple-600 bg-purple-50 dark:bg-purple-950 px-2 py-0.5 rounded-full flex items-center gap-1">
+              <NotebookPen size={9} />{entries.length} entrada{entries.length !== 1 ? 's' : ''}
+            </span>
+            <button onClick={onClose} className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400"><X size={15} /></button>
+          </div>
         </div>
 
-        {/* Editor */}
-        <div className="flex-1 overflow-y-auto px-6 py-4">
-          <p className="text-[10px] font-black uppercase text-slate-500 flex items-center gap-1.5 mb-2">
-            <NotebookPen size={11} /> Acompanhamento
+        {/* Timeline */}
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+          {loading ? (
+            <p className="text-center text-xs text-slate-400 py-8">Carregando...</p>
+          ) : entries.length === 0 ? (
+            <div className="text-center py-10">
+              <div className="w-12 h-12 bg-purple-50 dark:bg-purple-950 rounded-2xl flex items-center justify-center mx-auto mb-3">
+                <NotebookPen size={20} className="text-purple-400" />
+              </div>
+              <p className="text-sm font-bold text-slate-400">Nenhum acompanhamento ainda.</p>
+              <p className="text-xs text-slate-400 mt-0.5">Adicione o primeiro abaixo.</p>
+            </div>
+          ) : (
+            entries.map((e, i) => (
+              <div key={e.id} className="flex gap-3">
+                {/* Timeline line */}
+                <div className="flex flex-col items-center shrink-0">
+                  <div className="w-7 h-7 rounded-full bg-purple-100 dark:bg-purple-900 flex items-center justify-center text-[10px] font-black text-purple-600 dark:text-purple-300 shrink-0">
+                    {(e.autor_nome?.[0] ?? '?').toUpperCase()}
+                  </div>
+                  {i < entries.length - 1 && <div className="w-px flex-1 bg-slate-100 dark:bg-slate-800 mt-1" />}
+                </div>
+                {/* Content bubble */}
+                <div className="flex-1 min-w-0 pb-2">
+                  <div className="flex items-center justify-between gap-2 mb-1.5">
+                    <div>
+                      <span className="text-[11px] font-black text-slate-700 dark:text-slate-200">{e.autor_nome || 'Responsável'}</span>
+                      <span className="text-[10px] text-slate-400 ml-2">
+                        {new Date(e.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                    <button onClick={() => deletar(e.id)} disabled={deletingId === e.id}
+                      className="p-1 rounded-lg text-slate-300 hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950 transition-colors disabled:opacity-40 shrink-0">
+                      <Trash2 size={11} />
+                    </button>
+                  </div>
+                  <div
+                    className="bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl rounded-tl-sm px-4 py-3 text-sm text-slate-700 dark:text-slate-200
+                      [&_h1]:text-xl [&_h1]:font-black [&_h1]:mb-1
+                      [&_h2]:text-lg [&_h2]:font-black [&_h2]:mb-1
+                      [&_h3]:text-base [&_h3]:font-bold [&_h3]:mb-0.5
+                      [&_strong]:font-bold [&_em]:italic [&_u]:underline
+                      [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:mb-1
+                      [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:mb-1
+                      [&_img]:max-w-full [&_img]:rounded-xl [&_img]:my-2 [&_img]:border [&_img]:border-slate-200"
+                    dangerouslySetInnerHTML={{ __html: e.conteudo }}
+                  />
+                </div>
+              </div>
+            ))
+          )}
+          <div ref={bottomRef} />
+        </div>
+
+        {/* Nova entrada */}
+        <div className="border-t border-slate-100 dark:border-slate-800 px-5 pt-3 pb-4 shrink-0 space-y-2">
+          <p className="text-[10px] font-black uppercase text-slate-400 flex items-center gap-1">
+            <Plus size={9} /> Novo acompanhamento
           </p>
-          <RichTextEditor key={chamado.id} value={html} onChange={setHtml} />
-        </div>
-
-        {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-3 border-t border-slate-100 dark:border-slate-800 shrink-0">
-          <p className="text-[10px] text-slate-400">Cole imagens com <kbd className="px-1 py-0.5 bg-slate-100 dark:bg-slate-700 rounded text-[9px] font-mono">Ctrl+V</kbd> direto no editor</p>
-          <div className="flex gap-2">
-            <button onClick={onClose}
-              className="px-4 py-2 text-xs font-black rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 dark:text-slate-300">
-              Fechar
-            </button>
-            <button onClick={handleSave} disabled={saving}
-              className="px-4 py-2 text-xs font-black rounded-xl bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-60 transition-colors">
-              {saving ? 'Salvando...' : 'Salvar'}
+          <RichTextEditor key={`new-${entries.length}`} value="" onChange={setNovoHtml} />
+          <div className="flex items-center justify-between">
+            <p className="text-[9px] text-slate-400">Cole imagens com <kbd className="px-1 bg-slate-100 dark:bg-slate-700 rounded font-mono text-[8px]">Ctrl+V</kbd></p>
+            <button onClick={publicar} disabled={publishing}
+              className="flex items-center gap-1.5 px-4 py-2 text-xs font-black rounded-xl bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-60 transition-colors">
+              {publishing ? 'Publicando...' : <><Plus size={11} /> Publicar</>}
             </button>
           </div>
         </div>
@@ -402,17 +482,7 @@ export default function ChamadosPage() {
     try { await api.delete(`/chamados/${id}`); carregar(); } catch {}
   }
 
-  async function salvarAcomp(html: string) {
-    if (!acampChamado) return;
-    try {
-      await api.patch(`/chamados/${acampChamado.id}`, { acompanhamento: html });
-      setChamados(prev => prev.map(c => c.id === acampChamado.id ? { ...c, acompanhamento: html } : c));
-      setAcampChamado(prev => prev ? { ...prev, acompanhamento: html } : prev);
-      toast.success('Acompanhamento salvo.');
-    } catch {
-      toast.error('Erro ao salvar acompanhamento.');
-    }
-  }
+  function onAcompAdded() { carregar(); }
 
   const upd = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
 
@@ -523,9 +593,10 @@ export default function ChamadosPage() {
                         </button>
                       )}
                       <button onClick={() => setAcampChamado(c)}
-                        title="Acompanhamento"
-                        className={`p-1.5 rounded-lg border transition-colors ${c.acompanhamento ? 'bg-purple-50 dark:bg-purple-950 text-purple-600 border-purple-200 dark:border-purple-800 hover:bg-purple-100' : 'bg-slate-50 dark:bg-slate-800 text-slate-400 hover:bg-purple-50 hover:text-purple-600 border-slate-200 dark:border-slate-700'}`}>
-                        <NotebookPen size={12} />
+                        title="Acompanhamentos"
+                        className={`flex items-center gap-1 px-2 py-1.5 rounded-lg border transition-colors text-[10px] font-black ${(c._total_acomp ?? 0) > 0 ? 'bg-purple-50 dark:bg-purple-950 text-purple-600 border-purple-200 dark:border-purple-800 hover:bg-purple-100' : 'bg-slate-50 dark:bg-slate-800 text-slate-400 hover:bg-purple-50 hover:text-purple-600 border-slate-200 dark:border-slate-700'}`}>
+                        <NotebookPen size={11} />
+                        {(c._total_acomp ?? 0) > 0 && <span>{c._total_acomp}</span>}
                       </button>
                       {canWrite && (
                         <button onClick={() => abrirEditar(c)}
@@ -545,21 +616,6 @@ export default function ChamadosPage() {
                     <div className="mt-3 p-3 bg-slate-50 dark:bg-slate-800 rounded-xl text-xs text-slate-600 dark:text-slate-300 border border-slate-100 dark:border-slate-700">
                       <span className="font-black text-[10px] uppercase text-slate-400 block mb-1">Observações</span>
                       {c.observacoes}
-                    </div>
-                  )}
-                  {c.acompanhamento && (
-                    <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-                      <span className="text-[9px] font-black uppercase text-purple-500 flex items-center gap-1 mb-1.5">
-                        <NotebookPen size={9} /> Acompanhamento
-                      </span>
-                      <div
-                        className="text-xs text-slate-600 dark:text-slate-300 line-clamp-3 [&_img]:hidden [&_h1]:text-xs [&_h1]:font-black [&_h2]:text-xs [&_h2]:font-bold [&_h3]:text-xs [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4"
-                        dangerouslySetInnerHTML={{ __html: c.acompanhamento }}
-                      />
-                      <button onClick={() => setAcampChamado(c)}
-                        className="text-[9px] font-black text-purple-500 hover:text-purple-700 mt-1 underline">
-                        Ver / editar →
-                      </button>
                     </div>
                   )}
                 </div>
@@ -715,7 +771,7 @@ export default function ChamadosPage() {
           key={acampChamado.id}
           chamado={acampChamado}
           onClose={() => setAcampChamado(null)}
-          onSave={salvarAcomp}
+          onAdded={onAcompAdded}
         />
       )}
     </div>

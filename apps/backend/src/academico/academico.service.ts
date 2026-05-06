@@ -9,6 +9,7 @@ import { GradeHoraria } from './entities/grade-horaria.entity';
 import { DiarioAcademico } from './entities/diario.entity';
 import { PresencaSessao } from './entities/presenca-sessao.entity';
 import { ChamadoAcademico } from './entities/chamado.entity';
+import { ChamadoAcompanhamento } from './entities/chamado-acompanhamento.entity';
 import { Aluno } from '../alunos/aluno.entity';
 import { NotificacoesService } from '../notificacoes/notificacoes.service';
 import { InjectDataSource } from '@nestjs/typeorm';
@@ -24,7 +25,8 @@ export class AcademicoService {
     @InjectRepository(GradeHoraria)       private gradeRepo: Repository<GradeHoraria>,
     @InjectRepository(DiarioAcademico)    private diarioRepo: Repository<DiarioAcademico>,
     @InjectRepository(PresencaSessao)     private sessaoRepo: Repository<PresencaSessao>,
-    @InjectRepository(ChamadoAcademico)   private chamadoRepo: Repository<ChamadoAcademico>,
+    @InjectRepository(ChamadoAcademico)        private chamadoRepo: Repository<ChamadoAcademico>,
+    @InjectRepository(ChamadoAcompanhamento)   private acompRepo: Repository<ChamadoAcompanhamento>,
     @InjectRepository(Aluno)              private alunoRepo: Repository<Aluno>,
     @InjectRepository(TurmaAluno)         private turmaAlunoRepo: Repository<TurmaAluno>,
     private readonly notificacoes: NotificacoesService,
@@ -1670,11 +1672,34 @@ export class AcademicoService {
 
   async listarChamados(filtros: { status?: string; tipo?: string; aluno_id?: string; prioridade?: string } = {}) {
     let qb = this.chamadoRepo.createQueryBuilder('c').orderBy('c.created_at', 'DESC');
-    if (filtros.status)    qb = qb.andWhere('c.status = :s',     { s: filtros.status });
-    if (filtros.tipo)      qb = qb.andWhere('c.tipo = :t',       { t: filtros.tipo });
-    if (filtros.aluno_id)  qb = qb.andWhere('c.aluno_id = :a',   { a: filtros.aluno_id });
+    if (filtros.status)     qb = qb.andWhere('c.status = :s',     { s: filtros.status });
+    if (filtros.tipo)       qb = qb.andWhere('c.tipo = :t',       { t: filtros.tipo });
+    if (filtros.aluno_id)   qb = qb.andWhere('c.aluno_id = :a',   { a: filtros.aluno_id });
     if (filtros.prioridade) qb = qb.andWhere('c.prioridade = :p', { p: filtros.prioridade });
-    return qb.getMany();
+    const chamados = await qb.getMany();
+    if (!chamados.length) return chamados;
+    const ids = chamados.map(c => `'${c.id}'`).join(',');
+    const counts: { chamado_id: string; total: string }[] = await this.dataSource.query(
+      `SELECT chamado_id::text, COUNT(*)::int AS total FROM chamados_acompanhamentos WHERE chamado_id::text IN (${ids}) GROUP BY chamado_id`
+    ).catch(() => []);
+    const countMap = Object.fromEntries(counts.map(r => [r.chamado_id, Number(r.total)]));
+    return chamados.map(c => ({ ...c, _total_acomp: countMap[c.id] ?? 0 }));
+  }
+
+  async listarAcompanhamentos(chamadoId: string) {
+    return this.acompRepo.find({ where: { chamado_id: chamadoId }, order: { created_at: 'ASC' } });
+  }
+
+  async criarAcompanhamento(chamadoId: string, conteudo: string, autorNome?: string) {
+    if (!conteudo?.trim()) throw new BadRequestException('Conteúdo não pode estar vazio');
+    const chamado = await this.chamadoRepo.findOneBy({ id: chamadoId });
+    if (!chamado) throw new NotFoundException('Chamado não encontrado');
+    return this.acompRepo.save(this.acompRepo.create({ chamado_id: chamadoId, conteudo, autor_nome: autorNome ?? null }));
+  }
+
+  async deletarAcompanhamento(id: string) {
+    await this.acompRepo.delete(id);
+    return { ok: true };
   }
 
   async listarResponsaveis() {

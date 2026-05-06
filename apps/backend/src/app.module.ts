@@ -181,6 +181,15 @@ export class AppModule implements OnModuleInit {
           ADD COLUMN IF NOT EXISTS acompanhamento TEXT
       `);
       await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS chamados_acompanhamentos (
+          id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          chamado_id  UUID NOT NULL,
+          conteudo    TEXT NOT NULL,
+          autor_nome  VARCHAR,
+          created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `);
+      await this.dataSource.query(`
         CREATE TABLE IF NOT EXISTS controles_futebol (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           aluno_id TEXT NOT NULL,
