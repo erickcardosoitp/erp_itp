@@ -7,7 +7,7 @@ import { AlunosService } from './alunos.service';
 import { UpsertComplementoDto } from './dto/upsert-complemento.dto';
 import { EnviarDocumentoDto, ValidarDocumentoDto, InvalidarDocumentoDto } from './dto/enviar-documento.dto';
 
-@Controller('api/alunos')
+@Controller('alunos')
 export class AlunosController {
   constructor(private readonly svc: AlunosService) {}
 

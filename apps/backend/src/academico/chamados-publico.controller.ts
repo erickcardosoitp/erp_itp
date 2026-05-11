@@ -3,7 +3,7 @@ import { Public } from '../auth/decorators/public.decorator';
 import { AcademicoService } from './academico.service';
 import { CriarChamadoPublicoDto } from './dto/criar-chamado-publico.dto';
 
-@Controller('api/chamados/publico')
+@Controller('chamados/publico')
 export class ChamadosPublicoController {
   constructor(private readonly svc: AcademicoService) {}
 
