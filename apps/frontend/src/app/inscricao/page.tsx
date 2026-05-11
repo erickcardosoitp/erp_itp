@@ -736,6 +736,42 @@ export default function InscricaoPage() {
                   className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
                 />
               </div>
+
+              {/* ── Aviso curso especial ── */}
+              {(() => {
+                const PALAVRAS_ESPECIAIS = ['encceja', 'vestibular'];
+                const selecionados = form.cursos_desejados.toLowerCase();
+                const temEspecial = PALAVRAS_ESPECIAIS.some(p => selecionados.includes(p));
+                if (!temEspecial) return null;
+                return (
+                  <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 space-y-3">
+                    <div className="flex items-start gap-2">
+                      <span className="text-amber-500 text-base leading-none mt-0.5">⚠</span>
+                      <p className="text-sm font-semibold text-amber-800">
+                        O curso selecionado exige documentação adicional
+                      </p>
+                    </div>
+                    <p className="text-xs text-amber-700 leading-relaxed">
+                      Nossa equipe entrará em contato solicitando os dados abaixo. Tenha-os em mãos para agilizar o processo:
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                      {[
+                        ['🪪', 'RG (número, órgão expedidor e UF)'],
+                        ['🏦', 'Dados bancários (banco, agência e conta)'],
+                        ['📸', 'Selfie segurando o documento de identidade'],
+                        ['🪪', 'Foto da CNH ou RG (frente e verso)'],
+                        ['📄', 'Comprovante de inscrição no ENCCEJA / vestibular'],
+                        ['💳', 'Comprovante de conta bancária ou Pix'],
+                      ].map(([icon, label]) => (
+                        <div key={label as string} className="flex items-start gap-2 text-xs text-amber-700">
+                          <span className="text-sm leading-none shrink-0">{icon}</span>
+                          <span>{label as string}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           )}
 

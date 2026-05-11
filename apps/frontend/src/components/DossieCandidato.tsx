@@ -146,7 +146,22 @@ export default function DossieCandidato({ aluno, onClose, onSuccess }: DossiePro
           api.get(`/matriculas/inscricao/${aluno.id}/documentos`),
         ]);
         if (resInscricao.status === 'fulfilled') {
-          setFormData(resInscricao.value.data);
+          const inscData = resInscricao.value.data;
+          setFormData(inscData);
+          // Carrega complemento se aluno já foi criado
+          const alunoUuid = inscData?.aluno?.id;
+          if (alunoUuid) {
+            api.get(`/alunos/${alunoUuid}/complemento`).then(r => {
+              if (r.data) {
+                setComplemento(prev => ({ ...prev, ...r.data }));
+              }
+            }).catch(() => {});
+            // auto_declaracao fica no aluno diretamente
+            if (inscData.aluno?.auto_declaracao) {
+              setComplemento(prev => ({ ...prev, auto_declaracao: inscData.aluno.auto_declaracao }));
+            }
+            setComplementoCarregado(true);
+          }
         }
         if (resCursos.status === 'fulfilled') {
           setCursosAcademico(Array.isArray(resCursos.value.data) ? resCursos.value.data : []);
@@ -327,8 +342,20 @@ export default function DossieCandidato({ aluno, onClose, onSuccess }: DossiePro
     setLoading(true);
     try {
       await api.patch(`/matriculas/inscricao/${aluno.id}`, formData);
+
+      // Salva complemento e auto-declaração se aluno já existe
+      const alunoUuid = formData?.aluno?.id;
+      if (alunoUuid && complementoCarregado) {
+        const { auto_declaracao, ...camposComplemento } = complemento;
+        await Promise.allSettled([
+          api.patch(`/alunos/${alunoUuid}/complemento`, camposComplemento),
+          auto_declaracao
+            ? api.patch(`/alunos/${alunoUuid}/auto-declaracao`, { auto_declaracao })
+            : Promise.resolve(),
+        ]);
+      }
+
       setIsEditing(false);
-      // Recarrega movimentações para refletir os campos alterados
       const resMov = await api.get(`/matriculas/inscricao/${aluno.id}/movimentacoes`);
       setMovimentacoes(resMov.data);
       onSuccess?.();
@@ -372,6 +399,14 @@ export default function DossieCandidato({ aluno, onClose, onSuccess }: DossiePro
       return updated;
     });
   }, []);
+
+  // ── Complemento (curso especial) ─────────────────────────────
+  const [complemento, setComplemento] = useState<Record<string, string>>({
+    rg: '', orgao_expedidor: '', uf_expedicao: '', genero: '',
+    banco: '', agencia: '', agencia_digito: '', conta_corrente: '', conta_digito: '', tipo_conta: '',
+    auto_declaracao: '',
+  });
+  const [complementoCarregado, setComplementoCarregado] = useState(false);
 
   const [buscandoCep, setBuscandoCep] = useState(false);
   const buscarCep = useCallback(async (cep: string) => {
@@ -605,6 +640,146 @@ export default function DossieCandidato({ aluno, onClose, onSuccess }: DossiePro
                   </div>
                 </div>
               </div>
+
+              {/* ── Dados Especiais (Pré-ENCCEJA / Pré-Vestibular) ── */}
+              {complementoCarregado ? (
+                <div className="bg-purple-50/60 p-6 rounded-[24px] space-y-4 border border-purple-100">
+                  <SectionTitle>Dados Especiais — Pré-ENCCEJA / Pré-Vestibular</SectionTitle>
+
+                  {/* Auto-declaração */}
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Autodeclaração Racial</label>
+                    {isEditing ? (
+                      <select
+                        value={complemento.auto_declaracao ?? ''}
+                        onChange={e => setComplemento(p => ({ ...p, auto_declaracao: e.target.value }))}
+                        className="p-2 bg-white border border-purple-200 rounded-lg text-xs font-bold text-purple-900 outline-none focus:ring-2 focus:ring-purple-300"
+                      >
+                        <option value="">Prefiro não informar</option>
+                        <option value="branco">Branco</option>
+                        <option value="preto">Preto</option>
+                        <option value="pardo">Pardo</option>
+                        <option value="amarelo">Amarelo</option>
+                        <option value="indigena">Indígena</option>
+                      </select>
+                    ) : (
+                      <p className="text-xs font-black text-black uppercase">{complemento.auto_declaracao || '—'}</p>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    {/* Documentação */}
+                    <div className="col-span-2">
+                      <p className="text-[9px] font-black uppercase tracking-widest text-purple-400 mb-2">Documentação</p>
+                    </div>
+                    {[
+                      { label: 'RG', key: 'rg' },
+                      { label: 'Órgão Expedidor', key: 'orgao_expedidor' },
+                      { label: 'UF Expedição', key: 'uf_expedicao' },
+                    ].map(({ label, key }) => (
+                      <div key={key} className="flex flex-col gap-1">
+                        <label className="text-[8px] font-black text-gray-400 uppercase tracking-widest">{label}</label>
+                        {isEditing ? (
+                          <input
+                            value={complemento[key] ?? ''}
+                            maxLength={key === 'uf_expedicao' ? 2 : undefined}
+                            onChange={e => setComplemento(p => ({ ...p, [key]: key === 'uf_expedicao' ? e.target.value.toUpperCase().slice(0, 2) : e.target.value }))}
+                            className="p-2 bg-white border border-purple-200 rounded-lg text-xs font-bold text-purple-900 outline-none focus:ring-2 focus:ring-purple-300 uppercase"
+                          />
+                        ) : (
+                          <p className="text-xs font-black text-black uppercase truncate">{complemento[key] || '—'}</p>
+                        )}
+                      </div>
+                    ))}
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Gênero</label>
+                      {isEditing ? (
+                        <select
+                          value={complemento.genero ?? ''}
+                          onChange={e => setComplemento(p => ({ ...p, genero: e.target.value }))}
+                          className="p-2 bg-white border border-purple-200 rounded-lg text-xs font-bold text-purple-900 outline-none focus:ring-2 focus:ring-purple-300"
+                        >
+                          <option value="">—</option>
+                          <option value="masculino">Masculino</option>
+                          <option value="feminino">Feminino</option>
+                          <option value="nao_binario">Não-binário</option>
+                          <option value="prefiro_nao_informar">Prefiro não informar</option>
+                        </select>
+                      ) : (
+                        <p className="text-xs font-black text-black uppercase">{complemento.genero || '—'}</p>
+                      )}
+                    </div>
+
+                    {/* Dados bancários */}
+                    <div className="col-span-2 pt-2">
+                      <p className="text-[9px] font-black uppercase tracking-widest text-purple-400 mb-2">Dados Bancários</p>
+                    </div>
+                    {[
+                      { label: 'Banco', key: 'banco', span: 2 },
+                      { label: 'Agência', key: 'agencia' },
+                      { label: 'Dígito Agência', key: 'agencia_digito' },
+                      { label: 'Conta Corrente', key: 'conta_corrente' },
+                      { label: 'Dígito Conta', key: 'conta_digito' },
+                    ].map(({ label, key, span }) => (
+                      <div key={key} className={`flex flex-col gap-1 ${span === 2 ? 'col-span-2' : ''}`}>
+                        <label className="text-[8px] font-black text-gray-400 uppercase tracking-widest">{label}</label>
+                        {isEditing ? (
+                          <input
+                            value={complemento[key] ?? ''}
+                            onChange={e => setComplemento(p => ({ ...p, [key]: e.target.value }))}
+                            className="p-2 bg-white border border-purple-200 rounded-lg text-xs font-bold text-purple-900 outline-none focus:ring-2 focus:ring-purple-300"
+                          />
+                        ) : (
+                          <p className="text-xs font-black text-black uppercase truncate">{complemento[key] || '—'}</p>
+                        )}
+                      </div>
+                    ))}
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Tipo de Conta</label>
+                      {isEditing ? (
+                        <select
+                          value={complemento.tipo_conta ?? ''}
+                          onChange={e => setComplemento(p => ({ ...p, tipo_conta: e.target.value }))}
+                          className="p-2 bg-white border border-purple-200 rounded-lg text-xs font-bold text-purple-900 outline-none focus:ring-2 focus:ring-purple-300"
+                        >
+                          <option value="">—</option>
+                          <option value="corrente">Corrente</option>
+                          <option value="poupanca">Poupança</option>
+                        </select>
+                      ) : (
+                        <p className="text-xs font-black text-black uppercase">{complemento.tipo_conta || '—'}</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                /* Aluno ainda não matriculado — mostrar apenas auto-declaração */
+                <div className="bg-gray-50 p-6 rounded-[24px] space-y-4">
+                  <SectionTitle>Autodeclaração Racial</SectionTitle>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Autodeclaração</label>
+                    {isEditing ? (
+                      <select
+                        value={formData.auto_declaracao ?? ''}
+                        onChange={e => handleFieldChange('auto_declaracao', e.target.value)}
+                        className="p-2 bg-white border border-purple-200 rounded-lg text-xs font-bold text-purple-900 outline-none focus:ring-2 focus:ring-purple-300"
+                      >
+                        <option value="">Prefiro não informar</option>
+                        <option value="branco">Branco</option>
+                        <option value="preto">Preto</option>
+                        <option value="pardo">Pardo</option>
+                        <option value="amarelo">Amarelo</option>
+                        <option value="indigena">Indígena</option>
+                      </select>
+                    ) : (
+                      <p className="text-xs font-black text-black uppercase">{formData.auto_declaracao || '—'}</p>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-purple-400 italic">
+                    Os dados bancários e de documentação ficam disponíveis após a matrícula ser efetivada.
+                  </p>
+                </div>
+              )}
 
               {/* ── Responsável ── (apenas para menores ou quando maior_18_anos não foi confirmado) */}
               {!(formData.idade > 18) && (
