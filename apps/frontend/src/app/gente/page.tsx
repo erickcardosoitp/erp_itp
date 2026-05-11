@@ -2760,48 +2760,35 @@ function PontoTab({ reload, colaboradores }: { reload: number; colaboradores: an
 
 // ── Componente: Registro de Pagamentos de Passagem ───────────────────────────
 
-function RecibosPassagemPanel({ colaboradores, mes, feriadosMes }: {
-  colaboradores: any[];
+function RecibosPassagemModal({ colaborador, mes, feriadosMes, diasPagosIniciais, onClose, onSaved }: {
+  colaborador: any;
   mes: string;
   feriadosMes: Set<string>;
+  diasPagosIniciais: Set<string>;
+  onClose: () => void;
+  onSaved: (novaSet: Set<string>) => void;
 }) {
   const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? '';
-  const [colSel, setColSel] = useState<string>('');
-  const [diasPagos, setDiasPagos] = useState<Set<string>>(new Set());
+  const [diasPagos, setDiasPagos] = useState<Set<string>>(new Set(diasPagosIniciais));
   const [salvando, setSalvando] = useState(false);
-  const [carregando, setCarregando] = useState(false);
 
-  const colaborador = colaboradores.find(c => c.id === colSel);
-
-  // Gera todos os dias do mês que são dia de trabalho do colaborador
   const diasTrabalho = (() => {
     if (!colaborador || !mes) return [];
     const mapa: Record<string, number> = { dom:0, seg:1, ter:2, qua:3, qui:4, sex:5, sab:6 };
     const diasSem = new Set((colaborador.dias_trabalho ?? []).map((d: string) => mapa[d]).filter((n: number) => n !== undefined));
     const [ano, m] = mes.split('-').map(Number);
     const total = new Date(ano, m, 0).getDate();
-    const result: { iso: string; label: string; diaSem: string }[] = [];
+    const result: { iso: string; label: string; diaSem: string; diaSemIdx: number }[] = [];
     const nomesDia = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
     for (let d = 1; d <= total; d++) {
       const iso = `${ano}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
       const dObj = new Date(ano, m-1, d);
       if (diasSem.has(dObj.getDay()) && !feriadosMes.has(iso)) {
-        result.push({ iso, label: `${String(d).padStart(2,'0')}/${String(m).padStart(2,'0')}`, diaSem: nomesDia[dObj.getDay()] });
+        result.push({ iso, label: `${String(d).padStart(2,'0')}/${String(m).padStart(2,'0')}`, diaSem: nomesDia[dObj.getDay()], diaSemIdx: dObj.getDay() });
       }
     }
     return result;
   })();
-
-  // Carrega pagamentos salvos ao trocar colaborador/mês
-  useEffect(() => {
-    if (!colSel || !mes) return;
-    setCarregando(true);
-    fetch(`${API}/gente/passagens?colaborador_id=${colSel}&mes=${mes}`, { credentials: 'include' })
-      .then(r => r.ok ? r.json() : [])
-      .then((rows: any[]) => setDiasPagos(new Set(rows.map((r: any) => String(r.data).slice(0,10)))))
-      .catch(() => {})
-      .finally(() => setCarregando(false));
-  }, [colSel, mes]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggleDia = (iso: string) => {
     setDiasPagos(prev => {
@@ -2814,181 +2801,10 @@ function RecibosPassagemPanel({ colaboradores, mes, feriadosMes }: {
   const marcarTodos = () => setDiasPagos(new Set(diasTrabalho.map(d => d.iso)));
   const desmarcarTodos = () => setDiasPagos(new Set());
 
-  const salvar = async () => {
-    if (!colaborador) return;
-    setSalvando(true);
-    try {
-      const vp = Number(colaborador.valor_passagem) || 0;
-      const dias = Array.from(diasPagos).map(data => ({ data, valor: vp, status: 'pago' }));
-      const r = await fetch(`${API}/gente/passagens/lote`, {
-        method: 'POST', credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ colaborador_id: colSel, funcionario_id: colaborador.funcionario_id, mes, dias }),
-      });
-      if (!r.ok) throw new Error((await r.json()).message);
-      toast.success('Registro salvo!');
-    } catch (e: any) { toast.error(e.message); }
-    setSalvando(false);
-  };
-
-  const gerarPdf = async () => {
-    if (!colaborador || diasPagos.size === 0) return;
-    const { jsPDF } = await import('jspdf');
-    const vp = Number(colaborador.valor_passagem) || 0;
-    const nome = colaborador.funcionario?.nome ?? '—';
-    const cargo = colaborador.funcionario?.cargo ?? '';
-    const [ano, m] = mes.split('-').map(Number);
-    const nomesMes = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-    const periodoLabel = `${nomesMes[m-1]}/${ano}`;
-    const nomesDia = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
-
-    const diasOrdenados = diasTrabalho
-      .filter(d => diasPagos.has(d.iso))
-      .map(d => ({ ...d, diaSemIdx: new Date(d.iso + 'T12:00:00').getDay() }));
-
-    const total = diasOrdenados.length * vp;
-
-    // ── Layout por página: 3 recibos por folha ──────────────────────────────
-    // Cada recibo: recibo principal (esq) + stub comprovante (dir)
-    const RECIBOS_POR_PAG = 3;
-    const paginas = Math.ceil(diasOrdenados.length / RECIBOS_POR_PAG);
-
-    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-    const PW = 210; const PH = 297;
-    const RECIBO_H = 88; // altura de cada bloco recibo
-    const RECIBO_W = 145; // largura do recibo principal
-    const STUB_W = 55;   // largura do stub
-    const ML = 8;        // margem esquerda
-
-    const drawRecibo = (pag: number, idx: number, d: { iso: string; label: string; diaSem: string; diaSemIdx: number }) => {
-      const y = ML + idx * (RECIBO_H + 4);
-      const x = ML;
-
-      // Borda do recibo principal
-      doc.setDrawColor(180,180,180);
-      doc.setLineWidth(0.3);
-      doc.rect(x, y, RECIBO_W, RECIBO_H - 2);
-
-      // Título
-      doc.setFontSize(11);
-      doc.setFont('helvetica','bold');
-      doc.setTextColor(20,20,20);
-      doc.text('RECIBO DE PASSAGEM', x + RECIBO_W/2, y + 7, { align:'center' });
-
-      // Linha separadora
-      doc.setLineWidth(0.2);
-      doc.line(x + 4, y + 9, x + RECIBO_W - 4, y + 9);
-
-      // Campos
-      doc.setFontSize(8);
-      doc.setFont('helvetica','normal');
-      doc.text('Funcionário:', x + 4, y + 15);
-      doc.setFont('helvetica','bold');
-      doc.text(nome, x + 28, y + 15);
-
-      doc.setFont('helvetica','normal');
-      doc.text(`Valor: R$`, x + 4, y + 22);
-      doc.setFont('helvetica','bold');
-      doc.text(vp.toLocaleString('pt-BR', { minimumFractionDigits:2 }), x + 20, y + 22);
-      doc.setFont('helvetica','normal');
-      doc.text('Data:', x + 75, y + 22);
-      doc.setFont('helvetica','bold');
-      doc.text(d.label, x + 86, y + 22);
-
-      // Dia da semana
-      doc.setFont('helvetica','normal');
-      doc.setFontSize(7);
-      doc.text('Dia da Semana:', x + 4, y + 29);
-      const dias7 = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
-      const diasIdx = [1,2,3,4,5,6,0]; // índices correspondentes
-      dias7.forEach((dl, i) => {
-        const bx = x + 32 + i * 15;
-        const by = y + 25;
-        doc.setLineWidth(0.3);
-        doc.rect(bx, by, 4, 4);
-        if (diasIdx[i] === d.diaSemIdx) {
-          doc.setFillColor(20,20,20);
-          doc.rect(bx+0.5, by+0.5, 3, 3, 'F');
-        }
-        doc.setFontSize(6);
-        doc.text(dl, bx, by + 7);
-      });
-
-      // Assinaturas
-      const asY = y + RECIBO_H - 18;
-      doc.setLineWidth(0.3);
-      doc.line(x + 4, asY, x + 65, asY);
-      doc.line(x + 75, asY, x + RECIBO_W - 4, asY);
-      doc.setFontSize(6.5);
-      doc.setFont('helvetica','normal');
-      doc.text('Assinatura do Funcionário', x + 4, asY + 4);
-      doc.text('Assinatura do Coordenador', x + 75, asY + 4);
-
-      // ── Stub Comprovante (direita) ──────────────────────────────────────
-      const sx = x + RECIBO_W + 2;
-      doc.setDrawColor(150,150,150);
-      doc.setLineDashPattern([1,1], 0);
-      doc.line(sx - 1, y, sx - 1, y + RECIBO_H - 2);
-      doc.setLineDashPattern([], 0);
-      doc.rect(sx, y, STUB_W - 4, RECIBO_H - 2);
-
-      doc.setFontSize(8);
-      doc.setFont('helvetica','bold');
-      doc.setTextColor(20,20,20);
-      doc.text('COMPROVANTE', sx + (STUB_W-4)/2, y + 6, { align:'center' });
-
-      doc.setLineWidth(0.2);
-      doc.setLineDashPattern([1,1], 0);
-      doc.line(sx + 2, y + 8, sx + STUB_W - 6, y + 8);
-      doc.setLineDashPattern([], 0);
-
-      doc.setFontSize(6.5);
-      doc.setFont('helvetica','normal');
-      doc.text('Nome:', sx + 2, y + 14);
-      doc.text(nome.length > 16 ? nome.slice(0,16)+'.' : nome, sx + 2, y + 19);
-
-      doc.text('Data:', sx + 2, y + 25);
-      doc.text(d.label, sx + 2, y + 30);
-
-      doc.text('Valor:', sx + 2, y + 36);
-      doc.text('R$ ' + vp.toLocaleString('pt-BR', { minimumFractionDigits:2 }), sx + 2, y + 41);
-
-      // Dias semana mini
-      const dias7mini = ['S','T','Q','Q','S','S','D'];
-      dias7mini.forEach((dl, i) => {
-        const bx = sx + 2 + i * 6;
-        const by = y + 45;
-        doc.setLineWidth(0.3);
-        doc.rect(bx, by, 4, 4);
-        if (diasIdx[i] === d.diaSemIdx) {
-          doc.setFillColor(20,20,20);
-          doc.rect(bx+0.5, by+0.5, 3, 3, 'F');
-        }
-        doc.setFontSize(5.5);
-        doc.text(dl, bx + 0.7, by + 3.2);
-      });
-
-      // Linha assinatura stub
-      const asYS = y + RECIBO_H - 14;
-      doc.setLineWidth(0.3);
-      doc.line(sx + 2, asYS, sx + STUB_W - 6, asYS);
-      doc.setFontSize(6);
-      doc.text('Recibo do Funcionário', sx + 2, asYS + 4);
-    };
-
-    for (let p = 0; p < paginas; p++) {
-      if (p > 0) doc.addPage();
-      const slice = diasOrdenados.slice(p * RECIBOS_POR_PAG, (p+1) * RECIBOS_POR_PAG);
-      // Rodapé da página
-      doc.setFontSize(7);
-      doc.setTextColor(140,140,140);
-      doc.text(`Instituto Tia Pretinha · Recibo de Passagem · ${periodoLabel} · ${nome}`, PW/2, PH - 5, { align:'center' });
-      doc.text(`Total: ${diasOrdenados.length} dias · R$ ${total.toLocaleString('pt-BR', { minimumFractionDigits:2 })}`, PW/2, PH - 10, { align:'center' });
-      slice.forEach((d, i) => drawRecibo(p, i, d));
-    }
-
-    doc.save(`recibo_passagem_${nome.replace(/\s+/g,'_')}_${mes}.pdf`);
-  };
+  const vp = Number(colaborador.valor_passagem) || 0;
+  const totalPago = diasPagos.size * vp;
+  const totalDevido = diasTrabalho.length * vp;
+  const progresso = diasTrabalho.length === 0 ? 0 : Math.round((diasPagos.size / diasTrabalho.length) * 100);
 
   const fmtMes = (m: string) => {
     const [ano, mm] = m.split('-');
@@ -2996,33 +2812,199 @@ function RecibosPassagemPanel({ colaboradores, mes, feriadosMes }: {
     return `${nomes[parseInt(mm)-1]}/${ano}`;
   };
 
-  return (
-    <div className="mt-6 border-t border-slate-200 dark:border-slate-700 pt-6 space-y-4">
-      <div className="flex items-center gap-2 mb-2">
-        <Receipt size={16} className="text-purple-500" />
-        <span className="text-sm font-black uppercase tracking-wide text-slate-600 dark:text-slate-300">Registro de Pagamentos de Passagem</span>
-      </div>
+  const salvar = async () => {
+    setSalvando(true);
+    try {
+      const dias = Array.from(diasPagos).map(data => ({ data, valor: vp, status: 'pago' }));
+      const r = await fetch(`${API}/gente/passagens/lote`, {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ colaborador_id: colaborador.id, funcionario_id: colaborador.funcionario_id, mes, dias }),
+      });
+      if (!r.ok) throw new Error((await r.json()).message);
+      toast.success('Registro salvo!');
+      onSaved(new Set(diasPagos));
+    } catch (e: any) { toast.error(e.message); }
+    setSalvando(false);
+  };
 
-      {/* Seleção do colaborador */}
-      <div className="flex flex-wrap gap-3 items-end">
-        <div className="flex-1 min-w-[200px]">
-          <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Colaborador</label>
-          <select
-            value={colSel}
-            onChange={e => setColSel(e.target.value)}
-            className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-400"
-          >
-            <option value="">Selecione...</option>
-            {colaboradores.map(c => (
-              <option key={c.id} value={c.id}>
-                {c.funcionario?.nome ?? c.id}
-                {c.valor_passagem ? ` · R$ ${Number(c.valor_passagem).toFixed(2)}` : ''}
-              </option>
-            ))}
-          </select>
+  // ── PDF: recibo único consolidado ──────────────────────────────────────────
+  const gerarPdf = async () => {
+    if (diasPagos.size === 0) return;
+    const { jsPDF } = await import('jspdf');
+    const nome = colaborador.funcionario?.nome ?? '—';
+    const cargo = colaborador.funcionario?.cargo ?? '—';
+    const [ano, m] = mes.split('-').map(Number);
+    const nomesMes = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+    const periodoLabel = `${nomesMes[m-1]}/${ano}`;
+
+    const diasOrdenados = diasTrabalho.filter(d => diasPagos.has(d.iso));
+    const total = diasOrdenados.length * vp;
+
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const PW = 210; const PH = 297; const ML = 18; const MR = 18;
+
+    // ── Cabeçalho ──
+    doc.setFillColor(30,58,95);
+    doc.rect(0, 0, PW, 26, 'F');
+    doc.setTextColor(255,255,255);
+    doc.setFont('helvetica','bold'); doc.setFontSize(14);
+    doc.text('INSTITUTO TIA PRETINHA', ML, 12);
+    doc.setFont('helvetica','normal'); doc.setFontSize(8);
+    doc.text(`CNPJ ${CNPJ}`, ML, 17);
+    doc.text(ENDERECO, ML, 21);
+    doc.setFontSize(11); doc.setFont('helvetica','bold');
+    doc.text('RECIBO DE PASSAGEM', PW - MR, 14, { align:'right' });
+    doc.setFontSize(9); doc.setFont('helvetica','normal');
+    doc.text(`Referência: ${periodoLabel}`, PW - MR, 20, { align:'right' });
+
+    // ── Bloco identificação ──
+    let y = 36;
+    doc.setTextColor(20,20,20);
+    doc.setFont('helvetica','normal'); doc.setFontSize(9);
+    doc.setDrawColor(220,220,220); doc.setLineWidth(0.3);
+    doc.rect(ML, y, PW - ML - MR, 22);
+
+    doc.text('Funcionário(a):', ML + 3, y + 6);
+    doc.setFont('helvetica','bold');
+    doc.text(nome, ML + 32, y + 6);
+    doc.setFont('helvetica','normal');
+    doc.text('Cargo:', ML + 3, y + 12);
+    doc.setFont('helvetica','bold');
+    doc.text(cargo, ML + 32, y + 12);
+    doc.setFont('helvetica','normal');
+    doc.text('Valor diário:', ML + 3, y + 18);
+    doc.setFont('helvetica','bold');
+    doc.text(`R$ ${vp.toLocaleString('pt-BR', { minimumFractionDigits:2 })}`, ML + 32, y + 18);
+
+    doc.setFont('helvetica','normal');
+    doc.text('Dias pagos:', PW/2 + 5, y + 6);
+    doc.setFont('helvetica','bold');
+    doc.text(`${diasOrdenados.length} de ${diasTrabalho.length}`, PW/2 + 30, y + 6);
+    doc.setFont('helvetica','normal');
+    doc.text('Período:', PW/2 + 5, y + 12);
+    doc.setFont('helvetica','bold');
+    doc.text(periodoLabel, PW/2 + 30, y + 12);
+    doc.setFont('helvetica','normal');
+    doc.text('Total a receber:', PW/2 + 5, y + 18);
+    doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(30,58,95);
+    doc.text(`R$ ${total.toLocaleString('pt-BR', { minimumFractionDigits:2 })}`, PW/2 + 30, y + 18);
+
+    // ── Tabela de dias ──
+    y += 30;
+    doc.setTextColor(20,20,20); doc.setFontSize(9); doc.setFont('helvetica','bold');
+    doc.text('Detalhamento dos dias pagos', ML, y);
+    y += 3;
+    doc.setLineWidth(0.2); doc.line(ML, y, PW - MR, y);
+    y += 5;
+
+    const COLS = 3; // 3 colunas de dias por linha visual
+    const colW = (PW - ML - MR) / COLS;
+    doc.setFontSize(8); doc.setFont('helvetica','bold'); doc.setFillColor(245,245,245);
+    for (let i = 0; i < COLS; i++) {
+      doc.rect(ML + i*colW, y - 4, colW, 6, 'F');
+      doc.text('#', ML + i*colW + 2, y);
+      doc.text('Data', ML + i*colW + 9, y);
+      doc.text('Dia', ML + i*colW + 28, y);
+      doc.text('Valor', ML + i*colW + colW - 22, y);
+    }
+    y += 4;
+
+    doc.setFont('helvetica','normal');
+    const linhasMax = Math.ceil(diasOrdenados.length / COLS);
+    for (let row = 0; row < linhasMax; row++) {
+      for (let c = 0; c < COLS; c++) {
+        const idx = row * COLS + c;
+        if (idx >= diasOrdenados.length) continue;
+        const d = diasOrdenados[idx];
+        const xCol = ML + c * colW;
+        doc.text(String(idx + 1).padStart(2,'0'), xCol + 2, y);
+        doc.text(d.label, xCol + 9, y);
+        doc.text(d.diaSem, xCol + 28, y);
+        doc.text(`R$ ${vp.toLocaleString('pt-BR', { minimumFractionDigits:2 })}`, xCol + colW - 22, y);
+      }
+      y += 5;
+      if (y > PH - 60) {
+        doc.addPage(); y = 25;
+      }
+    }
+
+    // ── Total ──
+    y += 6;
+    doc.setLineWidth(0.4); doc.line(ML, y, PW - MR, y);
+    y += 7;
+    doc.setFont('helvetica','bold'); doc.setFontSize(11);
+    doc.text(`TOTAL GERAL (${diasOrdenados.length} dias):`, ML, y);
+    doc.setTextColor(30,58,95);
+    doc.text(`R$ ${total.toLocaleString('pt-BR', { minimumFractionDigits:2 })}`, PW - MR, y, { align:'right' });
+    doc.setTextColor(20,20,20);
+
+    // ── Declaração ──
+    y += 14;
+    doc.setFont('helvetica','normal'); doc.setFontSize(9);
+    const decl = `Declaro que recebi do Instituto Tia Pretinha a quantia acima discriminada, referente ao auxílio passagem dos dias listados, dando plena e geral quitação.`;
+    const linhas = doc.splitTextToSize(decl, PW - ML - MR);
+    doc.text(linhas, ML, y);
+    y += linhas.length * 4 + 6;
+
+    doc.text(`Rio de Janeiro, _____ de ____________________ de ${ano}.`, ML, y);
+
+    // ── Assinaturas ──
+    y = PH - 50;
+    doc.setLineWidth(0.4);
+    doc.line(ML + 5, y, ML + 80, y);
+    doc.line(PW - MR - 80, y, PW - MR - 5, y);
+    doc.setFontSize(8);
+    doc.text('Assinatura do(a) Funcionário(a)', ML + 5, y + 5);
+    doc.text('Assinatura do(a) Coordenador(a)', PW - MR - 80, y + 5);
+    doc.setFontSize(7);
+    doc.text(nome, ML + 5, y + 9);
+
+    // ── Rodapé ──
+    doc.setFontSize(7); doc.setTextColor(140,140,140);
+    doc.text(`Instituto Tia Pretinha · ${EMPRESA} · ${ENDERECO}`, PW/2, PH - 8, { align:'center' });
+
+    doc.save(`recibo_passagem_${nome.replace(/\s+/g,'_')}_${mes}.pdf`);
+  };
+
+  return (
+    <Modal title={`Pagamento de Passagem — ${colaborador.funcionario?.nome ?? ''}`} onClose={onClose} wide>
+      <div className="space-y-5">
+        {/* Resumo */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5">
+            <div className="text-[10px] font-bold uppercase text-slate-400">Período</div>
+            <div className="text-sm font-black text-slate-800 dark:text-white">{fmtMes(mes)}</div>
+          </div>
+          <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5">
+            <div className="text-[10px] font-bold uppercase text-slate-400">Valor diário</div>
+            <div className="text-sm font-black text-slate-800 dark:text-white">{vp.toLocaleString('pt-BR', { style:'currency', currency:'BRL' })}</div>
+          </div>
+          <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl px-3 py-2.5">
+            <div className="text-[10px] font-bold uppercase text-green-600 dark:text-green-400">Total pago</div>
+            <div className="text-sm font-black text-green-700 dark:text-green-300">{totalPago.toLocaleString('pt-BR', { style:'currency', currency:'BRL' })}</div>
+          </div>
+          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl px-3 py-2.5">
+            <div className="text-[10px] font-bold uppercase text-blue-600 dark:text-blue-400">Total devido</div>
+            <div className="text-sm font-black text-blue-700 dark:text-blue-300">{totalDevido.toLocaleString('pt-BR', { style:'currency', currency:'BRL' })}</div>
+          </div>
         </div>
-        {colSel && diasTrabalho.length > 0 && (
-          <div className="flex gap-2">
+
+        {/* Barra progresso */}
+        <div>
+          <div className="flex justify-between text-xs font-bold mb-1.5">
+            <span className="text-slate-500 dark:text-slate-400">{diasPagos.size} de {diasTrabalho.length} dias pagos</span>
+            <span className="text-green-600 dark:text-green-400">{progresso}%</span>
+          </div>
+          <div className="h-2.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+            <div className="h-full bg-gradient-to-r from-green-500 to-emerald-500 transition-all"
+              style={{ width: `${progresso}%` }} />
+          </div>
+        </div>
+
+        {/* Ações marcar/limpar */}
+        {diasTrabalho.length > 0 && (
+          <div className="flex flex-wrap gap-2">
             <button onClick={marcarTodos} className="text-xs font-bold px-3 py-2 rounded-xl bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 hover:bg-green-200 transition">
               Marcar todos
             </button>
@@ -3031,68 +3013,55 @@ function RecibosPassagemPanel({ colaboradores, mes, feriadosMes }: {
             </button>
           </div>
         )}
-      </div>
 
-      {/* Grade de dias */}
-      {colSel && (
-        <div>
-          {carregando ? (
-            <div className="text-center py-6 text-slate-400 text-sm">Carregando...</div>
-          ) : diasTrabalho.length === 0 ? (
-            <div className="text-center py-6 text-slate-400 text-sm">Nenhum dia de trabalho configurado para {fmtMes(mes)}.</div>
-          ) : (
-            <>
-              <div className="grid grid-cols-5 sm:grid-cols-7 gap-1.5 mb-4">
-                {diasTrabalho.map(d => {
-                  const pago = diasPagos.has(d.iso);
-                  return (
-                    <button
-                      key={d.iso}
-                      onClick={() => toggleDia(d.iso)}
-                      className={`flex flex-col items-center justify-center rounded-xl py-2 px-1 border text-[11px] font-bold transition-all ${
-                        pago
-                          ? 'bg-green-600 border-green-600 text-white'
-                          : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:border-green-400'
-                      }`}
-                    >
-                      <span className="text-[9px] font-normal opacity-70">{d.diaSem}</span>
-                      <span>{d.label.slice(0,2)}</span>
-                    </button>
-                  );
-                })}
-              </div>
+        {/* Grade de dias */}
+        {diasTrabalho.length === 0 ? (
+          <div className="text-center py-8 text-slate-400 text-sm bg-slate-50 dark:bg-slate-800 rounded-xl">
+            Nenhum dia de trabalho configurado para {fmtMes(mes)}.
+            <div className="text-xs mt-1">Configure os dias da semana na lista acima.</div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-5 sm:grid-cols-7 gap-1.5">
+            {diasTrabalho.map(d => {
+              const pago = diasPagos.has(d.iso);
+              return (
+                <button
+                  key={d.iso}
+                  onClick={() => toggleDia(d.iso)}
+                  className={`flex flex-col items-center justify-center rounded-xl py-2.5 px-1 border-2 text-[11px] font-bold transition-all ${
+                    pago
+                      ? 'bg-green-600 border-green-600 text-white shadow-sm'
+                      : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:border-green-400'
+                  }`}
+                >
+                  <span className="text-[9px] font-normal opacity-70">{d.diaSem}</span>
+                  <span className="text-sm">{d.label.slice(0,2)}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
 
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="text-sm text-slate-500 dark:text-slate-400">
-                  <span className="font-bold text-green-600 dark:text-green-400">{diasPagos.size}</span> dias selecionados
-                  {Number(colaborador?.valor_passagem) > 0 && diasPagos.size > 0 && (
-                    <span className="ml-2 font-bold text-slate-700 dark:text-slate-200">
-                      = {(diasPagos.size * Number(colaborador?.valor_passagem)).toLocaleString('pt-BR', { style:'currency', currency:'BRL' })}
-                    </span>
-                  )}
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={salvar}
-                    disabled={salvando || diasPagos.size === 0}
-                    className="flex items-center gap-1.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-40 text-white text-xs font-bold px-4 py-2 rounded-xl transition"
-                  >
-                    {salvando ? 'Salvando...' : 'Salvar Registro'}
-                  </button>
-                  <button
-                    onClick={gerarPdf}
-                    disabled={diasPagos.size === 0}
-                    className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white text-xs font-bold px-4 py-2 rounded-xl transition"
-                  >
-                    <Receipt size={13} />Gerar Recibo PDF
-                  </button>
-                </div>
-              </div>
-            </>
-          )}
+        {/* Ações principais */}
+        <div className="flex flex-wrap justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-700">
+          <button onClick={onClose} className={bs}>Fechar</button>
+          <button
+            onClick={salvar}
+            disabled={salvando}
+            className="flex items-center gap-1.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-40 text-white text-xs font-bold px-4 py-2 rounded-xl transition"
+          >
+            {salvando ? 'Salvando...' : 'Salvar Registro'}
+          </button>
+          <button
+            onClick={gerarPdf}
+            disabled={diasPagos.size === 0}
+            className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white text-xs font-bold px-4 py-2 rounded-xl transition"
+          >
+            <Receipt size={13} />Gerar Recibo PDF
+          </button>
         </div>
-      )}
-    </div>
+      </div>
+    </Modal>
   );
 }
 
@@ -3110,6 +3079,8 @@ function TransporteTab({ colaboradores, reload }: { colaboradores: any[]; reload
   const [mes, setMes] = useState(new Date().toISOString().slice(0, 7));
   const [comprovante, setComprovante] = useState<any | null>(null);
   const [feriadosMes, setFeriadosMes] = useState<Set<string>>(new Set());
+  const [pagamentosPorCol, setPagamentosPorCol] = useState<Record<string, Set<string>>>({});
+  const [modalRecibo, setModalRecibo] = useState<any | null>(null);
 
   useEffect(() => {
     const initVal: Record<string, string> = {};
@@ -3133,6 +3104,26 @@ function TransporteTab({ colaboradores, reload }: { colaboradores: any[]; reload
       })
       .catch(() => {});
   }, [mes]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Carrega pagamentos de todos colaboradores no mês selecionado
+  useEffect(() => {
+    if (!mes || colaboradores.length === 0) return;
+    let cancelado = false;
+    Promise.all(
+      colaboradores.map(c =>
+        fetch(`${API}/gente/passagens?colaborador_id=${c.id}&mes=${mes}`, { credentials: 'include' })
+          .then(r => r.ok ? r.json() : [])
+          .then((rows: any[]) => [c.id, new Set<string>(rows.map((r: any) => String(r.data).slice(0,10)))] as const)
+          .catch(() => [c.id, new Set<string>()] as const)
+      )
+    ).then(pares => {
+      if (cancelado) return;
+      const map: Record<string, Set<string>> = {};
+      pares.forEach(([id, set]) => { map[id] = set; });
+      setPagamentosPorCol(map);
+    });
+    return () => { cancelado = true; };
+  }, [colaboradores, mes]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function diasNoMes(diasSemana: string[], mesRef: string): number {
     const mapa: Record<string, number> = { dom: 0, seg: 1, ter: 2, qua: 3, qui: 4, sex: 5, sab: 6 };
@@ -3218,6 +3209,10 @@ function TransporteTab({ colaboradores, reload }: { colaboradores: any[]; reload
           const diasCol = diasEdit[c.id] ?? c.dias_trabalho ?? [];
           const dias = diasNoMes(diasCol, mes);
           const totalMes = vp * dias;
+          const pagSet = pagamentosPorCol[c.id] ?? new Set<string>();
+          const diasPagos = pagSet.size;
+          const valorPago = diasPagos * vp;
+          const progresso = dias > 0 ? Math.round((diasPagos / dias) * 100) : 0;
           return (
             <div key={c.id} className="border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 space-y-2">
               <div className="flex flex-wrap items-center gap-3">
@@ -3251,10 +3246,10 @@ function TransporteTab({ colaboradores, reload }: { colaboradores: any[]; reload
                     className="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition disabled:opacity-50">
                     {salvando === c.id ? '...' : 'Salvar'}
                   </button>
-                  {totalMes > 0 && (
-                    <button onClick={() => setComprovante({ col: c, vp, dias, totalMes, mes })}
-                      className="bg-blue-100 dark:bg-blue-900/30 hover:bg-blue-200 text-blue-700 dark:text-blue-300 text-xs font-bold px-3 py-1.5 rounded-lg transition flex items-center gap-1">
-                      <Bus size={11} />Comp.
+                  {totalMes > 0 && vp > 0 && (
+                    <button onClick={() => setModalRecibo(c)}
+                      className="bg-green-100 dark:bg-green-900/30 hover:bg-green-200 text-green-700 dark:text-green-300 text-xs font-bold px-3 py-1.5 rounded-lg transition flex items-center gap-1">
+                      <Receipt size={11} />Pagamentos
                     </button>
                   )}
                 </div>
@@ -3275,14 +3270,47 @@ function TransporteTab({ colaboradores, reload }: { colaboradores: any[]; reload
                 </div>
                 <span className="text-[10px] text-slate-400">{dias} dias em {fmtMes(mes)}</span>
               </div>
+              {/* Progresso de pagamento */}
+              {totalMes > 0 && vp > 0 && (
+                <div className="pt-1">
+                  <div className="flex justify-between items-center text-[10px] font-bold mb-1">
+                    <span className="text-slate-500 dark:text-slate-400">
+                      Pago: <span className="text-green-600 dark:text-green-400">{diasPagos}/{dias} dias</span>
+                      <span className="ml-2 text-slate-600 dark:text-slate-300">
+                        {valorPago.toLocaleString('pt-BR', { style:'currency', currency:'BRL' })}
+                        {' '}de{' '}
+                        {totalMes.toLocaleString('pt-BR', { style:'currency', currency:'BRL' })}
+                      </span>
+                    </span>
+                    <span className={progresso === 100 ? 'text-green-600 dark:text-green-400' : 'text-slate-400'}>
+                      {progresso}%
+                    </span>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                    <div className={`h-full transition-all ${progresso === 100 ? 'bg-green-500' : 'bg-gradient-to-r from-green-400 to-emerald-500'}`}
+                      style={{ width: `${progresso}%` }} />
+                  </div>
+                </div>
+              )}
             </div>
           );
         })}
         {ativos.length === 0 && <div className="text-center py-10 text-slate-400 text-sm">Nenhum colaborador ativo.</div>}
       </div>
 
-      {/* ── Registro de Pagamentos de Passagem ── */}
-      <RecibosPassagemPanel colaboradores={ativos} mes={mes} feriadosMes={feriadosMes} />
+      {/* Modal de Registro de Pagamentos */}
+      {modalRecibo && (
+        <RecibosPassagemModal
+          colaborador={modalRecibo}
+          mes={mes}
+          feriadosMes={feriadosMes}
+          diasPagosIniciais={pagamentosPorCol[modalRecibo.id] ?? new Set()}
+          onClose={() => setModalRecibo(null)}
+          onSaved={(novaSet) => {
+            setPagamentosPorCol(prev => ({ ...prev, [modalRecibo.id]: novaSet }));
+          }}
+        />
+      )}
 
       {/* Modal Comprovante VT */}
       {comprovante && (

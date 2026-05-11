@@ -1795,12 +1795,14 @@ export class AcademicoService {
       aluno_nome: dados.nome_aluno || null,
     });
 
-    // Notifica por e-mail todos DRT + PRT + admin
+    // Notifica por e-mail DRT + VP + ADMIN (Presidente)
     const admins: { email: string; nome: string }[] = await this.dataSource.query(
-      `SELECT email, nome FROM usuarios WHERE role IN ('drt', 'prt', 'admin') AND email IS NOT NULL`,
+      `SELECT email, nome FROM usuarios WHERE role IN ('drt', 'vp', 'admin') AND email IS NOT NULL AND email <> ''`,
     );
+    this.logger.log(`📨 [chamado público ${chamado.protocolo}] notificando ${admins.length} gestor(es): ${admins.map(a => a.email).join(', ') || '(nenhum)'}`);
+
     const esc = (s: string) => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-    const htmlEmail = `
+    const htmlAdmin = `
       <div style="font-family:Arial,sans-serif;max-width:600px">
         <h2 style="color:#1e3a5f">Novo chamado público — ${esc(dados.assunto)}</h2>
         <p><strong>Protocolo:</strong> ${chamado.protocolo}</p>
@@ -1814,9 +1816,38 @@ export class AcademicoService {
         <p style="color:#6b7280;font-size:12px">Acesse o ERP para visualizar e responder este chamado.</p>
       </div>`;
 
-    await Promise.allSettled(
-      admins.map(a => this.emailService.enviarGenerico(a.email, `[ITP] Novo chamado: ${dados.assunto} (${chamado.protocolo})`, htmlEmail)),
+    // Confirmação ao solicitante
+    const htmlSolicitante = `
+      <div style="font-family:Arial,sans-serif;max-width:600px">
+        <h2 style="color:#1e3a5f">Chamado recebido — Instituto Tia Pretinha</h2>
+        <p>Olá, <strong>${esc(dados.nome)}</strong>!</p>
+        <p>Recebemos seu chamado e em breve nossa equipe entrará em contato.</p>
+        <div style="background:#f4f4f4;padding:16px;border-radius:8px;margin:16px 0">
+          <p style="margin:0 0 8px"><strong>Protocolo:</strong> ${chamado.protocolo}</p>
+          <p style="margin:0 0 8px"><strong>Assunto:</strong> ${esc(dados.assunto)}</p>
+          ${dados.nome_aluno ? `<p style="margin:0 0 8px"><strong>Aluno:</strong> ${esc(dados.nome_aluno)}</p>` : ''}
+          <p style="margin:0 0 4px"><strong>Mensagem:</strong></p>
+          <p style="margin:0;white-space:pre-wrap">${esc(dados.mensagem)}</p>
+        </div>
+        <p>Guarde o protocolo acima para acompanhar o andamento em <a href="https://institutotiapretinha.org/#suporte" style="color:#1e3a5f">institutotiapretinha.org/#suporte</a>.</p>
+        <hr>
+        <p style="color:#6b7280;font-size:12px">Esta é uma mensagem automática. Para responder, aguarde o contato da nossa equipe.</p>
+      </div>`;
+
+    const envios: Promise<any>[] = [];
+    envios.push(
+      this.emailService.enviarGenerico(dados.email, `[ITP] Chamado recebido — Protocolo ${chamado.protocolo}`, htmlSolicitante)
+        .then(() => this.logger.log(`✅ Confirmação enviada ao solicitante ${dados.email}`))
+        .catch(err => this.logger.error(`❌ Falha ao enviar confirmação ao solicitante ${dados.email}: ${err?.message ?? err}`)),
     );
+    admins.forEach(a => {
+      envios.push(
+        this.emailService.enviarGenerico(a.email, `[ITP] Novo chamado: ${dados.assunto} (${chamado.protocolo})`, htmlAdmin)
+          .then(() => this.logger.log(`✅ Notificação enviada ao gestor ${a.email}`))
+          .catch(err => this.logger.error(`❌ Falha ao enviar notificação ao gestor ${a.email}: ${err?.message ?? err}`)),
+      );
+    });
+    await Promise.allSettled(envios);
 
     return { protocolo: chamado.protocolo, ok: true };
   }
