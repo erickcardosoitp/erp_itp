@@ -613,7 +613,7 @@ export default function DossieCandidato({ aluno, onClose, onSuccess }: DossiePro
                     value={formData.escolaridade}
                     isEditing={isEditing}
                     type="select"
-                    options={['Fundamental Incompleto', 'Fundamental Completo', 'Médio Incompleto', 'Médio Completo', 'Superior Incompleto', 'Superior Completo', 'Pós-Graduação', 'Não informado']}
+                    options={['Ensino Fundamental Incompleto', 'Ensino Fundamental Completo', 'Ensino Médio Incompleto', 'Ensino Médio Completo', 'Ensino Superior Incompleto', 'Ensino Superior Completo', 'Pós-Graduação', 'Não informado']}
                     onChange={handleFieldChange}
                   />
                   <EditField
@@ -622,7 +622,7 @@ export default function DossieCandidato({ aluno, onClose, onSuccess }: DossiePro
                     value={formData.turno_escolar}
                     isEditing={isEditing}
                     type="select"
-                    options={['Manhã', 'Tarde', 'Noite', 'Integral', 'Não estuda']}
+                    options={['Manhã', 'Tarde', 'Noite', 'Integral', 'Não estuda no momento']}
                     onChange={handleFieldChange}
                   />
                 </div>
@@ -641,31 +641,33 @@ export default function DossieCandidato({ aluno, onClose, onSuccess }: DossiePro
                 </div>
               </div>
 
+              {/* ── Autodeclaração Racial (sempre visível) ── */}
+              <div className="bg-gray-50 p-6 rounded-[24px] space-y-4">
+                <SectionTitle>Autodeclaração Racial</SectionTitle>
+                <div className="flex flex-col gap-1">
+                  {isEditing ? (
+                    <select
+                      value={complemento.auto_declaracao ?? ''}
+                      onChange={e => setComplemento(p => ({ ...p, auto_declaracao: e.target.value }))}
+                      className="p-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-green-300"
+                    >
+                      <option value="">Prefiro não informar</option>
+                      <option value="branco">Branco</option>
+                      <option value="preto">Preto</option>
+                      <option value="pardo">Pardo</option>
+                      <option value="amarelo">Amarelo</option>
+                      <option value="indigena">Indígena</option>
+                    </select>
+                  ) : (
+                    <p className="text-xs font-black text-black uppercase">{complemento.auto_declaracao || '—'}</p>
+                  )}
+                </div>
+              </div>
+
               {/* ── Dados Especiais (Pré-ENCCEJA / Pré-Vestibular) ── */}
-              {complementoCarregado ? (
+              {complementoCarregado && (complemento.rg || complemento.banco || isEditing) ? (
                 <div className="bg-purple-50/60 p-6 rounded-[24px] space-y-4 border border-purple-100">
                   <SectionTitle>Dados Especiais — Pré-ENCCEJA / Pré-Vestibular</SectionTitle>
-
-                  {/* Auto-declaração */}
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Autodeclaração Racial</label>
-                    {isEditing ? (
-                      <select
-                        value={complemento.auto_declaracao ?? ''}
-                        onChange={e => setComplemento(p => ({ ...p, auto_declaracao: e.target.value }))}
-                        className="p-2 bg-white border border-purple-200 rounded-lg text-xs font-bold text-purple-900 outline-none focus:ring-2 focus:ring-purple-300"
-                      >
-                        <option value="">Prefiro não informar</option>
-                        <option value="branco">Branco</option>
-                        <option value="preto">Preto</option>
-                        <option value="pardo">Pardo</option>
-                        <option value="amarelo">Amarelo</option>
-                        <option value="indigena">Indígena</option>
-                      </select>
-                    ) : (
-                      <p className="text-xs font-black text-black uppercase">{complemento.auto_declaracao || '—'}</p>
-                    )}
-                  </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     {/* Documentação */}
@@ -752,34 +754,7 @@ export default function DossieCandidato({ aluno, onClose, onSuccess }: DossiePro
                     </div>
                   </div>
                 </div>
-              ) : (
-                /* Aluno ainda não matriculado — mostrar apenas auto-declaração */
-                <div className="bg-gray-50 p-6 rounded-[24px] space-y-4">
-                  <SectionTitle>Autodeclaração Racial</SectionTitle>
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Autodeclaração</label>
-                    {isEditing ? (
-                      <select
-                        value={formData.auto_declaracao ?? ''}
-                        onChange={e => handleFieldChange('auto_declaracao', e.target.value)}
-                        className="p-2 bg-white border border-purple-200 rounded-lg text-xs font-bold text-purple-900 outline-none focus:ring-2 focus:ring-purple-300"
-                      >
-                        <option value="">Prefiro não informar</option>
-                        <option value="branco">Branco</option>
-                        <option value="preto">Preto</option>
-                        <option value="pardo">Pardo</option>
-                        <option value="amarelo">Amarelo</option>
-                        <option value="indigena">Indígena</option>
-                      </select>
-                    ) : (
-                      <p className="text-xs font-black text-black uppercase">{formData.auto_declaracao || '—'}</p>
-                    )}
-                  </div>
-                  <p className="text-[10px] text-purple-400 italic">
-                    Os dados bancários e de documentação ficam disponíveis após a matrícula ser efetivada.
-                  </p>
-                </div>
-              )}
+              ) : null}
 
               {/* ── Responsável ── (apenas para menores ou quando maior_18_anos não foi confirmado) */}
               {!(formData.idade > 18) && (
