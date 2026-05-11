@@ -1799,16 +1799,17 @@ export class AcademicoService {
     const admins: { email: string; nome: string }[] = await this.dataSource.query(
       `SELECT email, nome FROM usuarios WHERE role IN ('drt', 'prt', 'admin') AND email IS NOT NULL`,
     );
+    const esc = (s: string) => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     const htmlEmail = `
       <div style="font-family:Arial,sans-serif;max-width:600px">
-        <h2 style="color:#1e3a5f">Novo chamado público — ${dados.assunto}</h2>
+        <h2 style="color:#1e3a5f">Novo chamado público — ${esc(dados.assunto)}</h2>
         <p><strong>Protocolo:</strong> ${chamado.protocolo}</p>
-        <p><strong>Nome:</strong> ${dados.nome}</p>
-        <p><strong>E-mail:</strong> ${dados.email}</p>
-        <p><strong>Telefone:</strong> ${dados.telefone}</p>
-        ${dados.nome_aluno ? `<p><strong>Aluno:</strong> ${dados.nome_aluno}</p>` : ''}
+        <p><strong>Nome:</strong> ${esc(dados.nome)}</p>
+        <p><strong>E-mail:</strong> ${esc(dados.email)}</p>
+        <p><strong>Telefone:</strong> ${esc(dados.telefone)}</p>
+        ${dados.nome_aluno ? `<p><strong>Aluno:</strong> ${esc(dados.nome_aluno)}</p>` : ''}
         <p><strong>Mensagem:</strong></p>
-        <p style="background:#f4f4f4;padding:12px;border-radius:6px">${dados.mensagem.replace(/\n/g, '<br>')}</p>
+        <p style="background:#f4f4f4;padding:12px;border-radius:6px">${esc(dados.mensagem).replace(/\n/g, '<br>')}</p>
         <hr>
         <p style="color:#6b7280;font-size:12px">Acesse o ERP para visualizar e responder este chamado.</p>
       </div>`;

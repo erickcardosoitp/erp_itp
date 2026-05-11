@@ -184,6 +184,11 @@ export class AppModule implements OnModuleInit {
           ADD COLUMN IF NOT EXISTS protocolo      VARCHAR
       `);
       await this.dataSource.query(`
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_chamados_protocolo_unique
+        ON chamados_academicos (protocolo)
+        WHERE protocolo IS NOT NULL
+      `);
+      await this.dataSource.query(`
         CREATE TABLE IF NOT EXISTS chamados_acompanhamentos (
           id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           chamado_id  UUID NOT NULL,

@@ -1,8 +1,7 @@
-import {
-  Controller, Post, Get, Query, Body, BadRequestException,
-} from '@nestjs/common';
+import { Controller, Post, Get, Query, Body } from '@nestjs/common';
 import { Public } from '../auth/decorators/public.decorator';
 import { AcademicoService } from './academico.service';
+import { CriarChamadoPublicoDto } from './dto/criar-chamado-publico.dto';
 
 @Controller('api/chamados/publico')
 export class ChamadosPublicoController {
@@ -10,12 +9,8 @@ export class ChamadosPublicoController {
 
   @Post()
   @Public()
-  async criar(@Body() body: any) {
-    const { nome, email, telefone, nome_aluno, assunto, mensagem } = body;
-    if (!nome?.trim() || !email?.trim() || !telefone?.trim() || !assunto?.trim() || !mensagem?.trim()) {
-      throw new BadRequestException('Campos obrigatórios: nome, email, telefone, assunto, mensagem');
-    }
-    return this.svc.criarChamadoPublico({ nome, email, telefone, nome_aluno, assunto, mensagem });
+  async criar(@Body() dto: CriarChamadoPublicoDto) {
+    return this.svc.criarChamadoPublico(dto);
   }
 
   @Get('consultar')
