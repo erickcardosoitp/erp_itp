@@ -19,6 +19,17 @@
       "maxDuration": 10
     }
   },
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin", "value": "https://institutotiapretinha.org" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS" },
+        { "key": "Access-Control-Allow-Headers", "value": "Content-Type,Authorization,Accept,Cookie,X-Requested-With" },
+        { "key": "Access-Control-Allow-Credentials", "value": "true" }
+      ]
+    }
+  ],
   "routes": [
     {
       "src": "^/$",
@@ -28,6 +39,17 @@
     {
       "src": "/health",
       "dest": "/api/health.ts"
+    },
+    {
+      "methods": ["OPTIONS"],
+      "src": "/(.*)",
+      "dest": "/api/main.ts",
+      "headers": {
+        "Access-Control-Allow-Origin": "https://institutotiapretinha.org",
+        "Access-Control-Allow-Methods": "GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type,Authorization,Accept,Cookie,X-Requested-With",
+        "Access-Control-Allow-Credentials": "true"
+      }
     },
     {
       "src": "/(.*)",
