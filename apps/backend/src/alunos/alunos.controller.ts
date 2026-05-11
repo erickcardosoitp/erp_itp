@@ -2,6 +2,7 @@ import {
   Controller, Get, Post, Patch, Param, Body, ParseUUIDPipe, Req,
 } from '@nestjs/common';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { Role } from '../auth/constants/roles.enum';
 import { AlunosService } from './alunos.service';
 import { UpsertComplementoDto } from './dto/upsert-complemento.dto';
 import { EnviarDocumentoDto, ValidarDocumentoDto, InvalidarDocumentoDto } from './dto/enviar-documento.dto';
@@ -58,7 +59,7 @@ export class AlunosController {
   // ── Validação (admin) ─────────────────────────────────────────────
 
   @Patch(':id/documentos/:docId/validar')
-  @Roles('assist')
+  @Roles(Role.ASSIST)
   validarDocumento(
     @Param('id', ParseUUIDPipe) id: string,
     @Param('docId', ParseUUIDPipe) docId: string,
@@ -71,7 +72,7 @@ export class AlunosController {
   }
 
   @Patch(':id/documentos/:docId/invalidar')
-  @Roles('assist')
+  @Roles(Role.ASSIST)
   invalidarDocumento(
     @Param('id', ParseUUIDPipe) id: string,
     @Param('docId', ParseUUIDPipe) docId: string,
