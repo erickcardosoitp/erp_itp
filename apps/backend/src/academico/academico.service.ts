@@ -1777,7 +1777,6 @@ export class AcademicoService {
     nome_aluno?: string;
     assunto: string;
     mensagem: string;
-    arquivos?: string[];
   }) {
     const descricao = [
       `De: ${dados.nome}`,
@@ -1785,7 +1784,6 @@ export class AcademicoService {
       `Telefone: ${dados.telefone}`,
       dados.nome_aluno ? `Aluno: ${dados.nome_aluno}` : null,
       `\n${dados.mensagem}`,
-      dados.arquivos?.length ? `\nAnexos:\n${dados.arquivos.join('\n')}` : null,
     ].filter(Boolean).join('\n');
 
     const chamado = await this.criarChamado({
@@ -1811,7 +1809,6 @@ export class AcademicoService {
         ${dados.nome_aluno ? `<p><strong>Aluno:</strong> ${dados.nome_aluno}</p>` : ''}
         <p><strong>Mensagem:</strong></p>
         <p style="background:#f4f4f4;padding:12px;border-radius:6px">${dados.mensagem.replace(/\n/g, '<br>')}</p>
-        ${dados.arquivos?.length ? `<p><strong>Anexos:</strong> ${dados.arquivos.map(u => `<a href="${u}">${u}</a>`).join(', ')}</p>` : ''}
         <hr>
         <p style="color:#6b7280;font-size:12px">Acesse o ERP para visualizar e responder este chamado.</p>
       </div>`;
