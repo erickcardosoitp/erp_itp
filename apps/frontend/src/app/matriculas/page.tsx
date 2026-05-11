@@ -102,6 +102,12 @@ export default function GestaoMatriculas() {
     lgpd_aceito: false, autoriza_imagem: false,
     // Turmas (seleção direta de turma, não só curso)
     turma_ids: [] as string[],
+    // Auto-declaração (global)
+    auto_declaracao: '',
+    // Curso especial (Pré-ENCCEJA / Pré-Vestibular)
+    curso_especial: false,
+    rg: '', orgao_expedidor: '', uf_expedicao: '', genero: '',
+    banco: '', agencia: '', agencia_digito: '', conta_corrente: '', conta_digito: '', tipo_conta: '',
   };
   const [formDireto, setFormDireto] = useState<Record<string, any>>({ ...FORM_DIRETO_VAZIO });
   const [salvandoDireto, setSalvandoDireto] = useState(false);
@@ -211,6 +217,24 @@ export default function GestaoMatriculas() {
         turma_ids:            formDireto.turma_ids,
       };
       const r = await api.post('/matriculas/aluno-direto', payload);
+      const alunoId = r.data?.id;
+
+      // Se curso especial marcado, salva complemento + auto-declaração em paralelo
+      if (formDireto.curso_especial && alunoId) {
+        const complemento: Record<string, any> = {};
+        const campos = ['rg','orgao_expedidor','uf_expedicao','genero','banco','agencia','agencia_digito','conta_corrente','conta_digito','tipo_conta'] as const;
+        campos.forEach(k => { if (formDireto[k]) complemento[k] = formDireto[k]; });
+        const reqs: Promise<any>[] = [
+          api.patch(`/alunos/${alunoId}/complemento`, complemento),
+        ];
+        if (formDireto.auto_declaracao) {
+          reqs.push(api.patch(`/alunos/${alunoId}/auto-declaracao`, { auto_declaracao: formDireto.auto_declaracao }));
+        }
+        await Promise.allSettled(reqs);
+      } else if (formDireto.auto_declaracao && alunoId) {
+        await api.patch(`/alunos/${alunoId}/auto-declaracao`, { auto_declaracao: formDireto.auto_declaracao }).catch(() => {});
+      }
+
       setResultadoDireto(r.data);
       fetchMatriculas();
     } catch (err: any) {
@@ -923,6 +947,126 @@ export default function GestaoMatriculas() {
                       </div>
                     )}
                   </fieldset>
+
+                  {/* ── Auto-declaração (global) ── */}
+                  <fieldset className="space-y-2">
+                    <legend className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2">Autodeclaração Racial</legend>
+                    <select
+                      value={formDireto.auto_declaracao}
+                      onChange={e => setFormDireto((p: any) => ({ ...p, auto_declaracao: e.target.value }))}
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400 bg-white"
+                    >
+                      <option value="">Prefiro não informar</option>
+                      <option value="branco">Branco</option>
+                      <option value="preto">Preto</option>
+                      <option value="pardo">Pardo</option>
+                      <option value="amarelo">Amarelo</option>
+                      <option value="indigena">Indígena</option>
+                    </select>
+                  </fieldset>
+
+                  {/* ── Curso especial ── */}
+                  <div
+                    className={`rounded-2xl border-2 transition-colors ${formDireto.curso_especial ? 'border-purple-400 bg-purple-50 dark:bg-purple-950/20' : 'border-slate-200 bg-slate-50'}`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setFormDireto((p: any) => ({ ...p, curso_especial: !p.curso_especial }))}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-left"
+                    >
+                      <span className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-colors ${formDireto.curso_especial ? 'bg-purple-600 border-purple-600' : 'border-slate-300 bg-white'}`}>
+                        {formDireto.curso_especial && <span className="text-white text-[10px] font-black">✓</span>}
+                      </span>
+                      <div>
+                        <p className="text-[11px] font-black uppercase text-slate-700 dark:text-slate-200">Curso Especial — Pré-ENCCEJA / Pré-Vestibular</p>
+                        <p className="text-[10px] text-slate-400 font-normal normal-case">Solicita documentação adicional: RG, dados bancários</p>
+                      </div>
+                    </button>
+
+                    {formDireto.curso_especial && (
+                      <div className="px-4 pb-4 space-y-4 border-t border-purple-200 pt-4">
+                        {/* Documentação */}
+                        <fieldset className="space-y-3">
+                          <legend className="text-[9px] font-black uppercase tracking-widest text-purple-500 mb-2">Documentação</legend>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div>
+                              <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">RG</label>
+                              <input value={formDireto.rg} onChange={e => setFormDireto((p: any) => ({ ...p, rg: e.target.value }))}
+                                placeholder="0000000"
+                                className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400" />
+                            </div>
+                            <div>
+                              <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Órgão Expedidor</label>
+                              <input value={formDireto.orgao_expedidor} onChange={e => setFormDireto((p: any) => ({ ...p, orgao_expedidor: e.target.value }))}
+                                placeholder="SSP"
+                                className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400" />
+                            </div>
+                            <div>
+                              <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">UF Expedição</label>
+                              <input value={formDireto.uf_expedicao} onChange={e => setFormDireto((p: any) => ({ ...p, uf_expedicao: e.target.value.toUpperCase().slice(0,2) }))}
+                                placeholder="RJ" maxLength={2}
+                                className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 uppercase" />
+                            </div>
+                            <div className="sm:col-span-3">
+                              <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Gênero</label>
+                              <select value={formDireto.genero} onChange={e => setFormDireto((p: any) => ({ ...p, genero: e.target.value }))}
+                                className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white">
+                                <option value="">Selecione...</option>
+                                <option value="masculino">Masculino</option>
+                                <option value="feminino">Feminino</option>
+                                <option value="nao_binario">Não-binário</option>
+                                <option value="prefiro_nao_informar">Prefiro não informar</option>
+                              </select>
+                            </div>
+                          </div>
+                        </fieldset>
+
+                        {/* Dados bancários */}
+                        <fieldset className="space-y-3">
+                          <legend className="text-[9px] font-black uppercase tracking-widest text-purple-500 mb-2">Dados Bancários</legend>
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            <div className="col-span-2">
+                              <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Banco</label>
+                              <input value={formDireto.banco} onChange={e => setFormDireto((p: any) => ({ ...p, banco: e.target.value }))}
+                                placeholder="Caixa Econômica, Nubank..."
+                                className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400" />
+                            </div>
+                            <div>
+                              <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Tipo de Conta</label>
+                              <select value={formDireto.tipo_conta} onChange={e => setFormDireto((p: any) => ({ ...p, tipo_conta: e.target.value }))}
+                                className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white">
+                                <option value="">Selecione...</option>
+                                <option value="corrente">Corrente</option>
+                                <option value="poupanca">Poupança</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Agência</label>
+                              <div className="flex gap-1">
+                                <input value={formDireto.agencia} onChange={e => setFormDireto((p: any) => ({ ...p, agencia: e.target.value }))}
+                                  placeholder="0000"
+                                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400" />
+                                <input value={formDireto.agencia_digito} onChange={e => setFormDireto((p: any) => ({ ...p, agencia_digito: e.target.value }))}
+                                  placeholder="X" maxLength={1}
+                                  className="w-10 border border-slate-200 rounded-xl px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 text-center" />
+                              </div>
+                            </div>
+                            <div className="col-span-2">
+                              <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Conta Corrente</label>
+                              <div className="flex gap-1">
+                                <input value={formDireto.conta_corrente} onChange={e => setFormDireto((p: any) => ({ ...p, conta_corrente: e.target.value }))}
+                                  placeholder="000000"
+                                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400" />
+                                <input value={formDireto.conta_digito} onChange={e => setFormDireto((p: any) => ({ ...p, conta_digito: e.target.value }))}
+                                  placeholder="X" maxLength={1}
+                                  className="w-10 border border-slate-200 rounded-xl px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 text-center" />
+                              </div>
+                            </div>
+                          </div>
+                        </fieldset>
+                      </div>
+                    )}
+                  </div>
 
                   {/* ── Turmas ── */}
                   {cursosAcademico.length > 0 && (() => {
