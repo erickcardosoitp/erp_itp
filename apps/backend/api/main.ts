@@ -98,7 +98,22 @@ let app: NestExpressApplication | null = null;
 let bootstrapError: Error | null = null;
 let bootstrapping = false;
 
+const CORS_ORIGIN = 'https://institutotiapretinha.org';
+const CORS_METHODS = 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS';
+const CORS_HEADERS = 'Content-Type,Authorization,Accept,Cookie,X-Requested-With';
+
 export default async function handler(req: any, res: any) {
+  // Preflight: responde imediatamente sem precisar do NestJS
+  if (req.method === 'OPTIONS') {
+    res.setHeader('Access-Control-Allow-Origin', CORS_ORIGIN);
+    res.setHeader('Access-Control-Allow-Methods', CORS_METHODS);
+    res.setHeader('Access-Control-Allow-Headers', CORS_HEADERS);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Max-Age', '86400');
+    res.status(204).end();
+    return;
+  }
+
   // Erro permanente de bootstrap — não vai resolver com retry
   if (bootstrapError) {
     return res.status(500).json({
