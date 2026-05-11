@@ -43,12 +43,13 @@
     {
       "methods": ["OPTIONS"],
       "src": "/(.*)",
-      "dest": "/api/main.ts",
+      "status": 204,
       "headers": {
         "Access-Control-Allow-Origin": "https://institutotiapretinha.org",
         "Access-Control-Allow-Methods": "GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS",
         "Access-Control-Allow-Headers": "Content-Type,Authorization,Accept,Cookie,X-Requested-With",
-        "Access-Control-Allow-Credentials": "true"
+        "Access-Control-Allow-Credentials": "true",
+        "Access-Control-Max-Age": "86400"
       }
     },
     {
