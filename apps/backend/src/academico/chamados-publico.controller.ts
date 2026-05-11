@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Query, Body } from '@nestjs/common';
+import { Controller, Post, Get, Query, Body, BadRequestException } from '@nestjs/common';
 import { Public } from '../auth/decorators/public.decorator';
 import { AcademicoService } from './academico.service';
 import { CriarChamadoPublicoDto } from './dto/criar-chamado-publico.dto';
