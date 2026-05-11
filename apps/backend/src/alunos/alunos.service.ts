@@ -50,7 +50,8 @@ export class AlunosService {
   }
 
   async getComplemento(alunoId: string): Promise<AlunoComplemento | null> {
-    await this.assertAluno(alunoId);
+    const aluno = await this.alunoRepo.findOne({ where: { id: alunoId } });
+    if (!aluno) return null;
     return this.complementoRepo.findOne({ where: { aluno_id: alunoId } });
   }
 

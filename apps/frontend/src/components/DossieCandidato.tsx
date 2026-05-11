@@ -347,8 +347,12 @@ export default function DossieCandidato({ aluno, onClose, onSuccess }: DossiePro
       const alunoUuid = formData?.aluno?.id;
       if (alunoUuid && complementoCarregado) {
         const { auto_declaracao, ...camposComplemento } = complemento;
+        // Exclui strings vazias para evitar falha na validação de enums no backend
+        const complementoFiltrado = Object.fromEntries(
+          Object.entries(camposComplemento).filter(([, v]) => v !== '' && v !== null && v !== undefined)
+        );
         await Promise.allSettled([
-          api.patch(`/alunos/${alunoUuid}/complemento`, camposComplemento),
+          api.patch(`/alunos/${alunoUuid}/complemento`, complementoFiltrado),
           auto_declaracao
             ? api.patch(`/alunos/${alunoUuid}/auto-declaracao`, { auto_declaracao })
             : Promise.resolve(),
