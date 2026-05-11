@@ -47,6 +47,7 @@ import { NotificacoesModule } from './notificacoes/notificacoes.module';
 import { RelatoriosModule } from './relatorios/relatorios.module';
 import { PesquisasModule } from './pesquisas/pesquisas.module';
 import { GenteModule } from './gente/gente.module';
+import { AlunosModule } from './alunos/alunos.module';
 
 @Module({
   imports: [
@@ -115,6 +116,7 @@ import { GenteModule } from './gente/gente.module';
     RelatoriosModule,
     PesquisasModule,
     GenteModule,
+    AlunosModule,
     MatriculasModule,
     EmailModule,
   ],
@@ -832,6 +834,52 @@ export class AppModule implements OnModuleInit {
       `);
       this.logger.log('✅ Colunas gente_vales (forma_pagamento, movimentacao_saida_id, movimentacao_entrada_id) aplicadas (IF NOT EXISTS)');
       this.logger.log('✅ Tabelas do módulo Gente criadas (IF NOT EXISTS)');
+
+      // ── Módulo Alunos: complemento + validação de documentos ──────────────
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS alunos_complemento (
+          id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          aluno_id         UUID NOT NULL UNIQUE REFERENCES alunos(id) ON DELETE CASCADE,
+          rg               VARCHAR,
+          orgao_expedidor  VARCHAR,
+          uf_expedicao     CHAR(2),
+          genero           VARCHAR,
+          banco            VARCHAR,
+          agencia          VARCHAR,
+          agencia_digito   VARCHAR,
+          conta_corrente   VARCHAR,
+          conta_digito     VARCHAR,
+          tipo_conta       VARCHAR,
+          "createdAt"      TIMESTAMPTZ NOT NULL DEFAULT now(),
+          "updatedAt"      TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `);
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS documentos_validacao (
+          id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          aluno_id          UUID NOT NULL REFERENCES alunos(id) ON DELETE CASCADE,
+          tipo              VARCHAR NOT NULL,
+          url_drive         TEXT,
+          status            VARCHAR NOT NULL DEFAULT 'pendente',
+          motivo_pendencia  TEXT,
+          validado_por_id   TEXT,
+          validado_por_nome VARCHAR,
+          validado_em       TIMESTAMPTZ,
+          "createdAt"       TIMESTAMPTZ NOT NULL DEFAULT now(),
+          "updatedAt"       TIMESTAMPTZ NOT NULL DEFAULT now(),
+          UNIQUE (aluno_id, tipo)
+        )
+      `);
+      await this.dataSource.query(`
+        CREATE INDEX IF NOT EXISTS documentos_validacao_aluno_idx
+          ON documentos_validacao (aluno_id)
+      `);
+      // auto_declaracao: campo global aplicado a todos os alunos
+      await this.dataSource.query(`
+        ALTER TABLE IF EXISTS alunos
+          ADD COLUMN IF NOT EXISTS auto_declaracao VARCHAR
+      `);
+      this.logger.log('✅ Tabelas alunos_complemento / documentos_validacao criadas (IF NOT EXISTS)');
 
       // ── CPF, email e celular opcionais em inscricoes ───────────────────────
       await this.dataSource.query(`ALTER TABLE IF EXISTS inscricoes ALTER COLUMN cpf DROP NOT NULL`);
