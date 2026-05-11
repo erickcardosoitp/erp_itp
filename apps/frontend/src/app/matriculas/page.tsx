@@ -419,7 +419,7 @@ export default function GestaoMatriculas() {
               <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
             </button>
             <a
-              href="https://itp.institutotiapretinha.org/inscricao"
+              href="https://institutotiapretinha.org/matricula"
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-2 px-5 py-3 rounded-xl font-black text-xs uppercase tracking-widest text-white shadow-lg bg-emerald-500 hover:bg-emerald-600 transition-all"

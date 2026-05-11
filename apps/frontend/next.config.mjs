@@ -3,6 +3,13 @@
 const nextConfig = {
   transpilePackages: [],
 
+  async redirects() {
+    return [
+      // URL pública sem expor o subdomínio interno itp.*
+      { source: '/matricula', destination: '/inscricao', permanent: false },
+    ];
+  },
+
   // Proxy: o browser chama /backend-api/* → Next.js server repassa para localhost:3001/api/*
   // Elimina CORS e problemas de IP — funciona em qualquer máquina/rede
   async rewrites() {
