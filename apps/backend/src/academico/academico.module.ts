@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AcademicoController } from './academico.controller';
 import { ChamadosController } from './chamados.controller';
+import { ChamadosPublicoController } from './chamados-publico.controller';
 import { AcademicoService } from './academico.service';
 import { Curso } from './entities/curso.entity';
 import { Professor } from './entities/professor.entity';
@@ -22,7 +23,7 @@ import { NotificacoesModule } from '../notificacoes/notificacoes.module';
     TypeOrmModule.forFeature([Curso, Professor, Turma, TurmaAluno, GradeHoraria, DiarioAcademico, PresencaSessao, ChamadoAcademico, ChamadoAcompanhamento, ControleFutebol, Aluno, Inscricao]),
     NotificacoesModule,
   ],
-  controllers: [AcademicoController, ChamadosController],
+  controllers: [AcademicoController, ChamadosController, ChamadosPublicoController],
   providers: [AcademicoService],
   exports: [AcademicoService],
 })

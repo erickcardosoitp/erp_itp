@@ -180,7 +180,8 @@ export class AppModule implements OnModuleInit {
         ALTER TABLE chamados_academicos
           ADD COLUMN IF NOT EXISTS abertura       TIMESTAMPTZ,
           ADD COLUMN IF NOT EXISTS fechamento     TIMESTAMPTZ,
-          ADD COLUMN IF NOT EXISTS acompanhamento TEXT
+          ADD COLUMN IF NOT EXISTS acompanhamento TEXT,
+          ADD COLUMN IF NOT EXISTS protocolo      VARCHAR
       `);
       await this.dataSource.query(`
         CREATE TABLE IF NOT EXISTS chamados_acompanhamentos (

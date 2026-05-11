@@ -12,7 +12,9 @@ import { ChamadoAcademico } from './entities/chamado.entity';
 import { ChamadoAcompanhamento } from './entities/chamado-acompanhamento.entity';
 import { Aluno } from '../alunos/aluno.entity';
 import { NotificacoesService } from '../notificacoes/notificacoes.service';
+import { EmailService } from '../email.service';
 import { InjectDataSource } from '@nestjs/typeorm';
+import Anthropic from '@anthropic-ai/sdk';
 
 @Injectable()
 export class AcademicoService {
@@ -30,6 +32,7 @@ export class AcademicoService {
     @InjectRepository(Aluno)              private alunoRepo: Repository<Aluno>,
     @InjectRepository(TurmaAluno)         private turmaAlunoRepo: Repository<TurmaAluno>,
     private readonly notificacoes: NotificacoesService,
+    private readonly emailService: EmailService,
     @InjectDataSource()                   private readonly dataSource: DataSource,
   ) {}
 
@@ -1708,10 +1711,26 @@ export class AcademicoService {
     );
   }
 
+  private async gerarProtocolo(): Promise<string> {
+    const agora = new Date();
+    const yyyymm = `${agora.getFullYear()}${String(agora.getMonth() + 1).padStart(2, '0')}`;
+    const prefix = `ITP-${yyyymm}-`;
+    const [{ max }] = await this.dataSource.query(
+      `SELECT MAX(CAST(SUBSTRING(protocolo FROM LENGTH($1) + 1) AS INTEGER)) as max
+       FROM chamados_academicos
+       WHERE protocolo LIKE $2`,
+      [prefix, `${prefix}%`],
+    );
+    const seq = ((max ?? 0) + 1).toString().padStart(3, '0');
+    return `${prefix}${seq}`;
+  }
+
   async criarChamado(dto: Partial<ChamadoAcademico>, usuarioNome?: string) {
     if (!dto.titulo?.trim()) throw new BadRequestException('Título é obrigatório');
+    const protocolo = await this.gerarProtocolo();
     const chamado = this.chamadoRepo.create({
       ...dto,
+      protocolo,
       aluno_id:  dto.aluno_id  || null,
       turma_id:  dto.turma_id  || null,
       abertura:  new Date(),
@@ -1748,6 +1767,123 @@ export class AcademicoService {
   async deletarChamado(id: string) {
     await this.chamadoRepo.delete(id);
     return { ok: true };
+  }
+
+  // ── CHAMADOS PÚBLICOS (site institucional) ────────────────────────────────
+
+  async criarChamadoPublico(dados: {
+    nome: string;
+    email: string;
+    telefone: string;
+    nome_aluno?: string;
+    assunto: string;
+    mensagem: string;
+    arquivos?: string[];
+  }) {
+    const descricao = [
+      `De: ${dados.nome}`,
+      `E-mail: ${dados.email}`,
+      `Telefone: ${dados.telefone}`,
+      dados.nome_aluno ? `Aluno: ${dados.nome_aluno}` : null,
+      `\n${dados.mensagem}`,
+      dados.arquivos?.length ? `\nAnexos:\n${dados.arquivos.join('\n')}` : null,
+    ].filter(Boolean).join('\n');
+
+    const chamado = await this.criarChamado({
+      titulo: dados.assunto,
+      descricao,
+      tipo: 'Suporte',
+      prioridade: 'normal',
+      criado_por_nome: dados.nome,
+      aluno_nome: dados.nome_aluno || null,
+    });
+
+    // Notifica por e-mail todos DRT + PRT + admin
+    const admins: { email: string; nome: string }[] = await this.dataSource.query(
+      `SELECT email, nome FROM usuarios WHERE role IN ('drt', 'prt', 'admin') AND email IS NOT NULL`,
+    );
+    const htmlEmail = `
+      <div style="font-family:Arial,sans-serif;max-width:600px">
+        <h2 style="color:#1e3a5f">Novo chamado público — ${dados.assunto}</h2>
+        <p><strong>Protocolo:</strong> ${chamado.protocolo}</p>
+        <p><strong>Nome:</strong> ${dados.nome}</p>
+        <p><strong>E-mail:</strong> ${dados.email}</p>
+        <p><strong>Telefone:</strong> ${dados.telefone}</p>
+        ${dados.nome_aluno ? `<p><strong>Aluno:</strong> ${dados.nome_aluno}</p>` : ''}
+        <p><strong>Mensagem:</strong></p>
+        <p style="background:#f4f4f4;padding:12px;border-radius:6px">${dados.mensagem.replace(/\n/g, '<br>')}</p>
+        ${dados.arquivos?.length ? `<p><strong>Anexos:</strong> ${dados.arquivos.map(u => `<a href="${u}">${u}</a>`).join(', ')}</p>` : ''}
+        <hr>
+        <p style="color:#6b7280;font-size:12px">Acesse o ERP para visualizar e responder este chamado.</p>
+      </div>`;
+
+    await Promise.allSettled(
+      admins.map(a => this.emailService.enviarGenerico(a.email, `[ITP] Novo chamado: ${dados.assunto} (${chamado.protocolo})`, htmlEmail)),
+    );
+
+    return { protocolo: chamado.protocolo, ok: true };
+  }
+
+  async consultarChamadoPublico(q: string) {
+    const isProtocolo = /^ITP-\d{6}-\d+$/i.test(q.trim());
+    let chamados: ChamadoAcademico[];
+
+    if (isProtocolo) {
+      chamados = await this.chamadoRepo.find({
+        where: { protocolo: q.trim().toUpperCase() },
+        take: 1,
+      });
+    } else {
+      chamados = await this.dataSource.query(
+        `SELECT * FROM chamados_academicos WHERE LOWER(criado_por_nome) LIKE LOWER($1) ORDER BY created_at DESC LIMIT 3`,
+        [`%${q.trim()}%`],
+      );
+    }
+
+    if (!chamados.length) return { resultados: [] };
+
+    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+    const resultados = await Promise.all(
+      chamados.map(async (c) => {
+        const statusMap: Record<string, string> = {
+          aberto: 'aberto e aguardando atendimento',
+          em_andamento: 'em andamento — nossa equipe já está analisando',
+          resolvido: 'resolvido',
+        };
+        const statusTexto = statusMap[c.status] ?? c.status;
+        const dataAbertura = c.abertura
+          ? new Date(c.abertura).toLocaleDateString('pt-BR')
+          : new Date(c.created_at).toLocaleDateString('pt-BR');
+
+        let resumo_ia = '';
+        try {
+          const msg = await anthropic.messages.create({
+            model: 'claude-haiku-4-5-20251001',
+            max_tokens: 200,
+            messages: [{
+              role: 'user',
+              content: `Você é o assistente do Instituto Tia Pretinha. Gere um parágrafo curto e amigável em português informando o status do chamado. Dados: protocolo=${c.protocolo}, assunto=${c.titulo}, status=${statusTexto}, aberto em=${dataAbertura}. Oriente o próximo passo de forma simpática. Máximo 3 frases.`,
+            }],
+          });
+          resumo_ia = (msg.content[0] as any).text ?? '';
+        } catch {
+          resumo_ia = `Seu chamado (${c.protocolo}) está ${statusTexto} desde ${dataAbertura}.`;
+        }
+
+        return {
+          protocolo: c.protocolo,
+          titulo: c.titulo,
+          tipo: c.tipo,
+          status: c.status,
+          criado_em: c.abertura ?? c.created_at,
+          atualizado_em: c.updated_at,
+          resumo_ia,
+        };
+      }),
+    );
+
+    return { resultados };
   }
 
   // ── RELATÓRIOS DE PRESENÇA ────────────────────────────────────────────────

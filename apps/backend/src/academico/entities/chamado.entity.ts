@@ -52,6 +52,9 @@ export class ChamadoAcademico {
   @Column({ name: 'data_resolucao', type: 'date', nullable: true })
   data_resolucao: string | null;
 
+  @Column({ type: 'varchar', nullable: true })
+  protocolo: string | null;
+
   @Column({ name: 'abertura', type: 'timestamptz', nullable: true })
   abertura: Date | null;
 
