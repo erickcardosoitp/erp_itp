@@ -48,6 +48,7 @@ import { RelatoriosModule } from './relatorios/relatorios.module';
 import { PesquisasModule } from './pesquisas/pesquisas.module';
 import { GenteModule } from './gente/gente.module';
 import { AlunosModule } from './alunos/alunos.module';
+import { PublicoModule } from './publico/publico.module';
 
 @Module({
   imports: [
@@ -119,6 +120,7 @@ import { AlunosModule } from './alunos/alunos.module';
     AlunosModule,
     MatriculasModule,
     EmailModule,
+    PublicoModule,
   ],
   controllers: [
     AppController, 
