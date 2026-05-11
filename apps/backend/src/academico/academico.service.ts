@@ -14,7 +14,6 @@ import { Aluno } from '../alunos/aluno.entity';
 import { NotificacoesService } from '../notificacoes/notificacoes.service';
 import { EmailService } from '../email.service';
 import { InjectDataSource } from '@nestjs/typeorm';
-import Anthropic from '@anthropic-ai/sdk';
 
 @Injectable()
 export class AcademicoService {
@@ -1842,46 +1841,14 @@ export class AcademicoService {
 
     if (!chamados.length) return { resultados: [] };
 
-    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-
-    const resultados = await Promise.all(
-      chamados.map(async (c) => {
-        const statusMap: Record<string, string> = {
-          aberto: 'aberto e aguardando atendimento',
-          em_andamento: 'em andamento — nossa equipe já está analisando',
-          resolvido: 'resolvido',
-        };
-        const statusTexto = statusMap[c.status] ?? c.status;
-        const dataAbertura = c.abertura
-          ? new Date(c.abertura).toLocaleDateString('pt-BR')
-          : new Date(c.created_at).toLocaleDateString('pt-BR');
-
-        let resumo_ia = '';
-        try {
-          const msg = await anthropic.messages.create({
-            model: 'claude-haiku-4-5-20251001',
-            max_tokens: 200,
-            messages: [{
-              role: 'user',
-              content: `Você é o assistente do Instituto Tia Pretinha. Gere um parágrafo curto e amigável em português informando o status do chamado. Dados: protocolo=${c.protocolo}, assunto=${c.titulo}, status=${statusTexto}, aberto em=${dataAbertura}. Oriente o próximo passo de forma simpática. Máximo 3 frases.`,
-            }],
-          });
-          resumo_ia = (msg.content[0] as any).text ?? '';
-        } catch {
-          resumo_ia = `Seu chamado (${c.protocolo}) está ${statusTexto} desde ${dataAbertura}.`;
-        }
-
-        return {
-          protocolo: c.protocolo,
-          titulo: c.titulo,
-          tipo: c.tipo,
-          status: c.status,
-          criado_em: c.abertura ?? c.created_at,
-          atualizado_em: c.updated_at,
-          resumo_ia,
-        };
-      }),
-    );
+    const resultados = chamados.map((c) => ({
+      protocolo: c.protocolo,
+      titulo: c.titulo,
+      tipo: c.tipo,
+      status: c.status,
+      criado_em: c.abertura ?? c.created_at,
+      atualizado_em: c.updated_at,
+    }));
 
     return { resultados };
   }
