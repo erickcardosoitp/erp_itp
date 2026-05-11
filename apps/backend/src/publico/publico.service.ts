@@ -61,10 +61,11 @@ export class PublicoService {
       `, [anoFiltro]),
 
       // Movimentações detalhadas do período
-      this.ds.query<{ data: string; nome: string; tipo: string; valor: string; categoria: string; status: string }[]>(`
+      this.ds.query<{ data: string; nome: string; descricao: string; tipo: string; valor: string; categoria: string; status: string }[]>(`
         SELECT
           TO_CHAR(data, 'YYYY-MM-DD') AS data,
           nome,
+          descricao,
           COALESCE(tipo_movimentacao, 'Não classificado') AS tipo,
           valor::numeric AS valor,
           COALESCE(plano_contas, categoria, '') AS categoria,
@@ -139,6 +140,7 @@ export class PublicoService {
       movimentacoes: movimentacoes.map(r => ({
         data: r.data,
         descricao: r.nome,
+        detalhes: r.descricao ?? null,
         tipo: r.tipo,
         valor: parseFloat(r.valor ?? '0'),
         categoria: r.categoria,
