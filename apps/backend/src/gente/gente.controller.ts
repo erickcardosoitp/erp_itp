@@ -415,4 +415,34 @@ export class GenteController {
   @Get('debug/alertas')
   @Public()
   debugAlertas() { return this.svc.debugAlertas(); }
+
+  // ── Pagamentos de Passagem ────────────────────────────────────────────────
+
+  @Get('passagens')
+  @ModuloPerm('gente', 'visualizar')
+  listarPagamentosPassagem(
+    @Query('colaborador_id') colaborador_id: string,
+    @Query('mes') mes: string,
+  ) {
+    if (!colaborador_id || !mes) throw new BadRequestException('colaborador_id e mes são obrigatórios');
+    return this.svc.listarPagamentosPassagem(colaborador_id, mes);
+  }
+
+  @Post('passagens/lote')
+  @ModuloPerm('gente', 'incluir')
+  salvarPagamentosPassagem(
+    @Body() body: { colaborador_id: string; funcionario_id: string; mes: string; dias: { data: string; valor: number; status?: string }[] },
+  ) {
+    const { colaborador_id, funcionario_id, mes, dias } = body;
+    if (!colaborador_id || !funcionario_id || !mes || !Array.isArray(dias)) {
+      throw new BadRequestException('Payload inválido');
+    }
+    return this.svc.salvarPagamentosPassagem(colaborador_id, funcionario_id, mes, dias);
+  }
+
+  @Delete('passagens/:id')
+  @ModuloPerm('gente', 'excluir')
+  removerPagamentoPassagem(@Param('id') id: string) {
+    return this.svc.removerPagamentoPassagem(id);
+  }
 }

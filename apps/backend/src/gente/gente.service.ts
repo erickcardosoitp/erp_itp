@@ -15,6 +15,7 @@ import { GenteFolgaSolicitacao } from './entities/gente-folga-solicitacao.entity
 import { GenteTrabalhoExterno } from './entities/gente-trabalho-externo.entity';
 import { GenteColaboradorDocumento } from './entities/gente-colaborador-documento.entity';
 import { GenteFeriado } from './entities/gente-feriado.entity';
+import { GentePagamentoPassagem } from './entities/gente-pagamento-passagem.entity';
 import { MovimentacaoFinanceira } from '../financeiro/entities/movimentacao-financeira.entity';
 
 const PONTO_TOKEN = 'itp-ponto-2026';
@@ -50,6 +51,7 @@ export class GenteService {
     @InjectRepository(GenteTrabalhoExterno) private trabalhoExternoRepo: Repository<GenteTrabalhoExterno>,
     @InjectRepository(GenteColaboradorDocumento) private documentoRepo: Repository<GenteColaboradorDocumento>,
     @InjectRepository(GenteFeriado) private feriadoRepo: Repository<GenteFeriado>,
+    @InjectRepository(GentePagamentoPassagem) private pagamentoPassagemRepo: Repository<GentePagamentoPassagem>,
     @InjectRepository(MovimentacaoFinanceira) private movimentacaoRepo: Repository<MovimentacaoFinanceira>,
     private dataSource: DataSource,
   ) {}
@@ -2202,5 +2204,41 @@ export class GenteService {
       correto: { colaborador_id: colCorreto.id, funcionario_id: funcCorreto.id, nome: funcCorreto.nome, matricula: funcCorreto.matricula },
       acoes: log,
     };
+  }
+
+  // ── Pagamentos de Passagem ────────────────────────────────────────────────
+
+  async listarPagamentosPassagem(colaborador_id: string, mes: string) {
+    return this.pagamentoPassagemRepo.find({
+      where: { colaborador_id, mes_referencia: mes },
+      order: { data: 'ASC' },
+    });
+  }
+
+  async salvarPagamentosPassagem(
+    colaborador_id: string,
+    funcionario_id: string,
+    mes: string,
+    dias: { data: string; valor: number; status?: string }[],
+  ) {
+    // Upsert dia a dia
+    for (const d of dias) {
+      await this.dataSource.query(
+        `INSERT INTO gente_pagamentos_passagem
+           (colaborador_id, funcionario_id, data, valor, status, mes_referencia)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (colaborador_id, data)
+         DO UPDATE SET valor = EXCLUDED.valor, status = EXCLUDED.status`,
+        [colaborador_id, funcionario_id, d.data, d.valor, d.status ?? 'pago', mes],
+      );
+    }
+    return this.listarPagamentosPassagem(colaborador_id, mes);
+  }
+
+  async removerPagamentoPassagem(id: string) {
+    const p = await this.pagamentoPassagemRepo.findOne({ where: { id } });
+    if (!p) throw new NotFoundException('Pagamento não encontrado');
+    await this.pagamentoPassagemRepo.remove(p);
+    return { ok: true };
   }
 }

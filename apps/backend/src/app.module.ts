@@ -1097,6 +1097,22 @@ export class AppModule implements OnModuleInit {
       `);
       this.logger.log('✅ Permissões grupos: chamados adicionado + academico.incluir/editar garantidos');
 
+      // ── Pagamentos de Passagem (Transporte diário) ────────────────────────
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS gente_pagamentos_passagem (
+          id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          colaborador_id  UUID NOT NULL,
+          funcionario_id  UUID NOT NULL,
+          data            DATE NOT NULL,
+          valor           NUMERIC(10,2) NOT NULL,
+          status          VARCHAR NOT NULL DEFAULT 'pago',
+          mes_referencia  VARCHAR(7) NOT NULL,
+          created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+          UNIQUE (colaborador_id, data)
+        )
+      `);
+      this.logger.log('✅ Tabela gente_pagamentos_passagem criada (IF NOT EXISTS)');
+
     } catch (err: any) {
       this.logger.error(`❌ Erro nas migrations automáticas: ${err.message}`);
     }

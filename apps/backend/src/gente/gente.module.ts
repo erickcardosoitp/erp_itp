@@ -17,6 +17,7 @@ import { GenteFolgaSolicitacao } from './entities/gente-folga-solicitacao.entity
 import { GenteTrabalhoExterno } from './entities/gente-trabalho-externo.entity';
 import { GenteColaboradorDocumento } from './entities/gente-colaborador-documento.entity';
 import { GenteFeriado } from './entities/gente-feriado.entity';
+import { GentePagamentoPassagem } from './entities/gente-pagamento-passagem.entity';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { GenteFeriado } from './entities/gente-feriado.entity';
       GenteCodigoAjuda, GenteColaboradorCodigo, GenteColaboradorLocal,
       GenteFolgaSolicitacao, GenteTrabalhoExterno,
       MovimentacaoFinanceira, GenteColaboradorDocumento, GenteFeriado,
+      GentePagamentoPassagem,
     ]),
   ],
   controllers: [GenteController],
