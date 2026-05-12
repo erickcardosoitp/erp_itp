@@ -16,7 +16,6 @@ import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
 
 // Entities
-import { Materia } from './materia.entity';
 import { Usuario } from './usuarios/usuario.entity';
 import { Aluno } from './alunos/aluno.entity';
 import { Inscricao } from './matriculas/inscricao.entity';
@@ -29,8 +28,6 @@ import { Curso } from './academico/entities/curso.entity';
 import { Turma } from './academico/entities/turma.entity';
 
 // Services / Controllers
-import { MateriasService } from './materias/materias.service';
-import { MateriasController } from './materias/materias.controller';
 import { MatriculasModule } from './matriculas/matriculas.module';
 import { UsuariosController } from './usuarios/usuarios.controller'; 
 import { EmailModule } from './email.module';
@@ -91,7 +88,7 @@ import { PublicoModule } from './publico/publico.module';
         return {
           type: 'postgres',
           url: dbUrlWithTimeout,
-          entities: [Materia, Usuario, Aluno, Inscricao, InscricaoAnotacao, InscricaoMovimentacao, Grupo, DocumentoInscricao],
+          entities: [Usuario, Aluno, Inscricao, InscricaoAnotacao, InscricaoMovimentacao, Grupo, DocumentoInscricao],
           autoLoadEntities: true,
           synchronize: false,
           ssl: (dbUrl.includes('localhost') || dbUrl.includes('127.0.0.1'))
@@ -103,7 +100,7 @@ import { PublicoModule } from './publico/publico.module';
     }),
 
     // 4. Repositórios
-    TypeOrmModule.forFeature([Materia, Usuario, Aluno, Grupo, DocumentoInscricao]),
+    TypeOrmModule.forFeature([Usuario, Aluno, Grupo, DocumentoInscricao]),
     
     // 5. Módulos Encapsulados (Não adicione os services deles em providers!)
     GruposModule, 
@@ -123,15 +120,13 @@ import { PublicoModule } from './publico/publico.module';
     PublicoModule,
   ],
   controllers: [
-    AppController, 
-    MateriasController, 
-    AuthController, 
+    AppController,
+    AuthController,
     UsuariosController,
     require('./funcionarios/funcionarios.controller').FuncionariosController
   ],
   providers: [
     AppService,
-    MateriasService,
     AuthService,
     // O UsersService NÃO deve estar aqui, pois já está dentro do UsersModule
     JwtStrategy,

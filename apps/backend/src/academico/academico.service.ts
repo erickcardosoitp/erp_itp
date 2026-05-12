@@ -460,8 +460,17 @@ export class AcademicoService {
       } catch { /* sem inscricao, ok */ }
     }
 
+    // Carrega dados especiais (complemento)
+    const [complementoRow] = await this.dataSource.query(
+      `SELECT rg, orgao_expedidor, uf_expedicao, genero,
+              banco, agencia, agencia_digito, conta_corrente, conta_digito, tipo_conta
+       FROM alunos_complemento WHERE aluno_id = $1 LIMIT 1`,
+      [id],
+    ).catch(() => [null]);
+    const complemento = complementoRow ?? null;
+
     this.logger.log(`Ficha do aluno ${aluno.nome_completo}: ${historico.length} registros no diário, inscricao_id=${inscricao_id}`);
-    return { aluno, inscricao_id, frequencia, historico, turmaInfo, turmasDoAluno, totalPresencas, totalFaltas, foto_url };
+    return { aluno, inscricao_id, frequencia, historico, turmaInfo, turmasDoAluno, totalPresencas, totalFaltas, foto_url, complemento };
   }
 
   async criarAluno(dto: Partial<Aluno>) {

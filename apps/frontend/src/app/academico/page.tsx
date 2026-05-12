@@ -804,6 +804,7 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
   const [fichaLoading, setFichaLoading] = useState(false);
   const [fichaEditando, setFichaEditando] = useState(false);
   const [fichaForm, setFichaForm] = useState<Partial<Aluno>>({});
+  const [fichaComplemento, setFichaComplemento] = useState<Record<string, string>>({});
   const [fichaEditSalvando, setFichaEditSalvando] = useState(false);
   const [fichaEditErro, setFichaEditErro] = useState<string | null>(null);
   const [buscandoCepFicha, setBuscandoCepFicha] = useState(false);
@@ -891,6 +892,7 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
       const r = await api.get(`/academico/alunos/${id}/ficha`);
       setFichaAba('dados');
       setFichaAluno(r.data);
+      setFichaComplemento(r.data.complemento || {});
     } catch (err: any) {
       const msg = err?.response?.data?.message || err?.message || 'Erro ao carregar ficha do aluno.';
       setFichaErro(Array.isArray(msg) ? msg.join(', ') : msg);
@@ -921,9 +923,18 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
     }
     setFichaEditSalvando(true);
     try {
-      await api.patch(`/academico/alunos/${fichaAluno.aluno.id}`, fichaForm);
+      const complementoFiltrado = Object.fromEntries(
+        Object.entries(fichaComplemento).filter(([, v]) => v !== '' && v !== null && v !== undefined)
+      );
+      await Promise.all([
+        api.patch(`/academico/alunos/${fichaAluno.aluno.id}`, fichaForm),
+        Object.keys(complementoFiltrado).length > 0
+          ? api.patch(`/alunos/${fichaAluno.aluno.id}/complemento`, complementoFiltrado)
+          : Promise.resolve(),
+      ]);
       const r = await api.get(`/academico/alunos/${fichaAluno.aluno.id}/ficha`);
       setFichaAluno(r.data);
+      setFichaComplemento(r.data.complemento || {});
       if (!faltam.length) setFichaEditando(false);
       load();
     } catch (err: any) {
@@ -1653,6 +1664,50 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
                         </div>
                       </div>
                     </section>
+
+                    <section className="bg-purple-50 dark:bg-purple-900/10 rounded-2xl border border-purple-100 dark:border-purple-900/30 p-4">
+                      <h4 className="text-[9px] font-black uppercase text-purple-600 mb-3 tracking-widest flex items-center gap-2"><FileText size={11}/> Dados Especiais — Pré-ENCCEJA / Pré-Vestibular</h4>
+                      <div className="grid grid-cols-2 gap-2">
+                        <p className="col-span-2 text-[9px] font-black uppercase text-purple-400 mb-1">Documentação</p>
+                        {([['RG', 'rg'], ['Órgão Expedidor', 'orgao_expedidor'], ['UF Expedição', 'uf_expedicao']] as [string, string][]).map(([label, key]) => (
+                          <div key={key} className="space-y-1">
+                            <label className="text-[9px] font-black uppercase text-slate-400">{label}</label>
+                            <input value={fichaComplemento[key] || ''} maxLength={key === 'uf_expedicao' ? 2 : undefined}
+                              onChange={e => setFichaComplemento(p => ({ ...p, [key]: key === 'uf_expedicao' ? e.target.value.toUpperCase().slice(0, 2) : e.target.value }))}
+                              className="w-full border border-purple-200 dark:border-purple-800/50 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400 dark:bg-slate-700 dark:text-white uppercase" />
+                          </div>
+                        ))}
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-black uppercase text-slate-400">Gênero</label>
+                          <select value={fichaComplemento.genero || ''} onChange={e => setFichaComplemento(p => ({ ...p, genero: e.target.value }))}
+                            className="w-full border border-purple-200 dark:border-purple-800/50 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white dark:bg-slate-700 dark:text-white">
+                            <option value="">—</option>
+                            <option value="masculino">Masculino</option>
+                            <option value="feminino">Feminino</option>
+                            <option value="nao_binario">Não-binário</option>
+                            <option value="prefiro_nao_informar">Prefiro não informar</option>
+                          </select>
+                        </div>
+                        <p className="col-span-2 text-[9px] font-black uppercase text-purple-400 mt-1 mb-1">Dados Bancários</p>
+                        {([['Banco', 'banco', 2], ['Agência', 'agencia', 1], ['Dígito Agência', 'agencia_digito', 1], ['Conta Corrente', 'conta_corrente', 1], ['Dígito Conta', 'conta_digito', 1]] as [string, string, number][]).map(([label, key, span]) => (
+                          <div key={key} className={`space-y-1 ${span === 2 ? 'col-span-2' : ''}`}>
+                            <label className="text-[9px] font-black uppercase text-slate-400">{label}</label>
+                            <input value={fichaComplemento[key] || ''}
+                              onChange={e => setFichaComplemento(p => ({ ...p, [key]: e.target.value }))}
+                              className="w-full border border-purple-200 dark:border-purple-800/50 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400 dark:bg-slate-700 dark:text-white" />
+                          </div>
+                        ))}
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-black uppercase text-slate-400">Tipo de Conta</label>
+                          <select value={fichaComplemento.tipo_conta || ''} onChange={e => setFichaComplemento(p => ({ ...p, tipo_conta: e.target.value }))}
+                            className="w-full border border-purple-200 dark:border-purple-800/50 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white dark:bg-slate-700 dark:text-white">
+                            <option value="">—</option>
+                            <option value="corrente">Corrente</option>
+                            <option value="poupanca">Poupança</option>
+                          </select>
+                        </div>
+                      </div>
+                    </section>
                   </div>
                 )}
 
@@ -1771,6 +1826,36 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
                         </div>
                       </section>
                     )}
+
+                    {/* Dados Especiais (complemento) */}
+                    <section className="bg-purple-50 dark:bg-purple-900/10 rounded-2xl border border-purple-100 dark:border-purple-900/30 p-4">
+                      <h4 className="text-[10px] font-black uppercase text-purple-600 mb-3 tracking-widest flex items-center gap-2">
+                        <FileText size={12}/> Dados Especiais — Pré-ENCCEJA / Pré-Vestibular
+                      </h4>
+                      {fichaAluno.complemento ? (
+                        <div className="grid grid-cols-2 gap-3">
+                          {[
+                            ['RG', fichaAluno.complemento.rg],
+                            ['Órgão Expedidor', fichaAluno.complemento.orgao_expedidor],
+                            ['UF Expedição', fichaAluno.complemento.uf_expedicao],
+                            ['Gênero', fichaAluno.complemento.genero],
+                            ['Banco', fichaAluno.complemento.banco],
+                            ['Agência', fichaAluno.complemento.agencia],
+                            ['Dígito Agência', fichaAluno.complemento.agencia_digito],
+                            ['Conta Corrente', fichaAluno.complemento.conta_corrente],
+                            ['Dígito Conta', fichaAluno.complemento.conta_digito],
+                            ['Tipo de Conta', fichaAluno.complemento.tipo_conta],
+                          ].map(([label, value]) => (
+                            <div key={label as string} className="space-y-0.5">
+                              <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest block">{label}</span>
+                              <span className="font-bold text-slate-800 dark:text-slate-100 text-xs">{value || <span className="text-slate-300 font-normal">—</span>}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-[10px] text-slate-400 font-bold uppercase">Nenhum dado especial cadastrado.</p>
+                      )}
+                    </section>
 
                     {/* Dossier link */}
                     {fichaAluno.inscricao_id && (

@@ -347,16 +347,20 @@ export default function DossieCandidato({ aluno, onClose, onSuccess }: DossiePro
       const alunoUuid = formData?.aluno?.id;
       if (alunoUuid && complementoCarregado) {
         const { auto_declaracao, ...camposComplemento } = complemento;
-        // Exclui strings vazias para evitar falha na validação de enums no backend
         const complementoFiltrado = Object.fromEntries(
           Object.entries(camposComplemento).filter(([, v]) => v !== '' && v !== null && v !== undefined)
         );
-        await Promise.allSettled([
+        const results = await Promise.allSettled([
           api.patch(`/alunos/${alunoUuid}/complemento`, complementoFiltrado),
           auto_declaracao
             ? api.patch(`/alunos/${alunoUuid}/auto-declaracao`, { auto_declaracao })
             : Promise.resolve(),
         ]);
+        const falhou = results.find(r => r.status === 'rejected') as PromiseRejectedResult | undefined;
+        if (falhou) {
+          const msg = (falhou.reason as any)?.response?.data?.message || 'Erro ao salvar dados especiais.';
+          alert(`Atenção: dados principais salvos, mas dados especiais falharam.\n${msg}`);
+        }
       }
 
       setIsEditing(false);
@@ -669,7 +673,7 @@ export default function DossieCandidato({ aluno, onClose, onSuccess }: DossiePro
               </div>
 
               {/* ── Dados Especiais (Pré-ENCCEJA / Pré-Vestibular) ── */}
-              {complementoCarregado && (complemento.rg || complemento.banco || isEditing) ? (
+              {complementoCarregado ? (
                 <div className="bg-purple-50/60 p-6 rounded-[24px] space-y-4 border border-purple-100">
                   <SectionTitle>Dados Especiais — Pré-ENCCEJA / Pré-Vestibular</SectionTitle>
 
