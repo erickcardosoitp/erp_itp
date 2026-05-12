@@ -8,7 +8,7 @@ import Cookies from 'js-cookie';
 import {
   LayoutDashboard, UserPlus, ClipboardList,
   LogOut, Settings, PanelLeftClose, PanelLeftOpen,
-  GraduationCap, DollarSign, Heart, Package, Loader2, BarChart2, X, Users2, MessageSquare
+  GraduationCap, DollarSign, Heart, Package, Loader2, BarChart2, X, Users2, MessageSquare, FolderOpen
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -30,6 +30,7 @@ const PATH_TO_MODULE: Record<string, string> = {
   '/relatorios': 'relatorios',
   '/gente': 'gente',
   '/chamados': 'chamados',
+  '/projetos': 'projetos',
 };
 
 export default function Sidebar({ isCollapsed, setIsCollapsed, mobileOpen, setMobileOpen }: SidebarProps) {
@@ -50,6 +51,7 @@ export default function Sidebar({ isCollapsed, setIsCollapsed, mobileOpen, setMo
     { name: 'Relatórios', path: '/relatorios', icon: BarChart2 },
     { name: 'Gente', path: '/gente', icon: Users2 },
     { name: 'Chamados', path: '/chamados', icon: MessageSquare },
+    { name: 'Projetos', path: '/projetos', icon: FolderOpen },
   ];
 
   // Filtra módulos com base nas permissões do grupo
