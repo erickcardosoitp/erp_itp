@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft, Plus, Users, ClipboardCheck, Printer,
-  X, Edit3, Trash2, User, AlertTriangle, Search,
+  X, Edit3, Trash2, AlertTriangle, Search,
 } from 'lucide-react';
 import api from '@/services/api';
 import { toast } from 'sonner';
@@ -56,6 +56,8 @@ export default function ProjetoDashboard() {
   const [buscaAluno, setBuscaAluno] = useState('');
   const [resultadosAluno, setResultadosAluno] = useState<any[]>([]);
   const [buscandoAluno, setBuscandoAluno] = useState(false);
+  const [alunoSelecionado, setAlunoSelecionado] = useState<any>(null);
+  const [modoExterno, setModoExterno] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -85,7 +87,7 @@ export default function ProjetoDashboard() {
     const t = setTimeout(async () => {
       setBuscandoAluno(true);
       try {
-        const r = await api.get('/academico/alunos', { params: { busca: buscaAluno, ativo: true } });
+        const r = await api.get('/academico/alunos', { params: { nome: buscaAluno } });
         setResultadosAluno(r.data?.alunos || r.data || []);
       } catch { setResultadosAluno([]); }
       finally { setBuscandoAluno(false); }
@@ -102,6 +104,8 @@ export default function ProjetoDashboard() {
       setFormInscricao({});
       setBuscaAluno('');
       setResultadosAluno([]);
+      setAlunoSelecionado(null);
+      setModoExterno(false);
       await load();
     } catch (err: any) {
       toast.error(err?.response?.data?.message || 'Erro ao inscrever');
@@ -211,7 +215,7 @@ export default function ProjetoDashboard() {
                 <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar inscrito..."
                   className="w-full pl-8 pr-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl text-sm bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-400" />
               </div>
-              <button onClick={() => { setFormInscricao({}); setBuscaAluno(''); setModalInscricao(true); }}
+              <button onClick={() => { setFormInscricao({}); setBuscaAluno(''); setResultadosAluno([]); setAlunoSelecionado(null); setModoExterno(false); setModalInscricao(true); }}
                 className="flex items-center gap-1.5 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase">
                 <Plus size={13}/> Inscrever
               </button>
@@ -333,53 +337,121 @@ export default function ProjetoDashboard() {
               <button onClick={() => setModalInscricao(false)} className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400"><X size={16}/></button>
             </div>
             <form onSubmit={salvarInscricao} className="p-6 space-y-4">
-              {/* Busca aluno existente */}
-              <div className="bg-purple-50 dark:bg-purple-900/20 rounded-2xl p-4 space-y-3">
-                <p className="text-[10px] font-black uppercase text-purple-600 dark:text-purple-400 tracking-widest">Vincular Aluno Regular (opcional)</p>
-                <div className="relative">
-                  <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"/>
-                  <input value={buscaAluno} onChange={e => setBuscaAluno(e.target.value)} placeholder="Buscar aluno pelo nome..."
-                    className="w-full pl-8 pr-4 py-2 border border-purple-200 dark:border-purple-800 rounded-xl text-sm bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-400" />
-                </div>
-                {buscandoAluno && <p className="text-xs text-slate-400">Buscando...</p>}
-                {resultadosAluno.length > 0 && (
-                  <div className="space-y-1 max-h-32 overflow-y-auto">
-                    {resultadosAluno.map((a: any) => (
-                      <button key={a.id} type="button"
-                        onClick={() => {
-                          setFormInscricao({
-                            aluno_id: a.id, nome_completo: a.nome_completo,
-                            data_nascimento: a.data_nascimento,
-                            nome_responsavel: a.nome_responsavel,
-                            telefone_responsavel: a.telefone_alternativo,
-                          });
-                          setBuscaAluno(a.nome_completo);
-                          setResultadosAluno([]);
-                        }}
-                        className={`w-full text-left flex items-center gap-2 px-3 py-2 rounded-xl text-xs hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors
-                          ${formInscricao.aluno_id === a.id ? 'bg-purple-100 dark:bg-purple-900/30 font-bold' : ''}`}>
-                        <User size={12} className="text-purple-400 shrink-0"/>
-                        <span className="truncate">{a.nome_completo}</span>
-                        <span className="text-slate-400 ml-auto">{a.numero_matricula}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-                {formInscricao.aluno_id && (
-                  <div className="flex items-center gap-2 bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-900/30 rounded-xl px-3 py-2">
-                    <User size={12} className="text-green-600 shrink-0"/>
-                    <span className="text-xs font-bold text-green-700 dark:text-green-400 flex-1 truncate">{formInscricao.nome_completo}</span>
-                    <button type="button" onClick={() => { setFormInscricao({}); setBuscaAluno(''); }} className="text-slate-400 hover:text-red-500"><X size={12}/></button>
-                  </div>
-                )}
-              </div>
 
-              {/* Dados manuais (externo ou override) */}
-              {!formInscricao.aluno_id && (
-                <>
+              {/* Modo toggle: aluno regular × externo */}
+              {!alunoSelecionado && (
+                <div className="flex gap-2">
+                  <button type="button"
+                    onClick={() => { setModoExterno(false); setFormInscricao({}); }}
+                    className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all
+                      ${!modoExterno ? 'bg-purple-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700'}`}>
+                    Aluno do ITP
+                  </button>
+                  <button type="button"
+                    onClick={() => { setModoExterno(true); setBuscaAluno(''); setResultadosAluno([]); setFormInscricao({ tipo: 'externo' }); }}
+                    className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all
+                      ${modoExterno ? 'bg-purple-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700'}`}>
+                    Externo
+                  </button>
+                </div>
+              )}
+
+              {/* ── MODO ALUNO ITP ──────────────────────────────────────────── */}
+              {!modoExterno && !alunoSelecionado && (
+                <div className="space-y-2">
+                  <div className="relative">
+                    <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"/>
+                    <input value={buscaAluno} onChange={e => setBuscaAluno(e.target.value)}
+                      placeholder="Buscar aluno pelo nome..."
+                      autoFocus
+                      className="w-full pl-9 pr-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl text-sm bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-400" />
+                  </div>
+                  {buscandoAluno && <p className="text-xs text-slate-400 px-1">Buscando...</p>}
+                  {resultadosAluno.length > 0 && (
+                    <div className="border border-slate-100 dark:border-slate-800 rounded-xl overflow-hidden">
+                      {resultadosAluno.map((a: any) => (
+                        <button key={a.id} type="button"
+                          onClick={() => {
+                            const dados = {
+                              aluno_id: a.id, tipo: 'regular',
+                              nome_completo: a.nome_completo,
+                              data_nascimento: a.data_nascimento,
+                              nome_responsavel: a.nome_responsavel,
+                              telefone_responsavel: a.telefone_alternativo,
+                            };
+                            setAlunoSelecionado(a);
+                            setFormInscricao(dados);
+                            setResultadosAluno([]);
+                          }}
+                          className="w-full text-left flex items-center gap-3 px-4 py-3 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors border-b border-slate-100 dark:border-slate-800 last:border-0">
+                          <div className="w-8 h-8 rounded-xl bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center text-sm font-black text-purple-600 shrink-0">
+                            {a.nome_completo[0]}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">{a.nome_completo}</p>
+                            <p className="text-[10px] text-slate-400">{a.numero_matricula}</p>
+                          </div>
+                          {a.data_nascimento && (
+                            <span className="text-[10px] text-slate-400 shrink-0">{calcIdade(a.data_nascimento)} anos</span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {buscaAluno.length >= 3 && !buscandoAluno && resultadosAluno.length === 0 && (
+                    <p className="text-xs text-slate-400 px-1">Nenhum aluno encontrado.</p>
+                  )}
+                </div>
+              )}
+
+              {/* ── ALUNO SELECIONADO — card read-only ──────────────────────── */}
+              {alunoSelecionado && (
+                <div className="bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-900/40 rounded-2xl p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-green-100 dark:bg-green-900/30 flex items-center justify-center text-base font-black text-green-700 dark:text-green-400 shrink-0">
+                        {alunoSelecionado.nome_completo[0]}
+                      </div>
+                      <div>
+                        <p className="font-black text-sm text-slate-800 dark:text-slate-100">{alunoSelecionado.nome_completo}</p>
+                        <p className="text-[10px] text-slate-500">{alunoSelecionado.numero_matricula}</p>
+                      </div>
+                    </div>
+                    <button type="button" onClick={() => { setAlunoSelecionado(null); setFormInscricao({}); setBuscaAluno(''); }}
+                      className="p-1.5 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-400 hover:text-red-500 shrink-0">
+                      <X size={14}/>
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    {alunoSelecionado.data_nascimento && (
+                      <div className="bg-white dark:bg-slate-900/50 rounded-xl px-3 py-2">
+                        <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Idade</p>
+                        <p className="font-bold text-slate-700 dark:text-slate-300 mt-0.5">{calcIdade(alunoSelecionado.data_nascimento)} anos</p>
+                      </div>
+                    )}
+                    {alunoSelecionado.nome_responsavel && (
+                      <div className="bg-white dark:bg-slate-900/50 rounded-xl px-3 py-2">
+                        <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Responsável</p>
+                        <p className="font-bold text-slate-700 dark:text-slate-300 mt-0.5 truncate">{alunoSelecionado.nome_responsavel}</p>
+                      </div>
+                    )}
+                    {(alunoSelecionado.telefone_alternativo || alunoSelecionado.telefone_responsavel) && (
+                      <div className="bg-white dark:bg-slate-900/50 rounded-xl px-3 py-2 col-span-2">
+                        <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Telefone</p>
+                        <p className="font-bold text-slate-700 dark:text-slate-300 mt-0.5">{alunoSelecionado.telefone_alternativo || alunoSelecionado.telefone_responsavel}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* ── MODO EXTERNO — campos manuais ──────────────────────────── */}
+              {modoExterno && (
+                <div className="space-y-3">
                   <div>
                     <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Nome Completo *</label>
                     <input required value={formInscricao.nome_completo ?? ''} onChange={e => setFormInscricao(p => ({ ...p, nome_completo: e.target.value }))}
+                      autoFocus
                       className="mt-1 w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-400" />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
@@ -399,29 +471,34 @@ export default function ProjetoDashboard() {
                     <input value={formInscricao.telefone_responsavel ?? ''} onChange={e => setFormInscricao(p => ({ ...p, telefone_responsavel: e.target.value }))}
                       className="mt-1 w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-400" />
                   </div>
-                </>
+                </div>
               )}
 
-              <div>
-                <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Equipe</label>
-                <select value={formInscricao.equipe_id ?? ''} onChange={e => setFormInscricao(p => ({ ...p, equipe_id: e.target.value || undefined }))}
-                  className="mt-1 w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-400">
-                  <option value="">Sem equipe</option>
-                  {equipes.map(eq => <option key={eq.id} value={eq.id}>{eq.nome}</option>)}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Cuidado Especial</label>
-                <input value={formInscricao.cuidado_especial ?? ''} onChange={e => setFormInscricao(p => ({ ...p, cuidado_especial: e.target.value }))}
-                  placeholder="ex: Alérgico a glúten, TEA..."
-                  className="mt-1 w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-400" />
-              </div>
+              {/* Campos comuns (equipe + cuidado) — só mostra se aluno selecionado ou modo externo */}
+              {(alunoSelecionado || modoExterno) && (
+                <>
+                  <div>
+                    <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Equipe</label>
+                    <select value={formInscricao.equipe_id ?? ''} onChange={e => setFormInscricao(p => ({ ...p, equipe_id: e.target.value || undefined }))}
+                      className="mt-1 w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-400">
+                      <option value="">Sem equipe</option>
+                      {equipes.map(eq => <option key={eq.id} value={eq.id}>{eq.nome}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Cuidado Especial</label>
+                    <input value={formInscricao.cuidado_especial ?? ''} onChange={e => setFormInscricao(p => ({ ...p, cuidado_especial: e.target.value }))}
+                      placeholder="ex: Alérgico a glúten, TEA..."
+                      className="mt-1 w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-400" />
+                  </div>
+                </>
+              )}
 
               <div className="flex justify-end gap-3 pt-2">
                 <button type="button" onClick={() => setModalInscricao(false)}
                   className="px-4 py-2 rounded-xl text-xs font-black uppercase text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800">Cancelar</button>
-                <button type="submit" disabled={salvando || (!formInscricao.aluno_id && !formInscricao.nome_completo)}
+                <button type="submit"
+                  disabled={salvando || (!alunoSelecionado && !modoExterno) || (modoExterno && !formInscricao.nome_completo)}
                   className="px-5 py-2 rounded-xl text-xs font-black uppercase bg-purple-600 hover:bg-purple-700 text-white disabled:opacity-50">
                   {salvando ? 'Salvando...' : 'Inscrever'}
                 </button>

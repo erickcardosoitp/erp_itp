@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, FolderOpen, Calendar, Edit3, Trash2, X, CheckCircle, Circle } from 'lucide-react';
+import { Plus, FolderOpen, Calendar, Edit3, Trash2, X } from 'lucide-react';
 import api from '@/services/api';
 import { toast } from 'sonner';
 
@@ -140,18 +140,21 @@ export default function ProjetosPage() {
             <form onSubmit={salvar} className="p-6 space-y-4">
               <Field label="Nome *">
                 <input required value={form.nome ?? ''} onChange={e => setForm(p => ({ ...p, nome: e.target.value }))}
-                  className="input-base" placeholder="ex: Colônia de Férias Jul/2026" />
+                  className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-400"
+                  placeholder="ex: Colônia de Férias Jul/2026" />
               </Field>
               <Field label="Descrição">
                 <textarea value={form.descricao ?? ''} onChange={e => setForm(p => ({ ...p, descricao: e.target.value }))}
-                  rows={2} className="input-base resize-none" />
+                  rows={2} className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-400 resize-none" />
               </Field>
               <div className="grid grid-cols-2 gap-4">
                 <Field label="Data Início *">
-                  <input required type="date" value={form.data_inicio ?? ''} onChange={e => setForm(p => ({ ...p, data_inicio: e.target.value }))} className="input-base" />
+                  <input required type="date" value={form.data_inicio ?? ''} onChange={e => setForm(p => ({ ...p, data_inicio: e.target.value }))}
+                    className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-400" />
                 </Field>
                 <Field label="Data Fim *">
-                  <input required type="date" value={form.data_fim ?? ''} onChange={e => setForm(p => ({ ...p, data_fim: e.target.value }))} className="input-base" />
+                  <input required type="date" value={form.data_fim ?? ''} onChange={e => setForm(p => ({ ...p, data_fim: e.target.value }))}
+                    className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-400" />
                 </Field>
               </div>
               <div className="flex justify-end gap-3 pt-2">
@@ -169,22 +172,6 @@ export default function ProjetosPage() {
         </div>
       )}
 
-      <style jsx global>{`
-        .input-base {
-          width: 100%;
-          border: 1px solid #e2e8f0;
-          border-radius: 12px;
-          padding: 8px 12px;
-          font-size: 13px;
-          outline: none;
-          background: white;
-          transition: border-color 0.15s;
-        }
-        .input-base:focus { border-color: #a78bfa; box-shadow: 0 0 0 2px #a78bfa33; }
-        @media (prefers-color-scheme: dark) {
-          .input-base { background: #1e293b; border-color: #334155; color: #f1f5f9; }
-        }
-      `}</style>
     </div>
   );
 }
