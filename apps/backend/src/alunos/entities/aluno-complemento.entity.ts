@@ -62,6 +62,13 @@ export class AlunoComplemento {
   @Column({ type: 'varchar', nullable: true })
   tipo_conta: string | null;
 
+  // ── Identidade ────────────────────────────────────────────────────
+  @Column({ type: 'varchar', nullable: true })
+  orientacao_sexual: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  nome_mae: string | null;
+
   @CreateDateColumn()
   createdAt: Date;
 

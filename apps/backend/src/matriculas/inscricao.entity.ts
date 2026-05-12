@@ -101,10 +101,16 @@ export class Inscricao {
   @Column({ name: 'detalhes_cuidado', type: 'text', nullable: true }) 
   detalhes_cuidado: string;
 
-  @Column({ name: 'uso_medicamento', type: 'varchar', nullable: true }) 
+  @Column({ name: 'uso_medicamento', type: 'varchar', nullable: true })
   uso_medicamento: string;
 
-  @Column({ name: 'cursos_desejados', type: 'text', nullable: true }) 
+  @Column({ name: 'auto_declaracao', type: 'varchar', nullable: true })
+  auto_declaracao: string;
+
+  @Column({ name: 'orientacao_sexual', type: 'varchar', nullable: true })
+  orientacao_sexual: string;
+
+  @Column({ name: 'cursos_desejados', type: 'text', nullable: true })
   cursos_desejados: string;
 
   @Column({ name: 'autoriza_imagem', type: 'boolean', default: false }) 

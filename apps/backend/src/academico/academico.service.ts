@@ -463,14 +463,18 @@ export class AcademicoService {
     // Carrega dados especiais (complemento)
     const [complementoRow] = await this.dataSource.query(
       `SELECT rg, orgao_expedidor, uf_expedicao, genero,
-              banco, agencia, agencia_digito, conta_corrente, conta_digito, tipo_conta
+              banco, agencia, agencia_digito, conta_corrente, conta_digito, tipo_conta,
+              orientacao_sexual, nome_mae
        FROM alunos_complemento WHERE aluno_id = $1 LIMIT 1`,
       [id],
     ).catch(() => [null]);
     const complemento = complementoRow ?? null;
 
+    // Auto-declaração fica no próprio aluno
+    const autoDeclaracao = (aluno as any).auto_declaracao ?? null;
+
     this.logger.log(`Ficha do aluno ${aluno.nome_completo}: ${historico.length} registros no diário, inscricao_id=${inscricao_id}`);
-    return { aluno, inscricao_id, frequencia, historico, turmaInfo, turmasDoAluno, totalPresencas, totalFaltas, foto_url, complemento };
+    return { aluno, inscricao_id, frequencia, historico, turmaInfo, turmasDoAluno, totalPresencas, totalFaltas, foto_url, complemento, auto_declaracao: autoDeclaracao };
   }
 
   async criarAluno(dto: Partial<Aluno>) {

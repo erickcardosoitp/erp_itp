@@ -882,6 +882,17 @@ export class AppModule implements OnModuleInit {
         ALTER TABLE IF EXISTS alunos
           ADD COLUMN IF NOT EXISTS auto_declaracao VARCHAR
       `);
+      // Novos campos: orientação sexual e nome da mãe/responsável
+      await this.dataSource.query(`
+        ALTER TABLE IF EXISTS alunos_complemento
+          ADD COLUMN IF NOT EXISTS orientacao_sexual VARCHAR,
+          ADD COLUMN IF NOT EXISTS nome_mae VARCHAR
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE IF EXISTS inscricoes
+          ADD COLUMN IF NOT EXISTS auto_declaracao VARCHAR,
+          ADD COLUMN IF NOT EXISTS orientacao_sexual VARCHAR
+      `);
       this.logger.log('✅ Tabelas alunos_complemento / documentos_validacao criadas (IF NOT EXISTS)');
 
       // ── CPF, email e celular opcionais em inscricoes ───────────────────────
