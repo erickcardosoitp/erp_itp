@@ -54,6 +54,18 @@ export class ProjetoInscricao {
   @Column({ name: 'telefone_responsavel', type: 'varchar', nullable: true })
   telefone_responsavel: string | null;
 
+  @Column({ type: 'varchar', nullable: true })
+  cep: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  logradouro: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  numero: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  complemento: string | null;
+
   @Column({ name: 'cuidado_especial', type: 'varchar', nullable: true })
   cuidado_especial: string | null;
 

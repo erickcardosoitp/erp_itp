@@ -1185,6 +1185,13 @@ export class AppModule implements OnModuleInit {
         )
       `);
       await this.dataSource.query(`
+        ALTER TABLE projeto_inscricoes
+          ADD COLUMN IF NOT EXISTS cep         VARCHAR,
+          ADD COLUMN IF NOT EXISTS logradouro  VARCHAR,
+          ADD COLUMN IF NOT EXISTS numero      VARCHAR,
+          ADD COLUMN IF NOT EXISTS complemento VARCHAR
+      `);
+      await this.dataSource.query(`
         CREATE TABLE IF NOT EXISTS projeto_presencas (
           id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           projeto_id    UUID NOT NULL REFERENCES projetos(id) ON DELETE CASCADE,

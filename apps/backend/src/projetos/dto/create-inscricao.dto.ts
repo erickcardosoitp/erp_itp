@@ -30,6 +30,22 @@ export class CreateInscricaoDto {
 
   @IsOptional()
   @IsString()
+  cep?: string;
+
+  @IsOptional()
+  @IsString()
+  logradouro?: string;
+
+  @IsOptional()
+  @IsString()
+  numero?: string;
+
+  @IsOptional()
+  @IsString()
+  complemento?: string;
+
+  @IsOptional()
+  @IsString()
   cuidado_especial?: string;
 
   @IsOptional()

@@ -81,18 +81,27 @@ export class ProjetosService {
     const rows = await this.dataSource.query(`
       SELECT pi.*,
         row_to_json(pe) as equipe,
-        a.logradouro, a.numero as numero_end, a.bairro, a.cidade
+        a.logradouro  as aluno_logradouro,
+        a.numero      as aluno_numero,
+        a.bairro      as aluno_bairro,
+        a.cidade      as aluno_cidade
       FROM projeto_inscricoes pi
       LEFT JOIN projeto_equipes pe ON pe.id = pi.equipe_id
       LEFT JOIN alunos a ON a.id = pi.aluno_id
       WHERE pi.projeto_id = $1
       ORDER BY pi.created_at ASC
     `, [projeto_id]);
-    return rows.map((r: any) => ({
-      ...r,
-      endereco: [r.logradouro, r.numero_end, r.bairro, r.cidade]
-        .filter(Boolean).join(', ') || null,
-    }));
+    return rows.map((r: any) => {
+      // Externos têm endereço na própria inscrição; regulares usam o cadastro do aluno
+      const logradouro = r.logradouro || r.aluno_logradouro;
+      const numero     = r.numero     || r.aluno_numero;
+      const bairro     = r.aluno_bairro;
+      const cidade     = r.aluno_cidade;
+      return {
+        ...r,
+        endereco: [logradouro, numero, bairro, cidade].filter(Boolean).join(', ') || null,
+      };
+    });
   }
 
   async createInscricao(projeto_id: string, dto: CreateInscricaoDto) {
