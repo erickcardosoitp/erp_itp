@@ -46,6 +46,7 @@ import { PesquisasModule } from './pesquisas/pesquisas.module';
 import { GenteModule } from './gente/gente.module';
 import { AlunosModule } from './alunos/alunos.module';
 import { PublicoModule } from './publico/publico.module';
+import { ProjetosModule } from './projetos/projetos.module';
 
 @Module({
   imports: [
@@ -118,6 +119,7 @@ import { PublicoModule } from './publico/publico.module';
     MatriculasModule,
     EmailModule,
     PublicoModule,
+    ProjetosModule,
   ],
   controllers: [
     AppController,
@@ -1120,6 +1122,68 @@ export class AppModule implements OnModuleInit {
         )
       `);
       this.logger.log('✅ Tabela gente_pagamentos_passagem criada (IF NOT EXISTS)');
+
+      // ── Módulo Projetos / Colônia de Férias ───────────────────────────────
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS projetos (
+          id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          nome                 VARCHAR NOT NULL,
+          descricao            TEXT,
+          data_inicio          DATE NOT NULL,
+          data_fim             DATE NOT NULL,
+          pulseira_largura_mm  INT NOT NULL DEFAULT 54,
+          pulseira_altura_mm   INT NOT NULL DEFAULT 25,
+          ativo                BOOLEAN NOT NULL DEFAULT true,
+          created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+          updated_at           TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `);
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS projeto_equipes (
+          id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          projeto_id  UUID NOT NULL REFERENCES projetos(id) ON DELETE CASCADE,
+          nome        VARCHAR NOT NULL,
+          cor         VARCHAR NOT NULL DEFAULT '#7c3aed',
+          faixa_min   INT,
+          faixa_max   INT,
+          created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+          updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `);
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS projeto_inscricoes (
+          id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          projeto_id           UUID NOT NULL REFERENCES projetos(id) ON DELETE CASCADE,
+          equipe_id            UUID REFERENCES projeto_equipes(id) ON DELETE SET NULL,
+          aluno_id             UUID,
+          tipo                 VARCHAR NOT NULL DEFAULT 'externo',
+          nome_completo        VARCHAR NOT NULL,
+          data_nascimento      DATE,
+          nome_responsavel     VARCHAR,
+          telefone_responsavel VARCHAR,
+          cuidado_especial     VARCHAR,
+          detalhes_cuidado     TEXT,
+          status               VARCHAR NOT NULL DEFAULT 'inscrito',
+          convertido_em_aluno  BOOLEAN NOT NULL DEFAULT false,
+          created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+          updated_at           TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `);
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS projeto_presencas (
+          id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          projeto_id    UUID NOT NULL REFERENCES projetos(id) ON DELETE CASCADE,
+          equipe_id     UUID REFERENCES projeto_equipes(id) ON DELETE SET NULL,
+          inscricao_id  UUID NOT NULL REFERENCES projeto_inscricoes(id) ON DELETE CASCADE,
+          data          DATE NOT NULL,
+          presente      BOOLEAN NOT NULL DEFAULT false,
+          hora_entrada  TIME,
+          hora_saida    TIME,
+          created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+          UNIQUE (inscricao_id, data)
+        )
+      `);
+      this.logger.log('✅ Tabelas módulo Projetos criadas (IF NOT EXISTS)');
 
     } catch (err: any) {
       this.logger.error(`❌ Erro nas migrations automáticas: ${err.message}`);
