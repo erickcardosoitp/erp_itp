@@ -48,7 +48,7 @@ export default function ProjetosPage() {
   useEffect(() => { load(); }, [load]);
 
   const abrir = (p?: Projeto) => {
-    setForm(p ? { ...p } : { pulseira_largura_mm: 54, pulseira_altura_mm: 25, ativo: true });
+    setForm(p ? { ...p } : { ativo: true });
     setModal({ open: true, editando: p || null });
   };
 
@@ -152,16 +152,6 @@ export default function ProjetosPage() {
                 </Field>
                 <Field label="Data Fim *">
                   <input required type="date" value={form.data_fim ?? ''} onChange={e => setForm(p => ({ ...p, data_fim: e.target.value }))} className="input-base" />
-                </Field>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <Field label="Largura pulseira (mm)">
-                  <input type="number" min={20} max={200} value={form.pulseira_largura_mm ?? 54}
-                    onChange={e => setForm(p => ({ ...p, pulseira_largura_mm: +e.target.value }))} className="input-base" />
-                </Field>
-                <Field label="Altura pulseira (mm)">
-                  <input type="number" min={10} max={100} value={form.pulseira_altura_mm ?? 25}
-                    onChange={e => setForm(p => ({ ...p, pulseira_altura_mm: +e.target.value }))} className="input-base" />
                 </Field>
               </div>
               <div className="flex justify-end gap-3 pt-2">
