@@ -83,7 +83,7 @@ export class ProjetosService {
         row_to_json(pe) as equipe,
         a.logradouro, a.numero as numero_end, a.bairro, a.cidade
       FROM projeto_inscricoes pi
-      LEFT JOIN projeto_equipes pe ON pe.id = pi.equipe_id
+      LEFT JOIN projeto_equipes pe ON pe.id::text = pi.equipe_id
       LEFT JOIN alunos a ON a.id::text = pi.aluno_id
       WHERE pi.projeto_id = $1
       ORDER BY pi.created_at ASC
