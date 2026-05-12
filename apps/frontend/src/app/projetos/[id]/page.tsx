@@ -58,6 +58,17 @@ export default function ProjetoDashboard() {
   const [buscandoAluno, setBuscandoAluno] = useState(false);
   const [alunoSelecionado, setAlunoSelecionado] = useState<any>(null);
   const [modoExterno, setModoExterno] = useState(false);
+  const [equipeAutoSugerida, setEquipeAutoSugerida] = useState<string | null>(null);
+
+  const sugerirEquipe = useCallback((dob: string | undefined) => {
+    if (!dob || equipes.length === 0) return undefined;
+    const idade = calcIdade(dob);
+    if (idade === null) return undefined;
+    return equipes.find(eq =>
+      (eq.faixa_min == null || idade >= eq.faixa_min) &&
+      (eq.faixa_max == null || idade <= eq.faixa_max)
+    )?.id;
+  }, [equipes]);
 
   const load = useCallback(async () => {
     try {
@@ -106,6 +117,7 @@ export default function ProjetoDashboard() {
       setResultadosAluno([]);
       setAlunoSelecionado(null);
       setModoExterno(false);
+      setEquipeAutoSugerida(null);
       await load();
     } catch (err: any) {
       toast.error(err?.response?.data?.message || 'Erro ao inscrever');
@@ -215,7 +227,7 @@ export default function ProjetoDashboard() {
                 <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar inscrito..."
                   className="w-full pl-8 pr-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl text-sm bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-400" />
               </div>
-              <button onClick={() => { setFormInscricao({}); setBuscaAluno(''); setResultadosAluno([]); setAlunoSelecionado(null); setModoExterno(false); setModalInscricao(true); }}
+              <button onClick={() => { setFormInscricao({}); setBuscaAluno(''); setResultadosAluno([]); setAlunoSelecionado(null); setModoExterno(false); setEquipeAutoSugerida(null); setModalInscricao(true); }}
                 className="flex items-center gap-1.5 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase">
                 <Plus size={13}/> Inscrever
               </button>
@@ -372,6 +384,7 @@ export default function ProjetoDashboard() {
                       {resultadosAluno.map((a: any) => (
                         <button key={a.id} type="button"
                           onClick={() => {
+                            const equipe_id = sugerirEquipe(a.data_nascimento);
                             const dados = {
                               aluno_id: a.id, tipo: 'regular',
                               nome_completo: a.nome_completo,
@@ -380,9 +393,11 @@ export default function ProjetoDashboard() {
                               telefone_responsavel: a.telefone_alternativo,
                               cuidado_especial: a.cuidado_especial || '',
                               detalhes_cuidado: a.detalhes_cuidado || '',
+                              equipe_id,
                             };
                             setAlunoSelecionado(a);
                             setFormInscricao(dados);
+                            setEquipeAutoSugerida(equipe_id ?? null);
                             setResultadosAluno([]);
                           }}
                           className="w-full text-left flex items-center gap-3 px-4 py-3 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors border-b border-slate-100 dark:border-slate-800 last:border-0">
@@ -459,7 +474,13 @@ export default function ProjetoDashboard() {
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Nascimento</label>
-                      <input type="date" value={formInscricao.data_nascimento ?? ''} onChange={e => setFormInscricao(p => ({ ...p, data_nascimento: e.target.value }))}
+                      <input type="date" value={formInscricao.data_nascimento ?? ''}
+                        onChange={e => {
+                          const dob = e.target.value;
+                          const equipe_id = sugerirEquipe(dob);
+                          setFormInscricao(p => ({ ...p, data_nascimento: dob, equipe_id: equipe_id ?? p.equipe_id }));
+                          if (equipe_id) setEquipeAutoSugerida(equipe_id);
+                        }}
                         className="mt-1 w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-400" />
                     </div>
                     <div>
@@ -480,11 +501,19 @@ export default function ProjetoDashboard() {
               {(alunoSelecionado || modoExterno) && (
                 <>
                   <div>
-                    <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Equipe</label>
-                    <select value={formInscricao.equipe_id ?? ''} onChange={e => setFormInscricao(p => ({ ...p, equipe_id: e.target.value || undefined }))}
-                      className="mt-1 w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-400">
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Equipe</label>
+                      {equipeAutoSugerida && formInscricao.equipe_id === equipeAutoSugerida && (
+                        <span className="text-[9px] font-black text-purple-500 bg-purple-50 dark:bg-purple-900/20 px-2 py-0.5 rounded-full">
+                          ✦ sugerida pela idade
+                        </span>
+                      )}
+                    </div>
+                    <select value={formInscricao.equipe_id ?? ''}
+                      onChange={e => { setFormInscricao(p => ({ ...p, equipe_id: e.target.value || undefined })); setEquipeAutoSugerida(null); }}
+                      className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-400">
                       <option value="">Sem equipe</option>
-                      {equipes.map(eq => <option key={eq.id} value={eq.id}>{eq.nome}</option>)}
+                      {equipes.map(eq => <option key={eq.id} value={eq.id}>{eq.nome}{eq.faixa_min != null || eq.faixa_max != null ? ` (${eq.faixa_min ?? '?'}–${eq.faixa_max ?? '?'} anos)` : ''}</option>)}
                     </select>
                   </div>
                   <div>
