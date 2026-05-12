@@ -249,9 +249,17 @@ export default function PulseirasPage() {
 
       <style jsx global>{`
         @media print {
-          .no-print { display: none !important; }
-          .print-only { display: block !important; }
-          body { margin: 0; }
+          body * { visibility: hidden !important; }
+          .print-only, .print-only * { visibility: visible !important; }
+          .print-only {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%;
+            display: flex !important;
+            flex-wrap: wrap;
+            gap: 3mm;
+            padding: 0;
+          }
           @page { margin: 5mm; size: auto; }
         }
         @media screen {
