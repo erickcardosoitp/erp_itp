@@ -10,6 +10,7 @@ interface Inscricao {
   id: string; nome_completo: string; data_nascimento?: string;
   nome_responsavel?: string; telefone_responsavel?: string;
   cuidado_especial?: string; equipe_id?: string; equipe?: Equipe;
+  endereco?: string;
 }
 interface Projeto {
   id: string; nome: string;
@@ -117,6 +118,18 @@ function Pulseira({ ins, equipe, largura, altura }: {
           flexShrink: 0,
         }}>
           {ins.nome_responsavel}{ins.telefone_responsavel ? ` · ${ins.telefone_responsavel}` : ''}
+        </div>
+      )}
+
+      {/* Linha 4: endereço */}
+      {ins.endereco && (
+        <div style={{
+          fontSize: `${Math.max(4, fontSize - 2)}pt`,
+          color: '#666', lineHeight: 1.2,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          flexShrink: 0,
+        }}>
+          {ins.endereco}
         </div>
       )}
 

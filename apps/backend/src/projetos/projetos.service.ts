@@ -78,11 +78,21 @@ export class ProjetosService {
   // ── Inscrições ────────────────────────────────────────────────────────────
 
   async findInscricoes(projeto_id: string) {
-    return this.inscricoesRepo.find({
-      where: { projeto_id },
-      relations: ['equipe'],
-      order: { createdAt: 'ASC' },
-    });
+    const rows = await this.dataSource.query(`
+      SELECT pi.*,
+        row_to_json(pe) as equipe,
+        a.logradouro, a.numero as numero_end, a.bairro, a.cidade
+      FROM projeto_inscricoes pi
+      LEFT JOIN projeto_equipes pe ON pe.id = pi.equipe_id
+      LEFT JOIN alunos a ON a.id::text = pi.aluno_id
+      WHERE pi.projeto_id = $1
+      ORDER BY pi.created_at ASC
+    `, [projeto_id]);
+    return rows.map((r: any) => ({
+      ...r,
+      endereco: [r.logradouro, r.numero_end, r.bairro, r.cidade]
+        .filter(Boolean).join(', ') || null,
+    }));
   }
 
   async createInscricao(projeto_id: string, dto: CreateInscricaoDto) {
