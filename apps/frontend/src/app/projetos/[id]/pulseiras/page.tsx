@@ -34,7 +34,7 @@ function Pulseira({ ins, equipe, largura, altura }: {
   const idade = calcIdade(ins.data_nascimento);
   const temCuidado = ins.cuidado_especial && ins.cuidado_especial !== 'Não';
   const nomeLen = ins.nome_completo.length;
-  const fontSize = Math.max(5, 8 - Math.max(0, nomeLen - 22) * 0.2);
+  const fontSize = Math.max(6, 9 - Math.max(0, nomeLen - 22) * 0.2);
 
   useEffect(() => {
     if (!barcodeRef.current) return;
@@ -44,7 +44,7 @@ function Pulseira({ ins, equipe, largura, altura }: {
           format: 'CODE128',
           displayValue: false,
           margin: 0,
-          height: Math.max(12, altura * 1.5),
+          height: Math.max(10, altura * 0.9),
           width: 1,
           background: 'transparent',
         });
@@ -107,6 +107,7 @@ function Pulseira({ ins, equipe, largura, altura }: {
         whiteSpace: 'nowrap',
         color: '#111',
         flexShrink: 0,
+        textAlign: 'center',
       }}>
         {ins.nome_completo}{idade !== null ? ` · ${idade} ANOS` : ''}
       </div>
@@ -114,10 +115,11 @@ function Pulseira({ ins, equipe, largura, altura }: {
       {/* Linha 3: responsável */}
       {ins.nome_responsavel && (
         <div style={{
-          fontSize: `${Math.max(4, fontSize - 1.5)}pt`,
+          fontSize: `${Math.max(5, fontSize - 1.5)}pt`,
           color: '#444', lineHeight: 1.2,
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           flexShrink: 0,
+          textAlign: 'center',
         }}>
           {ins.nome_responsavel}{ins.telefone_responsavel ? ` · ${ins.telefone_responsavel}` : ''}
         </div>
@@ -130,14 +132,15 @@ function Pulseira({ ins, equipe, largura, altura }: {
           color: '#666', lineHeight: 1.2,
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           flexShrink: 0,
+          textAlign: 'center',
         }}>
           {ins.endereco}
         </div>
       )}
 
-      {/* Barcode */}
-      <div style={{ flex: 1, display: 'flex', alignItems: 'flex-end', overflow: 'hidden' }}>
-        <svg ref={barcodeRef} style={{ width: '100%', height: `${Math.max(8, altura * 0.38)}mm`, display: 'block' }} />
+      {/* Barcode — altura fixa para não dominar a etiqueta */}
+      <div style={{ flexShrink: 0, marginTop: '1mm', overflow: 'hidden' }}>
+        <svg ref={barcodeRef} style={{ width: '100%', height: `${Math.max(6, altura * 0.28)}mm`, display: 'block' }} />
       </div>
     </div>
   );
