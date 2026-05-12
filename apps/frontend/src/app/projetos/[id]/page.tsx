@@ -496,32 +496,32 @@ export default function ProjetoDashboard() {
                     <input value={formInscricao.telefone_responsavel ?? ''} onChange={e => setFormInscricao(p => ({ ...p, telefone_responsavel: e.target.value }))}
                       className="mt-1 w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-400" />
                   </div>
-                </div>
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="col-span-1">
-                    <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">CEP</label>
-                    <input value={formInscricao.cep ?? ''} onChange={e => setFormInscricao(p => ({ ...p, cep: e.target.value }))}
-                      placeholder="00000-000"
-                      className="mt-1 w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-400" />
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="col-span-1">
+                      <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">CEP</label>
+                      <input value={formInscricao.cep ?? ''} onChange={e => setFormInscricao(p => ({ ...p, cep: e.target.value }))}
+                        placeholder="00000-000"
+                        className="mt-1 w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-400" />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Logradouro</label>
+                      <input value={formInscricao.logradouro ?? ''} onChange={e => setFormInscricao(p => ({ ...p, logradouro: e.target.value }))}
+                        placeholder="Rua, Av..."
+                        className="mt-1 w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-400" />
+                    </div>
                   </div>
-                  <div className="col-span-2">
-                    <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Logradouro</label>
-                    <input value={formInscricao.logradouro ?? ''} onChange={e => setFormInscricao(p => ({ ...p, logradouro: e.target.value }))}
-                      placeholder="Rua, Av..."
-                      className="mt-1 w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-400" />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Número</label>
-                    <input value={formInscricao.numero ?? ''} onChange={e => setFormInscricao(p => ({ ...p, numero: e.target.value }))}
-                      className="mt-1 w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-400" />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Complemento</label>
-                    <input value={formInscricao.complemento ?? ''} onChange={e => setFormInscricao(p => ({ ...p, complemento: e.target.value }))}
-                      placeholder="Apto, Bloco..."
-                      className="mt-1 w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-400" />
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Número</label>
+                      <input value={formInscricao.numero ?? ''} onChange={e => setFormInscricao(p => ({ ...p, numero: e.target.value }))}
+                        className="mt-1 w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-400" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Complemento</label>
+                      <input value={formInscricao.complemento ?? ''} onChange={e => setFormInscricao(p => ({ ...p, complemento: e.target.value }))}
+                        placeholder="Apto, Bloco..."
+                        className="mt-1 w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-400" />
+                    </div>
                   </div>
                 </div>
               )}
