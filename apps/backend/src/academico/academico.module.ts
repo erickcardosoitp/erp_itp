@@ -14,13 +14,14 @@ import { PresencaSessao } from './entities/presenca-sessao.entity';
 import { ChamadoAcademico } from './entities/chamado.entity';
 import { ChamadoAcompanhamento } from './entities/chamado-acompanhamento.entity';
 import { ControleFutebol } from './entities/controle-futebol.entity';
+import { ControleBallet } from './entities/controle-ballet.entity';
 import { Aluno } from '../alunos/aluno.entity';
 import { Inscricao } from '../matriculas/inscricao.entity';
 import { NotificacoesModule } from '../notificacoes/notificacoes.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Curso, Professor, Turma, TurmaAluno, GradeHoraria, DiarioAcademico, PresencaSessao, ChamadoAcademico, ChamadoAcompanhamento, ControleFutebol, Aluno, Inscricao]),
+    TypeOrmModule.forFeature([Curso, Professor, Turma, TurmaAluno, GradeHoraria, DiarioAcademico, PresencaSessao, ChamadoAcademico, ChamadoAcompanhamento, ControleFutebol, ControleBallet, Aluno, Inscricao]),
     NotificacoesModule,
   ],
   controllers: [AcademicoController, ChamadosController, ChamadosPublicoController],

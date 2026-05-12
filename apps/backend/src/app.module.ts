@@ -1019,6 +1019,21 @@ export class AppModule implements OnModuleInit {
       `);
       this.logger.log('✅ Tabela controles_ballet criada (IF NOT EXISTS)');
 
+      // ── Controle Ballet — colunas de pagamento (idempotente) ─────────────────
+      await this.dataSource.query(`ALTER TABLE controles_ballet ADD COLUMN IF NOT EXISTS itens_pendentes TEXT`);
+      await this.dataSource.query(`ALTER TABLE controles_ballet ADD COLUMN IF NOT EXISTS valor_total NUMERIC(10,2)`);
+      await this.dataSource.query(`ALTER TABLE controles_ballet ADD COLUMN IF NOT EXISTS valor_entrada NUMERIC(10,2)`);
+      await this.dataSource.query(`ALTER TABLE controles_ballet ADD COLUMN IF NOT EXISTS data_entrada DATE`);
+      await this.dataSource.query(`ALTER TABLE controles_ballet ADD COLUMN IF NOT EXISTS forma_pagamento TEXT`);
+      await this.dataSource.query(`ALTER TABLE controles_ballet ADD COLUMN IF NOT EXISTS num_parcelas INTEGER`);
+      await this.dataSource.query(`ALTER TABLE controles_ballet ADD COLUMN IF NOT EXISTS valor_parcela NUMERIC(10,2)`);
+      await this.dataSource.query(`ALTER TABLE controles_ballet ADD COLUMN IF NOT EXISTS venc_1 DATE`);
+      await this.dataSource.query(`ALTER TABLE controles_ballet ADD COLUMN IF NOT EXISTS venc_2 DATE`);
+      await this.dataSource.query(`ALTER TABLE controles_ballet ADD COLUMN IF NOT EXISTS venc_3 DATE`);
+      await this.dataSource.query(`ALTER TABLE controles_ballet ADD COLUMN IF NOT EXISTS status_pagamento TEXT DEFAULT 'pendente'`);
+      await this.dataSource.query(`ALTER TABLE controles_ballet ADD COLUMN IF NOT EXISTS movimentacao_ids JSONB DEFAULT '[]'`);
+      this.logger.log('✅ Colunas de pagamento em controles_ballet aplicadas (IF NOT EXISTS)');
+
       // ── Boletos a Receber ────────────────────────────────────────────────────
       await this.dataSource.query(`
         CREATE TABLE IF NOT EXISTS boletos (

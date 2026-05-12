@@ -5019,6 +5019,13 @@ interface ControleBallet {
   roupa_entregue: boolean; sapatilha_entregue: boolean;
   status: string; observacoes?: string;
   roupa_nome?: string; sapatilha_nome?: string;
+  // Pagamento
+  itens_pendentes?: string;
+  valor_total?: number; valor_entrada?: number; data_entrada?: string;
+  forma_pagamento?: string; num_parcelas?: number; valor_parcela?: number;
+  venc_1?: string; venc_2?: string; venc_3?: string;
+  status_pagamento?: string;
+  movimentacao_ids?: string[];
 }
 
 const STATUS_BALLET = ['Pendente', 'Encomendado', 'Separado', 'Entregue'];
@@ -5052,6 +5059,9 @@ function ControlesTab({ podeEditar }: { podeEditar: boolean }) {
   const [formBallet, setFormBallet] = useState<Partial<ControleBallet>>({});
   const [salvandoBallet, setSalvandoBallet] = useState<string | null>(null);
   const [alunosBallet, setAlunosBallet] = useState<Aluno[]>([]);
+  const [formPagamentoBallet, setFormPagamentoBallet] = useState<{ tipo: string; valor: string; data: string; forma_pagamento: string }>({ tipo: 'entrada', valor: '', data: '', forma_pagamento: 'PIX' });
+  const [mostrarFormPagamento, setMostrarFormPagamento] = useState(false);
+  const [salvandoPagamento, setSalvandoPagamento] = useState(false);
 
   const carregar = useCallback(async () => {
     setLoading(true);
@@ -5172,8 +5182,8 @@ function ControlesTab({ podeEditar }: { podeEditar: boolean }) {
     return matchBusca && matchStatus;
   });
 
-  const abrirCriarBallet = () => { setFormBallet({}); setModalBallet({ aberto: true, item: null }); };
-  const abrirEditarBallet = (c: ControleBallet) => { setFormBallet({ ...c }); setModalBallet({ aberto: true, item: c }); };
+  const abrirCriarBallet = () => { setFormBallet({}); setModalBallet({ aberto: true, item: null }); setMostrarFormPagamento(false); setFormPagamentoBallet({ tipo: 'entrada', valor: '', data: '', forma_pagamento: 'PIX' }); };
+  const abrirEditarBallet = (c: ControleBallet) => { setFormBallet({ ...c }); setModalBallet({ aberto: true, item: c }); setMostrarFormPagamento(false); setFormPagamentoBallet({ tipo: 'entrada', valor: '', data: '', forma_pagamento: 'PIX' }); };
 
   const salvarBallet = async () => {
     if (!formBallet.aluno_id && !modalBallet.item) { toast.error('Selecione um aluno.'); return; }
@@ -5220,6 +5230,27 @@ function ControlesTab({ podeEditar }: { podeEditar: boolean }) {
       setControlesBallet(prev => prev.map(x => x.id === c.id ? { ...x, status: novoStatus } : x));
     } catch {}
     setSalvandoBallet(null);
+  };
+
+  const lancarPagamentoBallet = async () => {
+    if (!modalBallet.item) return;
+    if (!formPagamentoBallet.valor || !formPagamentoBallet.data) { toast.error('Preencha valor e data.'); return; }
+    setSalvandoPagamento(true);
+    try {
+      await api.post(`/academico/controle-ballet/${modalBallet.item.id}/pagamento`, {
+        tipo: formPagamentoBallet.tipo,
+        valor: Number(formPagamentoBallet.valor),
+        data: formPagamentoBallet.data,
+        forma_pagamento: formPagamentoBallet.forma_pagamento,
+      });
+      toast.success('Movimentação criada no financeiro!');
+      setMostrarFormPagamento(false);
+      setFormPagamentoBallet({ tipo: 'entrada', valor: '', data: '', forma_pagamento: 'PIX' });
+      await carregarBallet();
+    } catch (e: any) {
+      toast.error('Erro ao lançar pagamento: ' + (e?.response?.data?.message || e?.message || 'Erro'));
+    }
+    setSalvandoPagamento(false);
   };
 
   const stats = {
@@ -5308,6 +5339,7 @@ function ControlesTab({ podeEditar }: { podeEditar: boolean }) {
                       <th className="px-4 py-3 text-center">Sapatilha Enc.</th>
                       <th className="px-4 py-3 text-center">Roupa Ent.</th>
                       <th className="px-4 py-3 text-center">Sapatilha Ent.</th>
+                      <th className="px-4 py-3 text-center">Pagamento</th>
                       <th className="px-4 py-3 text-center">Status</th>
                       <th className="px-4 py-3 text-center">Ações</th>
                     </tr>
@@ -5332,6 +5364,18 @@ function ControlesTab({ podeEditar }: { podeEditar: boolean }) {
                             </button>
                           </td>
                         ))}
+                        <td className="px-4 py-3 text-center">
+                          {(() => {
+                            const sp = c.status_pagamento ?? 'pendente';
+                            const cor = sp === 'quitado' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' : sp === 'parcial' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300';
+                            return (
+                              <div className="flex flex-col items-center gap-0.5">
+                                <span className={`px-2 py-0.5 rounded-lg text-xs font-semibold ${cor}`}>{sp}</span>
+                                {c.valor_total ? <span className="text-xs text-slate-400">R$ {Number(c.valor_total).toFixed(2)}</span> : null}
+                              </div>
+                            );
+                          })()}
+                        </td>
                         <td className="px-4 py-3 text-center">
                           {podeEditar ? (
                             <select value={c.status} disabled={salvandoBallet === c.id + 'status'}
@@ -5452,6 +5496,114 @@ function ControlesTab({ podeEditar }: { podeEditar: boolean }) {
                     <textarea value={formBallet.observacoes ?? ''} onChange={e => setFormBallet(f => ({ ...f, observacoes: e.target.value }))} rows={2}
                       className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800 resize-none" />
                   </div>
+
+                  {/* Seção Pagamento */}
+                  <div className="border-t border-slate-100 dark:border-slate-800 pt-3">
+                    <h4 className="text-xs font-bold text-slate-500 uppercase mb-3">Pagamento</h4>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs font-semibold text-slate-500 mb-1 block">Valor Total (R$)</label>
+                        <input type="number" step="0.01" value={formBallet.valor_total ?? ''} onChange={e => setFormBallet(f => ({ ...f, valor_total: e.target.value ? Number(e.target.value) : undefined }))}
+                          className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800" />
+                      </div>
+                      <div>
+                        <label className="text-xs font-semibold text-slate-500 mb-1 block">Entrada (R$)</label>
+                        <input type="number" step="0.01" value={formBallet.valor_entrada ?? ''} onChange={e => setFormBallet(f => ({ ...f, valor_entrada: e.target.value ? Number(e.target.value) : undefined }))}
+                          className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800" />
+                      </div>
+                      <div>
+                        <label className="text-xs font-semibold text-slate-500 mb-1 block">Data Entrada</label>
+                        <input type="date" value={formBallet.data_entrada ?? ''} onChange={e => setFormBallet(f => ({ ...f, data_entrada: e.target.value || undefined }))}
+                          className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800" />
+                      </div>
+                      <div>
+                        <label className="text-xs font-semibold text-slate-500 mb-1 block">Forma de Pagamento</label>
+                        <select value={formBallet.forma_pagamento ?? ''} onChange={e => setFormBallet(f => ({ ...f, forma_pagamento: e.target.value || undefined }))}
+                          className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800">
+                          <option value="">Selecione...</option>
+                          {['PIX', 'Dinheiro', 'Boleto', 'Cartão', 'Misto'].map(o => <option key={o}>{o}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-xs font-semibold text-slate-500 mb-1 block">Parcelas</label>
+                        <input type="number" min="1" max="12" value={formBallet.num_parcelas ?? ''} onChange={e => setFormBallet(f => ({ ...f, num_parcelas: e.target.value ? Number(e.target.value) : undefined }))}
+                          className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800" />
+                      </div>
+                      <div>
+                        <label className="text-xs font-semibold text-slate-500 mb-1 block">Valor por Parcela</label>
+                        <input type="number" step="0.01" value={formBallet.valor_parcela ?? ''} onChange={e => setFormBallet(f => ({ ...f, valor_parcela: e.target.value ? Number(e.target.value) : undefined }))}
+                          className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800" />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-3 mt-3">
+                      {(['venc_1', 'venc_2', 'venc_3'] as const).map((f, i) => (
+                        <div key={f}>
+                          <label className="text-xs font-semibold text-slate-500 mb-1 block">Venc. {i + 1}</label>
+                          <input type="date" value={(formBallet as any)[f] ?? ''} onChange={e => setFormBallet(p => ({ ...p, [f]: e.target.value || undefined }))}
+                            className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800" />
+                        </div>
+                      ))}
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 mt-3">
+                      <div>
+                        <label className="text-xs font-semibold text-slate-500 mb-1 block">Status Pagamento</label>
+                        <select value={formBallet.status_pagamento ?? 'pendente'} onChange={e => setFormBallet(f => ({ ...f, status_pagamento: e.target.value }))}
+                          className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800">
+                          {['pendente', 'parcial', 'quitado'].map(o => <option key={o}>{o}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-xs font-semibold text-slate-500 mb-1 block">Itens Pendentes</label>
+                        <input value={formBallet.itens_pendentes ?? ''} onChange={e => setFormBallet(f => ({ ...f, itens_pendentes: e.target.value || undefined }))} placeholder="Ex: falta sapatilha"
+                          className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800" />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Lançar pagamento no financeiro (apenas ao editar) */}
+                  {modalBallet.item && (
+                    <div className="border-t border-slate-100 dark:border-slate-800 pt-3">
+                      <button type="button" onClick={() => setMostrarFormPagamento(v => !v)}
+                        className="text-xs font-semibold text-pink-600 dark:text-pink-400 hover:underline">
+                        {mostrarFormPagamento ? '▲ Ocultar' : '▼ Lançar Pagamento no Financeiro'}
+                      </button>
+                      {mostrarFormPagamento && (
+                        <div className="mt-3 p-3 bg-slate-50 dark:bg-slate-800 rounded-xl space-y-3">
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="text-xs font-semibold text-slate-500 mb-1 block">Tipo</label>
+                              <select value={formPagamentoBallet.tipo} onChange={e => setFormPagamentoBallet(f => ({ ...f, tipo: e.target.value }))}
+                                className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-700">
+                                <option value="entrada">Entrada</option>
+                                <option value="parcela">Parcela</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className="text-xs font-semibold text-slate-500 mb-1 block">Valor (R$)</label>
+                              <input type="number" step="0.01" value={formPagamentoBallet.valor} onChange={e => setFormPagamentoBallet(f => ({ ...f, valor: e.target.value }))}
+                                className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-700" />
+                            </div>
+                            <div>
+                              <label className="text-xs font-semibold text-slate-500 mb-1 block">Data</label>
+                              <input type="date" value={formPagamentoBallet.data} onChange={e => setFormPagamentoBallet(f => ({ ...f, data: e.target.value }))}
+                                className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-700" />
+                            </div>
+                            <div>
+                              <label className="text-xs font-semibold text-slate-500 mb-1 block">Forma</label>
+                              <select value={formPagamentoBallet.forma_pagamento} onChange={e => setFormPagamentoBallet(f => ({ ...f, forma_pagamento: e.target.value }))}
+                                className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-700">
+                                {['PIX', 'Dinheiro', 'Boleto', 'Cartão', 'Misto'].map(o => <option key={o}>{o}</option>)}
+                              </select>
+                            </div>
+                          </div>
+                          <button onClick={lancarPagamentoBallet} disabled={salvandoPagamento}
+                            className="w-full py-2 bg-pink-500 text-white rounded-xl text-sm font-semibold hover:bg-pink-600 disabled:opacity-60">
+                            {salvandoPagamento ? 'Lançando...' : 'Confirmar Lançamento'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div className="flex gap-3 pt-2">
                   <button onClick={salvarBallet} disabled={salvandoBallet === 'form'}

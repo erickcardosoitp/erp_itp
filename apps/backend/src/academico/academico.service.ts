@@ -2195,9 +2195,13 @@ export class AcademicoService {
         (id, aluno_id, tamanho_roupa, numero_sapatilha, tamanho_meia,
          estoque_roupa_id, estoque_sapatilha_id,
          roupa_encomendada, sapatilha_encomendada,
-         roupa_entregue, sapatilha_entregue, status, observacoes,
-         created_at, updated_at)
-       VALUES (gen_random_uuid(),$1,$2,$3,$4,$5,$6,false,false,false,false,$7,$8,now(),now())
+         roupa_entregue, sapatilha_entregue,
+         itens_pendentes, valor_total, valor_entrada, data_entrada,
+         forma_pagamento, num_parcelas, valor_parcela,
+         venc_1, venc_2, venc_3, status_pagamento, movimentacao_ids,
+         status, observacoes, created_at, updated_at)
+       VALUES (gen_random_uuid(),$1,$2,$3,$4,$5,$6,false,false,false,false,
+               $7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,'[]'::jsonb,$18,$19,now(),now())
        RETURNING id`,
       [
         dto.aluno_id,
@@ -2206,6 +2210,17 @@ export class AcademicoService {
         dto.tamanho_meia ?? null,
         dto.estoque_roupa_id ?? null,
         dto.estoque_sapatilha_id ?? null,
+        dto.itens_pendentes ?? null,
+        dto.valor_total ?? null,
+        dto.valor_entrada ?? null,
+        dto.data_entrada ?? null,
+        dto.forma_pagamento ?? null,
+        dto.num_parcelas ?? null,
+        dto.valor_parcela ?? null,
+        dto.venc_1 ?? null,
+        dto.venc_2 ?? null,
+        dto.venc_3 ?? null,
+        dto.status_pagamento ?? 'pendente',
         dto.status ?? 'Pendente',
         dto.observacoes ?? null,
       ],
@@ -2242,19 +2257,30 @@ export class AcademicoService {
 
     await this.dataSource.query(
       `UPDATE controles_ballet SET
-        tamanho_roupa       = COALESCE($1, tamanho_roupa),
-        numero_sapatilha    = COALESCE($2, numero_sapatilha),
-        tamanho_meia        = COALESCE($3, tamanho_meia),
-        estoque_roupa_id    = COALESCE($4, estoque_roupa_id),
-        estoque_sapatilha_id= COALESCE($5, estoque_sapatilha_id),
-        roupa_encomendada   = $6,
+        tamanho_roupa         = COALESCE($1, tamanho_roupa),
+        numero_sapatilha      = COALESCE($2, numero_sapatilha),
+        tamanho_meia          = COALESCE($3, tamanho_meia),
+        estoque_roupa_id      = COALESCE($4, estoque_roupa_id),
+        estoque_sapatilha_id  = COALESCE($5, estoque_sapatilha_id),
+        roupa_encomendada     = $6,
         sapatilha_encomendada = $7,
-        roupa_entregue      = $8,
-        sapatilha_entregue  = $9,
-        status              = COALESCE($10, status),
-        observacoes         = COALESCE($11, observacoes),
-        updated_at          = now()
-       WHERE id = $12`,
+        roupa_entregue        = $8,
+        sapatilha_entregue    = $9,
+        status                = COALESCE($10, status),
+        observacoes           = COALESCE($11, observacoes),
+        itens_pendentes       = COALESCE($12, itens_pendentes),
+        valor_total           = COALESCE($13, valor_total),
+        valor_entrada         = COALESCE($14, valor_entrada),
+        data_entrada          = COALESCE($15, data_entrada),
+        forma_pagamento       = COALESCE($16, forma_pagamento),
+        num_parcelas          = COALESCE($17, num_parcelas),
+        valor_parcela         = COALESCE($18, valor_parcela),
+        venc_1                = COALESCE($19, venc_1),
+        venc_2                = COALESCE($20, venc_2),
+        venc_3                = COALESCE($21, venc_3),
+        status_pagamento      = COALESCE($22, status_pagamento),
+        updated_at            = now()
+       WHERE id = $23`,
       [
         dto.tamanho_roupa ?? null,
         dto.numero_sapatilha ?? null,
@@ -2267,6 +2293,17 @@ export class AcademicoService {
         dto.sapatilha_entregue ?? current.sapatilha_entregue,
         dto.status ?? null,
         dto.observacoes ?? null,
+        dto.itens_pendentes ?? null,
+        dto.valor_total ?? null,
+        dto.valor_entrada ?? null,
+        dto.data_entrada ?? null,
+        dto.forma_pagamento ?? null,
+        dto.num_parcelas ?? null,
+        dto.valor_parcela ?? null,
+        dto.venc_1 ?? null,
+        dto.venc_2 ?? null,
+        dto.venc_3 ?? null,
+        dto.status_pagamento ?? null,
         id,
       ],
     );
@@ -2276,5 +2313,60 @@ export class AcademicoService {
   async deletarControleBallet(id: string) {
     await this.dataSource.query(`DELETE FROM controles_ballet WHERE id = $1`, [id]);
     return { ok: true };
+  }
+
+  async lancarPagamentoBallet(id: string, body: {
+    tipo: 'entrada' | 'parcela';
+    valor: number;
+    data: string;
+    forma_pagamento: string;
+    descricao?: string;
+  }) {
+    const [controle] = await this.dataSource.query(
+      `SELECT cb.*, a.nome_completo AS aluno_nome
+       FROM controles_ballet cb
+       LEFT JOIN alunos a ON a.id::text = cb.aluno_id
+       WHERE cb.id = $1`,
+      [id],
+    );
+    if (!controle) throw new Error('Controle ballet não encontrado');
+
+    // Cria movimentação financeira
+    const descricao = body.descricao || `Ballet - ${controle.aluno_nome ?? 'Aluno'} - ${body.tipo}`;
+    const [nova] = await this.dataSource.query(
+      `INSERT INTO movimentacoes_financeiras
+         (id, nome, tipo_movimentacao, valor, data, forma_pagamento, status, categoria, plano_contas, created_at, updated_at)
+       VALUES (gen_random_uuid(), $1, 'Receita', $2, $3, $4, 'Pago', 'Ballet', 'Uniforme', now(), now())
+       RETURNING id`,
+      [descricao, body.valor, body.data, body.forma_pagamento],
+    );
+
+    // Atualiza movimentacao_ids do controle
+    const idsAtuais: string[] = Array.isArray(controle.movimentacao_ids) ? controle.movimentacao_ids : [];
+    const novosIds = [...idsAtuais, nova.id];
+    await this.dataSource.query(
+      `UPDATE controles_ballet SET movimentacao_ids = $1::jsonb, updated_at = now() WHERE id = $2`,
+      [JSON.stringify(novosIds), id],
+    );
+
+    // Recalcula status_pagamento somando movimentações associadas
+    const somaPaga = await this.dataSource.query(
+      `SELECT COALESCE(SUM(valor), 0) AS total
+       FROM movimentacoes_financeiras
+       WHERE id = ANY($1::uuid[]) AND status IN ('Pago', 'Confirmado')`,
+      [novosIds],
+    );
+    const totalPago = Number(somaPaga[0]?.total ?? 0);
+    const valorTotal = Number(controle.valor_total ?? 0);
+    let statusPagamento = 'pendente';
+    if (totalPago > 0 && valorTotal > 0 && totalPago >= valorTotal) statusPagamento = 'quitado';
+    else if (totalPago > 0) statusPagamento = 'parcial';
+
+    await this.dataSource.query(
+      `UPDATE controles_ballet SET status_pagamento = $1 WHERE id = $2`,
+      [statusPagamento, id],
+    );
+
+    return { ok: true, movimentacao_id: nova.id, status_pagamento: statusPagamento, total_pago: totalPago };
   }
 }

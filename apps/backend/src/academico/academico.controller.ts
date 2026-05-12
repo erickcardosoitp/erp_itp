@@ -453,4 +453,10 @@ export class AcademicoController {
   @Delete('controle-ballet/:id')
   @ModuloPerm('academico', 'excluir')
   deletarControleBallet(@Param('id') id: string) { return this.svc.deletarControleBallet(id); }
+
+  @Post('controle-ballet/:id/pagamento')
+  @ModuloPerm('academico', 'editar')
+  lancarPagamentoBallet(@Param('id') id: string, @Body() body: any) {
+    return this.svc.lancarPagamentoBallet(id, body);
+  }
 }
