@@ -29,8 +29,9 @@ function fmtDate(v?: string) {
 
 function calcIdade(dob?: string) {
   if (!dob) return null;
-  const diff = Date.now() - new Date(dob).getTime();
-  return Math.floor(diff / (365.25 * 24 * 3600 * 1000));
+  const diff = Date.now() - new Date(dob.slice(0, 10) + 'T12:00:00').getTime();
+  const age = Math.floor(diff / (365.25 * 24 * 3600 * 1000));
+  return isNaN(age) ? null : age;
 }
 
 export default function ProjetoDashboard() {

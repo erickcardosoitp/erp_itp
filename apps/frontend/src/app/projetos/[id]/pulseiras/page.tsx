@@ -19,8 +19,10 @@ interface Projeto {
 
 function calcIdade(dob?: string) {
   if (!dob) return null;
-  const diff = Date.now() - new Date(dob + 'T12:00:00').getTime();
-  return Math.floor(diff / (365.25 * 24 * 3600 * 1000));
+  const dateOnly = dob.slice(0, 10);
+  const diff = Date.now() - new Date(dateOnly + 'T12:00:00').getTime();
+  const age = Math.floor(diff / (365.25 * 24 * 3600 * 1000));
+  return isNaN(age) ? null : age;
 }
 
 // ── Componente Pulseira ───────────────────────────────────────────────────────
