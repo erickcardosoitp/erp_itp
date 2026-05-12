@@ -72,30 +72,33 @@ function Pulseira({ ins, equipe, largura, altura }: {
         fontFamily: 'Arial, sans-serif',
       }}>
 
-      {/* Linha 1: cuidado especial + equipe */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', minHeight: `${altura * 0.22}mm` }}>
-        {temCuidado ? (
-          <span style={{
-            background: '#dc2626', color: 'white',
-            fontSize: `${Math.max(4, altura * 0.18)}pt`, fontWeight: 900,
-            padding: '0.3mm 1mm', borderRadius: '1mm', lineHeight: 1.2,
-            maxWidth: '55%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-          }}>
-            ⚠ {ins.cuidado_especial}
-          </span>
-        ) : <span />}
+      {/* Faixa de alerta — ocupa toda a largura quando há cuidado especial */}
+      {temCuidado && (
+        <div style={{
+          background: '#dc2626', color: 'white',
+          fontSize: `${Math.max(5, altura * 0.22)}pt`, fontWeight: 900,
+          textAlign: 'center', letterSpacing: '0.02em',
+          padding: '0.8mm 1mm', lineHeight: 1.2,
+          margin: '-1.5mm -1.5mm 1mm -1.5mm',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>
+          ⚠ {ins.cuidado_especial}{ins.detalhes_cuidado ? ` — ${ins.detalhes_cuidado}` : ''}
+        </div>
+      )}
 
-        {equipe && (
+      {/* Linha 1: equipe */}
+      {equipe && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.5mm' }}>
           <span style={{
             background: equipe.cor, color: 'white',
             fontSize: `${Math.max(4, altura * 0.18)}pt`, fontWeight: 900,
             padding: '0.3mm 1.5mm', borderRadius: '1mm', lineHeight: 1.2,
-            maxWidth: '50%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            maxWidth: '60%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}>
             {equipe.nome}
           </span>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Linha 2: nome + idade */}
       <div style={{
