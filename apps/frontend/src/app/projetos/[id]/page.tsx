@@ -378,6 +378,8 @@ export default function ProjetoDashboard() {
                               data_nascimento: a.data_nascimento,
                               nome_responsavel: a.nome_responsavel,
                               telefone_responsavel: a.telefone_alternativo,
+                              cuidado_especial: a.cuidado_especial || '',
+                              detalhes_cuidado: a.detalhes_cuidado || '',
                             };
                             setAlunoSelecionado(a);
                             setFormInscricao(dados);
@@ -491,6 +493,14 @@ export default function ProjetoDashboard() {
                       placeholder="ex: Alérgico a glúten, TEA..."
                       className="mt-1 w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-400" />
                   </div>
+                  {formInscricao.cuidado_especial && (
+                    <div>
+                      <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Detalhes</label>
+                      <input value={formInscricao.detalhes_cuidado ?? ''} onChange={e => setFormInscricao(p => ({ ...p, detalhes_cuidado: e.target.value }))}
+                        placeholder="Descreva o cuidado necessário..."
+                        className="mt-1 w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-400" />
+                    </div>
+                  )}
                 </>
               )}
 
