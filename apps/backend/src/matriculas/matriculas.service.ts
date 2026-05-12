@@ -1179,4 +1179,30 @@ export class MatriculasService {
     if (!doc) throw new NotFoundException('Documento não encontrado.');
     await this.documentoRepository.remove(doc);
   }
+
+  async limparDesistentes(): Promise<{ deletados: number }> {
+    const result = await this.dataSource.query(
+      `DELETE FROM inscricoes WHERE status_matricula = 'Desistente' RETURNING id`,
+    );
+    return { deletados: result.length };
+  }
+
+  async sincronizarNomeAluno(matricula: string): Promise<{ ok: boolean; nome_antigo: string; nome_novo: string }> {
+    const rows = await this.dataSource.query(
+      `SELECT i.id, i.nome_completo as nome_antigo, i.aluno_id,
+              a.nome_completo as nome_aluno
+       FROM inscricoes i
+       JOIN alunos a ON a.id = i.aluno_id
+       WHERE i.numero_matricula = $1
+       LIMIT 1`,
+      [matricula],
+    );
+    if (!rows.length) throw new NotFoundException('Matrícula não encontrada');
+    const { id, nome_antigo, nome_aluno } = rows[0];
+    await this.dataSource.query(
+      `UPDATE inscricoes SET nome_completo = $1 WHERE id = $2`,
+      [nome_aluno, id],
+    );
+    return { ok: true, nome_antigo, nome_novo: nome_aluno };
+  }
 }

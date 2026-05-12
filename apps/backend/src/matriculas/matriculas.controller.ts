@@ -301,4 +301,16 @@ export class MatriculasController {
     if (!tipoEnum) throw new BadRequestException('Tipo de documento inválido.');
     return await this.matriculasService.uploadDocumentoAdmin(id, tipoEnum, file, nomeExtra);
   }
+
+  @Delete('cleanup/desistentes')
+  @ModuloPerm('matriculas', 'excluir')
+  async limparDesistentes() {
+    return await this.matriculasService.limparDesistentes();
+  }
+
+  @Post('cleanup/sincronizar-nome/:matricula')
+  @ModuloPerm('matriculas', 'editar')
+  async sincronizarNome(@Param('matricula') matricula: string) {
+    return await this.matriculasService.sincronizarNomeAluno(matricula);
+  }
 }

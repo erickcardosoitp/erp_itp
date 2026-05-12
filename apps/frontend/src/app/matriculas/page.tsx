@@ -203,10 +203,10 @@ export default function GestaoMatriculas() {
         cidade:               t(formDireto.cidade),
         estado_uf:            t(formDireto.estado_uf),
         maior_18_anos:        !menorDeIdadeDireto,
-        nome_responsavel:     menorDeIdadeDireto ? t(formDireto.nome_responsavel) : undefined,
-        email_responsavel:    menorDeIdadeDireto ? t(formDireto.email_responsavel) : undefined,
-        grau_parentesco:      menorDeIdadeDireto ? t(formDireto.grau_parentesco) : undefined,
-        cpf_responsavel:      menorDeIdadeDireto ? t(formDireto.cpf_responsavel) : undefined,
+        nome_responsavel:     (menorDeIdadeDireto || formDireto.curso_especial) ? t(formDireto.nome_responsavel) : undefined,
+        email_responsavel:    (menorDeIdadeDireto || formDireto.curso_especial) ? t(formDireto.email_responsavel) : undefined,
+        grau_parentesco:      (menorDeIdadeDireto || formDireto.curso_especial) ? t(formDireto.grau_parentesco) : undefined,
+        cpf_responsavel:      (menorDeIdadeDireto || formDireto.curso_especial) ? t(formDireto.cpf_responsavel) : undefined,
         telefone_alternativo: t(formDireto.telefone_alternativo),
         possui_alergias:      formDireto.possui_alergias || undefined,
         cuidado_especial:     formDireto.cuidado_especial || undefined,
@@ -878,10 +878,12 @@ export default function GestaoMatriculas() {
                     </div>
                   </fieldset>
 
-                  {/* ── Responsável (somente menores) ── */}
-                  {menorDeIdadeDireto && (
+                  {/* ── Responsável (menores ou curso especial) ── */}
+                  {(menorDeIdadeDireto || formDireto.curso_especial) && (
                     <fieldset className="space-y-3 border border-orange-200 rounded-2xl p-4 bg-orange-50">
-                      <legend className="text-[9px] font-black uppercase tracking-widest text-orange-500 px-1">Responsável (menor de idade)</legend>
+                      <legend className="text-[9px] font-black uppercase tracking-widest text-orange-500 px-1">
+                        {menorDeIdadeDireto ? 'Responsável (menor de idade)' : 'Nome da Mãe / Responsável'}
+                      </legend>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div className="sm:col-span-2">
                           <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Nome Completo do Responsável</label>
@@ -1008,15 +1010,10 @@ export default function GestaoMatriculas() {
                                 className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 uppercase" />
                             </div>
                             <div className="sm:col-span-3">
-                              <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Gênero</label>
-                              <select value={formDireto.genero} onChange={e => setFormDireto((p: any) => ({ ...p, genero: e.target.value }))}
-                                className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white">
-                                <option value="">Selecione...</option>
-                                <option value="masculino">Masculino</option>
-                                <option value="feminino">Feminino</option>
-                                <option value="nao_binario">Não-binário</option>
-                                <option value="prefiro_nao_informar">Prefiro não informar</option>
-                              </select>
+                              <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Gênero (texto livre)</label>
+                              <input value={formDireto.genero} onChange={e => setFormDireto((p: any) => ({ ...p, genero: e.target.value }))}
+                                placeholder="Ex: feminino, masculino, não-binário..."
+                                className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400" />
                             </div>
                           </div>
                         </fieldset>
