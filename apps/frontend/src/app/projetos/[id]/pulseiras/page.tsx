@@ -9,7 +9,7 @@ interface Equipe { id: string; nome: string; cor: string; }
 interface Inscricao {
   id: string; nome_completo: string; data_nascimento?: string;
   nome_responsavel?: string; telefone_responsavel?: string;
-  cuidado_especial?: string; equipe_id?: string; equipe?: Equipe;
+  cuidado_especial?: string; detalhes_cuidado?: string; equipe_id?: string; equipe?: Equipe;
   endereco?: string;
 }
 interface Projeto {
