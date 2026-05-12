@@ -45,11 +45,29 @@ function Pulseira({ ins, equipe, largura, altura }: {
           displayValue: false,
           margin: 0,
           height: Math.max(10, altura * 0.9),
-          width: 1,
+          width: 2,
           background: 'transparent',
         });
       } catch {}
     });
+  }, [ins.id, altura]);
+
+  // Re-renderiza o barcode com largura maior antes de imprimir
+  useEffect(() => {
+    const beforePrint = () => {
+      if (!barcodeRef.current) return;
+      import('jsbarcode').then(({ default: JsBarcode }) => {
+        try {
+          JsBarcode(barcodeRef.current, ins.id, {
+            format: 'CODE128', displayValue: false,
+            margin: 0, height: Math.max(10, altura * 0.9),
+            width: 3, background: 'transparent',
+          });
+        } catch {}
+      });
+    };
+    window.addEventListener('beforeprint', beforePrint);
+    return () => window.removeEventListener('beforeprint', beforePrint);
   }, [ins.id, altura]);
 
   return (
@@ -271,7 +289,12 @@ export default function PulseirasPage() {
       <style jsx global>{`
         @media print {
           body * { visibility: hidden !important; }
-          .print-only, .print-only * { visibility: visible !important; }
+          .print-only, .print-only * {
+            visibility: visible !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            color-adjust: exact !important;
+          }
           .print-only {
             position: absolute;
             top: 0; left: 0;
@@ -280,6 +303,10 @@ export default function PulseirasPage() {
             flex-wrap: wrap;
             gap: 3mm;
             padding: 0;
+          }
+          .pulseira-container * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
           }
           @page { margin: 5mm; size: auto; }
         }
