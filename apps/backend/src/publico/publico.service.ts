@@ -19,6 +19,7 @@ export class PublicoService {
       alunos,
       cursos,
       voluntarios,
+      custoBenef,
     ] = await Promise.all([
       // Totais do período
       this.ds.query<{ tipo: string; total: string }[]>(`
@@ -93,6 +94,16 @@ export class PublicoService {
       this.ds.query<{ total: string }[]>(`
         SELECT COUNT(*) AS total FROM gente_colaboradores WHERE ativo = true
       `),
+
+      // Custo por beneficiário do período
+      this.ds.query<{ total_investido: string }[]>(`
+        SELECT COALESCE(SUM(valor), 0)::numeric AS total_investido
+        FROM movimentacoes_financeiras
+        WHERE EXTRACT(YEAR FROM data) = $1
+          ${mesFiltro ? `AND EXTRACT(MONTH FROM data) = ${parseInt(mesFiltro)}` : ''}
+          AND tipo_movimentacao IN ('Despesa', 'Saída')
+          AND status IN ('Pago', 'Confirmado')
+      `, [anoFiltro]),
     ]);
 
     const totalReceitas = resumoFinanceiro
@@ -130,6 +141,11 @@ export class PublicoService {
         totalReceitas,
         totalDespesas,
         saldo: totalReceitas - totalDespesas,
+        totalInvestido: parseFloat(custoBenef[0]?.total_investido ?? '0'),
+        beneficiarios: parseInt(alunos[0]?.total ?? '0'),
+        custoMedio: parseInt(alunos[0]?.total ?? '0') > 0
+          ? parseFloat(custoBenef[0]?.total_investido ?? '0') / parseInt(alunos[0]?.total ?? '0')
+          : 0,
       },
       porMes: porMesAgrupado,
       porCategoria: porCategoria.map(r => ({
