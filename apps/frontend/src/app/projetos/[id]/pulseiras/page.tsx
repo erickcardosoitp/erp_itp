@@ -32,7 +32,7 @@ interface TplPos {
 }
 
 const DEFAULT_POS: TplPos = {
-  fotoTop: 28, fotoLeft: 13, fotoW: 74, fotoH: 38,
+  fotoTop: 37, fotoLeft: 13, fotoW: 74, fotoH: 30,
   row1Top: 69, row1H: 9,
   row2Top: 79, row2H: 8,
   row3Top: 88, row3H: 7,
@@ -60,7 +60,8 @@ function CrachaComTemplate({ ins, equipe, largura, altura, pos }: {
   ins: Inscricao; equipe: Equipe; largura: number; altura: number; pos: TplPos;
 }) {
   const idade = calcIdade(ins.data_nascimento);
-  const temCuidado = ins.cuidado_especial && ins.cuidado_especial !== 'Não';
+  const temCuidado = ins.cuidado_especial && ins.cuidado_especial !== 'Não' && ins.cuidado_especial !== 'Nao';
+  const detalhe = ins.detalhes_cuidado && ins.detalhes_cuidado !== 'Nao' && ins.detalhes_cuidado !== 'Não' ? ins.detalhes_cuidado : null;
   const nomeLen = ins.nome_completo.length;
   // Font em mm, proporcional à altura do crachá
   const fSizeMm = Math.max(1.6, (altura * 0.036) - Math.max(0, nomeLen - 18) * 0.04);
@@ -134,7 +135,7 @@ function CrachaComTemplate({ ins, equipe, largura, altura, pos }: {
       {/* Row 3: Cuidados */}
       <div style={cell(pos.row3Top, pos.padLR, pos.padLR, undefined, pos.row3H)}>
         <span style={{ fontSize: `${infoSizeMm}mm`, color: temCuidado ? '#dc2626' : '#aaa', fontWeight: temCuidado ? 700 : 400, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>
-          {temCuidado ? `⚠ ${ins.cuidado_especial}${ins.detalhes_cuidado ? `: ${ins.detalhes_cuidado}` : ''}` : ''}
+          {temCuidado ? `⚠ ${ins.cuidado_especial}${detalhe ? `: ${detalhe}` : ''}` : ''}
         </span>
       </div>
 
@@ -153,7 +154,8 @@ function CrachaLimpo({ ins, equipe, largura, altura }: {
   ins: Inscricao; equipe?: Equipe; largura: number; altura: number;
 }) {
   const idade = calcIdade(ins.data_nascimento);
-  const temCuidado = ins.cuidado_especial && ins.cuidado_especial !== 'Não';
+  const temCuidado = ins.cuidado_especial && ins.cuidado_especial !== 'Não' && ins.cuidado_especial !== 'Nao';
+  const detalhe = ins.detalhes_cuidado && ins.detalhes_cuidado !== 'Nao' && ins.detalhes_cuidado !== 'Não' ? ins.detalhes_cuidado : null;
   const cor = equipe?.cor ?? '#7c3aed';
   const nomeLen = ins.nome_completo.length;
   const fSizeMm = Math.max(1.6, (altura * 0.036) - Math.max(0, nomeLen - 18) * 0.04);
@@ -192,7 +194,7 @@ function CrachaLimpo({ ins, equipe, largura, altura }: {
         </div>
         <div style={{ fontSize: `${infoSizeMm}mm`, color: '#666', lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ins.endereco || '—'}</div>
         <div style={{ fontSize: `${infoSizeMm}mm`, lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: temCuidado ? '#dc2626' : '#bbb', fontWeight: temCuidado ? 700 : 400 }}>
-          {temCuidado ? `⚠ ${ins.cuidado_especial}${ins.detalhes_cuidado ? `: ${ins.detalhes_cuidado}` : ''}` : 'Sem cuidados especiais'}
+          {temCuidado ? `⚠ ${ins.cuidado_especial}${detalhe ? `: ${detalhe}` : ''}` : 'Sem cuidados especiais'}
         </div>
       </div>
       <div style={{ background: cor, color: 'white', textAlign: 'center', fontWeight: 900, height: `${barH}mm`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: `${Math.max(1.4, barH * 0.45)}mm`, letterSpacing: '0.06em', textTransform: 'uppercase', flexShrink: 0 }}>
