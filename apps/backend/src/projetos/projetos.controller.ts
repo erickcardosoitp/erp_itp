@@ -69,7 +69,7 @@ export class ProjetosController {
     if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype))
       throw new BadRequestException('Use JPEG, PNG ou WebP.');
     const dataUrl = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
-    return this.svc.updateEquipe(id, eqId, { imagem_template: dataUrl });
+    return this.svc.updateEquipe(id, eqId, { imagem_template: dataUrl } as any);
   }
 
   // ── Inscrições ────────────────────────────────────────────────────────────
