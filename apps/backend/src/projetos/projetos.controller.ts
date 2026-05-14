@@ -1,7 +1,9 @@
 import {
   Controller, Get, Post, Patch, Delete,
-  Param, Body, Query,
+  Param, Body, Query, UseInterceptors, UploadedFile, BadRequestException,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 import { ProjetosService } from './projetos.service';
 import { CreateProjetoDto } from './dto/create-projeto.dto';
 import { CreateEquipeDto } from './dto/create-equipe.dto';
@@ -54,6 +56,20 @@ export class ProjetosController {
   @Delete(':id/equipes/:eqId')
   removeEquipe(@Param('id') id: string, @Param('eqId') eqId: string) {
     return this.svc.removeEquipe(id, eqId);
+  }
+
+  @Post(':id/equipes/:eqId/template')
+  @UseInterceptors(FileInterceptor('arquivo', { storage: memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } }))
+  async uploadTemplate(
+    @Param('id') id: string,
+    @Param('eqId') eqId: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!file) throw new BadRequestException('Nenhum arquivo enviado.');
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype))
+      throw new BadRequestException('Use JPEG, PNG ou WebP.');
+    const dataUrl = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
+    return this.svc.updateEquipe(id, eqId, { imagem_template: dataUrl });
   }
 
   // ── Inscrições ────────────────────────────────────────────────────────────

@@ -224,6 +224,9 @@ export class AppModule implements OnModuleInit {
       await this.dataSource.query(`ALTER TABLE movimentacoes_financeiras ADD COLUMN IF NOT EXISTS usuario_nome VARCHAR`);
       this.logger.log('✅ usuario_nome em movimentacoes_financeiras aplicado');
 
+      await this.dataSource.query(`ALTER TABLE projeto_equipes ADD COLUMN IF NOT EXISTS imagem_template TEXT`);
+      this.logger.log('✅ imagem_template em projeto_equipes aplicado');
+
       // Remove FK indevida em grade_horaria (professor_id pode ser de usuarios, não só professores)
       await this.dataSource.query(`ALTER TABLE grade_horaria DROP CONSTRAINT IF EXISTS grade_horaria_professor_id_fkey`);
       // Remove hora_inicio/hora_fim da turma (horários ficam apenas por dia na grade_horaria)

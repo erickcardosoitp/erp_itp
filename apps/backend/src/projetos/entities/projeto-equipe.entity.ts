@@ -24,6 +24,9 @@ export class ProjetoEquipe {
   @Column({ type: 'varchar', default: '#7c3aed' })
   cor: string;
 
+  @Column({ name: 'imagem_template', type: 'text', nullable: true })
+  imagem_template: string | null;
+
   @Column({ name: 'faixa_min', type: 'int', nullable: true })
   faixa_min: number | null;
 
