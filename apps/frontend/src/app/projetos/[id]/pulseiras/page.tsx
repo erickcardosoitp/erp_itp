@@ -32,14 +32,21 @@ interface TplPos {
 }
 
 const DEFAULT_POS: TplPos = {
-  fotoTop: 36, fotoLeft: 17, fotoW: 66, fotoH: 33,
-  row1Top: 70, row1H: 7,
-  row2Top: 78, row2H: 6,
-  row3Top: 85, row3H: 6,
-  row4Top: 92, row4H: 6,
-  colEsqW: 43, colDirLeft: 50, colDirW: 45,
-  padLR: 4,
+  fotoTop: 28, fotoLeft: 13, fotoW: 74, fotoH: 38,
+  row1Top: 69, row1H: 9,
+  row2Top: 79, row2H: 8,
+  row3Top: 88, row3H: 7,
+  row4Top: 95, row4H: 5,
+  colEsqW: 58, colDirLeft: 60, colDirW: 37,
+  padLR: 2,
 };
+
+// Presets: [label, largura, altura]
+const PRESETS: [string, number, number][] = [
+  ['4×4 A4', 48, 58],
+  ['3×4 A4', 64, 70],
+  ['2×3 A4', 95, 90],
+];
 
 function calcIdade(dob?: string) {
   if (!dob) return null;
@@ -55,8 +62,9 @@ function CrachaComTemplate({ ins, equipe, largura, altura, pos }: {
   const idade = calcIdade(ins.data_nascimento);
   const temCuidado = ins.cuidado_especial && ins.cuidado_especial !== 'Não';
   const nomeLen = ins.nome_completo.length;
-  const fSize = Math.max(3.5, 6.5 - Math.max(0, nomeLen - 16) * 0.15);
-  const infoSize = Math.max(3, fSize - 1);
+  // Font em mm, proporcional à altura do crachá
+  const fSizeMm = Math.max(1.6, (altura * 0.036) - Math.max(0, nomeLen - 18) * 0.04);
+  const infoSizeMm = Math.max(1.3, fSizeMm * 0.8);
 
   const cell = (top: number, left: number | undefined, right: number | undefined, w: number | undefined, h: number): React.CSSProperties => ({
     position: 'absolute',
@@ -104,35 +112,35 @@ function CrachaComTemplate({ ins, equipe, largura, altura, pos }: {
 
       {/* Row 1 esq: Nome | Idade */}
       <div style={cell(pos.row1Top, pos.padLR, undefined, pos.colEsqW, pos.row1H)}>
-        <span style={{ fontWeight: 900, fontSize: `${fSize}pt`, color: '#1a1a1a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>
+        <span style={{ fontWeight: 900, fontSize: `${fSizeMm}mm`, color: '#1a1a1a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>
           {ins.nome_completo}{idade !== null ? ` | ${idade}a` : ''}
         </span>
       </div>
 
       {/* Row 1 dir: Telefone */}
       <div style={cell(pos.row1Top, pos.colDirLeft, undefined, pos.colDirW, pos.row1H)}>
-        <span style={{ fontSize: `${infoSize}pt`, color: '#333', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>
+        <span style={{ fontSize: `${infoSizeMm}mm`, color: '#333', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>
           {ins.telefone_responsavel ?? ''}
         </span>
       </div>
 
       {/* Row 2: Endereço */}
       <div style={cell(pos.row2Top, pos.padLR, pos.padLR, undefined, pos.row2H)}>
-        <span style={{ fontSize: `${infoSize}pt`, color: '#444', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>
+        <span style={{ fontSize: `${infoSizeMm}mm`, color: '#444', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>
           {ins.endereco ?? ''}
         </span>
       </div>
 
       {/* Row 3: Cuidados */}
       <div style={cell(pos.row3Top, pos.padLR, pos.padLR, undefined, pos.row3H)}>
-        <span style={{ fontSize: `${infoSize}pt`, color: temCuidado ? '#dc2626' : '#aaa', fontWeight: temCuidado ? 700 : 400, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>
+        <span style={{ fontSize: `${infoSizeMm}mm`, color: temCuidado ? '#dc2626' : '#aaa', fontWeight: temCuidado ? 700 : 400, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>
           {temCuidado ? `⚠ ${ins.cuidado_especial}${ins.detalhes_cuidado ? `: ${ins.detalhes_cuidado}` : ''}` : ''}
         </span>
       </div>
 
       {/* Row 4: Equipe */}
       <div style={cell(pos.row4Top, pos.padLR, pos.padLR, undefined, pos.row4H)}>
-        <span style={{ fontSize: `${infoSize}pt`, fontWeight: 700, color: equipe.cor, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>
+        <span style={{ fontSize: `${infoSizeMm}mm`, fontWeight: 700, color: equipe.cor, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>
           {equipe.nome}
         </span>
       </div>
@@ -148,9 +156,9 @@ function CrachaLimpo({ ins, equipe, largura, altura }: {
   const temCuidado = ins.cuidado_especial && ins.cuidado_especial !== 'Não';
   const cor = equipe?.cor ?? '#7c3aed';
   const nomeLen = ins.nome_completo.length;
-  const fSize = Math.max(5, 7.5 - Math.max(0, nomeLen - 16) * 0.15);
-  const infoSize = Math.max(4, fSize - 1.2);
-  const barH = Math.max(5, altura * 0.1);
+  const fSizeMm = Math.max(1.6, (altura * 0.036) - Math.max(0, nomeLen - 18) * 0.04);
+  const infoSizeMm = Math.max(1.3, fSizeMm * 0.8);
+  const barH = Math.max(4, altura * 0.08);
   const fotoMm = Math.min(Math.round(largura * 0.85), Math.round(altura * 0.42));
   const initials = ins.nome_completo.trim().split(/\s+/).slice(0, 2).map(n => n[0]).join('').toUpperCase();
 
@@ -175,19 +183,19 @@ function CrachaLimpo({ ins, equipe, largura, altura }: {
       </div>
       <div style={{ flex: 1, padding: '0 1.5mm', display: 'flex', flexDirection: 'column', gap: '0.5mm', overflow: 'hidden', minHeight: 0 }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1mm' }}>
-          <span style={{ flex: 1, fontWeight: 900, fontSize: `${fSize}pt`, color: '#111', lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <span style={{ flex: 1, fontWeight: 900, fontSize: `${fSizeMm}mm`, color: '#111', lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {ins.nome_completo}{idade !== null ? ` | ${idade}a` : ''}
           </span>
           {ins.telefone_responsavel && (
-            <span style={{ fontSize: `${infoSize}pt`, color: '#555', lineHeight: 1.2, whiteSpace: 'nowrap', flexShrink: 0 }}>{ins.telefone_responsavel}</span>
+            <span style={{ fontSize: `${infoSizeMm}mm`, color: '#555', lineHeight: 1.2, whiteSpace: 'nowrap', flexShrink: 0 }}>{ins.telefone_responsavel}</span>
           )}
         </div>
-        <div style={{ fontSize: `${infoSize}pt`, color: '#666', lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ins.endereco || '—'}</div>
-        <div style={{ fontSize: `${infoSize}pt`, lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: temCuidado ? '#dc2626' : '#bbb', fontWeight: temCuidado ? 700 : 400 }}>
+        <div style={{ fontSize: `${infoSizeMm}mm`, color: '#666', lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ins.endereco || '—'}</div>
+        <div style={{ fontSize: `${infoSizeMm}mm`, lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: temCuidado ? '#dc2626' : '#bbb', fontWeight: temCuidado ? 700 : 400 }}>
           {temCuidado ? `⚠ ${ins.cuidado_especial}${ins.detalhes_cuidado ? `: ${ins.detalhes_cuidado}` : ''}` : 'Sem cuidados especiais'}
         </div>
       </div>
-      <div style={{ background: cor, color: 'white', textAlign: 'center', fontWeight: 900, height: `${barH}mm`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: `${Math.max(4.5, barH * 0.55)}pt`, letterSpacing: '0.06em', textTransform: 'uppercase', flexShrink: 0 }}>
+      <div style={{ background: cor, color: 'white', textAlign: 'center', fontWeight: 900, height: `${barH}mm`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: `${Math.max(1.4, barH * 0.45)}mm`, letterSpacing: '0.06em', textTransform: 'uppercase', flexShrink: 0 }}>
         {equipe?.nome ?? '—'}
       </div>
     </div>
@@ -288,7 +296,7 @@ export default function CrachasPage() {
   const gridStyle: React.CSSProperties = {
     display: 'grid',
     gridTemplateColumns: `repeat(${colunas}, ${largura}mm)`,
-    gap: '3mm',
+    gap: '2mm',
     padding: '5mm',
   };
 
@@ -314,6 +322,17 @@ export default function CrachasPage() {
                 <option key={e.id} value={e.id}>{e.nome} ({inscritos.filter(i => i.equipe_id === e.id).length})</option>
               ))}
             </select>
+
+            {/* Presets */}
+            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 rounded-xl px-2 py-1.5">
+              <span className="text-[10px] font-black uppercase text-slate-500 mr-1">preset</span>
+              {PRESETS.map(([label, w, h]) => (
+                <button key={label} onClick={() => { setLargura(w); setAltura(h); }}
+                  className={`text-[10px] font-bold px-2 py-1 rounded-lg transition-colors ${largura === w && altura === h ? 'bg-purple-600 text-white' : 'text-slate-500 hover:text-slate-800 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700'}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
 
             {/* Dimensões */}
             <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 rounded-xl px-3 py-1.5">
