@@ -456,6 +456,10 @@ export class AcademicoService {
           for (const f of fields) {
             if ((aluno as any)[f] == null && insc[f] != null) (aluno as any)[f] = insc[f];
           }
+          // nome_completo: usa da inscrição se o do aluno está vazio ou é mais curto (dados truncados na criação)
+          if (insc.nome_completo && (!aluno.nome_completo || insc.nome_completo.trim().length > aluno.nome_completo.trim().length)) {
+            aluno.nome_completo = insc.nome_completo;
+          }
         }
       } catch { /* sem inscricao, ok */ }
     }

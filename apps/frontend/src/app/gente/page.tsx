@@ -2828,7 +2828,7 @@ function RecibosPassagemModal({ colaborador, mes, feriadosMes, diasPagosIniciais
     setSalvando(false);
   };
 
-  // ── PDF: recibo único consolidado ──────────────────────────────────────────
+  // ── PDF: recibo único — duas vias por folha ────────────────────────────────
   const gerarPdf = async () => {
     if (diasPagos.size === 0) return;
     const { jsPDF } = await import('jspdf');
@@ -2840,129 +2840,130 @@ function RecibosPassagemModal({ colaborador, mes, feriadosMes, diasPagosIniciais
 
     const diasOrdenados = diasTrabalho.filter(d => diasPagos.has(d.iso));
     const total = diasOrdenados.length * vp;
+    const totalStr = `R$ ${total.toLocaleString('pt-BR', { minimumFractionDigits:2 })}`;
+    const vpStr = `R$ ${vp.toLocaleString('pt-BR', { minimumFractionDigits:2 })}`;
 
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-    const PW = 210; const PH = 297; const ML = 18; const MR = 18;
+    const PW = 210; const PH = 297; const ML = 14; const MR = 14;
+    const HALF = PH / 2; // 148.5mm — limite de cada via
 
-    // ── Cabeçalho ──
-    doc.setFillColor(30,58,95);
-    doc.rect(0, 0, PW, 26, 'F');
-    doc.setTextColor(255,255,255);
-    doc.setFont('helvetica','bold'); doc.setFontSize(14);
-    doc.text('INSTITUTO TIA PRETINHA', ML, 12);
-    doc.setFont('helvetica','normal'); doc.setFontSize(8);
-    doc.text(`CNPJ ${CNPJ}`, ML, 17);
-    doc.text(ENDERECO, ML, 21);
-    doc.setFontSize(11); doc.setFont('helvetica','bold');
-    doc.text('RECIBO DE PASSAGEM', PW - MR, 14, { align:'right' });
-    doc.setFontSize(9); doc.setFont('helvetica','normal');
-    doc.text(`Referência: ${periodoLabel}`, PW - MR, 20, { align:'right' });
+    const drawVia = (yBase: number, via: string) => {
+      // Cabeçalho
+      doc.setFillColor(30,58,95);
+      doc.rect(0, yBase, PW, 15, 'F');
+      doc.setTextColor(255,255,255);
+      doc.setFont('helvetica','bold'); doc.setFontSize(11);
+      doc.text('INSTITUTO TIA PRETINHA', ML, yBase + 7);
+      doc.setFont('helvetica','normal'); doc.setFontSize(6.5);
+      doc.text(`CNPJ ${CNPJ}  ·  ${ENDERECO}`, ML, yBase + 12);
+      doc.setFontSize(9); doc.setFont('helvetica','bold');
+      doc.text('RECIBO DE PASSAGEM', PW - MR, yBase + 7, { align:'right' });
+      doc.setFontSize(6.5); doc.setFont('helvetica','normal');
+      doc.text(`Referência: ${periodoLabel}  ·  ${via}`, PW - MR, yBase + 12, { align:'right' });
 
-    // ── Bloco identificação ──
-    let y = 36;
-    doc.setTextColor(20,20,20);
-    doc.setFont('helvetica','normal'); doc.setFontSize(9);
-    doc.setDrawColor(220,220,220); doc.setLineWidth(0.3);
-    doc.rect(ML, y, PW - ML - MR, 22);
+      // Bloco identificação
+      let y = yBase + 21;
+      doc.setTextColor(20,20,20);
+      doc.setFont('helvetica','normal'); doc.setFontSize(7.5);
+      doc.setDrawColor(220,220,220); doc.setLineWidth(0.3);
+      doc.rect(ML, y, PW - ML - MR, 15);
 
-    doc.text('Funcionário(a):', ML + 3, y + 6);
-    doc.setFont('helvetica','bold');
-    doc.text(nome, ML + 32, y + 6);
-    doc.setFont('helvetica','normal');
-    doc.text('Cargo:', ML + 3, y + 12);
-    doc.setFont('helvetica','bold');
-    doc.text(cargo, ML + 32, y + 12);
-    doc.setFont('helvetica','normal');
-    doc.text('Valor diário:', ML + 3, y + 18);
-    doc.setFont('helvetica','bold');
-    doc.text(`R$ ${vp.toLocaleString('pt-BR', { minimumFractionDigits:2 })}`, ML + 32, y + 18);
+      doc.text('Funcionário(a):', ML + 2, y + 5);
+      doc.setFont('helvetica','bold'); doc.text(nome, ML + 27, y + 5);
+      doc.setFont('helvetica','normal'); doc.text('Cargo:', ML + 2, y + 10);
+      doc.setFont('helvetica','bold'); doc.text(cargo, ML + 27, y + 10);
+      doc.setFont('helvetica','normal'); doc.text('Valor diário:', ML + 2, y + 14.5);
+      doc.setFont('helvetica','bold'); doc.text(vpStr, ML + 27, y + 14.5);
 
-    doc.setFont('helvetica','normal');
-    doc.text('Dias pagos:', PW/2 + 5, y + 6);
-    doc.setFont('helvetica','bold');
-    doc.text(`${diasOrdenados.length} de ${diasTrabalho.length}`, PW/2 + 30, y + 6);
-    doc.setFont('helvetica','normal');
-    doc.text('Período:', PW/2 + 5, y + 12);
-    doc.setFont('helvetica','bold');
-    doc.text(periodoLabel, PW/2 + 30, y + 12);
-    doc.setFont('helvetica','normal');
-    doc.text('Total a receber:', PW/2 + 5, y + 18);
-    doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(30,58,95);
-    doc.text(`R$ ${total.toLocaleString('pt-BR', { minimumFractionDigits:2 })}`, PW/2 + 30, y + 18);
+      const rx = PW / 2 + 3;
+      doc.setFont('helvetica','normal'); doc.text('Dias pagos:', rx, y + 5);
+      doc.setFont('helvetica','bold'); doc.text(`${diasOrdenados.length} de ${diasTrabalho.length}`, rx + 22, y + 5);
+      doc.setFont('helvetica','normal'); doc.text('Período:', rx, y + 10);
+      doc.setFont('helvetica','bold'); doc.text(periodoLabel, rx + 22, y + 10);
+      doc.setFont('helvetica','normal'); doc.text('Total a receber:', rx, y + 14.5);
+      doc.setFont('helvetica','bold'); doc.setFontSize(8.5); doc.setTextColor(30,58,95);
+      doc.text(totalStr, rx + 22, y + 14.5);
 
-    // ── Tabela de dias ──
-    y += 30;
-    doc.setTextColor(20,20,20); doc.setFontSize(9); doc.setFont('helvetica','bold');
-    doc.text('Detalhamento dos dias pagos', ML, y);
-    y += 3;
-    doc.setLineWidth(0.2); doc.line(ML, y, PW - MR, y);
-    y += 5;
+      // Tabela de dias
+      y += 21;
+      doc.setTextColor(20,20,20); doc.setFontSize(7.5); doc.setFont('helvetica','bold');
+      doc.text('Detalhamento dos dias pagos', ML, y);
+      y += 2;
+      doc.setLineWidth(0.2); doc.setDrawColor(200,200,200);
+      doc.line(ML, y, PW - MR, y);
+      y += 4;
 
-    const COLS = 3; // 3 colunas de dias por linha visual
-    const colW = (PW - ML - MR) / COLS;
-    doc.setFontSize(8); doc.setFont('helvetica','bold'); doc.setFillColor(245,245,245);
-    for (let i = 0; i < COLS; i++) {
-      doc.rect(ML + i*colW, y - 4, colW, 6, 'F');
-      doc.text('#', ML + i*colW + 2, y);
-      doc.text('Data', ML + i*colW + 9, y);
-      doc.text('Dia', ML + i*colW + 28, y);
-      doc.text('Valor', ML + i*colW + colW - 22, y);
-    }
-    y += 4;
-
-    doc.setFont('helvetica','normal');
-    const linhasMax = Math.ceil(diasOrdenados.length / COLS);
-    for (let row = 0; row < linhasMax; row++) {
-      for (let c = 0; c < COLS; c++) {
-        const idx = row * COLS + c;
-        if (idx >= diasOrdenados.length) continue;
-        const d = diasOrdenados[idx];
-        const xCol = ML + c * colW;
-        doc.text(String(idx + 1).padStart(2,'0'), xCol + 2, y);
-        doc.text(d.label, xCol + 9, y);
-        doc.text(d.diaSem, xCol + 28, y);
-        doc.text(`R$ ${vp.toLocaleString('pt-BR', { minimumFractionDigits:2 })}`, xCol + colW - 22, y);
+      const COLS = 3;
+      const colW = (PW - ML - MR) / COLS;
+      doc.setFillColor(245,245,245); doc.setDrawColor(245,245,245);
+      doc.rect(ML, y - 3, PW - ML - MR, 5, 'F');
+      doc.setDrawColor(200,200,200); doc.setTextColor(80,80,80);
+      doc.setFontSize(6.5); doc.setFont('helvetica','bold');
+      for (let i = 0; i < COLS; i++) {
+        doc.text('#',     ML + i*colW + 1,  y);
+        doc.text('Data',  ML + i*colW + 6,  y);
+        doc.text('Dia',   ML + i*colW + 20, y);
+        doc.text('Valor', ML + i*colW + colW - 16, y);
       }
+      doc.setTextColor(20,20,20); doc.setFont('helvetica','normal');
+      y += 3;
+
+      const linhasMax = Math.ceil(diasOrdenados.length / COLS);
+      for (let row = 0; row < linhasMax; row++) {
+        for (let c = 0; c < COLS; c++) {
+          const idx = row * COLS + c;
+          if (idx >= diasOrdenados.length) continue;
+          const d = diasOrdenados[idx];
+          const xCol = ML + c * colW;
+          doc.text(String(idx + 1).padStart(2,'0'), xCol + 1,  y);
+          doc.text(d.label,  xCol + 6,  y);
+          doc.text(d.diaSem, xCol + 20, y);
+          doc.text(vpStr,    xCol + colW - 16, y);
+        }
+        y += 4;
+      }
+
+      // Total
+      y += 2;
+      doc.setLineWidth(0.3); doc.setDrawColor(180,180,180);
+      doc.line(ML, y, PW - MR, y);
       y += 5;
-      if (y > PH - 60) {
-        doc.addPage(); y = 25;
-      }
-    }
+      doc.setFont('helvetica','bold'); doc.setFontSize(8);
+      doc.text(`TOTAL GERAL (${diasOrdenados.length} dias):`, ML, y);
+      doc.setTextColor(30,58,95);
+      doc.text(totalStr, PW - MR, y, { align:'right' });
+      doc.setTextColor(20,20,20);
 
-    // ── Total ──
-    y += 6;
-    doc.setLineWidth(0.4); doc.line(ML, y, PW - MR, y);
-    y += 7;
-    doc.setFont('helvetica','bold'); doc.setFontSize(11);
-    doc.text(`TOTAL GERAL (${diasOrdenados.length} dias):`, ML, y);
-    doc.setTextColor(30,58,95);
-    doc.text(`R$ ${total.toLocaleString('pt-BR', { minimumFractionDigits:2 })}`, PW - MR, y, { align:'right' });
-    doc.setTextColor(20,20,20);
+      // Declaração
+      y += 7;
+      doc.setFont('helvetica','normal'); doc.setFontSize(6.5);
+      const decl = `Declaro que recebi do Instituto Tia Pretinha a quantia acima discriminada, referente ao auxílio passagem dos dias listados, dando plena e geral quitação.`;
+      const linhas = doc.splitTextToSize(decl, PW - ML - MR);
+      doc.text(linhas, ML, y);
+      y += linhas.length * 3.2 + 4;
+      doc.text(`Rio de Janeiro, _____ de ____________________ de ${ano}.`, ML, y);
 
-    // ── Declaração ──
-    y += 14;
-    doc.setFont('helvetica','normal'); doc.setFontSize(9);
-    const decl = `Declaro que recebi do Instituto Tia Pretinha a quantia acima discriminada, referente ao auxílio passagem dos dias listados, dando plena e geral quitação.`;
-    const linhas = doc.splitTextToSize(decl, PW - ML - MR);
-    doc.text(linhas, ML, y);
-    y += linhas.length * 4 + 6;
+      // Assinaturas
+      y += 9;
+      doc.setLineWidth(0.3); doc.setDrawColor(150,150,150);
+      doc.line(ML + 2, y, ML + 68, y);
+      doc.line(PW - MR - 68, y, PW - MR - 2, y);
+      doc.setFontSize(6.5);
+      doc.text('Assinatura do(a) Funcionário(a)', ML + 2, y + 4);
+      doc.text('Assinatura da Administração', PW - MR - 68, y + 4);
+      doc.setFontSize(6);
+      doc.text(nome, ML + 2, y + 8);
+    };
 
-    doc.text(`Rio de Janeiro, _____ de ____________________ de ${ano}.`, ML, y);
+    drawVia(0, '1ª via');
 
-    // ── Assinaturas ──
-    y = PH - 50;
-    doc.setLineWidth(0.4);
-    doc.line(ML + 5, y, ML + 80, y);
-    doc.line(PW - MR - 80, y, PW - MR - 5, y);
-    doc.setFontSize(8);
-    doc.text('Assinatura do(a) Funcionário(a)', ML + 5, y + 5);
-    doc.text('Assinatura do(a) Coordenador(a)', PW - MR - 80, y + 5);
-    doc.setFontSize(7);
-    doc.text(nome, ML + 5, y + 9);
+    // Linha pontilhada de corte
+    doc.setDrawColor(160,160,160); doc.setLineWidth(0.2);
+    for (let x = 5; x < PW - 5; x += 4) doc.line(x, HALF, x + 2, HALF);
+    doc.setFontSize(6); doc.setTextColor(160,160,160);
+    doc.text('✂  recorte aqui', PW / 2, HALF - 1, { align:'center' });
 
-    // ── Rodapé ──
-    doc.setFontSize(7); doc.setTextColor(140,140,140);
-    doc.text(`Instituto Tia Pretinha · ${EMPRESA} · ${ENDERECO}`, PW/2, PH - 8, { align:'center' });
+    drawVia(HALF + 1, '2ª via');
 
     doc.save(`recibo_passagem_${nome.replace(/\s+/g,'_')}_${mes}.pdf`);
   };

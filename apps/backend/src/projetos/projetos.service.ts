@@ -84,15 +84,23 @@ export class ProjetosService {
         a.logradouro  as aluno_logradouro,
         a.numero      as aluno_numero,
         a.bairro      as aluno_bairro,
-        a.cidade      as aluno_cidade
+        a.cidade      as aluno_cidade,
+        foto.url_arquivo as foto_url
       FROM projeto_inscricoes pi
       LEFT JOIN projeto_equipes pe ON pe.id = pi.equipe_id
       LEFT JOIN alunos a ON a.id = pi.aluno_id
+      LEFT JOIN LATERAL (
+        SELECT d.url_arquivo
+        FROM inscricoes insc
+        JOIN documentos_inscricao d ON d.inscricao_id = insc.id AND d.tipo = 'foto_aluno'
+        WHERE insc.aluno_id::text = pi.aluno_id::text
+        ORDER BY d.created_at DESC
+        LIMIT 1
+      ) foto ON true
       WHERE pi.projeto_id = $1
       ORDER BY pi.created_at ASC
     `, [projeto_id]);
     return rows.map((r: any) => {
-      // Externos têm endereço na própria inscrição; regulares usam o cadastro do aluno
       const logradouro = r.logradouro || r.aluno_logradouro;
       const numero     = r.numero     || r.aluno_numero;
       const bairro     = r.aluno_bairro;
@@ -111,16 +119,23 @@ export class ProjetosService {
     let dadosAluno: Partial<CreateInscricaoDto> = {};
     if (dto.aluno_id) {
       const aluno = await this.dataSource.query(
-        `SELECT nome_completo, data_nascimento, nome_responsavel, telefone_alternativo
-         FROM alunos WHERE id = $1 LIMIT 1`,
+        `SELECT a.nome_completo, a.data_nascimento, a.nome_responsavel, a.telefone_alternativo,
+                i.nome_responsavel  AS insc_nome_responsavel,
+                i.telefone_responsavel AS insc_telefone_responsavel
+         FROM alunos a
+         LEFT JOIN inscricoes i ON i.aluno_id::text = a.id::text
+         WHERE a.id = $1
+         ORDER BY i.id DESC
+         LIMIT 1`,
         [dto.aluno_id],
       );
       if (!aluno.length) throw new BadRequestException('Aluno não encontrado');
+      const a = aluno[0];
       dadosAluno = {
-        nome_completo:        aluno[0].nome_completo,
-        data_nascimento:      aluno[0].data_nascimento,
-        nome_responsavel:     aluno[0].nome_responsavel,
-        telefone_responsavel: aluno[0].telefone_alternativo,
+        nome_completo:        a.nome_completo,
+        data_nascimento:      a.data_nascimento,
+        nome_responsavel:     a.nome_responsavel || a.insc_nome_responsavel || null,
+        telefone_responsavel: a.telefone_alternativo || a.insc_telefone_responsavel || null,
       };
     }
 

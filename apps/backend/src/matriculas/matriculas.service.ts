@@ -563,7 +563,31 @@ export class MatriculasService {
     }
 
     Object.assign(inscricao, dados);
-    return (await this.inscricaoRepository.save(inscricao)) as Inscricao;
+    const inscricaoSalva = (await this.inscricaoRepository.save(inscricao)) as Inscricao;
+
+    // Propaga campos pessoais editados para o aluno vinculado (se já matriculado)
+    const CAMPOS_ALUNO = [
+      'nome_completo', 'email', 'celular', 'data_nascimento', 'idade', 'sexo', 'escolaridade',
+      'turno_escolar', 'logradouro', 'numero', 'complemento', 'cidade', 'bairro', 'estado_uf',
+      'cep', 'maior_18_anos', 'nome_responsavel', 'email_responsavel', 'grau_parentesco',
+      'cpf_responsavel', 'telefone_alternativo', 'possui_alergias', 'alergias_descricao',
+      'cuidado_especial', 'detalhes_cuidado', 'uso_medicamento', 'medicamentos_descricao',
+      'lgpd_aceito', 'autoriza_imagem',
+    ];
+    const camposParaSync = camposAlterados.filter(c => CAMPOS_ALUNO.includes(c));
+    if (camposParaSync.length > 0) {
+      const [alunoRow] = await this.dataSource.query(
+        `SELECT id FROM alunos WHERE inscricao_id = $1 UNION SELECT aluno_id::text FROM inscricoes WHERE id = $1 AND aluno_id IS NOT NULL LIMIT 1`,
+        [id],
+      );
+      if (alunoRow?.id) {
+        const updateData: Record<string, any> = {};
+        for (const campo of camposParaSync) updateData[campo] = (inscricaoSalva as any)[campo];
+        await this.dataSource.getRepository(Aluno).update(alunoRow.id, updateData);
+      }
+    }
+
+    return inscricaoSalva;
   }
 
   /**
