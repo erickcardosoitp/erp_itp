@@ -43,9 +43,9 @@ const DEFAULT_POS: TplPos = {
 
 // Presets: [label, largura, altura, colunas]
 const PRESETS: [string, number, number, number][] = [
+  ['5×5 A4', 38, 55, 5],
   ['4×5 A4', 48, 55, 4],
   ['3×4 A4', 64, 70, 3],
-  ['2×3 A4', 95, 90, 2],
 ];
 
 function calcIdade(dob?: string) {
@@ -101,11 +101,16 @@ function CrachaComTemplate({ ins, equipe, largura, altura, pos }: {
     <div className="cracha-item" style={{
       width: `${largura}mm`, height: `${altura}mm`,
       position: 'relative', overflow: 'hidden',
-      backgroundImage: `url(${equipe.imagem_template})`,
-      backgroundSize: '100% 100%',
       pageBreakInside: 'avoid', breakInside: 'avoid',
       fontFamily: 'Arial, sans-serif',
     }}>
+      {/* Template PNG — img tag = melhor qualidade que background-image */}
+      <img src={equipe.imagem_template!} alt="" style={{
+        position: 'absolute', inset: 0, width: '100%', height: '100%',
+        objectFit: 'fill', display: 'block',
+        imageRendering: 'high-quality' as React.CSSProperties['imageRendering'],
+      }} />
+
       {/* Foto */}
       <div style={{
         position: 'absolute',
@@ -127,9 +132,18 @@ function CrachaComTemplate({ ins, equipe, largura, altura, pos }: {
         )}
       </div>
 
-      {/* Row 1 esq: Nome | Idade — font calculado para caber */}
-      <div style={cell(pos.row1Top, pos.padLR, undefined, pos.colEsqW, pos.row1H)}>
-        <span style={txtStyle(fSizeMm, true)}>
+      {/* Row 1 esq: Nome | Idade — até 2 linhas para nomes longos */}
+      <div style={{ ...cell(pos.row1Top, pos.padLR, undefined, pos.colEsqW, pos.row1H), alignItems: 'center' }}>
+        <span style={{
+          ...txtStyle(fSizeMm, true),
+          whiteSpace: 'normal',
+          wordBreak: 'break-word',
+          display: '-webkit-box',
+          WebkitLineClamp: 2,
+          WebkitBoxOrient: 'vertical',
+          overflow: 'hidden',
+          lineHeight: 1.1,
+        }}>
           {nomeIdade}
         </span>
       </div>
