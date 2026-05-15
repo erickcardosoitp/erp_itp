@@ -14,7 +14,7 @@ interface Inscricao {
   nome_responsavel?: string; telefone_responsavel?: string;
   cuidado_especial?: string; detalhes_cuidado?: string;
   equipe_id?: string; equipe?: Equipe;
-  endereco?: string; foto_url?: string;
+  endereco?: string; foto_url?: string; logradouro?: string;
 }
 interface Projeto {
   id: string; nome: string;
@@ -51,26 +51,32 @@ const PRESETS: [string, number, number, number][] = [
 // ── SmartPhoto: enquadramento automático de rosto via FaceDetector API ────────
 function SmartPhoto({ src, style }: { src: string; style: React.CSSProperties }) {
   const imgRef = useRef<HTMLImageElement>(null);
-  const [objPos, setObjPos] = useState('center 20%');
+  const [objPos, setObjPos] = useState('center 15%');
 
   useEffect(() => {
     const img = imgRef.current;
     if (!img) return;
 
     const detect = async () => {
-      // FaceDetector disponível só no Chrome/Edge
       if (!('FaceDetector' in window)) return;
       try {
         const detector = new (window as any).FaceDetector({ maxDetectedFaces: 1, fastMode: false });
         const faces = await detector.detect(img);
         if (faces.length > 0) {
           const { top, height } = faces[0].boundingBox;
-          const centerY = ((top + height * 0.4) / img.naturalHeight) * 100;
-          setObjPos(`center ${Math.max(5, Math.min(80, centerY)).toFixed(1)}%`);
+          // Centro do rosto (um pouco acima do centro geométrico = olhos/testa)
+          const faceCenterY = top + height * 0.35;
+          // Calcula posição correta para o rosto ficar centralizado no container
+          const scale = Math.max(img.clientWidth / img.naturalWidth, img.clientHeight / img.naturalHeight);
+          const renderedH = img.naturalHeight * scale;
+          const overflowH = renderedH - img.clientHeight;
+          if (overflowH > 0) {
+            const idealOffset = faceCenterY * scale - img.clientHeight * 0.42;
+            const posY = Math.max(0, Math.min(100, (idealOffset / overflowH) * 100));
+            setObjPos(`center ${posY.toFixed(1)}%`);
+          }
         }
-      } catch {
-        // FaceDetector falhou (cross-origin, imagem muito pequena, etc.) — mantém fallback
-      }
+      } catch { /* fallback mantido */ }
     };
 
     if (img.complete && img.naturalHeight > 0) detect();
@@ -182,21 +188,26 @@ function CrachaComTemplate({ ins, equipe, largura, altura, pos }: {
         <span style={txtStyle()}>{ins.telefone_responsavel ?? ''}</span>
       </div>
 
-      {/* Row 2: Endereço */}
+      {/* Row 2: Nome responsável */}
       <div style={cell(pos.row2Top, pos.padLR, undefined, 100 - pos.padLR * 2, pos.row2H)}>
-        <span style={txtStyle()}>{ins.endereco ?? ''}</span>
-      </div>
-
-      {/* Row 3: Cuidados */}
-      <div style={cell(pos.row3Top, pos.padLR, undefined, 100 - pos.padLR * 2, pos.row3H)}>
-        <span style={txtStyle(temCuidado ? '#cc0000' : '#bbb')}>
-          {temCuidado ? `⚠ ${ins.cuidado_especial}${detalhe ? `: ${detalhe}` : ''}` : ''}
+        <span style={txtStyle()}>
+          {ins.nome_responsavel ? `Resp: ${ins.nome_responsavel}` : ''}
         </span>
       </div>
 
-      {/* Row 4: Equipe */}
+      {/* Row 3: Endereço */}
+      <div style={cell(pos.row3Top, pos.padLR, undefined, 100 - pos.padLR * 2, pos.row3H)}>
+        <span style={txtStyle()}>{ins.endereco ?? ''}</span>
+      </div>
+
+      {/* Row 4: Equipe + cuidados */}
       <div style={cell(pos.row4Top, pos.padLR, undefined, 100 - pos.padLR * 2, pos.row4H)}>
         <span style={txtStyle(equipe.cor)}>{equipe.nome}</span>
+        {temCuidado && (
+          <span style={{ ...txtStyle('#cc0000'), marginLeft: '2%', flexShrink: 0 }}>
+            {` ⚠ ${ins.cuidado_especial}`}
+          </span>
+        )}
       </div>
     </div>
   );
