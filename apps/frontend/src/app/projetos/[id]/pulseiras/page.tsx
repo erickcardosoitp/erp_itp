@@ -60,7 +60,7 @@ function CrachaComTemplate({ ins, equipe, largura, altura, pos }: {
   ins: Inscricao; equipe: Equipe; largura: number; altura: number; pos: TplPos;
 }) {
   const idade = calcIdade(ins.data_nascimento);
-  const temCuidado = ins.cuidado_especial && ins.cuidado_especial !== 'Não' && ins.cuidado_especial !== 'Nao';
+  const temCuidado = !!(ins.cuidado_especial && ins.cuidado_especial !== 'Não' && ins.cuidado_especial !== 'Nao');
   const detalhe = ins.detalhes_cuidado && ins.detalhes_cuidado !== 'Nao' && ins.detalhes_cuidado !== 'Não' ? ins.detalhes_cuidado : null;
 
   // Font proporcional à LARGURA da coluna disponível × chars do nome
@@ -170,7 +170,7 @@ function CrachaLimpo({ ins, equipe, largura, altura }: {
   ins: Inscricao; equipe?: Equipe; largura: number; altura: number;
 }) {
   const idade = calcIdade(ins.data_nascimento);
-  const temCuidado = ins.cuidado_especial && ins.cuidado_especial !== 'Não' && ins.cuidado_especial !== 'Nao';
+  const temCuidado = !!(ins.cuidado_especial && ins.cuidado_especial !== 'Não' && ins.cuidado_especial !== 'Nao');
   const detalhe = ins.detalhes_cuidado && ins.detalhes_cuidado !== 'Nao' && ins.detalhes_cuidado !== 'Não' ? ins.detalhes_cuidado : null;
   const cor = equipe?.cor ?? '#7c3aed';
   const nomeLen = ins.nome_completo.length;
