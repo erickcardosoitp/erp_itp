@@ -37,7 +37,7 @@ const DEFAULT_POS: TplPos = {
   row2Top: 79, row2H: 8,
   row3Top: 88, row3H: 7,
   row4Top: 95, row4H: 5,
-  colEsqW: 58, colDirLeft: 60, colDirW: 37,
+  colEsqW: 54, colDirLeft: 62, colDirW: 35,
   padLR: 2,
 };
 
@@ -69,7 +69,7 @@ function CrachaComTemplate({ ins, equipe, largura, altura, pos }: {
   const nomeIdade = ins.nome_completo + (idade !== null ? ` | ${idade}a` : '');
   // Assume ~0.58 de largura por caractere em relação ao tamanho da fonte (Arial caps)
   // Clamp: mín 1.8mm (legível), máx 3mm (não transborda célula)
-  const fSizeMm = Math.max(1.8, Math.min(3.0, (colEsqMm * 0.58) / Math.max(nomeIdade.length, 1)));
+  const fSizeMm = Math.max(1.6, Math.min(2.2, (colEsqMm * 0.58) / Math.max(nomeIdade.length, 1)));
   const infoSizeMm = Math.max(1.5, largura * 0.034);
 
   const cell = (top: number, left: number | undefined, right: number | undefined, w: number | undefined, h: number, wrap = false): React.CSSProperties => ({
@@ -119,7 +119,7 @@ function CrachaComTemplate({ ins, equipe, largura, altura, pos }: {
         overflow: 'hidden',
       }}>
         {ins.foto_url ? (
-          <img src={ins.foto_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top', display: 'block' }} />
+          <img src={ins.foto_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 25%', display: 'block' }} />
         ) : (
           <div style={{
             width: '100%', height: '100%',
