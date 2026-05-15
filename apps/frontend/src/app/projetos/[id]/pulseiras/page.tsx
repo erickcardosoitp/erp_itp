@@ -119,7 +119,7 @@ function CrachaComTemplate({ ins, equipe, largura, altura, pos }: {
         overflow: 'hidden',
       }}>
         {ins.foto_url ? (
-          <img src={ins.foto_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 25%', display: 'block' }} />
+          <img src={ins.foto_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', objectPosition: 'center center', display: 'block', background: '#fff8' }} />
         ) : (
           <div style={{
             width: '100%', height: '100%',
