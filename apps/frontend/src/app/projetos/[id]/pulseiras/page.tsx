@@ -48,6 +48,46 @@ const PRESETS: [string, number, number, number][] = [
   ['3×4 A4', 64, 70, 3],
 ];
 
+// ── SmartPhoto: enquadramento automático de rosto via FaceDetector API ────────
+function SmartPhoto({ src, style }: { src: string; style: React.CSSProperties }) {
+  const imgRef = useRef<HTMLImageElement>(null);
+  const [objPos, setObjPos] = useState('center 20%');
+
+  useEffect(() => {
+    const img = imgRef.current;
+    if (!img) return;
+
+    const detect = async () => {
+      // FaceDetector disponível só no Chrome/Edge
+      if (!('FaceDetector' in window)) return;
+      try {
+        const detector = new (window as any).FaceDetector({ maxDetectedFaces: 1, fastMode: false });
+        const faces = await detector.detect(img);
+        if (faces.length > 0) {
+          const { top, height } = faces[0].boundingBox;
+          const centerY = ((top + height * 0.4) / img.naturalHeight) * 100;
+          setObjPos(`center ${Math.max(5, Math.min(80, centerY)).toFixed(1)}%`);
+        }
+      } catch {
+        // FaceDetector falhou (cross-origin, imagem muito pequena, etc.) — mantém fallback
+      }
+    };
+
+    if (img.complete && img.naturalHeight > 0) detect();
+    else img.addEventListener('load', detect, { once: true });
+  }, [src]);
+
+  return (
+    <img
+      ref={imgRef}
+      src={src}
+      alt=""
+      crossOrigin="anonymous"
+      style={{ ...style, objectFit: 'cover', objectPosition: objPos }}
+    />
+  );
+}
+
 function calcIdade(dob?: string) {
   if (!dob) return null;
   const diff = Date.now() - new Date(dob.slice(0, 10) + 'T12:00:00').getTime();
@@ -116,7 +156,7 @@ function CrachaComTemplate({ ins, equipe, largura, altura, pos }: {
         overflow: 'hidden',
       }}>
         {ins.foto_url ? (
-          <img src={ins.foto_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', objectPosition: 'center center', display: 'block', background: '#fff8' }} />
+          <SmartPhoto src={ins.foto_url} style={{ width: '100%', height: '100%', display: 'block' }} />
         ) : (
           <div style={{
             width: '100%', height: '100%',
@@ -189,7 +229,7 @@ function CrachaLimpo({ ins, equipe, largura, altura }: {
       <div style={{ background: cor, height: '3.5mm', flexShrink: 0 }} />
       <div style={{ display: 'flex', justifyContent: 'center', padding: '1.5mm 1mm 1mm', flexShrink: 0 }}>
         {ins.foto_url ? (
-          <img src={ins.foto_url} alt="" style={{ width: `${fotoMm}mm`, height: `${fotoMm}mm`, objectFit: 'cover', borderRadius: '1mm', border: `0.3mm solid ${cor}`, display: 'block' }} />
+          <SmartPhoto src={ins.foto_url} style={{ width: `${fotoMm}mm`, height: `${fotoMm}mm`, borderRadius: '1mm', border: `0.3mm solid ${cor}`, display: 'block' }} />
         ) : (
           <div style={{ width: `${fotoMm}mm`, height: `${fotoMm}mm`, borderRadius: '1mm', background: cor + '22', border: `0.3mm solid ${cor}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: cor, fontWeight: 900, fontSize: `${Math.round(fotoMm * 1.5)}pt` }}>
             {initials}
