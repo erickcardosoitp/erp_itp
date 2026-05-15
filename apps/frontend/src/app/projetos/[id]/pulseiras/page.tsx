@@ -63,14 +63,10 @@ function CrachaComTemplate({ ins, equipe, largura, altura, pos }: {
   const temCuidado = !!(ins.cuidado_especial && ins.cuidado_especial !== 'Não' && ins.cuidado_especial !== 'Nao');
   const detalhe = ins.detalhes_cuidado && ins.detalhes_cuidado !== 'Nao' && ins.detalhes_cuidado !== 'Não' ? ins.detalhes_cuidado : null;
 
-  // Font proporcional à LARGURA da coluna disponível × chars do nome
-  // Técnica padrão de badge printing: cálculo de fit automático
-  const colEsqMm = largura * (pos.colEsqW / 100) - largura * (pos.padLR / 100) * 2;
+  // Fonte única para todos os campos — negrito uniforme
+  // Calculada pela largura total do crachá para consistência
+  const fontSize = Math.max(1.5, Math.min(1.9, largura * 0.038));
   const nomeIdade = ins.nome_completo + (idade !== null ? ` | ${idade}a` : '');
-  // Assume ~0.58 de largura por caractere em relação ao tamanho da fonte (Arial caps)
-  // Clamp: mín 1.8mm (legível), máx 3mm (não transborda célula)
-  const fSizeMm = Math.max(1.6, Math.min(2.2, (colEsqMm * 0.58) / Math.max(nomeIdade.length, 1)));
-  const infoSizeMm = Math.max(1.5, largura * 0.034);
 
   const cell = (top: number, left: number | undefined, right: number | undefined, w: number | undefined, h: number, wrap = false): React.CSSProperties => ({
     position: 'absolute',
@@ -86,9 +82,10 @@ function CrachaComTemplate({ ins, equipe, largura, altura, pos }: {
     boxSizing: 'border-box',
   });
 
-  const txtStyle = (sizeMm: number, bold = false, col = '#1a1a1a'): React.CSSProperties => ({
-    fontSize: `${sizeMm}mm`,
-    fontWeight: bold ? 900 : 400,
+  // Estilo uniforme para todos os campos — mesma fonte, sempre negrito
+  const txtStyle = (col = '#1a1a1a'): React.CSSProperties => ({
+    fontSize: `${fontSize}mm`,
+    fontWeight: 700,
     color: col,
     lineHeight: 1.15,
     maxWidth: '100%',
@@ -133,47 +130,33 @@ function CrachaComTemplate({ ins, equipe, largura, altura, pos }: {
       </div>
 
       {/* Row 1 esq: Nome | Idade — até 2 linhas para nomes longos */}
+      {/* Row 1 esq: Nome | Idade */}
       <div style={{ ...cell(pos.row1Top, pos.padLR, undefined, pos.colEsqW, pos.row1H), alignItems: 'center' }}>
-        <span style={{
-          ...txtStyle(fSizeMm, true),
-          whiteSpace: 'normal',
-          wordBreak: 'break-word',
-          display: '-webkit-box',
-          WebkitLineClamp: 2,
-          WebkitBoxOrient: 'vertical',
-          overflow: 'hidden',
-          lineHeight: 1.1,
-        }}>
+        <span style={{ ...txtStyle(), whiteSpace: 'normal', wordBreak: 'break-word', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', lineHeight: 1.1 }}>
           {nomeIdade}
         </span>
       </div>
 
       {/* Row 1 dir: Telefone */}
       <div style={cell(pos.row1Top, pos.colDirLeft, undefined, pos.colDirW, pos.row1H)}>
-        <span style={txtStyle(infoSizeMm)}>
-          {ins.telefone_responsavel ?? ''}
-        </span>
+        <span style={txtStyle()}>{ins.telefone_responsavel ?? ''}</span>
       </div>
 
       {/* Row 2: Endereço */}
       <div style={cell(pos.row2Top, pos.padLR, undefined, 100 - pos.padLR * 2, pos.row2H)}>
-        <span style={txtStyle(infoSizeMm)}>
-          {ins.endereco ?? ''}
-        </span>
+        <span style={txtStyle()}>{ins.endereco ?? ''}</span>
       </div>
 
       {/* Row 3: Cuidados */}
       <div style={cell(pos.row3Top, pos.padLR, undefined, 100 - pos.padLR * 2, pos.row3H)}>
-        <span style={txtStyle(infoSizeMm, temCuidado, temCuidado ? '#cc0000' : '#999')}>
+        <span style={txtStyle(temCuidado ? '#cc0000' : '#bbb')}>
           {temCuidado ? `⚠ ${ins.cuidado_especial}${detalhe ? `: ${detalhe}` : ''}` : ''}
         </span>
       </div>
 
       {/* Row 4: Equipe */}
       <div style={cell(pos.row4Top, pos.padLR, undefined, 100 - pos.padLR * 2, pos.row4H)}>
-        <span style={txtStyle(infoSizeMm, true, equipe.cor)}>
-          {equipe.nome}
-        </span>
+        <span style={txtStyle(equipe.cor)}>{equipe.nome}</span>
       </div>
     </div>
   );
