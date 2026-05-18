@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "buildCommand": "npm ci && rm -f tsconfig.tsbuildinfo && npm run build",
+  "buildCommand": "npm ci --prefer-offline && npm run build",
   "outputDirectory": "dist",
   "env": {
     "COLETOR_TOKEN": "itp-coletor-2026",

@@ -10,6 +10,7 @@
     "start": "cd apps/backend && npm start"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "@nestjs/common": "^11.0.0",
     "@nestjs/config": "^4.0.3",
     "@nestjs/core": "^11.1.16",
@@ -23,6 +24,7 @@
     "class-validator": "^0.14.4",
     "cookie-parser": "^1.4.6",
     "csv-parse": "^6.1.0",
+    "docx": "^9.6.1",
     "dotenv": "^17.3.1",
     "express": "5.2.1",
     "knex": "^3.1.0",
