@@ -1,7 +1,7 @@
 import api from '@/services/api';
 import type {
   SearchResult, Opportunity, PipelineStatus, PipelineResponse,
-  InsightsResponse, TemplateType,
+  InsightsResponse, TemplateType, MonthlyEntry,
 } from '../types';
 
 const BASE = '/captacao';
@@ -65,6 +65,22 @@ export async function deleteOpportunity(id: string): Promise<{ ok: boolean }> {
 export async function getInsights(): Promise<InsightsResponse> {
   const res = await api.get(`${BASE}/insights`, { timeout: 10_000 });
   return res.data;
+}
+
+// ── Submissões mensais ────────────────────────────────────────────────────────
+export async function getMonthlySubmissions(): Promise<MonthlyEntry[]> {
+  const res = await api.get(`${BASE}/insights/monthly`, { timeout: 10_000 });
+  return res.data;
+}
+
+// ── Prévia do documento (texto bruto da IA) ───────────────────────────────────
+export async function previewDocument(opportunityId: string, templateType: TemplateType): Promise<string> {
+  const res = await api.post(
+    `${BASE}/opportunities/${opportunityId}/documents/preview`,
+    { template_type: templateType },
+    { timeout: 35_000 },
+  );
+  return res.data.content as string;
 }
 
 // ── Gerar documento DOCX ─────────────────────────────────────────────────────

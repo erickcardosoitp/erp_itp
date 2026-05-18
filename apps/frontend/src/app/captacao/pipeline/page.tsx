@@ -1,14 +1,14 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Search, Kanban, List, Loader2 } from 'lucide-react';
+import { Search, Kanban, List, LayoutGrid, Loader2 } from 'lucide-react';
 import type { Opportunity, PipelineStatus } from '../types';
 import { PIPELINE_ORDER, STATUS_LABELS, STATUS_COLORS } from '../constants';
 import { usePipeline } from '../hooks/usePipeline';
 import { KanbanBoard } from '../components/KanbanBoard';
 import { OpportunityDrawer } from '../components/OpportunityDrawer';
 
-type ViewMode = 'kanban' | 'lista';
+type ViewMode = 'kanban' | 'lista' | 'tabs';
 
 export default function PipelinePage() {
   const [view, setView] = useState<ViewMode>('kanban');
@@ -76,6 +76,14 @@ export default function PipelinePage() {
           >
             <List size={13} />
             Lista
+          </button>
+          <button
+            onClick={() => setView('tabs')}
+            className={`flex items-center gap-1.5 px-3 py-2 text-xs font-bold transition
+              ${view === 'tabs' ? 'bg-purple-600 text-white' : 'bg-white dark:bg-slate-900 text-slate-500 hover:text-slate-800'}`}
+          >
+            <LayoutGrid size={13} />
+            Abas
           </button>
         </div>
 
@@ -146,6 +154,15 @@ export default function PipelinePage() {
         </div>
       )}
 
+      {/* Tabs view */}
+      {!loading && view === 'tabs' && (
+        <TabsView
+          opportunities={opportunities}
+          onOpen={handleOpen}
+          onDelete={deleteCard}
+        />
+      )}
+
       {/* Empty state */}
       {!loading && opportunities.length === 0 && (
         <div className="text-center py-16 text-slate-400">
@@ -164,6 +181,85 @@ export default function PipelinePage() {
           onDelete={deleteCard}
         />
       )}
+    </div>
+  );
+}
+
+// ── Tabs view: uma aba por status com lista de cards ────────────────────────
+
+function TabsView({ opportunities, onOpen, onDelete }: {
+  opportunities: Opportunity[];
+  onOpen: (o: Opportunity) => void;
+  onDelete: (id: string) => void;
+}) {
+  const [activeStatus, setActiveStatus] = useState<PipelineStatus>(PIPELINE_ORDER[0]);
+  const countByStatus = PIPELINE_ORDER.reduce<Record<PipelineStatus, number>>(
+    (acc, s) => ({ ...acc, [s]: opportunities.filter(o => o.status === s).length }),
+    {} as any,
+  );
+  const items = opportunities.filter(o => o.status === activeStatus);
+  const colors = STATUS_COLORS[activeStatus];
+
+  return (
+    <div className="space-y-3">
+      {/* Tab headers */}
+      <div className="flex flex-wrap gap-1.5">
+        {PIPELINE_ORDER.map(status => {
+          const c = STATUS_COLORS[status];
+          const active = status === activeStatus;
+          return (
+            <button
+              key={status}
+              onClick={() => setActiveStatus(status)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border-2 transition
+                ${active ? `${c.bg} ${c.border} ${c.text}` : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-500 hover:border-slate-300'}`}
+            >
+              {STATUS_LABELS[status]}
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${active ? 'bg-white/30' : 'bg-slate-100 dark:bg-slate-800'}`}>
+                {countByStatus[status]}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Items */}
+      <div className={`rounded-2xl border-2 ${colors.border} ${colors.bg} min-h-[200px]`}>
+        {items.length === 0 ? (
+          <p className="text-sm text-slate-400 italic text-center py-12">Nenhuma oportunidade neste status</p>
+        ) : (
+          <div className="divide-y divide-slate-100 dark:divide-slate-800">
+            {items.map(o => (
+              <div
+                key={o.id}
+                className="flex items-center gap-3 px-4 py-3 bg-white dark:bg-slate-900 first:rounded-t-2xl last:rounded-b-2xl hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition"
+                onClick={() => onOpen(o)}
+              >
+                {o.ai_score != null && (
+                  <span className="text-[10px] font-black text-purple-600 dark:text-purple-400 w-7 text-center shrink-0">
+                    {o.ai_score}
+                  </span>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-black text-slate-800 dark:text-white truncate">{o.title}</p>
+                  {o.entity_name && <p className="text-xs text-slate-400 truncate">{o.entity_name}</p>}
+                </div>
+                {o.deadline && (
+                  <span className="text-[10px] text-slate-400 shrink-0">
+                    {new Date(o.deadline).toLocaleDateString('pt-BR')}
+                  </span>
+                )}
+                <button
+                  onClick={e => { e.stopPropagation(); onDelete(o.id); }}
+                  className="text-slate-300 hover:text-red-400 transition shrink-0 p-1"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

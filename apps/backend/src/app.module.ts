@@ -1264,6 +1264,8 @@ export class AppModule implements OnModuleInit {
         )
       `);
       await this.dataSource.query(`CREATE INDEX IF NOT EXISTS idx_captacao_events_opp ON captacao_pipeline_events(opportunity_id)`);
+      // Adiciona coluna gemini_raw se não existir (tabela pode ter sido criada antes desta coluna)
+      await this.dataSource.query(`ALTER TABLE captacao_opportunities ADD COLUMN IF NOT EXISTS gemini_raw JSONB`);
       this.logger.log('✅ Tabelas módulo Captação criadas (IF NOT EXISTS)');
 
     } catch (err: any) {

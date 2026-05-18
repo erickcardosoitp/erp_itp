@@ -33,6 +33,8 @@ export function OpportunityDrawer({ opportunityId, onClose, onStatusChange, onDe
   // Document tab
   const [templateType, setTemplateType] = useState<TemplateType>('project_summary');
   const [generating, setGenerating] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [previewContent, setPreviewContent] = useState<string | null>(null);
 
   // Lazy load ao abrir
   useEffect(() => {
@@ -78,6 +80,21 @@ export function OpportunityDrawer({ opportunityId, onClose, onStatusChange, onDe
   const handleGenerateDocument = async () => {
     if (!opportunity) return;
     setGenerating(true);
+    setPreviewContent(null);
+    try {
+      const content = await api.previewDocument(opportunity.id, templateType);
+      setPreviewContent(content);
+      toast.success('Prévia gerada — revise antes de baixar.');
+    } catch (err: any) {
+      const msg = err?.response?.status === 503 ? 'Serviço de IA indisponível. Tente novamente.' : 'Erro ao gerar prévia';
+      toast.error(msg);
+    }
+    setGenerating(false);
+  };
+
+  const handleDownloadDocument = async () => {
+    if (!opportunity) return;
+    setDownloading(true);
     try {
       const blob = await api.generateDocument(opportunity.id, templateType);
       const url = URL.createObjectURL(blob);
@@ -86,12 +103,12 @@ export function OpportunityDrawer({ opportunityId, onClose, onStatusChange, onDe
       a.download = `captacao_${templateType}_${opportunity.id.slice(0, 8)}.docx`;
       a.click();
       URL.revokeObjectURL(url);
-      toast.success('Documento gerado!');
+      toast.success('Documento baixado!');
     } catch (err: any) {
-      const msg = err?.response?.status === 503 ? 'Serviço de IA indisponível. Tente novamente.' : 'Erro ao gerar documento';
+      const msg = err?.response?.status === 503 ? 'Serviço de IA indisponível. Tente novamente.' : 'Erro ao baixar documento';
       toast.error(msg);
     }
-    setGenerating(false);
+    setDownloading(false);
   };
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
@@ -268,7 +285,7 @@ export function OpportunityDrawer({ opportunityId, onClose, onStatusChange, onDe
                   <div className="relative">
                     <select
                       value={templateType}
-                      onChange={e => setTemplateType(e.target.value as TemplateType)}
+                      onChange={e => { setTemplateType(e.target.value as TemplateType); setPreviewContent(null); }}
                       className="w-full appearance-none border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500 pr-8"
                     >
                       {Object.entries(TEMPLATE_LABELS).map(([k, v]) => (
@@ -279,23 +296,39 @@ export function OpportunityDrawer({ opportunityId, onClose, onStatusChange, onDe
                   </div>
                 </div>
 
-                <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-4 text-sm text-slate-500 dark:text-slate-400">
-                  <p className="font-semibold text-slate-700 dark:text-slate-300 mb-1">{TEMPLATE_LABELS[templateType]}</p>
-                  {templateType === 'project_summary' && <p>Resumo executivo com dados do ITP, problema social, solução proposta, metas e orçamento resumido.</p>}
-                  {templateType === 'cover_letter' && <p>Carta formal de apresentação do ITP para o financiador, destacando alinhamento com a oportunidade.</p>}
-                  {templateType === 'budget_memo' && <p>Memorando de orçamento detalhado com categorias, justificativas e cronograma físico-financeiro.</p>}
-                </div>
-
                 <button
                   onClick={handleGenerateDocument}
                   disabled={generating}
                   className="w-full flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition text-sm"
                 >
-                  {generating ? <><Loader2 size={15} className="animate-spin" />Gerando com IA...</> : <><Download size={15} />Gerar e Baixar .docx</>}
+                  {generating ? <><Loader2 size={15} className="animate-spin" />Gerando com IA...</> : 'Gerar Prévia'}
                 </button>
 
+                {/* Textarea de revisão — aparece após gerar */}
+                {previewContent !== null && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-bold uppercase text-slate-400">Prévia — edite se necessário</span>
+                      <span className="text-[10px] text-slate-400">{previewContent.length} caracteres</span>
+                    </div>
+                    <textarea
+                      value={previewContent}
+                      onChange={e => setPreviewContent(e.target.value)}
+                      rows={16}
+                      className="w-full text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500 text-slate-800 dark:text-white resize-none font-mono"
+                    />
+                    <button
+                      onClick={handleDownloadDocument}
+                      disabled={downloading}
+                      className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition text-sm"
+                    >
+                      {downloading ? <><Loader2 size={15} className="animate-spin" />Baixando...</> : <><Download size={15} />Baixar .docx</>}
+                    </button>
+                  </div>
+                )}
+
                 <p className="text-[10px] text-slate-400 text-center">
-                  Documento gerado pelo Gemini 2.0 Flash com base nos dados da oportunidade e no perfil do ITP.
+                  Documento gerado pelo Gemini 2.0 Flash. O .docx é gerado na hora do download.
                 </p>
               </div>
             )}

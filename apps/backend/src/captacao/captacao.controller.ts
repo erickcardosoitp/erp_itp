@@ -100,6 +100,13 @@ export class CaptacaoController {
     return this.svc.getInsights();
   }
 
+  // ── GET /captacao/insights/monthly ───────────────────────────────────────
+  @Get('insights/monthly')
+  @ModuloPerm('captacao', 'visualizar')
+  getMonthly() {
+    return this.svc.getMonthlySubmissions();
+  }
+
   // ── GET /captacao/opportunities/:id ───────────────────────────────────────
   @Get('opportunities/:id')
   @ModuloPerm('captacao', 'visualizar')
@@ -135,6 +142,19 @@ export class CaptacaoController {
     return this.svc.softDelete(id, userId);
   }
 
+  // ── POST /captacao/opportunities/:id/documents/preview ───────────────────
+  @Post('opportunities/:id/documents/preview')
+  @ModuloPerm('captacao', 'visualizar')
+  async previewDocument(
+    @Param('id') id: string,
+    @Body() body: { template_type: string },
+    @Req() req: any,
+  ) {
+    const requestId = `prev-${Date.now()}`;
+    const content = await this.svc.previewDocument(id, body.template_type, requestId);
+    return { content };
+  }
+
   // ── POST /captacao/opportunities/:id/documents ────────────────────────────
   @Post('opportunities/:id/documents')
   @ModuloPerm('captacao', 'incluir')
@@ -163,7 +183,7 @@ export class CaptacaoController {
   @ModuloPerm('captacao', 'visualizar')
   async cronExpire(@Headers('x-cron-secret') secret: string) {
     const expected = this.config.get<string>('CRON_SECRET');
-    if (expected && secret !== expected) throw new BadRequestException('Acesso negado');
+    if (!expected || secret !== expected) throw new BadRequestException('Acesso negado');
     return this.svc.expireStale();
   }
 }

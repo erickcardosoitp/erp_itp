@@ -48,6 +48,9 @@ export class CaptacaoOpportunity {
   @Column({ type: 'jsonb', nullable: true })
   search_metadata?: Record<string, any>;
 
+  @Column({ type: 'jsonb', nullable: true })
+  gemini_raw?: Record<string, any>;
+
   @Column({ type: 'text', nullable: true })
   notes?: string;
 

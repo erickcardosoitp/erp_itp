@@ -50,6 +50,10 @@ export const TEMPLATE_LABELS: Record<TemplateType, string> = {
   project_summary: 'Resumo Executivo',
   cover_letter:    'Carta de Apresentação',
   budget_memo:     'Memorando de Orçamento',
+  oficio:          'Ofício',
+  chamamento:      'Resposta ao Chamamento',
+  projeto_esboco:  'Esboço de Projeto',
+  proposta:        'Proposta Técnica',
 };
 
 // ── Ordem do kanban ───────────────────────────────────────────────────────────

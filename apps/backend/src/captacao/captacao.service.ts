@@ -14,7 +14,10 @@ const VALID_STATUS: PipelineStatus[] = [
 const VALID_SOURCE_TYPES: SourceType[] = [
   'edital', 'grant', 'patrocinio', 'lei_incentivo', 'outro',
 ];
-const VALID_TEMPLATE_TYPES = ['project_summary', 'cover_letter', 'budget_memo'];
+const VALID_TEMPLATE_TYPES = [
+  'project_summary', 'cover_letter', 'budget_memo',
+  'oficio', 'chamamento', 'projeto_esboco', 'proposta',
+];
 
 @Injectable()
 export class CaptacaoService {
@@ -234,6 +237,19 @@ export class CaptacaoService {
     };
   }
 
+  async getMonthlySubmissions(): Promise<Array<{ month: string; count: number }>> {
+    const rows = await this.dataSource.query(`
+      SELECT to_char(date_trunc('month', created_at), 'YYYY-MM') AS month,
+             COUNT(*)::int AS count
+      FROM captacao_opportunities
+      WHERE deleted_at IS NULL
+        AND created_at >= now() - INTERVAL '12 months'
+      GROUP BY 1
+      ORDER BY 1
+    `);
+    return rows;
+  }
+
   // ── Expirar oportunidades vencidas (cron) ─────────────────────────────────
 
   async expireStale(): Promise<{ expired: number }> {
@@ -248,6 +264,21 @@ export class CaptacaoService {
     `);
     this.logger.log(`[Captação] expire_stale: ${result.length} oportunidades arquivadas`);
     return { expired: result.length };
+  }
+
+  // ── Prévia do documento (texto bruto da IA, sem build DOCX) ─────────────────
+
+  async previewDocument(
+    opportunityId: string,
+    templateType: string,
+    requestId: string,
+  ): Promise<string> {
+    if (!VALID_TEMPLATE_TYPES.includes(templateType)) {
+      throw new BadRequestException(`template_type inválido: ${templateType}`);
+    }
+    const opp = await this.oppRepo.findOne({ where: { id: opportunityId, deleted_at: IsNull() } });
+    if (!opp) throw new NotFoundException('Oportunidade não encontrada');
+    return this.geminiSvc.generateDocument(opp, templateType, requestId);
   }
 
   // ── Gerar documento DOCX ─────────────────────────────────────────────────

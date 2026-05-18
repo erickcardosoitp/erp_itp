@@ -9,7 +9,14 @@ export type PipelineStatus =
   | 'reprovado'
   | 'archived';
 
-export type TemplateType = 'project_summary' | 'cover_letter' | 'budget_memo';
+export type TemplateType =
+  | 'project_summary'
+  | 'cover_letter'
+  | 'budget_memo'
+  | 'oficio'
+  | 'chamamento'
+  | 'projeto_esboco'
+  | 'proposta';
 
 export type ScoreLabel = 'Excelente' | 'Alta' | 'Média' | 'Baixa';
 
@@ -85,6 +92,11 @@ export interface InsightsResponse {
   kpis: InsightsKPIs;
   by_pipeline_status: Array<{ status: string; count: number }>;
   by_source_type: Array<{ source_type: string; count: number; total_value: number }>;
+}
+
+export interface MonthlyEntry {
+  month: string;
+  count: number;
 }
 
 export interface SearchState {

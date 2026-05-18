@@ -57,6 +57,114 @@ Se não encontrar oportunidades relevantes, retorne: []
 `.trim();
 
 const DOCUMENT_PROMPTS: Record<string, (opp: any) => string> = {
+  oficio: (opp) => `
+Você é especialista em elaboração de documentos oficiais para organizações do terceiro setor brasileiro.
+
+CONTEXTO INSTITUCIONAL:
+${ITP_CONTEXT}
+
+OPORTUNIDADE:
+- Título: ${opp.title}
+- Organização financiadora: ${opp.entity_name || 'Organização financiadora'}
+- Valor estimado: ${opp.estimated_value ? `R$ ${Number(opp.estimated_value).toLocaleString('pt-BR')}` : 'A definir'}
+
+TAREFA: Redija um Ofício formal solicitando apoio/parceria para esta oportunidade.
+
+O ofício deve conter:
+- Número: OFÍCIO Nº ___/2025-ITP
+- Local e data: Rio de Janeiro, ${new Date().toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' })}
+- Destinatário: (deixar espaço para nome e cargo)
+- Assunto: Solicitação de apoio — ${opp.title}
+- Corpo: apresentação do ITP, objetivo do ofício, proposta, indicadores de impacto, pedido formal
+- Assinatura: Diretoria Executiva — Instituto Tia Pretinha
+- Tom: formal, respeitoso, objetivo. Máximo 1 página.
+`.trim(),
+
+  chamamento: (opp) => `
+Você é especialista em elaboração de documentos para captação de recursos no terceiro setor brasileiro.
+
+CONTEXTO INSTITUCIONAL:
+${ITP_CONTEXT}
+
+OPORTUNIDADE:
+- Título: ${opp.title}
+- Organização financiadora: ${opp.entity_name || 'Organização financiadora'}
+- Valor estimado: ${opp.estimated_value ? `R$ ${Number(opp.estimated_value).toLocaleString('pt-BR')}` : 'A definir'}
+- Prazo: ${opp.deadline ? new Date(opp.deadline).toLocaleDateString('pt-BR') : 'A confirmar'}
+
+TAREFA: Redija uma Resposta ao Chamamento Público / Manifestação de Interesse para esta oportunidade.
+
+O documento deve conter:
+1. IDENTIFICAÇÃO DA ORGANIZAÇÃO PROPONENTE
+2. DECLARAÇÃO DE INTERESSE E CAPACIDADE TÉCNICA
+3. HISTÓRICO E QUALIFICAÇÃO DO ITP
+4. DESCRIÇÃO DA PROPOSTA
+5. METODOLOGIA E CRONOGRAMA
+6. RESULTADOS ESPERADOS
+7. DECLARAÇÕES LEGAIS (ato constitutivo, CNPJ, certidões negativas)
+8. ASSINATURA
+
+Tom: formal, técnico, convincente. Formato: documento de habilitação.
+`.trim(),
+
+  projeto_esboco: (opp) => `
+Você é especialista em elaboração de projetos sociais para o terceiro setor brasileiro.
+
+CONTEXTO INSTITUCIONAL:
+${ITP_CONTEXT}
+
+OPORTUNIDADE:
+- Título: ${opp.title}
+- Organização financiadora: ${opp.entity_name || 'Organização financiadora'}
+- Valor estimado: ${opp.estimated_value ? `R$ ${Number(opp.estimated_value).toLocaleString('pt-BR')}` : 'A definir'}
+- Prazo: ${opp.deadline ? new Date(opp.deadline).toLocaleDateString('pt-BR') : 'A confirmar'}
+
+TAREFA: Redija um Esboço de Projeto (Project Brief) estruturado para esta oportunidade.
+
+O esboço deve cobrir:
+1. TÍTULO DO PROJETO
+2. PROBLEMA / NECESSIDADE IDENTIFICADA
+3. OBJETIVO GERAL e OBJETIVOS ESPECÍFICOS (mínimo 3)
+4. PÚBLICO-ALVO (perfil, quantidade, localização)
+5. ATIVIDADES PROPOSTAS (por eixo)
+6. INDICADORES DE RESULTADO (quantitativos e qualitativos)
+7. PRAZO DE EXECUÇÃO
+8. ORÇAMENTO ESTIMADO (tabela resumida)
+9. EQUIPE MÍNIMA NECESSÁRIA
+10. ALINHAMENTO COM OS ODS (Objetivos de Desenvolvimento Sustentável)
+
+Extensão: 2–3 páginas. Tom: técnico e objetivo.
+`.trim(),
+
+  proposta: (opp) => `
+Você é especialista em elaboração de propostas técnicas para captação de recursos no terceiro setor brasileiro.
+
+CONTEXTO INSTITUCIONAL:
+${ITP_CONTEXT}
+
+OPORTUNIDADE:
+- Título: ${opp.title}
+- Organização financiadora: ${opp.entity_name || 'Organização financiadora'}
+- Valor estimado: ${opp.estimated_value ? `R$ ${Number(opp.estimated_value).toLocaleString('pt-BR')}` : 'A definir'}
+- Prazo: ${opp.deadline ? new Date(opp.deadline).toLocaleDateString('pt-BR') : 'A confirmar'}
+
+TAREFA: Redija uma Proposta Técnica completa para submissão a esta oportunidade.
+
+A proposta deve conter:
+1. SUMÁRIO EXECUTIVO
+2. CONTEXTUALIZAÇÃO E JUSTIFICATIVA
+3. OBJETIVOS (geral e específicos)
+4. METODOLOGIA DETALHADA
+5. CRONOGRAMA DE EXECUÇÃO (tabela mês a mês)
+6. PLANO DE MONITORAMENTO E AVALIAÇÃO
+7. ORÇAMENTO DETALHADO (com justificativas por item)
+8. SUSTENTABILIDADE DO PROJETO
+9. EXPERIÊNCIA PRÉVIA DO ITP EM INICIATIVAS SIMILARES
+10. ANEXOS SUGERIDOS
+
+Extensão: 4–6 páginas. Tom: técnico, formal, persuasivo.
+`.trim(),
+
   project_summary: (opp) => `
 Você é especialista em elaboração de documentos para captação de recursos no terceiro setor brasileiro.
 

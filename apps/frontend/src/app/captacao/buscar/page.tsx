@@ -9,15 +9,23 @@ import { SearchResultCard } from '../components/SearchResultCard';
 
 const SOURCE_OPTIONS = Object.entries(SOURCE_TYPE_LABELS) as [SourceType, string][];
 
+const AREAS_OPTIONS = [
+  'educação', 'esporte', 'cultura', 'saúde', 'arte', 'assistência social',
+];
+
 export default function BuscarPage() {
   const [query, setQuery] = useState('');
   const [selectedSources, setSelectedSources] = useState<SourceType[]>([]);
+  const [selectedAreas, setSelectedAreas] = useState<string[]>([]);
 
   const { results, loading, error, lastQuery, search, save } = useCaptacaoSearch();
 
   const handleSearch = () => {
     if (!query.trim() || loading) return;
-    search(query, { source_types: selectedSources.length ? selectedSources : undefined });
+    search(query, {
+      source_types: selectedSources.length ? selectedSources : undefined,
+      areas: selectedAreas.length ? selectedAreas : undefined,
+    });
   };
 
   const toggleSource = (s: SourceType) => {
@@ -62,21 +70,40 @@ export default function BuscarPage() {
           </button>
         </div>
 
-        {/* Filtro de fonte */}
-        <div className="flex flex-wrap gap-2">
-          {SOURCE_OPTIONS.map(([val, label]) => (
-            <button
-              key={val}
-              onClick={() => toggleSource(val)}
-              className={`text-[11px] font-bold px-3 py-1 rounded-full border transition
-                ${selectedSources.includes(val)
-                  ? 'bg-white text-purple-700 border-white'
-                  : 'bg-white/10 text-purple-200 border-white/20 hover:bg-white/20'
-                }`}
-            >
-              {label}
-            </button>
-          ))}
+        {/* Filtros */}
+        <div className="space-y-2">
+          <div className="flex flex-wrap gap-1.5">
+            <span className="text-[10px] font-bold text-purple-300 self-center mr-1">Fonte:</span>
+            {SOURCE_OPTIONS.map(([val, label]) => (
+              <button
+                key={val}
+                onClick={() => setSelectedSources(p => p.includes(val) ? p.filter(x => x !== val) : [...p, val])}
+                className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border transition
+                  ${selectedSources.includes(val)
+                    ? 'bg-white text-purple-700 border-white'
+                    : 'bg-white/10 text-purple-200 border-white/20 hover:bg-white/20'
+                  }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            <span className="text-[10px] font-bold text-purple-300 self-center mr-1">Área:</span>
+            {AREAS_OPTIONS.map(area => (
+              <button
+                key={area}
+                onClick={() => setSelectedAreas(p => p.includes(area) ? p.filter(x => x !== area) : [...p, area])}
+                className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border transition
+                  ${selectedAreas.includes(area)
+                    ? 'bg-white text-purple-700 border-white'
+                    : 'bg-white/10 text-purple-200 border-white/20 hover:bg-white/20'
+                  }`}
+              >
+                {area}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
