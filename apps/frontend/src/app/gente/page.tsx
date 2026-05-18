@@ -2771,7 +2771,10 @@ function RecibosPassagemModal({ colaborador, mes, feriadosMes, diasPagosIniciais
   onAssinadoChange: (assinado: boolean) => void;
 }) {
   const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? '';
-  const [diasPagos, setDiasPagos] = useState<Set<string>>(new Set(diasPagosIniciais));
+  // Dias já pagos E assinados: aparecem na grade como bloqueados mas não entram no novo PDF/seleção
+  const diasBloqueados = assinadoInicial ? new Set(diasPagosIniciais) : new Set<string>();
+  // Inicia vazio se assinado (novo recibo = só dias novos), ou com os já pagos se ainda não assinado
+  const [diasPagos, setDiasPagos] = useState<Set<string>>(assinadoInicial ? new Set() : new Set(diasPagosIniciais));
   const [salvando, setSalvando] = useState(false);
   const [assinado, setAssinado] = useState(assinadoInicial);
   const [togglingAssinado, setTogglingAssinado] = useState(false);
@@ -2795,6 +2798,7 @@ function RecibosPassagemModal({ colaborador, mes, feriadosMes, diasPagosIniciais
   })();
 
   const toggleDia = (iso: string) => {
+    if (diasBloqueados.has(iso)) return; // dia já assinado — não pode alterar
     setDiasPagos(prev => {
       const n = new Set(prev);
       n.has(iso) ? n.delete(iso) : n.add(iso);
@@ -2802,13 +2806,15 @@ function RecibosPassagemModal({ colaborador, mes, feriadosMes, diasPagosIniciais
     });
   };
 
-  const marcarTodos = () => setDiasPagos(new Set(diasTrabalho.map(d => d.iso)));
+  // marcarTodos e desmarcarTodos só operam nos dias ainda não bloqueados
+  const marcarTodos = () => setDiasPagos(new Set(diasTrabalho.filter(d => !diasBloqueados.has(d.iso)).map(d => d.iso)));
   const desmarcarTodos = () => setDiasPagos(new Set());
 
   const vp = Number(colaborador.valor_passagem) || 0;
-  const totalPago = diasPagos.size * vp;
+  const totalDiasPagos = diasBloqueados.size + diasPagos.size; // bloqueados + novos selecionados
+  const totalPago = diasPagos.size * vp; // valor do novo recibo (só dias novos)
   const totalDevido = diasTrabalho.length * vp;
-  const progresso = diasTrabalho.length === 0 ? 0 : Math.round((diasPagos.size / diasTrabalho.length) * 100);
+  const progresso = diasTrabalho.length === 0 ? 0 : Math.round((totalDiasPagos / diasTrabalho.length) * 100);
 
   const fmtMes = (m: string) => {
     const [ano, mm] = m.split('-');
@@ -2819,7 +2825,9 @@ function RecibosPassagemModal({ colaborador, mes, feriadosMes, diasPagosIniciais
   const salvar = async () => {
     setSalvando(true);
     try {
-      const dias = Array.from(diasPagos).map(data => ({ data, valor: vp, status: 'pago' }));
+      // Inclui dias bloqueados (já pagos/assinados) + novos selecionados para não apagar histórico
+      const todosOsDias = new Set([...diasBloqueados, ...diasPagos]);
+      const dias = Array.from(todosOsDias).map(data => ({ data, valor: vp, status: 'pago' }));
       const r = await fetch(`${API}/gente/passagens/lote`, {
         method: 'POST', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -2827,7 +2835,7 @@ function RecibosPassagemModal({ colaborador, mes, feriadosMes, diasPagosIniciais
       });
       if (!r.ok) throw new Error((await r.json()).message);
       toast.success('Registro salvo!');
-      onSaved(new Set(diasPagos));
+      onSaved(todosOsDias);
     } catch (e: any) { toast.error(e.message); }
     setSalvando(false);
   };
@@ -3003,8 +3011,11 @@ function RecibosPassagemModal({ colaborador, mes, feriadosMes, diasPagosIniciais
             <div className="text-sm font-black text-slate-800 dark:text-white">{vp.toLocaleString('pt-BR', { style:'currency', currency:'BRL' })}</div>
           </div>
           <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl px-3 py-2.5">
-            <div className="text-[10px] font-bold uppercase text-green-600 dark:text-green-400">Total pago</div>
+            <div className="text-[10px] font-bold uppercase text-green-600 dark:text-green-400">{diasBloqueados.size > 0 ? 'Novo recibo' : 'Total pago'}</div>
             <div className="text-sm font-black text-green-700 dark:text-green-300">{totalPago.toLocaleString('pt-BR', { style:'currency', currency:'BRL' })}</div>
+            {diasBloqueados.size > 0 && (
+              <div className="text-[9px] text-slate-400 mt-0.5">{diasBloqueados.size} dia{diasBloqueados.size !== 1 ? 's' : ''} já assinado{diasBloqueados.size !== 1 ? 's' : ''}</div>
+            )}
           </div>
           <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl px-3 py-2.5">
             <div className="text-[10px] font-bold uppercase text-blue-600 dark:text-blue-400">Total devido</div>
@@ -3015,7 +3026,7 @@ function RecibosPassagemModal({ colaborador, mes, feriadosMes, diasPagosIniciais
         {/* Barra progresso */}
         <div>
           <div className="flex justify-between text-xs font-bold mb-1.5">
-            <span className="text-slate-500 dark:text-slate-400">{diasPagos.size} de {diasTrabalho.length} dias pagos</span>
+            <span className="text-slate-500 dark:text-slate-400">{totalDiasPagos} de {diasTrabalho.length} dias pagos</span>
             <span className="text-green-600 dark:text-green-400">{progresso}%</span>
           </div>
           <div className="h-2.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
@@ -3045,19 +3056,25 @@ function RecibosPassagemModal({ colaborador, mes, feriadosMes, diasPagosIniciais
         ) : (
           <div className="grid grid-cols-5 sm:grid-cols-7 gap-1.5">
             {diasTrabalho.map(d => {
+              const bloqueado = diasBloqueados.has(d.iso);
               const pago = diasPagos.has(d.iso);
               return (
                 <button
                   key={d.iso}
                   onClick={() => toggleDia(d.iso)}
+                  disabled={bloqueado}
+                  title={bloqueado ? 'Já pago e assinado' : undefined}
                   className={`flex flex-col items-center justify-center rounded-xl py-2.5 px-1 border-2 text-[11px] font-bold transition-all ${
-                    pago
-                      ? 'bg-green-600 border-green-600 text-white shadow-sm'
-                      : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:border-green-400'
+                    bloqueado
+                      ? 'bg-slate-200 dark:bg-slate-700 border-slate-300 dark:border-slate-600 text-slate-400 dark:text-slate-500 cursor-not-allowed opacity-70'
+                      : pago
+                        ? 'bg-green-600 border-green-600 text-white shadow-sm'
+                        : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:border-green-400'
                   }`}
                 >
                   <span className="text-[9px] font-normal opacity-70">{d.diaSem}</span>
                   <span className="text-sm">{d.label.slice(0,2)}</span>
+                  {bloqueado && <span className="text-[7px] opacity-60">✓</span>}
                 </button>
               );
             })}
