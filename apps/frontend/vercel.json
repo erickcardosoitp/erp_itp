@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "buildCommand": "npm ci && npm run build",
+  "buildCommand": "npm ci && rm -rf .next/cache && npm run build",
   "env": {
     "BACKEND_INTERNAL_URL": "https://api.itp.institutotiapretinha.org",
     "APP_URL": "https://itp.institutotiapretinha.org"
