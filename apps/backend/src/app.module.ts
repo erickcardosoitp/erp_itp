@@ -841,6 +841,19 @@ export class AppModule implements OnModuleInit {
           ADD COLUMN IF NOT EXISTS movimentacao_entrada_id TEXT
       `);
       this.logger.log('✅ Colunas gente_vales (forma_pagamento, movimentacao_saida_id, movimentacao_entrada_id) aplicadas (IF NOT EXISTS)');
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS gente_vt_assinaturas (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          colaborador_id UUID NOT NULL,
+          mes_referencia VARCHAR(7) NOT NULL,
+          assinado BOOLEAN NOT NULL DEFAULT false,
+          data_assinatura DATE,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+          UNIQUE(colaborador_id, mes_referencia)
+        )
+      `);
+      this.logger.log('✅ Tabela gente_vt_assinaturas criada (IF NOT EXISTS)');
       this.logger.log('✅ Tabelas do módulo Gente criadas (IF NOT EXISTS)');
 
       // ── Módulo Alunos: complemento + validação de documentos ──────────────

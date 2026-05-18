@@ -445,4 +445,21 @@ export class GenteController {
   removerPagamentoPassagem(@Param('id') id: string) {
     return this.svc.removerPagamentoPassagem(id);
   }
+
+  @Get('passagens/assinaturas')
+  @ModuloPerm('gente', 'visualizar')
+  listarVtAssinaturas(@Query('mes') mes: string) {
+    if (!mes) throw new BadRequestException('mes é obrigatório');
+    return this.svc.listarVtAssinaturas(mes);
+  }
+
+  @Post('passagens/assinaturas')
+  @ModuloPerm('gente', 'incluir')
+  toggleVtAssinatura(@Body() body: { colaborador_id: string; mes_referencia: string; assinado: boolean }) {
+    const { colaborador_id, mes_referencia, assinado } = body;
+    if (!colaborador_id || !mes_referencia || typeof assinado !== 'boolean') {
+      throw new BadRequestException('Payload inválido');
+    }
+    return this.svc.toggleVtAssinatura(colaborador_id, mes_referencia, assinado);
+  }
 }

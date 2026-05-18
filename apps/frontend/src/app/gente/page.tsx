@@ -2760,17 +2760,21 @@ function PontoTab({ reload, colaboradores }: { reload: number; colaboradores: an
 
 // ── Componente: Registro de Pagamentos de Passagem ───────────────────────────
 
-function RecibosPassagemModal({ colaborador, mes, feriadosMes, diasPagosIniciais, onClose, onSaved }: {
+function RecibosPassagemModal({ colaborador, mes, feriadosMes, diasPagosIniciais, assinadoInicial, onClose, onSaved, onAssinadoChange }: {
   colaborador: any;
   mes: string;
   feriadosMes: Set<string>;
   diasPagosIniciais: Set<string>;
+  assinadoInicial: boolean;
   onClose: () => void;
   onSaved: (novaSet: Set<string>) => void;
+  onAssinadoChange: (assinado: boolean) => void;
 }) {
   const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? '';
   const [diasPagos, setDiasPagos] = useState<Set<string>>(new Set(diasPagosIniciais));
   const [salvando, setSalvando] = useState(false);
+  const [assinado, setAssinado] = useState(assinadoInicial);
+  const [togglingAssinado, setTogglingAssinado] = useState(false);
 
   const diasTrabalho = (() => {
     if (!colaborador || !mes) return [];
@@ -2828,6 +2832,23 @@ function RecibosPassagemModal({ colaborador, mes, feriadosMes, diasPagosIniciais
     setSalvando(false);
   };
 
+  const toggleAssinado = async () => {
+    setTogglingAssinado(true);
+    try {
+      const novoStatus = !assinado;
+      const r = await fetch(`${API}/gente/passagens/assinaturas`, {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ colaborador_id: colaborador.id, mes_referencia: mes, assinado: novoStatus }),
+      });
+      if (!r.ok) throw new Error((await r.json()).message);
+      setAssinado(novoStatus);
+      onAssinadoChange(novoStatus);
+      toast.success(novoStatus ? 'Recibo marcado como assinado!' : 'Assinatura removida.');
+    } catch (e: any) { toast.error(e.message); }
+    setTogglingAssinado(false);
+  };
+
   // ── PDF: recibo único — duas vias por folha ────────────────────────────────
   const gerarPdf = async () => {
     if (diasPagos.size === 0) return;
@@ -2880,7 +2901,7 @@ function RecibosPassagemModal({ colaborador, mes, feriadosMes, diasPagosIniciais
       doc.setFont('helvetica','bold'); doc.text(`${diasOrdenados.length} de ${diasTrabalho.length}`, rx + 22, y + 5);
       doc.setFont('helvetica','normal'); doc.text('Período:', rx, y + 10);
       doc.setFont('helvetica','bold'); doc.text(periodoLabel, rx + 22, y + 10);
-      doc.setFont('helvetica','normal'); doc.text('Total a receber:', rx, y + 14.5);
+      doc.setFont('helvetica','normal'); doc.text('Total recebido:', rx, y + 14.5);
       doc.setFont('helvetica','bold'); doc.setFontSize(8.5); doc.setTextColor(30,58,95);
       doc.text(totalStr, rx + 22, y + 14.5);
 
@@ -3044,22 +3065,35 @@ function RecibosPassagemModal({ colaborador, mes, feriadosMes, diasPagosIniciais
         )}
 
         {/* Ações principais */}
-        <div className="flex flex-wrap justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-700">
-          <button onClick={onClose} className={bs}>Fechar</button>
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-200 dark:border-slate-700">
           <button
-            onClick={salvar}
-            disabled={salvando}
-            className="flex items-center gap-1.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-40 text-white text-xs font-bold px-4 py-2 rounded-xl transition"
+            onClick={toggleAssinado}
+            disabled={togglingAssinado}
+            className={`flex items-center gap-1.5 text-xs font-bold px-4 py-2 rounded-xl border-2 transition disabled:opacity-40 ${
+              assinado
+                ? 'bg-emerald-600 border-emerald-600 text-white hover:bg-emerald-700'
+                : 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:border-emerald-400'
+            }`}
           >
-            {salvando ? 'Salvando...' : 'Salvar Registro'}
+            {togglingAssinado ? '...' : assinado ? '✓ Assinado' : 'Marcar como assinado'}
           </button>
-          <button
-            onClick={gerarPdf}
-            disabled={diasPagos.size === 0}
-            className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white text-xs font-bold px-4 py-2 rounded-xl transition"
-          >
-            <Receipt size={13} />Gerar Recibo PDF
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button onClick={onClose} className={bs}>Fechar</button>
+            <button
+              onClick={salvar}
+              disabled={salvando}
+              className="flex items-center gap-1.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-40 text-white text-xs font-bold px-4 py-2 rounded-xl transition"
+            >
+              {salvando ? 'Salvando...' : 'Salvar Registro'}
+            </button>
+            <button
+              onClick={gerarPdf}
+              disabled={diasPagos.size === 0}
+              className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white text-xs font-bold px-4 py-2 rounded-xl transition"
+            >
+              <Receipt size={13} />Gerar Recibo PDF
+            </button>
+          </div>
         </div>
       </div>
     </Modal>
@@ -3081,6 +3115,8 @@ function TransporteTab({ colaboradores, reload }: { colaboradores: any[]; reload
   const [comprovante, setComprovante] = useState<any | null>(null);
   const [feriadosMes, setFeriadosMes] = useState<Set<string>>(new Set());
   const [pagamentosPorCol, setPagamentosPorCol] = useState<Record<string, Set<string>>>({});
+  const [assinaturasPorCol, setAssinaturasPorCol] = useState<Record<string, boolean>>({});
+  const [carregandoPassagens, setCarregandoPassagens] = useState(false);
   const [modalRecibo, setModalRecibo] = useState<any | null>(null);
 
   useEffect(() => {
@@ -3106,22 +3142,32 @@ function TransporteTab({ colaboradores, reload }: { colaboradores: any[]; reload
       .catch(() => {});
   }, [mes]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Carrega pagamentos de todos colaboradores no mês selecionado
+  // Carrega pagamentos e assinaturas de todos colaboradores no mês selecionado
   useEffect(() => {
     if (!mes || colaboradores.length === 0) return;
     let cancelado = false;
-    Promise.all(
-      colaboradores.map(c =>
-        fetch(`${API}/gente/passagens?colaborador_id=${c.id}&mes=${mes}`, { credentials: 'include' })
-          .then(r => r.ok ? r.json() : [])
-          .then((rows: any[]) => [c.id, new Set<string>(rows.map((r: any) => String(r.data).slice(0,10)))] as const)
-          .catch(() => [c.id, new Set<string>()] as const)
-      )
-    ).then(pares => {
+    setCarregandoPassagens(true);
+    Promise.all([
+      Promise.all(
+        colaboradores.map(c =>
+          fetch(`${API}/gente/passagens?colaborador_id=${c.id}&mes=${mes}`, { credentials: 'include' })
+            .then(r => r.ok ? r.json() : [])
+            .then((rows: any[]) => [c.id, new Set<string>(rows.map((r: any) => String(r.data).slice(0,10)))] as const)
+            .catch(() => [c.id, new Set<string>()] as const)
+        )
+      ),
+      fetch(`${API}/gente/passagens/assinaturas?mes=${mes}`, { credentials: 'include' })
+        .then(r => r.ok ? r.json() : [])
+        .catch(() => []),
+    ]).then(([pares, assinaturas]) => {
       if (cancelado) return;
       const map: Record<string, Set<string>> = {};
       pares.forEach(([id, set]) => { map[id] = set; });
       setPagamentosPorCol(map);
+      const aMap: Record<string, boolean> = {};
+      (assinaturas as any[]).forEach((a: any) => { aMap[a.colaborador_id] = !!a.assinado; });
+      setAssinaturasPorCol(aMap);
+      setCarregandoPassagens(false);
     });
     return () => { cancelado = true; };
   }, [colaboradores, mes]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -3249,9 +3295,15 @@ function TransporteTab({ colaboradores, reload }: { colaboradores: any[]; reload
                   </button>
                   {totalMes > 0 && vp > 0 && (
                     <button onClick={() => setModalRecibo(c)}
-                      className="bg-green-100 dark:bg-green-900/30 hover:bg-green-200 text-green-700 dark:text-green-300 text-xs font-bold px-3 py-1.5 rounded-lg transition flex items-center gap-1">
-                      <Receipt size={11} />Pagamentos
+                      disabled={carregandoPassagens}
+                      className="bg-green-100 dark:bg-green-900/30 hover:bg-green-200 text-green-700 dark:text-green-300 text-xs font-bold px-3 py-1.5 rounded-lg transition flex items-center gap-1 disabled:opacity-50">
+                      <Receipt size={11} />{carregandoPassagens ? '...' : 'Pagamentos'}
                     </button>
+                  )}
+                  {assinaturasPorCol[c.id] && (
+                    <span className="flex items-center gap-1 text-[10px] font-black text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 px-2 py-1 rounded-lg">
+                      ✓ Assinado
+                    </span>
                   )}
                 </div>
               </div>
@@ -3306,9 +3358,13 @@ function TransporteTab({ colaboradores, reload }: { colaboradores: any[]; reload
           mes={mes}
           feriadosMes={feriadosMes}
           diasPagosIniciais={pagamentosPorCol[modalRecibo.id] ?? new Set()}
+          assinadoInicial={assinaturasPorCol[modalRecibo.id] ?? false}
           onClose={() => setModalRecibo(null)}
           onSaved={(novaSet) => {
             setPagamentosPorCol(prev => ({ ...prev, [modalRecibo.id]: novaSet }));
+          }}
+          onAssinadoChange={(val) => {
+            setAssinaturasPorCol(prev => ({ ...prev, [modalRecibo.id]: val }));
           }}
         />
       )}

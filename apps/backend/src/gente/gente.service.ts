@@ -2241,4 +2241,24 @@ export class GenteService {
     await this.pagamentoPassagemRepo.remove(p);
     return { ok: true };
   }
+
+  async listarVtAssinaturas(mes: string) {
+    const rows = await this.dataSource.query(
+      `SELECT colaborador_id, mes_referencia, assinado, data_assinatura FROM gente_vt_assinaturas WHERE mes_referencia = $1`,
+      [mes],
+    );
+    return rows;
+  }
+
+  async toggleVtAssinatura(colaborador_id: string, mes_referencia: string, assinado: boolean) {
+    const data_assinatura = assinado ? new Date().toISOString().slice(0, 10) : null;
+    await this.dataSource.query(
+      `INSERT INTO gente_vt_assinaturas (colaborador_id, mes_referencia, assinado, data_assinatura, updated_at)
+       VALUES ($1, $2, $3, $4, now())
+       ON CONFLICT (colaborador_id, mes_referencia)
+       DO UPDATE SET assinado = EXCLUDED.assinado, data_assinatura = EXCLUDED.data_assinatura, updated_at = now()`,
+      [colaborador_id, mes_referencia, assinado, data_assinatura],
+    );
+    return { ok: true, assinado, data_assinatura };
+  }
 }
