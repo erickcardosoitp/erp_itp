@@ -18,6 +18,8 @@ Contato: contato@institutotiapretinha.com.br | (21) 6554-0576
 `.trim();
 
 // ── Templates de prompt ────────────────────────────────────────────────────────
+
+// Prompt para Gemini nativo (tem Google Search grounding)
 const SEARCH_PROMPT = (query: string, areas?: string[], sourceTypes?: string[]) => `
 Você é especialista sênior em captação de recursos para o terceiro setor brasileiro com acesso ao Google Search.
 
@@ -68,6 +70,60 @@ RETORNE APENAS JSON array válido (sem markdown) com até 8 oportunidades:
 ]
 
 Se não encontrar oportunidades com evidências reais, retorne: []
+`.trim();
+
+// Prompt para OpenRouter + resultados Tavily (busca web real)
+const SEARCH_PROMPT_WITH_CONTEXT = (
+  query: string,
+  webResults: Array<{ title: string; url: string; content: string }>,
+  areas?: string[],
+  sourceTypes?: string[],
+) => `
+Você é especialista sênior em captação de recursos para o terceiro setor brasileiro.
+
+PERFIL DA ORGANIZAÇÃO:
+${ITP_CONTEXT}
+Natureza jurídica: Associação Privada sem fins lucrativos
+Anos de operação: ${new Date().getFullYear() - 2010} anos (fundada 2010)
+Localização: Vaz Lobo, Zona Norte do Rio de Janeiro — periferia
+
+CONSULTA: "${query}"
+Áreas: ${areas?.join(', ') || 'esporte, cultura, educação, saúde, arte'}
+Tipos: ${sourceTypes?.join(', ') || 'editais, grants, patrocínios, leis de incentivo'}
+
+RESULTADOS DA BUSCA NA WEB (analise estes dados reais):
+${webResults.map((r, i) => `[${i + 1}] ${r.title}\nURL: ${r.url}\n${r.content.slice(0, 300)}`).join('\n\n---\n\n')}
+
+TAREFA:
+Analise os resultados acima e identifique oportunidades de captação relevantes para o ITP.
+Para cada oportunidade encontrada nos resultados, extraia e estruture as informações.
+Se um resultado mencionar edital aberto, prazo, valor ou requisitos — use essas informações.
+Calcule ai_score (alinhamento com perfil do ITP) e ai_confidence (certeza da informação encontrada).
+
+REGRAS:
+- Use APENAS informações dos resultados acima — não invente dados
+- source_url deve ser a URL do resultado onde encontrou a informação (ou null se incerta)
+- Se um resultado não for uma oportunidade de captação real, ignore-o
+- Retorne entre 1 e 8 oportunidades
+
+RETORNE APENAS JSON array válido (sem markdown):
+[
+  {
+    "title": "Nome do edital/programa",
+    "source_type": "edital|grant|patrocinio|lei_incentivo|outro",
+    "entity_name": "Órgão responsável",
+    "source_url": "URL do resultado ou null",
+    "deadline": "YYYY-MM-DD ou null",
+    "estimated_value": número em reais ou null,
+    "ai_score": 0-100,
+    "ai_confidence": 0-100,
+    "summary": "Descrição em até 220 caracteres",
+    "match_reasons": ["razão baseada nos resultados"],
+    "areas": ["educação", "esporte", "cultura", "saúde"]
+  }
+]
+
+Se nenhum resultado for uma oportunidade válida, retorne: []
 `.trim();
 
 const DOCUMENT_PROMPTS: Record<string, (opp: any) => string> = {
@@ -361,6 +417,43 @@ export class GeminiService {
     return key;
   }
 
+  /** Busca web via Tavily — retorna snippets para contexto do LLM */
+  private async callTavily(
+    query: string,
+  ): Promise<Array<{ title: string; url: string; content: string }>> {
+    const apiKey = this.config.get<string>('TAVILY_API_KEY');
+    if (!apiKey) return [];
+
+    try {
+      const res = await fetch('https://api.tavily.com/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          api_key: apiKey,
+          query,
+          search_depth: 'basic',
+          max_results: 5,
+          include_answer: false,
+        }),
+        signal: AbortSignal.timeout(12_000),
+      });
+
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '');
+        this.logger.warn(`[Tavily] HTTP ${res.status}: ${errText.slice(0, 120)}`);
+        return [];
+      }
+
+      const data: any = await res.json();
+      const results = (data.results ?? []) as Array<{ title: string; url: string; content: string }>;
+      this.logger.log(`[Tavily] ${results.length} resultados para: ${query.slice(0, 60)}`);
+      return results.slice(0, 10);
+    } catch (err: any) {
+      this.logger.warn(`[Tavily] erro: ${err.message?.slice(0, 100)}`);
+      return [];
+    }
+  }
+
   /** Detecta o provedor pela chave e roteia para o endpoint correto */
   private async callGemini(
     model: string,
@@ -545,6 +638,64 @@ export class GeminiService {
       .filter((s): s is string => Boolean(s));
   }
 
+  /** Converte resultado Tavily diretamente em GeminiSearchResult (sem LLM) */
+  private tavilyToSearchResult(
+    result: { title: string; url: string; content: string },
+  ): GeminiSearchResult {
+    const text = `${result.title} ${result.url} ${result.content}`.toLowerCase();
+
+    // Inferir source_type
+    let source_type = 'outro';
+    if (text.includes('edital') || text.includes('chamamento') || text.includes('seleção pública')) source_type = 'edital';
+    else if (text.includes('rouanet') || text.includes('lei de incentivo') || text.includes('lei aldir') || text.includes('lei paulo gustavo')) source_type = 'lei_incentivo';
+    else if (text.includes('grant') || text.includes('fundação') || text.includes('instituto ')) source_type = 'grant';
+    else if (text.includes('patrocín')) source_type = 'patrocinio';
+
+    // Inferir áreas
+    const areas: string[] = [];
+    if (text.includes('educação') || text.includes('escola') || text.includes('creche') || text.includes('aprendiz')) areas.push('educação');
+    if (text.includes('esporte') || text.includes('futebol') || text.includes('atleta') || text.includes('olímpic')) areas.push('esporte');
+    if (text.includes('cultura') || text.includes('arte') || text.includes('música') || text.includes('teatro') || text.includes('dança')) areas.push('cultura');
+    if (text.includes('saúde') || text.includes('médic') || text.includes('nutri') || text.includes('psicolog')) areas.push('saúde');
+    if (areas.length === 0) areas.push('outro');
+
+    // Calcular ai_score baseado em relevância para o ITP
+    let score = 40;
+    if (text.includes('vulnerabilidade') || text.includes('periferia') || text.includes('comunidade')) score += 15;
+    if (text.includes('criança') || text.includes('adolescente') || text.includes('jovem') || text.includes('infantil')) score += 10;
+    if (text.includes('rio de janeiro') || text.includes(' rj ') || text.includes('.rj.')) score += 10;
+    if (text.includes('associação') || text.includes(' osc') || text.includes('organização social') || text.includes('sem fins lucrativos')) score += 10;
+    if (text.includes('parceria') || text.includes('convênio') || text.includes('celebração')) score += 5;
+    score = Math.min(score, 88);
+
+    // Extrair entidade do domínio
+    let entity_name: string | undefined;
+    try {
+      const host = new URL(result.url).hostname.replace('www.', '');
+      if (host.includes('gov.br')) {
+        const parts = host.split('.');
+        entity_name = parts[0].toUpperCase();
+      } else if (host.includes('faperj')) entity_name = 'FAPERJ';
+      else if (host.includes('funarj')) entity_name = 'FUNARJ';
+      else if (host.includes('fadc')) entity_name = 'FADC';
+      else entity_name = host.split('.')[0];
+    } catch { entity_name = undefined; }
+
+    return {
+      title: this.sanitizeText(result.title, 200) ?? 'Sem título',
+      source_type,
+      entity_name,
+      source_url: this.sanitizeUrl(result.url),
+      deadline: undefined,
+      estimated_value: undefined,
+      ai_score: score,
+      ai_confidence: 60,
+      summary: this.sanitizeText(result.content, 220),
+      match_reasons: ['Resultado de busca web em tempo real'],
+      areas,
+    };
+  }
+
   /** Sanitiza campos do objeto opportunity antes de injetar em prompts (evita C-2) */
   private sanitizeOppForPrompt(opp: any): Record<string, string> {
     return {
@@ -621,9 +772,47 @@ export class GeminiService {
     const safeQuery = this.sanitizeQuery(query);
     const safeAreas = this.sanitizeFilterArray(areas, 6);
     const safeSourceTypes = this.sanitizeFilterArray(sourceTypes, 5);
-    const prompt = SEARCH_PROMPT(safeQuery, safeAreas, safeSourceTypes);
     const startedAt = Date.now();
 
+    // Se OpenRouter → usa Tavily para busca web real (LLM gratuito é lento demais)
+    const apiKey = this.getApiKey();
+    const isOpenRouter = apiKey.startsWith('sk-or-');
+
+    if (isOpenRouter) {
+      const tavilyQuery = `${safeQuery} edital OSC associação sem fins lucrativos Rio de Janeiro 2025 2026`;
+      const webResults = await this.callTavily(tavilyQuery);
+
+      if (webResults.length > 0) {
+        const results = webResults
+          .map(r => this.tavilyToSearchResult(r))
+          .filter(r => r.ai_score >= 35)
+          .sort((a, b) => b.ai_score - a.ai_score)
+          .slice(0, 8);
+
+        this.logger.log(JSON.stringify({
+          event: 'tavily_search_direct',
+          request_id: requestId,
+          query: safeQuery,
+          tavily_results: webResults.length,
+          filtered_results: results.length,
+          duration_ms: Date.now() - startedAt,
+        }));
+
+        return results;
+      }
+
+      // Tavily sem resultado → retorna vazio (degradação graciosa)
+      this.logger.warn(JSON.stringify({
+        event: 'tavily_empty',
+        request_id: requestId,
+        query: safeQuery,
+        duration_ms: Date.now() - startedAt,
+      }));
+      return [];
+    }
+
+    // Gemini nativo (tem Google Search grounding) → fluxo original com LLM
+    const prompt = SEARCH_PROMPT(safeQuery, safeAreas, safeSourceTypes);
     const MAX_RETRIES = 3;
     let lastError: Error | null = null;
 
