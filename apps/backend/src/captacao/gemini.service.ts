@@ -406,6 +406,7 @@ export class GeminiService {
       const data: any = await res.json();
       const text: string = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
       if (!text) throw new Error('Resposta vazia do Gemini');
+      if (text.length > 32_000) throw new Error('Resposta do Gemini excede limite de tamanho');
       return text;
     } finally {
       clearTimeout(timer);
@@ -460,12 +461,15 @@ export class GeminiService {
         const data: any = await res.json();
         const text: string = data?.choices?.[0]?.message?.content ?? '';
         if (!text) throw new Error('Resposta vazia do OpenRouter');
-        this.logger.log(`[OpenRouter] modelo usado: ${model}`);
+        if (text.length > 32_000) throw new Error('Resposta excede limite de tamanho');
+        this.logger.log(`[OpenRouter] modelo=${model} chars=${text.length}`);
         return text;
       } catch (err: any) {
         if (err.name === 'AbortError') throw err;
         lastError = err;
-        this.logger.warn(`[OpenRouter] ${model} falhou: ${err.message}`);
+        // não loga mensagem de erro externa raw — apenas tipo e código
+        const safeMsg = err.message?.replace(/sk-or-[^\s"']*/g, '[REDACTED]').slice(0, 150) ?? 'erro desconhecido';
+        this.logger.warn(`[OpenRouter] modelo=${model} falhou: ${safeMsg}`);
       } finally {
         clearTimeout(timer);
       }
@@ -474,14 +478,84 @@ export class GeminiService {
     throw lastError ?? new Error('Todos os modelos OpenRouter gratuitos falharam');
   }
 
-  /** Sanitiza input contra prompt injection */
+  // ── Helpers de sanitização ────────────────────────────────────────────────
+
+  /** Sanitiza query do usuário contra prompt injection */
   private sanitizeQuery(query: string): string {
     return query
-      .slice(0, 500)
-      .replace(/[<>{}[\]\\]/g, '')
-      .replace(/ignore previous instructions?/gi, '')
-      .replace(/system prompt/gi, '')
+      .slice(0, 300)
+      .replace(/[<>{}[\]\\`"]/g, '')
+      .replace(/\r?\n|\r/g, ' ')
+      .replace(/\t/g, ' ')
+      // padrões de prompt injection conhecidos
+      .replace(/ignore\s+(previous\s+)?(instructions?|context|prompt)/gi, '')
+      .replace(/forget\s+(everything|all|above)/gi, '')
+      .replace(/new\s+(instructions?|task|prompt):/gi, '')
+      .replace(/disregard\s+(all|everything|above|previous)/gi, '')
+      .replace(/system\s*(prompt|message|context)/gi, '')
+      .replace(/act\s+as\s+(a\s+)?/gi, '')
+      .replace(/you\s+are\s+now\s+/gi, '')
+      .replace(/jailbreak/gi, '')
+      .replace(/DAN\b/g, '')
+      .replace(/\s{2,}/g, ' ')
       .trim();
+  }
+
+  /** Sanitiza campo de texto livre vindo da LLM ou do usuário */
+  private sanitizeText(value: unknown, maxLen: number): string | undefined {
+    if (value == null) return undefined;
+    const s = String(value)
+      .replace(/<[^>]*>/g, '')           // strip HTML tags
+      .replace(/javascript:/gi, '')
+      .replace(/on\w+\s*=/gi, '')        // strip event handlers
+      .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, '') // control chars
+      .slice(0, maxLen)
+      .trim();
+    return s || undefined;
+  }
+
+  /** Valida e sanitiza URL vinda da LLM */
+  private sanitizeUrl(value: unknown): string | undefined {
+    if (!value || value === 'null' || value === 'undefined') return undefined;
+    const s = String(value).trim().slice(0, 500);
+    try {
+      const parsed = new URL(s);
+      if (!['http:', 'https:'].includes(parsed.protocol)) return undefined;
+      return s;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** Sanitiza array de strings (areas, sourceTypes, match_reasons) */
+  private sanitizeStringArray(value: unknown, maxItems: number, maxItemLen: number): string[] {
+    if (!Array.isArray(value)) return [];
+    return value
+      .slice(0, maxItems)
+      .map(item => this.sanitizeText(item, maxItemLen))
+      .filter((s): s is string => Boolean(s));
+  }
+
+  /** Sanitiza campos do objeto opportunity antes de injetar em prompts (evita C-2) */
+  private sanitizeOppForPrompt(opp: any): Record<string, string> {
+    return {
+      title: this.sanitizeText(opp.title, 200) ?? 'Não especificado',
+      entity_name: this.sanitizeText(opp.entity_name, 150) ?? 'Não especificado',
+      estimated_value: opp.estimated_value ? `R$ ${Number(opp.estimated_value).toLocaleString('pt-BR')}` : 'Não informado',
+      deadline: opp.deadline ? new Date(opp.deadline).toLocaleDateString('pt-BR') : 'Não informado',
+      source_url: this.sanitizeUrl(opp.source_url) ?? 'Não informada',
+      areas: this.sanitizeStringArray(opp.areas, 6, 50).join(', ') || 'Não especificado',
+    };
+  }
+
+  /** Sanitiza array de filtros do usuário antes de injetar em prompts (evita C-1) */
+  private sanitizeFilterArray(arr: string[] | undefined, maxItems: number): string[] | undefined {
+    if (!arr || !Array.isArray(arr)) return undefined;
+    const clean = arr
+      .slice(0, maxItems)
+      .map(s => this.sanitizeQuery(String(s).slice(0, 50)))
+      .filter(Boolean);
+    return clean.length ? clean : undefined;
   }
 
   /** Parse seguro do JSON retornado pelo Gemini */
@@ -508,21 +582,19 @@ export class GeminiService {
           return true;
         })
         .map((item: any): GeminiSearchResult => ({
-          title: String(item.title).trim(),
+          title: this.sanitizeText(item.title, 200) ?? 'Sem título',
           source_type: item.source_type,
-          entity_name: item.entity_name ? String(item.entity_name).trim() : undefined,
-          source_url: item.source_url && item.source_url !== 'null' ? String(item.source_url) : undefined,
-          deadline: item.deadline && item.deadline !== 'null' ? String(item.deadline) : undefined,
-          estimated_value: typeof item.estimated_value === 'number' ? item.estimated_value : undefined,
+          entity_name: this.sanitizeText(item.entity_name, 150),
+          source_url: this.sanitizeUrl(item.source_url),
+          deadline: item.deadline && item.deadline !== 'null' ? String(item.deadline).slice(0, 10) : undefined,
+          estimated_value: typeof item.estimated_value === 'number' && item.estimated_value >= 0
+            ? Math.min(item.estimated_value, 1_000_000_000)
+            : undefined,
           ai_score: Math.min(100, Math.max(0, Number(item.ai_score) || 0)),
           ai_confidence: Math.min(100, Math.max(0, Number(item.ai_confidence) || 0)),
-          summary: item.summary ? String(item.summary).slice(0, 250) : undefined,
-          match_reasons: Array.isArray(item.match_reasons)
-            ? item.match_reasons.map((r: any) => String(r)).slice(0, 5)
-            : [],
-          areas: Array.isArray(item.areas)
-            ? item.areas.map((a: any) => String(a)).slice(0, 6)
-            : [],
+          summary: this.sanitizeText(item.summary, 250),
+          match_reasons: this.sanitizeStringArray(item.match_reasons, 5, 150),
+          areas: this.sanitizeStringArray(item.areas, 6, 50),
         }));
     } catch (err: any) {
       this.logger.warn(`[Gemini] Falha no parse: ${err.message}`);
@@ -538,7 +610,9 @@ export class GeminiService {
     sourceTypes?: string[],
   ): Promise<GeminiSearchResult[]> {
     const safeQuery = this.sanitizeQuery(query);
-    const prompt = SEARCH_PROMPT(safeQuery, areas, sourceTypes);
+    const safeAreas = this.sanitizeFilterArray(areas, 6);
+    const safeSourceTypes = this.sanitizeFilterArray(sourceTypes, 5);
+    const prompt = SEARCH_PROMPT(safeQuery, safeAreas, safeSourceTypes);
     const startedAt = Date.now();
 
     const MAX_RETRIES = 3;
@@ -591,7 +665,8 @@ export class GeminiService {
     opportunity: any,
     requestId: string,
   ): Promise<EligibilityAnalysis> {
-    const prompt = ELIGIBILITY_PROMPT(opportunity);
+    const safeOpp = this.sanitizeOppForPrompt(opportunity);
+    const prompt = ELIGIBILITY_PROMPT(safeOpp);
     const startedAt = Date.now();
     const MAX_RETRIES = 2;
     let lastError: Error | null = null;
@@ -680,9 +755,10 @@ export class GeminiService {
     requestId: string,
   ): Promise<string> {
     const promptFn = DOCUMENT_PROMPTS[templateType];
-    if (!promptFn) throw new Error(`Template "${templateType}" não reconhecido`);
+    if (!promptFn) throw new Error(`Template inválido`);
 
-    const prompt = promptFn(opportunity);
+    const safeOpp = this.sanitizeOppForPrompt(opportunity);
+    const prompt = promptFn(safeOpp);
     const startedAt = Date.now();
     const MAX_RETRIES = 3;
     let lastError: Error | null = null;

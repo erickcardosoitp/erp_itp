@@ -12,9 +12,12 @@ import { CaptacaoService } from './captacao.service';
 import { PipelineStatus, SourceType } from './entities/captacao-opportunity.entity';
 import { ConfigService } from '@nestjs/config';
 
-// Rate limiting simples em memória (por userId)
+// Rate limiting em memória (por userId).
+// Em ambiente serverless multi-instância é uma proteção best-effort;
+// a principal barreira é a autenticação JWT obrigatória em todos os endpoints.
 const searchRateMap = new Map<string, { count: number; resetAt: number }>();
 const docRateMap    = new Map<string, { count: number; resetAt: number }>();
+const previewRateMap = new Map<string, { count: number; resetAt: number }>();
 
 function checkRateLimit(map: Map<string, any>, userId: string, maxPerMin: number): void {
   const now = Date.now();
@@ -23,6 +26,21 @@ function checkRateLimit(map: Map<string, any>, userId: string, maxPerMin: number
   entry.count++;
   map.set(userId, entry);
   if (entry.count > maxPerMin) throw new BadRequestException('Rate limit atingido. Aguarde 1 minuto.');
+}
+
+/** Comparação de segredos em tempo constante — evita timing attack */
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+/** Extrai userId do JWT de forma fail-closed */
+function extractUserId(req: any): string {
+  const id = req.user?.userId ?? req.user?.sub;
+  if (!id || typeof id !== 'string') throw new BadRequestException('Usuário não identificado');
+  return id;
 }
 
 @Controller('captacao')
@@ -42,16 +60,18 @@ export class CaptacaoController {
     @Body() body: { query: string; areas?: string[]; source_types?: string[] },
     @Req() req: any,
   ) {
-    const userId = req.user?.userId ?? req.user?.sub ?? 'unknown';
-    checkRateLimit(searchRateMap, userId, 10);
+    const userId = extractUserId(req);
+    checkRateLimit(searchRateMap, userId, 6);
 
-    if (!body.query || body.query.trim().length < 3) {
+    if (!body.query || typeof body.query !== 'string' || body.query.trim().length < 3) {
       throw new BadRequestException('Query deve ter ao menos 3 caracteres');
     }
+    if (body.query.length > 500) throw new BadRequestException('Query muito longa');
 
     const requestId = uuidv4();
     const startedAt = Date.now();
-    this.logger.log(JSON.stringify({ event: 'search_start', request_id: requestId, user_id: userId, query: body.query }));
+    // loga apenas tamanho da query, não o conteúdo (evita log poisoning)
+    this.logger.log(JSON.stringify({ event: 'search_start', request_id: requestId, user_id: userId, query_len: body.query.length }));
 
     const results = await this.svc.search(body.query, requestId, body.areas, body.source_types);
 
@@ -69,8 +89,8 @@ export class CaptacaoController {
   @Post('opportunities')
   @ModuloPerm('captacao', 'incluir')
   async save(@Body() body: any, @Req() req: any) {
-    const userId = req.user?.userId ?? req.user?.sub;
-    if (!body.title || !body.source_type) {
+    const userId = extractUserId(req);
+    if (!body.title || typeof body.title !== 'string' || !body.source_type) {
       throw new BadRequestException('title e source_type são obrigatórios');
     }
     return this.svc.saveOpportunity(body as any, userId);
@@ -118,7 +138,7 @@ export class CaptacaoController {
   @Patch('opportunities/:id')
   @ModuloPerm('captacao', 'editar')
   update(@Param('id') id: string, @Body() body: any, @Req() req: any) {
-    const userId = req.user?.userId ?? req.user?.sub;
+    const userId = extractUserId(req);
     return this.svc.updateOpportunity(id, body, userId);
   }
 
@@ -130,7 +150,7 @@ export class CaptacaoController {
     @Body() body: { status: PipelineStatus; notes?: string },
     @Req() req: any,
   ) {
-    const userId = req.user?.userId ?? req.user?.sub;
+    const userId = extractUserId(req);
     return this.svc.updateStatus(id, body.status, userId, body.notes);
   }
 
@@ -138,7 +158,7 @@ export class CaptacaoController {
   @Delete('opportunities/:id')
   @ModuloPerm('captacao', 'excluir')
   softDelete(@Param('id') id: string, @Req() req: any) {
-    const userId = req.user?.userId ?? req.user?.sub;
+    const userId = extractUserId(req);
     return this.svc.softDelete(id, userId);
   }
 
@@ -149,10 +169,10 @@ export class CaptacaoController {
     @Param('id') id: string,
     @Req() req: any,
   ) {
-    const userId = req.user?.userId ?? req.user?.sub ?? 'unknown';
-    checkRateLimit(docRateMap, userId, 5);
+    const userId = extractUserId(req);
+    checkRateLimit(docRateMap, userId, 3);
     const requestId = uuidv4();
-    this.logger.log(JSON.stringify({ event: 'eligibility_start', request_id: requestId, user_id: userId, opportunity_id: id }));
+    this.logger.log(JSON.stringify({ event: 'eligibility_start', request_id: requestId, user_id: userId }));
     const analysis = await this.svc.analyzeEligibility(id, requestId);
     return { request_id: requestId, analysis };
   }
@@ -165,7 +185,9 @@ export class CaptacaoController {
     @Body() body: { template_type: string },
     @Req() req: any,
   ) {
-    const requestId = `prev-${Date.now()}`;
+    const userId = extractUserId(req);
+    checkRateLimit(previewRateMap, userId, 5);
+    const requestId = uuidv4();
     const content = await this.svc.previewDocument(id, body.template_type, requestId);
     return { content };
   }
@@ -179,15 +201,17 @@ export class CaptacaoController {
     @Req() req: any,
     @Res() res: Response,
   ) {
-    const userId = req.user?.userId ?? req.user?.sub;
-    checkRateLimit(docRateMap, userId, 5);
+    const userId = extractUserId(req);
+    checkRateLimit(docRateMap, userId, 3);
 
     const requestId = uuidv4();
     const bytes = await this.svc.generateDocument(id, body.template_type, userId, requestId);
 
+    // template_type já foi validado no service — apenas sufixo seguro no header
+    const safeType = body.template_type.replace(/[^a-z_]/g, '').slice(0, 30);
     res.set({
       'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'Content-Disposition': `attachment; filename="captacao_${body.template_type}_${id.slice(0, 8)}.docx"`,
+      'Content-Disposition': `attachment; filename="captacao_${safeType}_${id.slice(0, 8)}.docx"`,
       'Content-Length': bytes.length,
     });
     res.send(bytes);
@@ -198,7 +222,7 @@ export class CaptacaoController {
   @ModuloPerm('captacao', 'visualizar')
   async cronExpire(@Headers('x-cron-secret') secret: string) {
     const expected = this.config.get<string>('CRON_SECRET');
-    if (!expected || secret !== expected) throw new BadRequestException('Acesso negado');
+    if (!expected || !secret || !timingSafeEqual(expected, secret)) throw new BadRequestException('Acesso negado');
     return this.svc.expireStale();
   }
 }

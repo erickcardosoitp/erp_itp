@@ -152,6 +152,12 @@ export class CaptacaoService {
 
   // ── Atualizar campos (PATCH parcial) ──────────────────────────────────────
 
+  // Campos editáveis pelo usuário via PATCH — whitelist explícita (evita mass assignment)
+  private static readonly PATCH_ALLOWED: Array<keyof CaptacaoOpportunity> = [
+    'notes', 'deadline', 'estimated_value', 'source_url',
+    'entity_name', 'title', 'expires_at',
+  ];
+
   async updateOpportunity(
     id: string,
     data: Partial<CaptacaoOpportunity>,
@@ -160,8 +166,25 @@ export class CaptacaoService {
     const opp = await this.oppRepo.findOne({ where: { id, deleted_at: IsNull() } });
     if (!opp) throw new NotFoundException('Oportunidade não encontrada');
 
-    // Nunca sobrescrever campos de controle via PATCH
-    const { id: _, created_by: __, created_at: ___, deleted_at: ____, ...safe } = data as any;
+    const safe: Partial<CaptacaoOpportunity> = {};
+    for (const key of CaptacaoService.PATCH_ALLOWED) {
+      if (key in (data as any)) {
+        (safe as any)[key] = (data as any)[key];
+      }
+    }
+
+    // Valida source_url se presente
+    if ('source_url' in safe && safe.source_url) {
+      try {
+        const parsed = new URL(safe.source_url);
+        if (!['http:', 'https:'].includes(parsed.protocol)) {
+          throw new BadRequestException('source_url deve ser http ou https');
+        }
+      } catch {
+        throw new BadRequestException('source_url inválida');
+      }
+    }
+
     Object.assign(opp, safe);
     return this.oppRepo.save(opp);
   }
