@@ -145,7 +145,7 @@ export default function BuscarPage() {
       {!loading && !error && results.length === 0 && lastQuery && (
         <div className="text-center py-16 text-slate-400">
           <Search size={40} className="mx-auto mb-3 opacity-30" />
-          <p className="text-sm font-semibold">Nenhum resultado para "{lastQuery}"</p>
+          <p className="text-sm font-semibold">Nenhum resultado para &ldquo;{lastQuery}&rdquo;</p>
           <p className="text-xs mt-1">Tente termos diferentes ou remova filtros de fonte</p>
         </div>
       )}
