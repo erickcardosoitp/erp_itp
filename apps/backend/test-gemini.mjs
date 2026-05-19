@@ -42,7 +42,7 @@ try {
         'X-Title': 'ERP ITP',
       },
       body: JSON.stringify({
-        model: 'deepseek/deepseek-chat-v3-0324',
+        model: 'nvidia/nemotron-3-super-120b-a12b:free',
         messages: [{ role: 'user', content: prompt }],
         max_tokens: 100,
       }),

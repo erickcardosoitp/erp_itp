@@ -418,38 +418,60 @@ export class GeminiService {
     prompt: string,
     timeoutMs: number,
   ): Promise<string> {
+    const FREE_MODELS = [
+      'nvidia/nemotron-3-super-120b-a12b:free',
+      'deepseek/deepseek-v4-flash:free',
+      'meta-llama/llama-3.3-70b-instruct:free',
+    ];
+
     const url = 'https://openrouter.ai/api/v1/chat/completions';
-    const body = {
-      model: 'deepseek/deepseek-chat-v3-0324',
-      messages: [{ role: 'user', content: prompt }],
-      max_tokens: 4096,
+    const headers = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+      'HTTP-Referer': 'https://itp.institutotiapretinha.org',
+      'X-Title': 'ERP Instituto Tia Pretinha',
     };
 
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-    try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`,
-          'HTTP-Referer': 'https://itp.institutotiapretinha.org',
-          'X-Title': 'ERP Instituto Tia Pretinha',
-        },
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      });
-      if (!res.ok) {
-        const errText = await res.text().catch(() => res.statusText);
-        throw new Error(`OpenRouter HTTP ${res.status}: ${errText}`);
+    let lastError: Error | null = null;
+
+    for (const model of FREE_MODELS) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }], max_tokens: 4096 }),
+          signal: controller.signal,
+        });
+
+        if (res.status === 429 || res.status === 503) {
+          const errText = await res.text().catch(() => '');
+          lastError = new Error(`OpenRouter ${model} HTTP ${res.status}: ${errText.slice(0, 200)}`);
+          this.logger.warn(`[OpenRouter] ${model} indisponível, tentando próximo...`);
+          continue;
+        }
+
+        if (!res.ok) {
+          const errText = await res.text().catch(() => res.statusText);
+          throw new Error(`OpenRouter HTTP ${res.status}: ${errText}`);
+        }
+
+        const data: any = await res.json();
+        const text: string = data?.choices?.[0]?.message?.content ?? '';
+        if (!text) throw new Error('Resposta vazia do OpenRouter');
+        this.logger.log(`[OpenRouter] modelo usado: ${model}`);
+        return text;
+      } catch (err: any) {
+        if (err.name === 'AbortError') throw err;
+        lastError = err;
+        this.logger.warn(`[OpenRouter] ${model} falhou: ${err.message}`);
+      } finally {
+        clearTimeout(timer);
       }
-      const data: any = await res.json();
-      const text: string = data?.choices?.[0]?.message?.content ?? '';
-      if (!text) throw new Error('Resposta vazia do OpenRouter');
-      return text;
-    } finally {
-      clearTimeout(timer);
     }
+
+    throw lastError ?? new Error('Todos os modelos OpenRouter gratuitos falharam');
   }
 
   /** Sanitiza input contra prompt injection */
