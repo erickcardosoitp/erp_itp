@@ -777,6 +777,14 @@ export class GeminiService {
     // Se OpenRouter → usa Tavily para busca web real (LLM gratuito é lento demais)
     const apiKey = this.getApiKey();
     const isOpenRouter = apiKey.startsWith('sk-or-');
+    const hasTavily = !!this.config.get<string>('TAVILY_API_KEY');
+
+    this.logger.log(JSON.stringify({
+      event: 'search_config',
+      request_id: requestId,
+      provider: isOpenRouter ? 'openrouter' : 'gemini-native',
+      tavily: hasTavily,
+    }));
 
     if (isOpenRouter) {
       const tavilyQuery = `${safeQuery} edital OSC associação sem fins lucrativos Rio de Janeiro 2025 2026`;
