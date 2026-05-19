@@ -156,6 +156,49 @@ export class AppModule implements OnModuleInit {
     try {
       // ── Tabelas críticas criadas PRIMEIRO (antes de qualquer outro await) ──
       // Garante que existam mesmo se a request chegar durante a inicialização
+
+      // Captação — movidas para o topo para evitar 500 durante cold start
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS captacao_opportunities (
+          id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          title            TEXT NOT NULL,
+          source_type      TEXT NOT NULL CHECK (source_type IN ('edital','grant','patrocinio','lei_incentivo','outro')),
+          source_url       TEXT,
+          entity_name      TEXT,
+          deadline         TIMESTAMPTZ,
+          estimated_value  NUMERIC(12,2),
+          status           TEXT NOT NULL DEFAULT 'prospeccao'
+                             CHECK (status IN ('prospeccao','qualificacao','elaboracao','submissao','aprovado','reprovado','archived')),
+          ai_score         SMALLINT CHECK (ai_score >= 0 AND ai_score <= 100),
+          ai_confidence    SMALLINT CHECK (ai_confidence >= 0 AND ai_confidence <= 100),
+          summary          TEXT,
+          match_reasons    JSONB,
+          search_metadata  JSONB,
+          notes            TEXT,
+          created_by       UUID,
+          deleted_at       TIMESTAMPTZ,
+          expires_at       TIMESTAMPTZ,
+          created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+          updated_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `);
+      await this.dataSource.query(`ALTER TABLE captacao_opportunities ADD COLUMN IF NOT EXISTS gemini_raw JSONB`);
+      await this.dataSource.query(`CREATE INDEX IF NOT EXISTS idx_captacao_opp_status   ON captacao_opportunities(status) WHERE deleted_at IS NULL`);
+      await this.dataSource.query(`CREATE INDEX IF NOT EXISTS idx_captacao_opp_deadline ON captacao_opportunities(deadline) WHERE deleted_at IS NULL`);
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS captacao_pipeline_events (
+          id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          opportunity_id UUID NOT NULL REFERENCES captacao_opportunities(id) ON DELETE CASCADE,
+          from_status    TEXT,
+          to_status      TEXT NOT NULL,
+          changed_by     UUID,
+          notes          TEXT,
+          created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `);
+      await this.dataSource.query(`CREATE INDEX IF NOT EXISTS idx_captacao_events_opp ON captacao_pipeline_events(opportunity_id)`);
+      this.logger.log('✅ Tabelas críticas captacao garantidas no topo');
+
       await this.dataSource.query(`
         CREATE TABLE IF NOT EXISTS chamados_academicos (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
