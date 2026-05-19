@@ -421,8 +421,9 @@ export class GeminiService {
   ): Promise<string> {
     const FREE_MODELS = [
       'nvidia/nemotron-3-super-120b-a12b:free',
-      'deepseek/deepseek-v4-flash:free',
       'meta-llama/llama-3.3-70b-instruct:free',
+      'google/gemma-3-27b-it:free',
+      'deepseek/deepseek-r1-distill-llama-70b:free',
     ];
 
     const url = 'https://openrouter.ai/api/v1/chat/completions';
@@ -446,16 +447,17 @@ export class GeminiService {
           signal: controller.signal,
         });
 
-        if (res.status === 429 || res.status === 503) {
-          const errText = await res.text().catch(() => '');
-          lastError = new Error(`OpenRouter ${model} HTTP ${res.status}: ${errText.slice(0, 200)}`);
-          this.logger.warn(`[OpenRouter] ${model} indisponível, tentando próximo...`);
-          continue;
+        // 401/402 = chave inválida ou sem crédito — inútil tentar próximo modelo
+        if (res.status === 401 || res.status === 402) {
+          const errText = await res.text().catch(() => res.statusText);
+          throw new Error(`OpenRouter auth/billing error HTTP ${res.status}: ${errText.slice(0, 200)}`);
         }
 
         if (!res.ok) {
-          const errText = await res.text().catch(() => res.statusText);
-          throw new Error(`OpenRouter HTTP ${res.status}: ${errText}`);
+          const errText = await res.text().catch(() => '');
+          lastError = new Error(`OpenRouter ${model} HTTP ${res.status}: ${errText.slice(0, 200)}`);
+          this.logger.warn(`[OpenRouter] ${model} HTTP ${res.status} — tentando próximo...`);
+          continue;
         }
 
         const data: any = await res.json();
