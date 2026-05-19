@@ -409,7 +409,11 @@ export interface EligibilityAnalysis {
 export class GeminiService {
   private readonly logger = new Logger(GeminiService.name);
 
-  constructor(private readonly config: ConfigService) {}
+  constructor(private readonly config: ConfigService) {
+    const tavilyKey = (this.config.get<string>('TAVILY_API_KEY') ?? '').trim();
+    const geminiKey = (this.config.get<string>('GEMINI_API_KEY') ?? '').trim();
+    this.logger.log(`[INIT] GEMINI_API_KEY=${geminiKey ? geminiKey.slice(0, 8) + '...' : 'AUSENTE'} TAVILY_API_KEY=${tavilyKey ? tavilyKey.slice(0, 8) + '...' : 'AUSENTE'}`);
+  }
 
   private getApiKey(): string {
     const key = this.config.get<string>('GEMINI_API_KEY');
@@ -421,7 +425,7 @@ export class GeminiService {
   private async callTavily(
     query: string,
   ): Promise<Array<{ title: string; url: string; content: string }>> {
-    const apiKey = this.config.get<string>('TAVILY_API_KEY');
+    const apiKey = (this.config.get<string>('TAVILY_API_KEY') ?? '').trim();
     if (!apiKey) return [];
 
     try {
