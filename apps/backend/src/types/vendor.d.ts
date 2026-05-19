@@ -1,26 +1,3 @@
-declare module '@google/generative-ai' {
-  export class GoogleGenerativeAI {
-    constructor(apiKey: string);
-    getGenerativeModel(options: {
-      model: string;
-      tools?: unknown[];
-      generationConfig?: Record<string, unknown>;
-    }): GenerativeModel;
-  }
-
-  interface GenerativeModel {
-    generateContent(
-      request: string | { contents: unknown[] },
-    ): Promise<GenerateContentResult>;
-  }
-
-  interface GenerateContentResult {
-    response: {
-      text(): string;
-    };
-  }
-}
-
 declare module 'docx' {
   export enum HeadingLevel {
     HEADING_1 = 'Heading1',

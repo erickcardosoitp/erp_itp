@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+
+const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 
 // ── Contexto institucional fixo ────────────────────────────────────────────────
 export const ITP_CONTEXT = `
@@ -233,7 +234,7 @@ TAREFA: Elabore um Memorando de Orçamento detalhado para esta oportunidade.
 O documento deve incluir:
 1. RESUMO DO PROJETO
 2. ORÇAMENTO DETALHADO por categoria:
-   - Pessoal (professores, coordenadores, administrativo)
+   - Pessoal (professores, coordinadores, administrativo)
    - Material pedagógico e esportivo
    - Infraestrutura e equipamentos
    - Comunicação e documentação
@@ -262,17 +263,56 @@ export interface GeminiSearchResult {
 @Injectable()
 export class GeminiService {
   private readonly logger = new Logger(GeminiService.name);
-  private client: GoogleGenerativeAI | null = null;
 
   constructor(private readonly config: ConfigService) {}
 
-  private getClient(): GoogleGenerativeAI {
-    if (!this.client) {
-      const apiKey = this.config.get<string>('GEMINI_API_KEY');
-      if (!apiKey) throw new Error('GEMINI_API_KEY não configurada');
-      this.client = new GoogleGenerativeAI(apiKey);
+  private getApiKey(): string {
+    const key = this.config.get<string>('GEMINI_API_KEY');
+    if (!key) throw new Error('GEMINI_API_KEY não configurada');
+    return key;
+  }
+
+  /** Chama a API REST do Gemini diretamente via fetch */
+  private async callGemini(
+    model: string,
+    prompt: string,
+    withSearch: boolean,
+    timeoutMs: number,
+  ): Promise<string> {
+    const apiKey = this.getApiKey();
+    const url = `${GEMINI_BASE}/${model}:generateContent?key=${apiKey}`;
+
+    const body: Record<string, unknown> = {
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    };
+
+    if (withSearch) {
+      body.tools = [{ google_search: {} }];
     }
-    return this.client;
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+
+      if (!res.ok) {
+        const errText = await res.text().catch(() => res.statusText);
+        throw new Error(`Gemini HTTP ${res.status}: ${errText}`);
+      }
+
+      const data: any = await res.json();
+      const text: string = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+      if (!text) throw new Error('Resposta vazia do Gemini');
+      return text;
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   /** Sanitiza input contra prompt injection */
@@ -288,13 +328,11 @@ export class GeminiService {
   /** Parse seguro do JSON retornado pelo Gemini */
   private parseSearchResponse(raw: string): GeminiSearchResult[] {
     try {
-      // Remove markdown fences
       const cleaned = raw
         .replace(/```json\s*/gi, '')
         .replace(/```\s*/g, '')
         .trim();
 
-      // Extrai o array JSON
       const match = cleaned.match(/\[[\s\S]*\]/);
       if (!match) return [];
 
@@ -349,20 +387,7 @@ export class GeminiService {
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       try {
-        const model = this.getClient().getGenerativeModel({
-          model: 'gemini-2.0-flash',
-          // Google Search grounding
-          tools: [{ googleSearch: {} } as any],
-        });
-
-        const result = await Promise.race([
-          model.generateContent(prompt),
-          new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error('Gemini timeout')), 25_000),
-          ),
-        ]);
-
-        const text = (result as any).response.text();
+        const text = await this.callGemini('gemini-2.0-flash', prompt, true, 25_000);
         const parsed = this.parseSearchResponse(text);
 
         this.logger.log(JSON.stringify({
@@ -372,7 +397,6 @@ export class GeminiService {
           duration_ms: Date.now() - startedAt,
           results_count: parsed.length,
           attempt,
-          cache_hit: false,
         }));
 
         return parsed;
@@ -381,7 +405,7 @@ export class GeminiService {
         const isRetryable =
           err.message?.includes('429') ||
           err.message?.includes('503') ||
-          err.message?.includes('timeout');
+          err.name === 'AbortError';
 
         this.logger.warn(`[Gemini] Tentativa ${attempt} falhou: ${err.message}`);
 
@@ -419,18 +443,7 @@ export class GeminiService {
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       try {
-        const model = this.getClient().getGenerativeModel({
-          model: 'gemini-2.0-flash',
-        });
-
-        const result = await Promise.race([
-          model.generateContent(prompt),
-          new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error('Gemini timeout')), 30_000),
-          ),
-        ]);
-
-        const text = (result as any).response.text();
+        const text = await this.callGemini('gemini-2.0-flash', prompt, false, 30_000);
 
         this.logger.log(JSON.stringify({
           event: 'gemini_document',
@@ -447,7 +460,7 @@ export class GeminiService {
         const isRetryable =
           err.message?.includes('429') ||
           err.message?.includes('503') ||
-          err.message?.includes('timeout');
+          err.name === 'AbortError';
 
         if (isRetryable && attempt < MAX_RETRIES) {
           await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt - 1)));
