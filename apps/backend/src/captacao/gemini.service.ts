@@ -422,8 +422,6 @@ export class GeminiService {
     const FREE_MODELS = [
       'nvidia/nemotron-3-super-120b-a12b:free',
       'meta-llama/llama-3.3-70b-instruct:free',
-      'google/gemma-3-27b-it:free',
-      'deepseek/deepseek-r1-distill-llama-70b:free',
     ];
 
     const url = 'https://openrouter.ai/api/v1/chat/completions';
@@ -652,12 +650,17 @@ export class GeminiService {
       }
     }
 
-    this.logger.error(JSON.stringify({
-      event: 'gemini_search_error',
+    const isAllRateLimited = lastError?.message?.includes('429') || lastError?.message?.includes('rate');
+    this.logger.warn(JSON.stringify({
+      event: 'gemini_search_degraded',
       request_id: requestId,
+      reason: isAllRateLimited ? 'rate_limit' : 'all_models_failed',
       error: lastError?.message,
       duration_ms: Date.now() - startedAt,
     }));
+
+    // Rate limit temporário → retorna vazio em vez de 503 (degradação graciosa)
+    if (isAllRateLimited) return [];
 
     throw lastError ?? new Error('Erro desconhecido no Gemini');
   }
