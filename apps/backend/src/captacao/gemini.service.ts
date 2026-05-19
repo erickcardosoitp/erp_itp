@@ -361,7 +361,7 @@ export class GeminiService {
     return key;
   }
 
-  /** Chama a API REST do Gemini diretamente via fetch */
+  /** Detecta o provedor pela chave e roteia para o endpoint correto */
   private async callGemini(
     model: string,
     prompt: string,
@@ -369,19 +369,29 @@ export class GeminiService {
     timeoutMs: number,
   ): Promise<string> {
     const apiKey = this.getApiKey();
-    const url = `${GEMINI_BASE}/${model}:generateContent?key=${apiKey}`;
+    // OpenRouter keys start with sk-or-
+    if (apiKey.startsWith('sk-or-')) {
+      return this.callOpenRouter(apiKey, prompt, timeoutMs);
+    }
+    return this.callGeminiNative(apiKey, model, prompt, withSearch, timeoutMs);
+  }
 
+  /** Gemini REST API nativa (suporta Google Search grounding) */
+  private async callGeminiNative(
+    apiKey: string,
+    model: string,
+    prompt: string,
+    withSearch: boolean,
+    timeoutMs: number,
+  ): Promise<string> {
+    const url = `${GEMINI_BASE}/${model}:generateContent?key=${apiKey}`;
     const body: Record<string, unknown> = {
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
     };
-
-    if (withSearch) {
-      body.tools = [{ google_search: {} }];
-    }
+    if (withSearch) body.tools = [{ google_search: {} }];
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
-
     try {
       const res = await fetch(url, {
         method: 'POST',
@@ -389,15 +399,53 @@ export class GeminiService {
         body: JSON.stringify(body),
         signal: controller.signal,
       });
-
       if (!res.ok) {
         const errText = await res.text().catch(() => res.statusText);
         throw new Error(`Gemini HTTP ${res.status}: ${errText}`);
       }
-
       const data: any = await res.json();
       const text: string = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
       if (!text) throw new Error('Resposta vazia do Gemini');
+      return text;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /** OpenRouter (OpenAI-compatible) — sem Google Search grounding */
+  private async callOpenRouter(
+    apiKey: string,
+    prompt: string,
+    timeoutMs: number,
+  ): Promise<string> {
+    const url = 'https://openrouter.ai/api/v1/chat/completions';
+    const body = {
+      model: 'deepseek/deepseek-chat-v3-0324',
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 4096,
+    };
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+          'HTTP-Referer': 'https://itp.institutotiapretinha.org',
+          'X-Title': 'ERP Instituto Tia Pretinha',
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        const errText = await res.text().catch(() => res.statusText);
+        throw new Error(`OpenRouter HTTP ${res.status}: ${errText}`);
+      }
+      const data: any = await res.json();
+      const text: string = data?.choices?.[0]?.message?.content ?? '';
+      if (!text) throw new Error('Resposta vazia do OpenRouter');
       return text;
     } finally {
       clearTimeout(timer);
@@ -476,7 +524,7 @@ export class GeminiService {
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       try {
-        const text = await this.callGemini('gemini-2.0-flash', prompt, true, 25_000);
+        const text = await this.callGemini('gemini-1.5-flash', prompt, true, 25_000);
         const parsed = this.parseSearchResponse(text);
 
         this.logger.log(JSON.stringify({
@@ -528,7 +576,7 @@ export class GeminiService {
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       try {
-        const text = await this.callGemini('gemini-2.0-flash', prompt, true, 45_000);
+        const text = await this.callGemini('gemini-1.5-flash', prompt, true, 45_000);
 
         const cleaned = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
         const match = cleaned.match(/\{[\s\S]*\}/);
@@ -619,7 +667,7 @@ export class GeminiService {
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       try {
-        const text = await this.callGemini('gemini-2.0-flash', prompt, false, 30_000);
+        const text = await this.callGemini('gemini-1.5-flash', prompt, false, 30_000);
 
         this.logger.log(JSON.stringify({
           event: 'gemini_document',

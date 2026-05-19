@@ -16,45 +16,58 @@ try {
   }
 } catch {}
 
-const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 const key = process.env.GEMINI_API_KEY;
 
 if (!key) {
-  console.error('\n❌ GEMINI_API_KEY não encontrada no .env nem no ambiente.\n');
-  console.log('Como obter a chave:');
-  console.log('1. Acesse: https://aistudio.google.com/');
-  console.log('2. Clique em "Get API key" → "Create API key"');
-  console.log('3. Adicione ao apps/backend/.env:  GEMINI_API_KEY=sua_chave\n');
+  console.error('\n❌ GEMINI_API_KEY não encontrada no .env\n');
   process.exit(1);
 }
 
-console.log(`\n🔑 Chave encontrada: ${key.slice(0, 8)}...${key.slice(-4)}`);
-console.log('📡 Chamando Gemini 2.0 Flash com Google Search...\n');
+const isOpenRouter = key.startsWith('sk-or-');
+console.log(`\n🔑 Provedor: ${isOpenRouter ? 'OpenRouter' : 'Google Gemini nativo'}`);
+console.log(`📡 Testando conexão...\n`);
 
-const body = {
-  contents: [{ role: 'user', parts: [{ text: 'Qual o CNPJ do Instituto Tia Pretinha, Rio de Janeiro? Responda em 1 linha.' }] }],
-};
+const prompt = 'Responda em uma linha: qual é a capital do Rio de Janeiro?';
 
 try {
-  const res = await fetch(`${GEMINI_BASE}/gemini-2.0-flash:generateContent?key=${key}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
+  let res, data, text;
 
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`HTTP ${res.status}: ${err}`);
+  if (isOpenRouter) {
+    res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${key}`,
+        'HTTP-Referer': 'https://itp.institutotiapretinha.org',
+        'X-Title': 'ERP ITP',
+      },
+      body: JSON.stringify({
+        model: 'deepseek/deepseek-chat-v3-0324',
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 100,
+      }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+    data = await res.json();
+    text = data?.choices?.[0]?.message?.content ?? '';
+  } else {
+    res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }] }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+    data = await res.json();
+    text = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
   }
 
-  const data = await res.json();
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
-
-  console.log('✅ Gemini respondeu:');
-  console.log(`   "${text}"\n`);
-  console.log('✅ API funcionando corretamente!\n');
-  console.log('Próximo passo: adicionar GEMINI_API_KEY nas variáveis de ambiente do Vercel:');
-  console.log('  https://vercel.com → Projeto erp-itp-38am → Settings → Environment Variables\n');
+  if (!text) throw new Error('Resposta vazia');
+  console.log(`✅ Resposta: "${text.trim()}"\n`);
+  console.log('✅ API funcionando! Já pode usar a busca no sistema.\n');
+  if (isOpenRouter) {
+    console.log('⚠️  OpenRouter: Google Search grounding indisponível.');
+    console.log('   A IA usará conhecimento de treinamento (não pesquisa em tempo real).\n');
+  }
 } catch (err) {
   console.error(`\n❌ Erro: ${err.message}\n`);
   process.exit(1);
