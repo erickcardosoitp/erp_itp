@@ -437,42 +437,51 @@ export class GeminiService {
     for (const model of FREE_MODELS) {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeoutMs);
+      let res: Response;
       try {
-        const res = await fetch(url, {
+        res = await fetch(url, {
           method: 'POST',
           headers,
           body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }], max_tokens: 4096 }),
           signal: controller.signal,
         });
-
-        // 401/402 = chave inválida ou sem crédito — inútil tentar próximo modelo
-        if (res.status === 401 || res.status === 402) {
-          const errText = await res.text().catch(() => res.statusText);
-          throw new Error(`OpenRouter auth/billing error HTTP ${res.status}: ${errText.slice(0, 200)}`);
-        }
-
-        if (!res.ok) {
-          const errText = await res.text().catch(() => '');
-          lastError = new Error(`OpenRouter ${model} HTTP ${res.status}: ${errText.slice(0, 200)}`);
-          this.logger.warn(`[OpenRouter] ${model} HTTP ${res.status} — tentando próximo...`);
-          continue;
-        }
-
-        const data: any = await res.json();
-        const text: string = data?.choices?.[0]?.message?.content ?? '';
-        if (!text) throw new Error('Resposta vazia do OpenRouter');
-        if (text.length > 32_000) throw new Error('Resposta excede limite de tamanho');
-        this.logger.log(`[OpenRouter] modelo=${model} chars=${text.length}`);
-        return text;
       } catch (err: any) {
+        clearTimeout(timer);
         if (err.name === 'AbortError') throw err;
         lastError = err;
-        // não loga mensagem de erro externa raw — apenas tipo e código
-        const safeMsg = err.message?.replace(/sk-or-[^\s"']*/g, '[REDACTED]').slice(0, 150) ?? 'erro desconhecido';
-        this.logger.warn(`[OpenRouter] modelo=${model} falhou: ${safeMsg}`);
-      } finally {
-        clearTimeout(timer);
+        const safeMsg = err.message?.replace(/sk-or-[^\s"']*/g, '[REDACTED]').slice(0, 150) ?? 'network error';
+        this.logger.warn(`[OpenRouter] modelo=${model} network error: ${safeMsg}`);
+        continue;
       }
+      clearTimeout(timer);
+
+      // 401/402 = chave inválida ou sem crédito — fora do try para não ser engolido pelo catch
+      if (res.status === 401 || res.status === 402) {
+        const errText = await res.text().catch(() => res.statusText);
+        throw new Error(`AUTH_ERROR HTTP ${res.status}: ${errText.slice(0, 200)}`);
+      }
+
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '');
+        lastError = new Error(`HTTP_${res.status} ${model}: ${errText.slice(0, 200)}`);
+        this.logger.warn(`[OpenRouter] ${model} HTTP ${res.status} — tentando próximo...`);
+        continue;
+      }
+
+      const data: any = await res.json();
+      const text: string = data?.choices?.[0]?.message?.content ?? '';
+      if (!text) {
+        lastError = new Error(`EMPTY_RESPONSE ${model}`);
+        this.logger.warn(`[OpenRouter] ${model} retornou resposta vazia — tentando próximo...`);
+        continue;
+      }
+      if (text.length > 32_000) {
+        lastError = new Error(`RESPONSE_TOO_LARGE ${model}`);
+        this.logger.warn(`[OpenRouter] ${model} resposta muito grande — tentando próximo...`);
+        continue;
+      }
+      this.logger.log(`[OpenRouter] modelo=${model} chars=${text.length}`);
+      return text;
     }
 
     throw lastError ?? new Error('Todos os modelos OpenRouter gratuitos falharam');
@@ -650,19 +659,20 @@ export class GeminiService {
       }
     }
 
-    const isAllRateLimited = lastError?.message?.includes('429') || lastError?.message?.includes('rate');
+    const isAuthError = lastError?.message?.startsWith('AUTH_ERROR');
     this.logger.warn(JSON.stringify({
       event: 'gemini_search_degraded',
       request_id: requestId,
-      reason: isAllRateLimited ? 'rate_limit' : 'all_models_failed',
+      reason: isAuthError ? 'auth_error' : 'model_unavailable',
       error: lastError?.message,
       duration_ms: Date.now() - startedAt,
     }));
 
-    // Rate limit temporário → retorna vazio em vez de 503 (degradação graciosa)
-    if (isAllRateLimited) return [];
+    // Auth inválida → propaga (vai virar 503 com mensagem útil)
+    if (isAuthError) throw lastError;
 
-    throw lastError ?? new Error('Erro desconhecido no Gemini');
+    // Qualquer outro erro (rate limit, empty response, timeout, 4xx) → degradação graciosa
+    return [];
   }
 
   /** Analisa elegibilidade de uma oportunidade com pesquisa de beneficiários históricos */
