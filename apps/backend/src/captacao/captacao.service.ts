@@ -266,6 +266,14 @@ export class CaptacaoService {
     return { expired: result.length };
   }
 
+  // ── Análise de elegibilidade via Gemini ──────────────────────────────────────
+
+  async analyzeEligibility(opportunityId: string, requestId: string) {
+    const opp = await this.oppRepo.findOne({ where: { id: opportunityId, deleted_at: IsNull() } });
+    if (!opp) throw new NotFoundException('Oportunidade não encontrada');
+    return this.geminiSvc.analyzeOpportunityEligibility(opp, requestId);
+  }
+
   // ── Prévia do documento (texto bruto da IA, sem build DOCX) ─────────────────
 
   async previewDocument(

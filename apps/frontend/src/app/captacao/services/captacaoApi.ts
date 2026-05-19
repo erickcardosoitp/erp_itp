@@ -1,7 +1,7 @@
 import api from '@/services/api';
 import type {
   SearchResult, Opportunity, PipelineStatus, PipelineResponse,
-  InsightsResponse, TemplateType, MonthlyEntry,
+  InsightsResponse, TemplateType, MonthlyEntry, EligibilityAnalysis,
 } from '../types';
 
 const BASE = '/captacao';
@@ -89,6 +89,16 @@ export async function generateDocument(opportunityId: string, templateType: Temp
     `${BASE}/opportunities/${opportunityId}/documents`,
     { template_type: templateType },
     { responseType: 'blob', timeout: 35_000 },
+  );
+  return res.data;
+}
+
+// ── Análise de elegibilidade (Gemini + Google Search) ────────────────────────
+export async function analyzeEligibility(opportunityId: string): Promise<{ request_id: string; analysis: EligibilityAnalysis }> {
+  const res = await api.post(
+    `${BASE}/opportunities/${opportunityId}/eligibility`,
+    {},
+    { timeout: 60_000 },
   );
   return res.data;
 }

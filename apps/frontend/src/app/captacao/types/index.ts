@@ -106,3 +106,33 @@ export interface SearchState {
   lastQuery: string;
   requestId: string | null;
 }
+
+export interface EligibilityCheckItem {
+  requirement: string;
+  status: 'ok' | 'verificar' | 'risco';
+  detail: string;
+}
+
+export interface EligibilityFitFactor {
+  factor: string;
+  score: number;
+  explanation: string;
+}
+
+export interface EligibilityAnalysis {
+  overall_score: number;
+  verdict: 'alta' | 'media' | 'baixa' | 'incompativel';
+  verdict_explanation: string;
+  past_beneficiaries: {
+    found_evidence: boolean;
+    typical_profile: string;
+    examples: string[];
+    data_source: string;
+  };
+  eligibility_checklist: EligibilityCheckItem[];
+  itp_fit_factors: EligibilityFitFactor[];
+  strengths: string[];
+  risk_factors: string[];
+  recommended_actions: string[];
+  disclaimer: string;
+}

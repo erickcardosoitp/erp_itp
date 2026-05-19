@@ -142,6 +142,21 @@ export class CaptacaoController {
     return this.svc.softDelete(id, userId);
   }
 
+  // ── POST /captacao/opportunities/:id/eligibility ─────────────────────────
+  @Post('opportunities/:id/eligibility')
+  @ModuloPerm('captacao', 'visualizar')
+  async analyzeEligibility(
+    @Param('id') id: string,
+    @Req() req: any,
+  ) {
+    const userId = req.user?.userId ?? req.user?.sub ?? 'unknown';
+    checkRateLimit(docRateMap, userId, 5);
+    const requestId = uuidv4();
+    this.logger.log(JSON.stringify({ event: 'eligibility_start', request_id: requestId, user_id: userId, opportunity_id: id }));
+    const analysis = await this.svc.analyzeEligibility(id, requestId);
+    return { request_id: requestId, analysis };
+  }
+
   // ── POST /captacao/opportunities/:id/documents/preview ───────────────────
   @Post('opportunities/:id/documents/preview')
   @ModuloPerm('captacao', 'visualizar')
