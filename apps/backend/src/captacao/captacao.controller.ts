@@ -2,6 +2,7 @@ import {
   Controller, Get, Post, Patch, Delete,
   Body, Param, Query, Req, Res, Logger,
   UseGuards, BadRequestException, Headers,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
@@ -73,7 +74,16 @@ export class CaptacaoController {
     // loga apenas tamanho da query, não o conteúdo (evita log poisoning)
     this.logger.log(JSON.stringify({ event: 'search_start', request_id: requestId, user_id: userId, query_len: body.query.length }));
 
-    const results = await this.svc.search(body.query, requestId, body.areas, body.source_types);
+    let results: any[];
+    try {
+      results = await this.svc.search(body.query, requestId, body.areas, body.source_types);
+    } catch (err: any) {
+      this.logger.error(JSON.stringify({
+        event: 'search_error', request_id: requestId, user_id: userId,
+        error: err?.message?.slice(0, 300),
+      }));
+      throw new ServiceUnavailableException('Serviço de IA temporariamente indisponível. Tente novamente em instantes.');
+    }
 
     this.logger.log(JSON.stringify({
       event: 'search_done',
@@ -173,7 +183,16 @@ export class CaptacaoController {
     checkRateLimit(docRateMap, userId, 3);
     const requestId = uuidv4();
     this.logger.log(JSON.stringify({ event: 'eligibility_start', request_id: requestId, user_id: userId }));
-    const analysis = await this.svc.analyzeEligibility(id, requestId);
+    let analysis: any;
+    try {
+      analysis = await this.svc.analyzeEligibility(id, requestId);
+    } catch (err: any) {
+      this.logger.error(JSON.stringify({
+        event: 'eligibility_error', request_id: requestId, user_id: userId,
+        error: err?.message?.slice(0, 300),
+      }));
+      throw new ServiceUnavailableException('Análise de elegibilidade temporariamente indisponível. Tente novamente.');
+    }
     return { request_id: requestId, analysis };
   }
 
@@ -188,7 +207,16 @@ export class CaptacaoController {
     const userId = extractUserId(req);
     checkRateLimit(previewRateMap, userId, 5);
     const requestId = uuidv4();
-    const content = await this.svc.previewDocument(id, body.template_type, requestId);
+    let content: string;
+    try {
+      content = await this.svc.previewDocument(id, body.template_type, requestId);
+    } catch (err: any) {
+      this.logger.error(JSON.stringify({
+        event: 'preview_error', request_id: requestId, user_id: userId,
+        error: err?.message?.slice(0, 300),
+      }));
+      throw new ServiceUnavailableException('Prévia do documento temporariamente indisponível. Tente novamente.');
+    }
     return { content };
   }
 
@@ -205,7 +233,16 @@ export class CaptacaoController {
     checkRateLimit(docRateMap, userId, 3);
 
     const requestId = uuidv4();
-    const bytes = await this.svc.generateDocument(id, body.template_type, userId, requestId);
+    let bytes: Buffer;
+    try {
+      bytes = await this.svc.generateDocument(id, body.template_type, userId, requestId);
+    } catch (err: any) {
+      this.logger.error(JSON.stringify({
+        event: 'gendoc_error', request_id: requestId, user_id: userId,
+        error: err?.message?.slice(0, 300),
+      }));
+      throw new ServiceUnavailableException('Geração de documento temporariamente indisponível. Tente novamente.');
+    }
 
     // template_type já foi validado no service — apenas sufixo seguro no header
     const safeType = body.template_type.replace(/[^a-z_]/g, '').slice(0, 30);
