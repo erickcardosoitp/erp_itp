@@ -790,7 +790,8 @@ export class GeminiService {
       tavily: hasTavily,
     }));
 
-    if (isOpenRouter) {
+    // Tavily tem prioridade quando disponível — funciona com qualquer provedor
+    if (hasTavily) {
       const tavilyQuery = `${safeQuery} edital OSC associação sem fins lucrativos Rio de Janeiro 2025 2026`;
       const webResults = await this.callTavily(tavilyQuery);
 
