@@ -120,12 +120,12 @@ export class ProjetosService {
     if (dto.aluno_id) {
       const aluno = await this.dataSource.query(
         `SELECT a.nome_completo, a.data_nascimento, a.nome_responsavel, a.telefone_alternativo,
-                i.nome_responsavel  AS insc_nome_responsavel,
-                i.telefone_responsavel AS insc_telefone_responsavel
+                pi.nome_responsavel  AS insc_nome_responsavel,
+                pi.telefone_responsavel AS insc_telefone_responsavel
          FROM alunos a
-         LEFT JOIN inscricoes i ON i.aluno_id::text = a.id::text
+         LEFT JOIN projeto_inscricoes pi ON pi.aluno_id::text = a.id::text
          WHERE a.id = $1
-         ORDER BY i.id DESC
+         ORDER BY pi.id DESC
          LIMIT 1`,
         [dto.aluno_id],
       );
