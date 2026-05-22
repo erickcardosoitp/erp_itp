@@ -42,8 +42,16 @@ export class ModuloPermGuard implements CanActivate {
 
     const permModulo = permissoes[meta.modulo];
     if (!permModulo) {
-      this.logger.warn(`[${grupoNome}] módulo '${meta.modulo}' não configurado → negado`);
-      throw new ForbiddenException(`Sem acesso ao módulo '${meta.modulo}'.`);
+      // Módulos não configurados no grupo → fallback por nível de role
+      const ROLE_LEVEL: Record<string, number> = {
+        user: 0, cozinha: 1, assist: 2, monitor: 3, prof: 4,
+        adjunto: 5, drt: 8, vp: 9, prt: 10, admin: 10,
+      };
+      const level = ROLE_LEVEL[(user.role ?? '').toLowerCase()] ?? 0;
+      if (meta.acao === 'visualizar') return level >= 1;
+      if (meta.acao === 'incluir' || meta.acao === 'editar') return level >= 4;
+      if (meta.acao === 'excluir') return level >= 8;
+      return false;
     }
 
     const permitido = !!permModulo[meta.acao];

@@ -368,6 +368,7 @@ const MODULOS_SISTEMA = [
   { key: 'estoque',         label: 'Estoque' },
   { key: 'gente',           label: 'Gente' },
   { key: 'relatorios',      label: 'Relatórios' },
+  { key: 'captacao',        label: 'Captação' },
 ];
 
 const ACOES_PERM = [
