@@ -189,7 +189,7 @@ export class GenteController {
   @ModuloPerm('gente', 'excluir')
   deletarRecibo(@Param('id') id: string) { return this.svc.deletarRecibo(id); }
 
-  // ── Ponto ─────────────────────────────────────────────────────────────────
+  // ── Ponto (DESCONTINUADO — dados históricos preservados, UI removida) ──────
 
   @Get('ponto')
   @ModuloPerm('gente', 'visualizar')
