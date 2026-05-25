@@ -789,11 +789,13 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData }
                     <input type="text" placeholder="Nome do documento" value={uploadNomeExtra} onChange={e => setUploadNomeExtra(e.target.value)} className={`${INPUT_CLS} flex-1 min-w-[140px]`} />
                   )}
                 </div>
-                <label className={`flex items-center justify-center gap-2 w-full py-3 border rounded-xl cursor-pointer transition-colors text-xs font-medium ${
+                <label className={`flex flex-col items-center justify-center gap-1 w-full py-3 border rounded-xl cursor-pointer transition-colors text-xs font-medium text-center ${
                   uploadingDoc ? 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed'
                     : 'border-dashed border-purple-300 hover:border-purple-500 hover:bg-purple-50/40 text-gray-500 hover:text-purple-700'
                 }`}>
-                  {uploadingDoc ? <><Loader2 size={13} className="animate-spin" /> Enviando...</> : <><Paperclip size={13} /> Selecionar arquivo (JPG, PNG, PDF · máx 8 MB)</>}
+                  {uploadingDoc
+                    ? <><Loader2 size={13} className="animate-spin" /> Enviando...</>
+                    : <><Paperclip size={13} /><span>Selecionar arquivo</span><span className="text-[10px] opacity-70">JPG, PNG, PDF · máx 8 MB</span></>}
                   <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" disabled={uploadingDoc} className="hidden"
                     onChange={async e => {
                       const file = e.target.files?.[0]; if (!file) return; setUploadingDoc(true);
