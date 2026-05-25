@@ -57,10 +57,16 @@ RETORNE APENAS JSON array válido (sem markdown) com até 8 oportunidades:
   {
     "title": "Nome exato do edital/programa",
     "source_type": "edital|grant|patrocinio|lei_incentivo|outro",
+    "modalidade": "convênio|OS|OSC|licitação|incentivo_fiscal|chamamento_público|outro",
     "entity_name": "Órgão ou empresa responsável",
     "source_url": "URL oficial verificada ou null",
-    "deadline": "YYYY-MM-DD ou null",
-    "estimated_value": número em reais ou null,
+    "link_edital": "URL direta do edital/chamamento público ou null",
+    "deadline": "YYYY-MM-DD (prazo EXATO de submissão) ou null",
+    "estimated_value": número em reais representando valor médio ou único ou null,
+    "valor_minimo": número em reais (menor valor disponível na faixa) ou null,
+    "valor_maximo": número em reais (maior valor disponível na faixa) ou null,
+    "requisitos_elegibilidade": "texto com os principais requisitos de elegibilidade (CNPJ ativo, certidões, etc.)",
+    "documentos_necessarios": ["documento 1", "documento 2", "..."],
     "ai_score": 0-100 (baseado em evidências de beneficiários históricos),
     "ai_confidence": 0-100 (confiança na informação encontrada),
     "summary": "Descrição objetiva em até 220 caracteres incluindo por que o ITP se encaixa",
@@ -69,6 +75,8 @@ RETORNE APENAS JSON array válido (sem markdown) com até 8 oportunidades:
   }
 ]
 
+CAMPOS OBRIGATÓRIOS: title, source_type, ai_score, ai_confidence, match_reasons, areas.
+CAMPOS PRIORITÁRIOS: deadline (data exata), link_edital (URL direta), valor_minimo + valor_maximo (faixa), documentos_necessarios.
 Se não encontrar oportunidades com evidências reais, retorne: []
 `.trim();
 
@@ -111,10 +119,16 @@ RETORNE APENAS JSON array válido (sem markdown):
   {
     "title": "Nome do edital/programa",
     "source_type": "edital|grant|patrocinio|lei_incentivo|outro",
+    "modalidade": "convênio|OS|OSC|licitação|incentivo_fiscal|chamamento_público|outro",
     "entity_name": "Órgão responsável",
     "source_url": "URL do resultado ou null",
-    "deadline": "YYYY-MM-DD ou null",
-    "estimated_value": número em reais ou null,
+    "link_edital": "URL direta do edital se encontrada nos resultados ou null",
+    "deadline": "YYYY-MM-DD (prazo EXATO de submissão extraído dos resultados) ou null",
+    "estimated_value": número em reais (valor único ou médio) ou null,
+    "valor_minimo": número em reais ou null,
+    "valor_maximo": número em reais ou null,
+    "requisitos_elegibilidade": "requisitos extraídos dos resultados ou null",
+    "documentos_necessarios": ["documentos extraídos dos resultados"],
     "ai_score": 0-100,
     "ai_confidence": 0-100,
     "summary": "Descrição em até 220 caracteres",

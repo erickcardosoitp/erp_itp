@@ -156,6 +156,8 @@ export class CaptacaoService {
   private static readonly PATCH_ALLOWED: Array<keyof CaptacaoOpportunity> = [
     'notes', 'deadline', 'estimated_value', 'source_url',
     'entity_name', 'title', 'expires_at',
+    'valor_minimo', 'valor_maximo', 'link_edital',
+    'documentos_necessarios', 'requisitos_elegibilidade', 'modalidade',
   ];
 
   async updateOpportunity(

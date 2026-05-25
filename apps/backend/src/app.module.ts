@@ -183,6 +183,12 @@ export class AppModule implements OnModuleInit {
         )
       `);
       await this.dataSource.query(`ALTER TABLE captacao_opportunities ADD COLUMN IF NOT EXISTS gemini_raw JSONB`);
+      await this.dataSource.query(`ALTER TABLE captacao_opportunities ADD COLUMN IF NOT EXISTS valor_minimo NUMERIC(15,2)`);
+      await this.dataSource.query(`ALTER TABLE captacao_opportunities ADD COLUMN IF NOT EXISTS valor_maximo NUMERIC(15,2)`);
+      await this.dataSource.query(`ALTER TABLE captacao_opportunities ADD COLUMN IF NOT EXISTS link_edital TEXT`);
+      await this.dataSource.query(`ALTER TABLE captacao_opportunities ADD COLUMN IF NOT EXISTS documentos_necessarios JSONB`);
+      await this.dataSource.query(`ALTER TABLE captacao_opportunities ADD COLUMN IF NOT EXISTS requisitos_elegibilidade TEXT`);
+      await this.dataSource.query(`ALTER TABLE captacao_opportunities ADD COLUMN IF NOT EXISTS modalidade VARCHAR(60)`);
       await this.dataSource.query(`CREATE INDEX IF NOT EXISTS idx_captacao_opp_status   ON captacao_opportunities(status) WHERE deleted_at IS NULL`);
       await this.dataSource.query(`CREATE INDEX IF NOT EXISTS idx_captacao_opp_deadline ON captacao_opportunities(deadline) WHERE deleted_at IS NULL`);
       await this.dataSource.query(`

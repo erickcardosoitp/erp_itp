@@ -27,8 +27,26 @@ export class CaptacaoOpportunity {
   @Column({ type: 'timestamptz', nullable: true })
   deadline?: Date;
 
-  @Column({ type: 'numeric', precision: 12, scale: 2, nullable: true })
+  @Column({ type: 'numeric', precision: 15, scale: 2, nullable: true })
   estimated_value?: number;
+
+  @Column({ type: 'numeric', precision: 15, scale: 2, nullable: true })
+  valor_minimo?: number;
+
+  @Column({ type: 'numeric', precision: 15, scale: 2, nullable: true })
+  valor_maximo?: number;
+
+  @Column({ type: 'text', nullable: true })
+  link_edital?: string;
+
+  @Column({ type: 'jsonb', nullable: true })
+  documentos_necessarios?: string[];
+
+  @Column({ type: 'text', nullable: true })
+  requisitos_elegibilidade?: string;
+
+  @Column({ type: 'varchar', length: 60, nullable: true })
+  modalidade?: string;
 
   @Column({ type: 'text', default: 'prospeccao' })
   status: PipelineStatus;
