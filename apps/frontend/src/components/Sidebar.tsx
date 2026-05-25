@@ -8,7 +8,7 @@ import Cookies from 'js-cookie';
 import {
   LayoutDashboard, UserPlus, ClipboardList,
   LogOut, Settings, PanelLeftClose, PanelLeftOpen,
-  GraduationCap, DollarSign, Heart, Package, Loader2, BarChart2, X, Users2, MessageSquare, FolderOpen, Target
+  GraduationCap, DollarSign, Package, Loader2, BarChart2, X, Users2, MessageSquare, FolderOpen, Target
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -25,7 +25,6 @@ const PATH_TO_MODULE: Record<string, string> = {
   '/matriculas': 'matriculas',
   '/academico': 'academico',
   '/financeiro': 'financeiro',
-  '/doacoes': 'doacoes',
   '/estoque': 'estoque',
   '/relatorios': 'relatorios',
   '/gente': 'gente',
@@ -47,7 +46,6 @@ export default function Sidebar({ isCollapsed, setIsCollapsed, mobileOpen, setMo
     { name: 'Cadastro Básico', path: '/cadastro', icon: UserPlus },
     { name: 'Captação', path: '/captacao', icon: Target },
     { name: 'Chamados', path: '/chamados', icon: MessageSquare },
-    { name: 'Doações', path: '/doacoes', icon: Heart },
     { name: 'Estoque', path: '/estoque', icon: Package },
     { name: 'Financeiro', path: '/financeiro', icon: DollarSign },
     { name: 'Gente', path: '/gente', icon: Users2 },

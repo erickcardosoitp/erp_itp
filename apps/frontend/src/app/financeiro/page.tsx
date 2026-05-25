@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   DollarSign, TrendingUp, TrendingDown, Plus, Search, X,
   Edit3, Trash2, AlertCircle, RefreshCw, Settings2,
-  FileBarChart2, ChevronDown, ChevronUp, Upload, CheckCircle2,
+  FileBarChart2, ChevronDown, ChevronUp, Upload, CheckCircle2, Heart,
 } from 'lucide-react';
 import api from '@/services/api';
 import { useAuth } from '@/context/auth-context';
@@ -151,7 +151,7 @@ export default function FinanceiroPage() {
   const [recorrencias, setRecorrencias] = useState<LookupItem[]>([]);
 
   const [isMounted, setIsMounted] = useState(false);
-  const [activeTab, setActiveTab] = useState<'movimentacoes' | 'boletos'>('movimentacoes');
+  const [activeTab, setActiveTab] = useState<'movimentacoes' | 'boletos' | 'doacoes'>('movimentacoes');
   const { canDelete, canAccess } = usePermissions(user);
 
   const loadLookups = useCallback(async () => {
@@ -279,11 +279,11 @@ export default function FinanceiroPage() {
           </div>
           <div className="flex gap-3 flex-wrap">
             <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl gap-1">
-              {([['movimentacoes', 'Movimentações', DollarSign], ['boletos', 'Boletos a Receber', FileBarChart2]] as const).map(([id, label, Icon]) => (
+              {([['movimentacoes', 'Movimentações', DollarSign], ['boletos', 'Boletos a Receber', FileBarChart2], ['doacoes', 'Doações', Heart]] as const).map(([id, label, Icon]) => (
                 <button
                   key={id}
                   onClick={() => setActiveTab(id)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${activeTab === id ? 'bg-emerald-600 text-white shadow' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${activeTab === id ? (id === 'doacoes' ? 'bg-rose-500 text-white shadow' : 'bg-emerald-600 text-white shadow') : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}
                 >
                   <Icon size={13} /> {label}
                 </button>
@@ -304,6 +304,8 @@ export default function FinanceiroPage() {
         </header>
 
         {activeTab === 'boletos' && <BoletosTab podeEscrever={podeEscrever} podeEditar={podeEditar} podeExcluir={podeExcluir} />}
+
+        {activeTab === 'doacoes' && <DoacoesTab podeExcluir={podeExcluir} />}
 
         {activeTab === 'movimentacoes' && <>
         {/* KPIs */}
@@ -1133,5 +1135,178 @@ function FSelect({ label, value, onChange, children, required }: {
         {children}
       </select>
     </div>
+  );
+}
+
+// ─── DoacoesTab ───────────────────────────────────────────────────────────────
+
+interface DoacaoMovimentacao {
+  id: string;
+  data?: string;
+  nome: string;
+  competencia?: string;
+  descricao?: string;
+  plano_contas?: string;
+  status?: string;
+  valor?: number;
+  tipo_pessoa?: string;
+  forma_pagamento?: string;
+  recorrencia?: string;
+}
+
+function statusCorDoacao(s?: string) {
+  if (s === 'Pago' || s === 'Confirmado') return 'bg-emerald-50 text-emerald-600 border-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800';
+  if (s === 'Pendente') return 'bg-amber-50 text-amber-600 border-amber-100 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800';
+  if (s === 'Cancelado') return 'bg-red-50 text-red-500 border-red-100 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800';
+  return 'bg-slate-50 text-slate-500 border-slate-100 dark:bg-slate-700 dark:text-slate-400 dark:border-slate-600';
+}
+
+function DoacoesTab({ podeExcluir }: { podeExcluir: boolean }) {
+  const [lista, setLista] = useState<DoacaoMovimentacao[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [erro, setErro] = useState('');
+  const [busca, setBusca] = useState('');
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await api.get('/financeiro/doacoes');
+      setLista(r.data);
+    } catch { setErro('Erro ao carregar doações.'); }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const totalDoacoes = lista.reduce((s, m) => s + Number(m.valor ?? 0), 0);
+  const totalConfirmadas = lista.filter(m => m.status === 'Pago' || m.status === 'Confirmado').reduce((s, m) => s + Number(m.valor ?? 0), 0);
+  const totalPendentes = lista.filter(m => m.status === 'Pendente').reduce((s, m) => s + Number(m.valor ?? 0), 0);
+
+  const filtrados = lista.filter(m =>
+    m.nome.toLowerCase().includes(busca.toLowerCase()) ||
+    (m.descricao ?? '').toLowerCase().includes(busca.toLowerCase()) ||
+    (m.plano_contas ?? '').toLowerCase().includes(busca.toLowerCase()),
+  );
+
+  const handleDeletar = async (id: string) => {
+    if (!confirm('Confirmar exclusão desta doação?')) return;
+    try { await api.delete(`/financeiro/movimentacoes/${id}`); load(); }
+    catch (e: any) { alert(e.response?.data?.message || 'Erro ao excluir.'); }
+  };
+
+  return (
+    <>
+      {/* KPIs */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 p-5 flex items-center gap-4 shadow-sm">
+          <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-900/30">
+            <Heart size={22} className="text-rose-500" />
+          </div>
+          <div>
+            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Total Doações</p>
+            <p className="text-xl font-black text-rose-500 tracking-tight">{moeda(totalDoacoes)}</p>
+          </div>
+        </div>
+        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 p-5 flex items-center gap-4 shadow-sm">
+          <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/30">
+            <TrendingUp size={22} className="text-emerald-600" />
+          </div>
+          <div>
+            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Confirmadas</p>
+            <p className="text-xl font-black text-emerald-600 tracking-tight">{moeda(totalConfirmadas)}</p>
+          </div>
+        </div>
+        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 p-5 flex items-center gap-4 shadow-sm">
+          <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-900/30">
+            <DollarSign size={22} className="text-amber-500" />
+          </div>
+          <div>
+            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Pendentes</p>
+            <p className="text-xl font-black text-amber-500 tracking-tight">{moeda(totalPendentes)}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Info banner */}
+      <div className="bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 rounded-2xl px-5 py-3 mb-6 flex items-center gap-3">
+        <Heart size={16} className="text-rose-500 shrink-0" />
+        <p className="text-xs text-rose-700 dark:text-rose-300 font-semibold">
+          Exibe automaticamente todas as movimentações com categoria <strong>&quot;Doação&quot;</strong>.
+          Para criar ou editar, use a aba <strong>Movimentações</strong> e selecione a categoria &quot;Doação&quot;.
+        </p>
+      </div>
+
+      {/* Erro */}
+      {erro && (
+        <div className="flex items-start gap-2 rounded-xl p-3 border bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 mb-4">
+          <AlertCircle size={14} className="text-red-500 shrink-0 mt-0.5" />
+          <p className="text-xs text-red-600 dark:text-red-400 font-semibold flex-1">{erro}</p>
+          <button onClick={() => setErro('')} className="text-slate-400 hover:text-slate-600 shrink-0"><X size={12} /></button>
+        </div>
+      )}
+
+      {/* Busca */}
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-100 dark:border-slate-700 shadow-sm mb-6">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar por nome, descrição ou plano de contas..."
+            className="w-full pl-8 pr-3 py-2 border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-rose-400" />
+        </div>
+      </div>
+
+      {/* Tabela */}
+      <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-100 dark:border-slate-700 shadow overflow-hidden">
+        {loading ? (
+          <div className="py-16 text-center text-sm text-slate-400 dark:text-slate-500 font-bold">Carregando...</div>
+        ) : filtrados.length === 0 ? (
+          <div className="py-16 text-center text-sm text-slate-400 dark:text-slate-500 font-bold">Nenhuma doação encontrada.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="bg-slate-50 dark:bg-slate-700/50 border-b border-slate-100 dark:border-slate-600">
+                <tr className="text-[9px] font-black uppercase text-slate-400 tracking-widest">
+                  <th className="text-left px-4 py-4">Data</th>
+                  <th className="text-left px-4 py-4">Nome</th>
+                  <th className="text-left px-4 py-4">Competência</th>
+                  <th className="text-left px-4 py-4">Plano Contas</th>
+                  <th className="text-left px-4 py-4">Descrição</th>
+                  <th className="text-center px-4 py-4">Status</th>
+                  <th className="text-right px-4 py-4">Valor</th>
+                  <th className="text-left px-4 py-4">Tipo Pessoa</th>
+                  <th className="text-left px-4 py-4">Forma Pgto</th>
+                  <th className="text-left px-4 py-4">Recorrência</th>
+                  {podeExcluir && <th className="text-right px-4 py-4">Ações</th>}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50 dark:divide-slate-700">
+                {filtrados.map(m => (
+                  <tr key={m.id} className="hover:bg-rose-50/30 dark:hover:bg-rose-900/20 transition-colors">
+                    <td className="px-4 py-3 text-xs font-mono text-slate-600 dark:text-slate-300 whitespace-nowrap">{dataFmt(m.data)}</td>
+                    <td className="px-4 py-3 font-bold text-slate-800 dark:text-slate-100 text-sm max-w-[160px] truncate">{m.nome}</td>
+                    <td className="px-4 py-3 text-xs text-slate-500">{m.competencia || '–'}</td>
+                    <td className="px-4 py-3 text-xs text-slate-500">{m.plano_contas || '–'}</td>
+                    <td className="px-4 py-3 text-xs text-slate-500 max-w-[200px] truncate">{m.descricao || '–'}</td>
+                    <td className="px-4 py-3 text-center">
+                      <span className={`px-2 py-0.5 rounded-lg text-[9px] font-black uppercase border ${statusCorDoacao(m.status)}`}>
+                        {m.status || '–'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right font-bold text-slate-800 dark:text-slate-100 whitespace-nowrap">{moeda(m.valor)}</td>
+                    <td className="px-4 py-3 text-xs text-slate-500">{m.tipo_pessoa || '–'}</td>
+                    <td className="px-4 py-3 text-xs text-slate-500">{m.forma_pagamento || '–'}</td>
+                    <td className="px-4 py-3 text-xs text-slate-500">{m.recorrencia || '–'}</td>
+                    {podeExcluir && (
+                      <td className="px-4 py-3 text-right">
+                        <button onClick={() => handleDeletar(m.id)} className="p-1.5 rounded-lg bg-red-500 hover:bg-red-600 text-white transition-colors"><Trash2 size={11} /></button>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </>
   );
 }
