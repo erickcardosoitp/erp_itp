@@ -1181,119 +1181,112 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
         </button>
       </div>
 
-      <div className="bg-white rounded-3xl border border-slate-100 shadow overflow-hidden">
-        {loading ? (
-          <div className="py-16 text-center text-sm text-slate-400">Carregando...</div>
-        ) : erroLoad ? (
-          <div className="py-12 text-center space-y-2">
-            <div className="text-red-500 text-sm font-bold">Erro ao carregar alunos</div>
-            <div className="text-slate-400 text-xs max-w-md mx-auto">{erroLoad}</div>
-            <button onClick={load} className="mt-2 text-xs text-purple-600 underline">Tentar novamente</button>
-          </div>
-        ) : alunos.length === 0 ? (
-          <div className="py-16 text-center text-sm text-slate-400">Nenhum aluno encontrado.</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-[11px]">
-              <thead className="bg-slate-50 border-b border-slate-100">
-                <tr className="text-[9px] font-black uppercase text-slate-400">
-                  <th className="text-left px-4 py-3">Aluno</th>
-                  <th className="text-left px-4 py-3">Matrícula</th>
-                  <th className="text-left px-4 py-3">CPF</th>
-                  <th className="text-left px-4 py-3">Turmas</th>
-                  <th className="text-center px-4 py-3">Status</th>
-                  <th className="text-left px-4 py-3">Data Matr.</th>
-                  <th className="text-center px-4 py-3">Ficha</th>
-                  {podeEditar && <th className="text-center px-4 py-3">Ações</th>}
-                </tr>
-              </thead>
-              <tbody>
-                {alunos.map((a, i) => (
-                  <tr key={a.id} className={`border-b border-slate-50 hover:bg-purple-50/30 transition-colors ${i % 2 === 0 ? '' : 'bg-slate-50/30'}`}>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        {a.foto_url
-                          ? <img src={a.foto_url} alt="" className="w-8 h-8 rounded-full object-cover shrink-0 border border-slate-100 shadow-sm" />
-                          : <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-100 to-purple-200 flex items-center justify-center shrink-0 text-[11px] font-black text-purple-600">
-                              {(a.nome_completo[0] || '?').toUpperCase()}
-                            </div>
-                        }
-                        <div>
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="font-bold text-slate-800">{a.nome_completo}</span>
-                            {camposFaltando(a).length > 0 && (
-                              <span title={`Faltando: ${camposFaltando(a).join(', ')}`}
-                                className="text-[8px] font-black uppercase px-1.5 py-0.5 rounded-full border bg-amber-100 text-amber-700 border-amber-200 cursor-help">
-                                ⚠ incompleto
-                              </span>
-                            )}
-                            {a.cuidado_especial && a.cuidado_especial !== 'Não' && (() => {
-                              const b = CUIDADO_BADGE[a.cuidado_especial] || { label: 'Cuidado Espec.', color: 'bg-pink-100 text-pink-700 border-pink-200' };
-                              return <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded-full border ${b.color}`}>{b.label}</span>;
-                            })()}
-                          </div>
-                          <div className="text-[9px] text-slate-400">{a.celular || a.email || '–'}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 font-mono text-purple-700 font-bold text-[10px]">{a.numero_matricula || '–'}</td>
-                    <td className="px-4 py-3 text-slate-500 font-mono text-[10px]">{a.cpf || '–'}</td>
-                    <td className="px-4 py-3 max-w-[220px]">
-                      {(a.turmas && a.turmas.length > 0) ? (
-                        <div className="flex flex-wrap gap-1">
-                          {(() => {
-                            const todas = a.turmas;
-                            const visiveis = todas.slice(0, 3);
-                            const extras = todas.length - 3;
-                            return (<>
-                              {visiveis.map((t: any) => (
-                                <span key={t.id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black text-white shadow-sm"
-                                  style={{ backgroundColor: t.cor || '#6d28d9', opacity: t.status !== 'ativo' ? 0.6 : 1 }}>
-                                  {t.nome}
-                                </span>
-                              ))}
-                              {extras > 0 && (
-                                <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-slate-100 text-slate-500">+{extras}</span>
-                              )}
-                            </>);
-                          })()}
-                        </div>
-                      ) : (
-                        <span className="text-slate-300 text-[10px]">Sem turma</span>
+      {loading ? (
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm py-20 text-center text-sm text-slate-400">Carregando...</div>
+      ) : erroLoad ? (
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm py-12 text-center space-y-2">
+          <div className="text-red-500 text-sm font-bold">Erro ao carregar alunos</div>
+          <div className="text-slate-400 text-xs max-w-md mx-auto">{erroLoad}</div>
+          <button onClick={load} className="mt-2 text-xs text-purple-600 underline">Tentar novamente</button>
+        </div>
+      ) : alunos.length === 0 ? (
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm py-20 text-center text-sm text-slate-400">Nenhum aluno encontrado.</div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+          {alunos.map((a) => {
+            const faltam = camposFaltando(a);
+            const cuidadoBadge = a.cuidado_especial && a.cuidado_especial !== 'Não'
+              ? (CUIDADO_BADGE[a.cuidado_especial] || { label: 'Cuidado Espec.', color: 'bg-pink-100 text-pink-700 border-pink-200' })
+              : null;
+            const turmasVisiveis = (a.turmas || []).slice(0, 3);
+            const turmasExtras = (a.turmas || []).length - 3;
+            const iniciais = (a.nome_completo || '?').split(' ').filter(Boolean).slice(0, 2).map((n: string) => n[0]).join('').toUpperCase();
+            return (
+              <div key={a.id} className="bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-md hover:border-purple-200 transition-all duration-200 flex flex-col overflow-hidden">
+                {/* Topo colorido por status */}
+                <div className={`h-1.5 w-full ${a.ativo ? 'bg-gradient-to-r from-purple-500 to-violet-400' : 'bg-slate-200'}`} />
+
+                <div className="p-4 flex-1 flex flex-col gap-3">
+                  {/* Identidade */}
+                  <div className="flex items-start gap-3">
+                    <div className="shrink-0">
+                      {a.foto_url
+                        ? <img src={a.foto_url} alt="" className="w-12 h-12 rounded-xl object-cover border-2 border-white shadow-md" />
+                        : <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-violet-600 flex items-center justify-center border-2 border-white shadow-md">
+                            <span className="text-base font-black text-white">{iniciais}</span>
+                          </div>}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-bold text-sm text-slate-800 leading-snug truncate">{a.nome_completo}</p>
+                      {a.numero_matricula && (
+                        <p className="text-xs font-mono text-purple-600 font-semibold mt-0.5">{a.numero_matricula}</p>
                       )}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase ${a.ativo ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-500'}`}>
-                        {a.ativo ? 'Ativo' : 'Inativo'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-slate-500 text-[10px]">{fmtDate(a.data_matricula)}</td>
-                    <td className="px-4 py-3 text-center">
-                      <button onClick={() => verFicha(a.id)} disabled={fichaLoading}
-                        className="bg-purple-100 text-purple-700 px-3 py-1 rounded-lg text-[9px] font-black uppercase hover:bg-purple-200 transition-colors disabled:opacity-50">
-                        {fichaLoading ? '...' : 'Ver'}
-                      </button>
-                    </td>
-                    {podeEditar && (
-                      <td className="px-4 py-3 text-center">
-                        <div className="flex items-center justify-center gap-1">
-                          <button
-                            onClick={() => inativarAluno(a)}
-                            disabled={inativandoId === a.id}
-                            title="Inativar aluno"
-                            className="px-3 py-1 rounded-lg text-[9px] font-black uppercase transition-colors disabled:opacity-50 bg-red-50 text-red-500 hover:bg-red-100">
-                            {inativandoId === a.id ? '...' : 'Inativar'}
-                          </button>
-                        </div>
-                      </td>
+                      <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${a.ativo ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-500 border-red-200'}`}>
+                          {a.ativo ? 'Ativo' : 'Inativo'}
+                        </span>
+                        {faltam.length > 0 && (
+                          <span title={`Faltando: ${faltam.join(', ')}`} className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-amber-50 text-amber-700 border-amber-200 cursor-help">
+                            ⚠ incompleto
+                          </span>
+                        )}
+                        {cuidadoBadge && (
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${cuidadoBadge.color}`}>{cuidadoBadge.label}</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Contato + matrícula */}
+                  <div className="space-y-1">
+                    {(a.celular || a.email) && (
+                      <p className="text-xs text-slate-500 truncate">{a.celular || a.email}</p>
                     )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+                    {a.cpf && (
+                      <p className="text-xs font-mono text-slate-400">{a.cpf}</p>
+                    )}
+                    {a.data_matricula && (
+                      <p className="text-[11px] text-slate-400">Matrícula: {fmtDate(a.data_matricula)}</p>
+                    )}
+                  </div>
+
+                  {/* Turmas */}
+                  {turmasVisiveis.length > 0 ? (
+                    <div className="flex flex-wrap gap-1">
+                      {turmasVisiveis.map((t: any) => (
+                        <span key={t.id} className="text-[10px] font-semibold px-2 py-0.5 rounded-full text-white shadow-sm ring-1 ring-black/10"
+                          style={{ backgroundColor: t.cor || '#7c3aed', opacity: t.status !== 'ativo' ? 0.55 : 1 }}>
+                          {t.nome}
+                        </span>
+                      ))}
+                      {turmasExtras > 0 && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">+{turmasExtras}</span>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-300 italic">Sem turma vinculada</p>
+                  )}
+                </div>
+
+                {/* Rodapé com ações */}
+                <div className="px-4 pb-4 flex gap-2">
+                  <button onClick={() => verFicha(a.id)} disabled={fichaLoading}
+                    className="flex-1 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition-colors disabled:opacity-50 shadow-sm">
+                    {fichaLoading ? 'Abrindo...' : 'Ver Ficha'}
+                  </button>
+                  {podeEditar && (
+                    <button onClick={() => inativarAluno(a)} disabled={inativandoId === a.id}
+                      title="Inativar aluno"
+                      className="px-3 py-2 border border-red-200 text-red-500 hover:bg-red-50 rounded-xl text-xs font-bold transition-colors disabled:opacity-50">
+                      {inativandoId === a.id ? '...' : 'Inativar'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Erro ao carregar ficha */}
       {fichaErro && (
