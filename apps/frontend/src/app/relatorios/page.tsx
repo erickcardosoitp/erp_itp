@@ -9,7 +9,7 @@ import {
   BarChart2, Download, TrendingUp, Users, BookOpen,
   Package, Heart, DollarSign, Globe, Filter, RefreshCw,
   Leaf, HandHeart, Eye, EyeOff, Mail, Send, X, CheckCircle,
-  AlertCircle,
+  AlertCircle, Target, UserCheck, FileText, Clock, Printer,
 } from 'lucide-react';
 import api from '@/services/api';
 
@@ -30,7 +30,7 @@ function exportarExcel(dados: Record<string, unknown>[], nomeArquivo: string) {
 
 const CORES_PIZZA = ['#7c3aed', '#a855f7', '#c084fc', '#d8b4fe', '#ede9fe', '#4f46e5', '#818cf8'];
 
-type AbaId = 'financeiro' | 'academico' | 'social' | 'estoque' | 'dre' | 'ong';
+type AbaId = 'financeiro' | 'academico' | 'social' | 'estoque' | 'dre' | 'ong' | 'captacao' | 'rh';
 
 /* ── Modal de Envio por E-mail ── */
 function ModalEmail({
@@ -381,6 +381,101 @@ function AbaFinanceiro() {
           </div>
         )}
       </div>
+
+      {/* ── Boletos a Vencer ── */}
+      <BoletosVencerSection />
+
+    </div>
+  );
+}
+
+function BoletosVencerSection() {
+  const [dias, setDias] = useState(30);
+  const [dados, setDados] = useState<any[]>([]);
+  const [carregando, setCarregando] = useState(false);
+
+  const carregar = useCallback(async () => {
+    setCarregando(true);
+    try {
+      const { data } = await api.get('/financeiro/boletos');
+      const hoje = new Date();
+      const limite = new Date(hoje.getTime() + dias * 86_400_000);
+      const filtrados = (data ?? []).filter((b: any) => {
+        if (b.pago) return false;
+        const vcto = new Date(b.data_vencimento ?? b.data_emissao);
+        return vcto >= hoje && vcto <= limite;
+      }).sort((a: any, b: any) => new Date(a.data_vencimento ?? a.data_emissao).getTime() - new Date(b.data_vencimento ?? b.data_emissao).getTime());
+      setDados(filtrados);
+    } catch {/* silencia */} finally { setCarregando(false); }
+  }, [dias]);
+
+  const totalVencer = dados.reduce((s, b) => s + Number(b.valor ?? 0), 0);
+
+  return (
+    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex-wrap gap-3">
+        <h3 className="font-black text-sm uppercase tracking-widest text-slate-700 dark:text-slate-200 flex items-center gap-2">
+          <Clock size={16} className="text-orange-500" /> Boletos a Vencer
+        </h3>
+        <div className="flex items-center gap-2 flex-wrap">
+          <select value={dias} onChange={e => setDias(Number(e.target.value))}
+            className="border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs bg-white dark:bg-slate-800 dark:text-slate-100">
+            <option value={30}>Próximos 30 dias</option>
+            <option value={60}>Próximos 60 dias</option>
+            <option value={90}>Próximos 90 dias</option>
+          </select>
+          <button onClick={carregar} disabled={carregando}
+            className="px-3 py-1.5 text-xs font-bold bg-orange-500 hover:bg-orange-600 text-white rounded-lg flex items-center gap-1 disabled:opacity-50">
+            {carregando ? <RefreshCw size={12} className="animate-spin"/> : <Filter size={12}/>} Gerar
+          </button>
+          {dados.length > 0 && (
+            <button onClick={() => exportarExcel(dados, 'boletos_a_vencer')}
+              className="px-3 py-1.5 text-xs font-bold border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-1">
+              <Download size={12}/> Excel
+            </button>
+          )}
+        </div>
+      </div>
+      {dados.length === 0 && !carregando && (
+        <EmptyRelatorio onClick={carregar} loading={carregando} />
+      )}
+      {dados.length > 0 && (
+        <>
+          <div className="px-5 py-3 bg-orange-50 dark:bg-orange-900/20 border-b border-orange-100 dark:border-orange-800 flex items-center gap-4">
+            <span className="text-[10px] font-black uppercase text-orange-500">{dados.length} boleto{dados.length !== 1 ? 's' : ''} a vencer</span>
+            <span className="font-black text-orange-600">{moeda(totalVencer)}</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-100 dark:border-slate-700">
+                <tr>
+                  {['Credor', 'Valor', 'Vencimento', 'Dias Restantes'].map(h => (
+                    <th key={h} className="px-4 py-3 text-left font-black text-[10px] uppercase tracking-wider text-slate-500">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
+                {dados.map((b: any, i: number) => {
+                  const vcto = new Date(b.data_vencimento ?? b.data_emissao);
+                  const diff = Math.ceil((vcto.getTime() - Date.now()) / 86_400_000);
+                  return (
+                    <tr key={i} className={`hover:bg-slate-50 dark:hover:bg-slate-800/50 ${diff <= 7 ? 'bg-red-50/30 dark:bg-red-900/10' : ''}`}>
+                      <td className="px-4 py-2.5 font-bold text-slate-800 dark:text-slate-200">{b.credor || '—'}</td>
+                      <td className="px-4 py-2.5 font-mono font-black text-orange-600">{moeda(Number(b.valor ?? 0))}</td>
+                      <td className="px-4 py-2.5 font-mono text-slate-600">{vcto.toLocaleDateString('pt-BR')}</td>
+                      <td className="px-4 py-2.5">
+                        <span className={`font-black ${diff <= 7 ? 'text-red-500' : diff <= 15 ? 'text-orange-500' : 'text-slate-600'}`}>
+                          {diff} dia{diff !== 1 ? 's' : ''}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -549,6 +644,127 @@ function AbaAcademico() {
           </div>
         )}
       </div>
+
+      {/* ── Frequência por Turma ── */}
+      <FrequenciaTurmaSection />
+
+    </div>
+  );
+}
+
+function FrequenciaTurmaSection() {
+  const anoAtual = new Date().getFullYear();
+  const [turmas, setTurmas] = useState<{ id: string; nome: string }[]>([]);
+  const [turmaSel, setTurmaSel] = useState('');
+  const [dataIni, setDataIni] = useState(`${anoAtual}-01-01`);
+  const [dataFim, setDataFim] = useState(new Date().toISOString().slice(0, 10));
+  const [dados, setDados] = useState<Record<string, unknown> | null>(null);
+  const [carregando, setCarregando] = useState(false);
+
+  useEffect(() => {
+    api.get('/academico/turmas').then(r => setTurmas(r.data ?? [])).catch(() => {});
+  }, []);
+
+  const carregar = useCallback(async () => {
+    setCarregando(true);
+    try {
+      const params = new URLSearchParams();
+      if (turmaSel) params.set('turma_id', turmaSel);
+      if (dataIni) params.set('data_ini', dataIni);
+      if (dataFim) params.set('data_fim', dataFim);
+      const { data } = await api.get(`/relatorios/academico/frequencia?${params}`);
+      setDados(data);
+    } catch {/* silencia */} finally { setCarregando(false); }
+  }, [turmaSel, dataIni, dataFim]);
+
+  const porAluno = Array.isArray((dados as any)?.por_aluno) ? (dados as any).por_aluno as any[] : [];
+
+  const imprimirLista = () => {
+    const turma = turmas.find(t => t.id === turmaSel)?.nome ?? 'Todas as Turmas';
+    const linhas = porAluno.map(a =>
+      `<tr><td>${a.aluno_nome || '—'}</td><td style="text-align:center">${a.presencas ?? 0}</td><td style="text-align:center">${a.faltas ?? 0}</td><td style="text-align:center">${a.total ?? 0}</td><td style="text-align:center">${a.total > 0 ? ((Number(a.presencas) / Number(a.total)) * 100).toFixed(0) + '%' : '—'}</td></tr>`
+    ).join('');
+    const html = `<!DOCTYPE html><html><head><title>Frequência — ${turma}</title>
+    <style>body{font-family:Arial,sans-serif;font-size:12px;padding:24px}h2{margin-bottom:4px}p{color:#666;font-size:11px;margin-bottom:16px}
+    table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:6px 10px;text-align:left}th{background:#f0f0f0;font-weight:700;font-size:11px;text-transform:uppercase}</style></head>
+    <body><h2>Frequência — ${turma}</h2><p>Período: ${dataIni} a ${dataFim} · Gerado em ${new Date().toLocaleString('pt-BR')}</p>
+    <table><thead><tr><th>Aluno</th><th style="text-align:center">Presenças</th><th style="text-align:center">Faltas</th><th style="text-align:center">Total</th><th style="text-align:center">%</th></tr></thead>
+    <tbody>${linhas}</tbody></table></body></html>`;
+    const win = window.open('', '_blank');
+    if (win) { win.document.write(html); win.document.close(); win.print(); }
+  };
+
+  return (
+    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex-wrap gap-3">
+        <h3 className="font-black text-sm uppercase tracking-widest text-slate-700 dark:text-slate-200 flex items-center gap-2">
+          <Users size={16} className="text-teal-600" /> Frequência por Turma
+        </h3>
+        <div className="flex items-center gap-2 flex-wrap">
+          <select value={turmaSel} onChange={e => setTurmaSel(e.target.value)}
+            className="border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs bg-white dark:bg-slate-800 dark:text-slate-100">
+            <option value="">Todas as turmas</option>
+            {turmas.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
+          </select>
+          <input type="date" value={dataIni} onChange={e => setDataIni(e.target.value)}
+            className="border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs bg-white dark:bg-slate-800 dark:text-slate-100" />
+          <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)}
+            className="border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs bg-white dark:bg-slate-800 dark:text-slate-100" />
+          <button onClick={carregar} disabled={carregando}
+            className="px-3 py-1.5 text-xs font-bold bg-teal-600 hover:bg-teal-700 text-white rounded-lg flex items-center gap-1 disabled:opacity-50">
+            {carregando ? <RefreshCw size={12} className="animate-spin"/> : <Filter size={12}/>} Gerar
+          </button>
+          {porAluno.length > 0 && (
+            <>
+              <button onClick={() => exportarExcel(porAluno, 'frequencia_turma')}
+                className="px-3 py-1.5 text-xs font-bold border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-1">
+                <Download size={12}/> Excel
+              </button>
+              <button onClick={imprimirLista}
+                className="px-3 py-1.5 text-xs font-bold border border-teal-200 text-teal-600 dark:border-teal-700 dark:text-teal-400 rounded-lg hover:bg-teal-50 flex items-center gap-1">
+                <Printer size={12}/> Imprimir
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+      {!dados && <EmptyRelatorio onClick={carregar} loading={carregando} />}
+      {dados && (
+        <div className="overflow-x-auto">
+          {porAluno.length === 0 ? (
+            <p className="text-center text-sm text-slate-400 py-10">Nenhum dado de frequência no período.</p>
+          ) : (
+            <table className="w-full text-xs">
+              <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-100 dark:border-slate-700">
+                <tr>
+                  {['Aluno', 'Turma', 'Presenças', 'Faltas', 'Total', '%'].map(h => (
+                    <th key={h} className="px-4 py-3 text-left font-black text-[10px] uppercase tracking-wider text-slate-500">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
+                {porAluno.map((a: any, i: number) => {
+                  const pct = a.total > 0 ? ((Number(a.presencas) / Number(a.total)) * 100).toFixed(0) : null;
+                  return (
+                    <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                      <td className="px-4 py-2.5 font-bold text-slate-800 dark:text-slate-200">{a.aluno_nome || '—'}</td>
+                      <td className="px-4 py-2.5 text-slate-500">{a.turma_nome || '—'}</td>
+                      <td className="px-4 py-2.5 font-mono font-black text-green-600">{a.presencas ?? 0}</td>
+                      <td className="px-4 py-2.5 font-mono font-black text-red-500">{a.faltas ?? 0}</td>
+                      <td className="px-4 py-2.5 font-mono text-slate-600">{a.total ?? 0}</td>
+                      <td className="px-4 py-2.5">
+                        {pct !== null && (
+                          <span className={`font-black ${Number(pct) >= 75 ? 'text-green-600' : 'text-red-500'}`}>{pct}%</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -1651,6 +1867,253 @@ function AbaONG() {
 }
 
 /* ════════════════════════════════════════════════════════
+   ABA CAPTAÇÃO
+═══════════════════════════════════════════════════════════ */
+
+function AbaCaptacao() {
+  const [insights, setInsights] = useState<Record<string, unknown> | null>(null);
+  const [monthly, setMonthly] = useState<unknown[]>([]);
+  const [carregando, setCarregando] = useState(false);
+
+  const carregar = useCallback(async () => {
+    setCarregando(true);
+    try {
+      const [ri, rm] = await Promise.all([
+        api.get('/captacao/insights'),
+        api.get('/captacao/insights/monthly'),
+      ]);
+      setInsights(ri.data);
+      setMonthly(rm.data ?? []);
+    } catch {/* silencia */} finally { setCarregando(false); }
+  }, []);
+
+  useEffect(() => { carregar(); }, [carregar]);
+
+  const kpis = (insights?.kpis as Record<string, unknown>) ?? {};
+  const byStatus = Array.isArray(insights?.by_pipeline_status) ? (insights!.by_pipeline_status as any[]) : [];
+  const bySource = Array.isArray(insights?.by_source_type) ? (insights!.by_source_type as any[]) : [];
+
+  const STATUS_LABELS: Record<string, string> = {
+    prospeccao: 'Prospecção', qualificacao: 'Qualificação', elaboracao: 'Elaboração',
+    submissao: 'Submissão', aprovado: 'Aprovado', reprovado: 'Reprovado', archived: 'Arquivado',
+  };
+  const STATUS_CORES: Record<string, string> = {
+    prospeccao: '#94a3b8', qualificacao: '#f59e0b', elaboracao: '#3b82f6',
+    submissao: '#8b5cf6', aprovado: '#10b981', reprovado: '#ef4444', archived: '#64748b',
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+          <h3 className="font-black text-sm uppercase tracking-widest text-slate-700 dark:text-slate-200 flex items-center gap-2">
+            <Target size={16} className="text-purple-600" /> KPIs de Captação
+          </h3>
+          <button onClick={carregar} disabled={carregando}
+            className="px-3 py-1.5 text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center gap-1 disabled:opacity-50">
+            {carregando ? <RefreshCw size={12} className="animate-spin"/> : <RefreshCw size={12}/>} Atualizar
+          </button>
+        </div>
+        {!insights && <EmptyRelatorio onClick={carregar} loading={carregando} />}
+        {insights && (
+          <div className="p-5 space-y-5">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {[
+                { label: 'Total Oportunidades', value: String(kpis.total ?? 0), color: 'text-purple-600' },
+                { label: 'Aprovadas', value: String(kpis.approved ?? 0), color: 'text-green-600' },
+                { label: 'Taxa Aprovação', value: `${kpis.approval_rate ?? 0}%`, color: Number(kpis.approval_rate ?? 0) >= 20 ? 'text-green-600' : 'text-orange-500' },
+                { label: 'Vencendo em 30d', value: String(kpis.expiring_30d ?? 0), color: Number(kpis.expiring_30d ?? 0) > 0 ? 'text-red-500' : 'text-slate-500' },
+              ].map(c => (
+                <div key={c.label} className="bg-slate-50 dark:bg-slate-800 rounded-xl p-4 text-center">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">{c.label}</p>
+                  <p className={`text-2xl font-black mt-1 ${c.color}`}>{c.value}</p>
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {byStatus.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-3">Pipeline por Status</p>
+                  <ResponsiveContainer width="100%" height={200}>
+                    <BarChart data={byStatus.map((s: any) => ({ ...s, status_label: STATUS_LABELS[s.status] ?? s.status }))}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                      <XAxis dataKey="status_label" tick={{ fontSize: 9 }} />
+                      <YAxis tick={{ fontSize: 10 }} />
+                      <Tooltip />
+                      <Bar dataKey="count" name="Oportunidades" radius={[4, 4, 0, 0]}>
+                        {byStatus.map((s: any, i: number) => (
+                          <Cell key={i} fill={STATUS_CORES[s.status] ?? '#7c3aed'} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+              {bySource.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-3">Por Tipo de Fonte</p>
+                  <ResponsiveContainer width="100%" height={200}>
+                    <PieChart>
+                      <Pie data={bySource} dataKey="count" nameKey="source_type" cx="50%" cy="50%" outerRadius={80} label={({ name, value }: any) => `${name}: ${value}`}>
+                        {bySource.map((_: unknown, i: number) => <Cell key={i} fill={CORES_PIZZA[i % CORES_PIZZA.length]} />)}
+                      </Pie>
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {monthly.length > 0 && (
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+            <h3 className="font-black text-sm uppercase tracking-widest text-slate-700 dark:text-slate-200 flex items-center gap-2">
+              <TrendingUp size={16} className="text-purple-600" /> Oportunidades por Mês (12 meses)
+            </h3>
+          </div>
+          <div className="p-5">
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={monthly as Record<string, unknown>[]}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                <XAxis dataKey="month" tick={{ fontSize: 10 }} />
+                <YAxis tick={{ fontSize: 10 }} />
+                <Tooltip />
+                <Bar dataKey="count" name="Oportunidades" fill="#7c3aed" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
+      {insights && (
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+            <h3 className="font-black text-sm uppercase tracking-widest text-slate-700 dark:text-slate-200 flex items-center gap-2">
+              <DollarSign size={16} className="text-green-600" /> Potencial Financeiro
+            </h3>
+          </div>
+          <div className="p-5 grid grid-cols-1 md:grid-cols-3 gap-3">
+            {[
+              { label: 'Valor Potencial Total', value: moeda(Number(kpis.value_potential ?? 0)), color: 'text-purple-600' },
+              { label: 'Valor em Submissão', value: moeda(Number(kpis.value_submitted ?? 0)), color: 'text-blue-600' },
+              { label: 'Valor Aprovado', value: moeda(Number(kpis.value_approved ?? 0)), color: 'text-green-600' },
+            ].map(c => (
+              <div key={c.label} className="bg-slate-50 dark:bg-slate-800 rounded-xl p-4 text-center">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">{c.label}</p>
+                <p className={`text-lg font-black mt-1 ${c.color}`}>{c.value}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════
+   ABA RH
+═══════════════════════════════════════════════════════════ */
+
+function AbaRH() {
+  const [colaboradores, setColaboradores] = useState<any[]>([]);
+  const [busca, setBusca] = useState('');
+  const [carregando, setCarregando] = useState(false);
+
+  const carregar = useCallback(async () => {
+    setCarregando(true);
+    try {
+      const { data } = await api.get('/gente/colaboradores');
+      setColaboradores(data ?? []);
+    } catch {/* silencia */} finally { setCarregando(false); }
+  }, []);
+
+  useEffect(() => { carregar(); }, [carregar]);
+
+  const filtrados = colaboradores.filter(c =>
+    !busca || (c.funcionario?.nome ?? '').toLowerCase().includes(busca.toLowerCase()) ||
+    (c.funcionario?.cargo ?? '').toLowerCase().includes(busca.toLowerCase())
+  );
+
+  const exportarColaboradores = () => {
+    exportarExcel(filtrados.map(c => ({
+      Nome: c.funcionario?.nome ?? '',
+      Cargo: c.funcionario?.cargo ?? '',
+      Tipo: c.tipo ?? '',
+      Jornada: c.jornada_flexivel ? 'Flexível' : `${c.horario_entrada ?? '—'} às ${c.horario_saida ?? '—'}`,
+      'Dias de Trabalho': (c.dias_trabalho ?? []).join(', '),
+      'VT Diário': c.valor_passagem ? `R$ ${Number(c.valor_passagem).toFixed(2)}` : '—',
+    })), 'colaboradores_ativos');
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex-wrap gap-3">
+          <h3 className="font-black text-sm uppercase tracking-widest text-slate-700 dark:text-slate-200 flex items-center gap-2">
+            <UserCheck size={16} className="text-indigo-600" /> Colaboradores Ativos — {filtrados.length}
+          </h3>
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="relative">
+              <FileText size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar nome ou cargo..."
+                className="pl-7 pr-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-xs bg-white dark:bg-slate-800 dark:text-slate-100 w-48" />
+            </div>
+            <button onClick={carregar} disabled={carregando}
+              className="px-3 py-1.5 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg flex items-center gap-1 disabled:opacity-50">
+              {carregando ? <RefreshCw size={12} className="animate-spin"/> : <RefreshCw size={12}/>} Atualizar
+            </button>
+            {filtrados.length > 0 && (
+              <button onClick={exportarColaboradores}
+                className="px-3 py-1.5 text-xs font-bold border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-1">
+                <Download size={12}/> Excel
+              </button>
+            )}
+          </div>
+        </div>
+        {carregando && <div className="py-10 text-center text-slate-400"><RefreshCw size={20} className="animate-spin mx-auto" /></div>}
+        {!carregando && filtrados.length === 0 && (
+          <div className="py-10 text-center text-slate-400 text-sm">Nenhum colaborador ativo encontrado.</div>
+        )}
+        {!carregando && filtrados.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-100 dark:border-slate-700">
+                <tr>
+                  {['Nome', 'Cargo', 'Tipo', 'Jornada', 'Dias', 'VT/dia'].map(h => (
+                    <th key={h} className="px-4 py-3 text-left font-black text-[10px] uppercase tracking-wider text-slate-500">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
+                {filtrados.map((c: any, i: number) => (
+                  <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                    <td className="px-4 py-2.5 font-bold text-slate-800 dark:text-slate-200">{c.funcionario?.nome ?? '—'}</td>
+                    <td className="px-4 py-2.5 text-slate-600 dark:text-slate-300">{c.funcionario?.cargo ?? '—'}</td>
+                    <td className="px-4 py-2.5">
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${c.tipo === 'voluntario' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'}`}>
+                        {c.tipo === 'voluntario' ? 'Voluntário' : 'Funcionário'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2.5 font-mono text-xs text-slate-500">
+                      {c.jornada_flexivel ? 'Flexível' : `${c.horario_entrada ?? '—'} – ${c.horario_saida ?? '—'}`}
+                    </td>
+                    <td className="px-4 py-2.5 text-slate-500">{(c.dias_trabalho ?? []).join(', ') || '—'}</td>
+                    <td className="px-4 py-2.5 font-mono text-slate-600">{c.valor_passagem ? `R$ ${Number(c.valor_passagem).toFixed(2)}` : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════
    PÁGINA PRINCIPAL
 ═══════════════════════════════════════════════════════════ */
 
@@ -1661,6 +2124,8 @@ const ABAS: { id: AbaId; label: string; icon: React.ElementType; color: string }
   { id: 'academico',  label: 'Acadêmico',   icon: BookOpen,   color: 'text-blue-600' },
   { id: 'social',     label: 'Social',      icon: Globe,      color: 'text-emerald-600' },
   { id: 'estoque',    label: 'Estoque',     icon: Package,    color: 'text-orange-500' },
+  { id: 'captacao',   label: 'Captação',    icon: Target,     color: 'text-purple-500' },
+  { id: 'rh',         label: 'RH',          icon: UserCheck,  color: 'text-indigo-600' },
 ];
 
 export default function RelatoriosPage() {
@@ -1709,6 +2174,8 @@ export default function RelatoriosPage() {
         {aba === 'academico'  && <AbaAcademico />}
         {aba === 'social'     && <AbaSocial />}
         {aba === 'estoque'    && <AbaEstoque />}
+        {aba === 'captacao'   && <AbaCaptacao />}
+        {aba === 'rh'         && <AbaRH />}
 
       </div>
     </div>
