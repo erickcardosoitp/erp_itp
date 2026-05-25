@@ -20,6 +20,40 @@ export class ChamadosController {
   @ModuloPerm('chamados', 'visualizar')
   stats() { return this.svc.statsChamados(); }
 
+  @Get('filas')
+  @ModuloPerm('chamados', 'visualizar')
+  filas() { return this.svc.listarFilas(); }
+
+  // ── Base de Conhecimento ──────────────────────────────────────────────────
+
+  @Get('conhecimento')
+  @ModuloPerm('chamados', 'visualizar')
+  listarConhecimento(@Query('q') q?: string) { return this.svc.listarConhecimento(q); }
+
+  @Post('conhecimento')
+  @ModuloPerm('chamados', 'incluir')
+  criarConhecimento(@Body() dto: any, @Req() req: any) {
+    return this.svc.criarConhecimento({ ...dto, autor_nome: req.user?.nome || req.user?.email });
+  }
+
+  @Patch('conhecimento/:id')
+  @ModuloPerm('chamados', 'editar')
+  editarConhecimento(@Param('id') id: string, @Body() dto: any) {
+    return this.svc.editarConhecimento(id, dto);
+  }
+
+  @Delete('conhecimento/:id')
+  @ModuloPerm('chamados', 'excluir')
+  deletarConhecimento(@Param('id') id: string) { return this.svc.deletarConhecimento(id); }
+
+  // ── Satisfação ────────────────────────────────────────────────────────────
+
+  @Patch(':id/satisfacao')
+  @ModuloPerm('chamados', 'editar')
+  satisfacao(@Param('id') id: string, @Body('nota') nota: number) {
+    return this.svc.registrarSatisfacao(id, Number(nota));
+  }
+
   @Get()
   @ModuloPerm('chamados', 'visualizar')
   listar(@Query() q: any) { return this.svc.listarChamados(q); }

@@ -2009,6 +2009,62 @@ export class AcademicoService {
 
 
 
+  async listarFilas() {
+    return this.dataSource.query(
+      `SELECT * FROM chamados_filas WHERE ativo = true ORDER BY nome ASC`,
+    );
+  }
+
+  async listarConhecimento(q?: string) {
+    const base = `SELECT * FROM chamados_conhecimento WHERE ativo = true`;
+    if (q?.trim()) {
+      return this.dataSource.query(
+        `${base} AND (titulo ILIKE $1 OR conteudo ILIKE $1 OR categoria ILIKE $1) ORDER BY visualizacoes DESC`,
+        [`%${q.trim()}%`],
+      );
+    }
+    return this.dataSource.query(`${base} ORDER BY updated_at DESC`);
+  }
+
+  async criarConhecimento(dto: { titulo: string; conteudo: string; categoria?: string; tags?: string[]; autor_nome?: string }) {
+    await this.dataSource.query(
+      `INSERT INTO chamados_conhecimento (titulo, conteudo, categoria, tags, autor_nome) VALUES ($1, $2, $3, $4, $5)`,
+      [dto.titulo, dto.conteudo, dto.categoria ?? null, dto.tags ?? null, dto.autor_nome ?? null],
+    );
+    return { ok: true };
+  }
+
+  async editarConhecimento(id: string, dto: Partial<{ titulo: string; conteudo: string; categoria: string; tags: string[]; ativo: boolean }>) {
+    const fields: string[] = [];
+    const vals: any[] = [];
+    let i = 1;
+    if (dto.titulo    !== undefined) { fields.push(`titulo = $${i++}`);    vals.push(dto.titulo); }
+    if (dto.conteudo  !== undefined) { fields.push(`conteudo = $${i++}`);  vals.push(dto.conteudo); }
+    if (dto.categoria !== undefined) { fields.push(`categoria = $${i++}`); vals.push(dto.categoria); }
+    if (dto.tags      !== undefined) { fields.push(`tags = $${i++}`);      vals.push(dto.tags); }
+    if (dto.ativo     !== undefined) { fields.push(`ativo = $${i++}`);     vals.push(dto.ativo); }
+    if (!fields.length) return { ok: true };
+    fields.push(`updated_at = now()`);
+    vals.push(id);
+    await this.dataSource.query(`UPDATE chamados_conhecimento SET ${fields.join(', ')} WHERE id = $${i}`, vals);
+    return { ok: true };
+  }
+
+  async deletarConhecimento(id: string) {
+    await this.dataSource.query(`UPDATE chamados_conhecimento SET ativo = false WHERE id = $1`, [id]);
+    return { ok: true };
+  }
+
+  async registrarSatisfacao(id: string, nota: number) {
+    if (nota < 1 || nota > 5) throw new BadRequestException('Nota deve ser entre 1 e 5');
+    const updated = await this.dataSource.query(
+      `UPDATE chamados_academicos SET satisfacao = $1 WHERE id = $2 RETURNING id`,
+      [nota, id],
+    );
+    if (!updated[1]) throw new NotFoundException('Chamado não encontrado');
+    return { ok: true };
+  }
+
   async statsChamados() {
     const rows = await this.dataSource.query(`
       SELECT

@@ -266,6 +266,47 @@ export class AppModule implements OnModuleInit {
       `);
       this.logger.log('✅ Tabelas críticas (chamados_academicos, controles_futebol) garantidas');
 
+      // GLPI — filas e base de conhecimento
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS chamados_filas (
+          id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          nome                VARCHAR NOT NULL,
+          descricao           TEXT,
+          sla_horas_resposta  INT NOT NULL DEFAULT 24,
+          sla_horas_resolucao INT NOT NULL DEFAULT 72,
+          ativo               BOOLEAN NOT NULL DEFAULT true,
+          created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `);
+      await this.dataSource.query(`
+        INSERT INTO chamados_filas (nome, sla_horas_resposta, sla_horas_resolucao) VALUES
+          ('Administração', 8, 48),
+          ('Conselho', 24, 72),
+          ('Presidência', 4, 24),
+          ('Apoio', 24, 72)
+        ON CONFLICT DO NOTHING
+      `).catch(() => {});
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS chamados_conhecimento (
+          id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          titulo         VARCHAR NOT NULL,
+          conteudo       TEXT NOT NULL,
+          categoria      VARCHAR,
+          tags           TEXT[],
+          autor_nome     VARCHAR,
+          ativo          BOOLEAN NOT NULL DEFAULT true,
+          visualizacoes  INT NOT NULL DEFAULT 0,
+          created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+          updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE chamados_academicos
+          ADD COLUMN IF NOT EXISTS satisfacao  INT,
+          ADD COLUMN IF NOT EXISTS fila_nome   VARCHAR
+      `);
+      this.logger.log('✅ GLPI: chamados_filas, chamados_conhecimento e colunas satisfacao/fila_nome garantidos');
+
       // Migrations idempotentes — executam na inicialização em produção ou dev
       await this.dataSource.query(`ALTER TABLE funcionarios ADD COLUMN IF NOT EXISTS matricula TEXT UNIQUE`);
       await this.dataSource.query(`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS matricula TEXT UNIQUE`);

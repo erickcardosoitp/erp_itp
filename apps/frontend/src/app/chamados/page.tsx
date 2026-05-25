@@ -4,7 +4,8 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import {
   Plus, Trash2, Search, X, Edit3,
   User, Users, Calendar, Shield, CheckSquare, Clock,
-  NotebookPen, FileImage,
+  NotebookPen, FileImage, Star, BookOpen, Lightbulb,
+  AlertTriangle, ChevronDown, ChevronUp, Tag,
 } from 'lucide-react';
 import api from '@/services/api';
 import { useAuth } from '@/context/auth-context';
@@ -19,6 +20,7 @@ interface Chamado {
   turma_id?: string | null; turma_nome?: string | null; responsavel_nome?: string | null;
   criado_por_nome?: string | null; observacoes?: string | null; data_resolucao?: string | null;
   abertura?: string | null; fechamento?: string | null; _total_acomp?: number;
+  satisfacao?: number | null; fila_nome?: string | null;
   created_at: string; updated_at: string;
 }
 interface Acompanhamento {
@@ -27,6 +29,11 @@ interface Acompanhamento {
 interface Aluno { id: string; nome_completo: string; turma_nome?: string; turmas?: any[]; }
 interface Turma { id: string; nome: string; }
 interface Responsavel { id: string; nome: string; role: string; }
+interface Fila { id: string; nome: string; sla_horas_resposta: number; sla_horas_resolucao: number; }
+interface Conhecimento {
+  id: string; titulo: string; conteudo: string; categoria?: string;
+  tags?: string[]; autor_nome?: string; visualizacoes: number; created_at: string;
+}
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -79,6 +86,25 @@ function calcSLA(abertura?: string | null, fechamento?: string | null): string |
   if (h >= 48) return `${Math.floor(h / 24)}d`;
   if (h > 0) return `${h}h ${m}m`;
   return `${m}m`;
+}
+
+const SLA_LIMITES: Record<string, { amarelo: number; vermelho: number }> = {
+  urgente: { amarelo: 2,  vermelho: 4  },
+  alta:    { amarelo: 4,  vermelho: 8  },
+  normal:  { amarelo: 12, vermelho: 24 },
+  baixa:   { amarelo: 36, vermelho: 72 },
+};
+
+function getSLABadge(c: Chamado): { label: string; cls: string } | null {
+  const ini = c.abertura ?? c.created_at;
+  const label = calcSLA(ini, c.fechamento);
+  if (!label) return null;
+  if (c.status === 'resolvido') return { label, cls: 'bg-green-50 text-green-600' };
+  const h = (Date.now() - new Date(ini).getTime()) / 3600000;
+  const limites = SLA_LIMITES[c.prioridade] ?? SLA_LIMITES.normal;
+  if (h >= limites.vermelho) return { label, cls: 'bg-red-50 text-red-600 font-black animate-pulse' };
+  if (h >= limites.amarelo)  return { label, cls: 'bg-amber-50 text-amber-600' };
+  return { label, cls: 'bg-green-50 text-green-600' };
 }
 
 // ─── Rich Text Editor ─────────────────────────────────────────────────────────
@@ -355,6 +381,211 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
   );
 }
 
+// ─── Satisfação Modal ─────────────────────────────────────────────────────────
+
+function SatisfacaoModal({ chamado, onClose, onSaved }: {
+  chamado: Chamado; onClose: () => void; onSaved: () => void;
+}) {
+  const [nota, setNota] = useState(0);
+  const [saving, setSaving] = useState(false);
+  const LABELS = ['', 'Muito insatisfeito', 'Insatisfeito', 'Regular', 'Satisfeito', 'Muito satisfeito'];
+
+  const salvar = async () => {
+    if (!nota) return;
+    setSaving(true);
+    try {
+      await api.patch(`/chamados/${chamado.id}/satisfacao`, { nota });
+      toast.success('Avaliação registrada!');
+      onSaved(); onClose();
+    } catch { toast.error('Erro ao registrar avaliação.'); }
+    setSaving(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[400] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-sm p-6">
+        <div className="text-center mb-5">
+          <div className="w-12 h-12 bg-yellow-50 dark:bg-yellow-950 rounded-2xl flex items-center justify-center mx-auto mb-3">
+            <Star size={22} className="text-yellow-500" />
+          </div>
+          <h3 className="font-black text-sm text-slate-800 dark:text-slate-100 uppercase tracking-tight">Avaliar Atendimento</h3>
+          <p className="text-xs text-slate-400 mt-1 line-clamp-1">"{chamado.titulo}"</p>
+        </div>
+        <div className="flex justify-center gap-2 mb-2">
+          {[1,2,3,4,5].map(s => (
+            <button key={s} onClick={() => setNota(s)}
+              className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${nota >= s ? 'bg-yellow-400 text-white scale-110 shadow' : 'bg-slate-100 dark:bg-slate-800 text-slate-400 hover:bg-yellow-100'}`}>
+              <Star size={18} fill={nota >= s ? 'currentColor' : 'none'} />
+            </button>
+          ))}
+        </div>
+        {nota > 0 && <p className="text-center text-[11px] font-black text-yellow-600 mb-4">{LABELS[nota]}</p>}
+        <div className="flex gap-2 mt-4">
+          <button onClick={onClose} className="flex-1 px-3 py-2 text-xs font-black rounded-xl border border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800">
+            Pular
+          </button>
+          <button onClick={salvar} disabled={!nota || saving}
+            className="flex-1 px-3 py-2 text-xs font-black rounded-xl bg-yellow-500 text-white hover:bg-yellow-600 disabled:opacity-50 transition-colors">
+            {saving ? 'Salvando...' : 'Avaliar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Base de Conhecimento Panel ───────────────────────────────────────────────
+
+function BaseConhecimentoPanel({ onClose, canWrite }: { onClose: () => void; canWrite: boolean; }) {
+  const { user } = useAuth();
+  const [artigos, setArtigos] = useState<Conhecimento[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busca, setBusca] = useState('');
+  const [artigoAberto, setArtigoAberto] = useState<Conhecimento | null>(null);
+  const [editando, setEditando] = useState<Conhecimento | null>(null);
+  const [form, setForm] = useState({ titulo: '', conteudo: '', categoria: '' });
+  const [salvando, setSalvando] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+
+  const carregar = useCallback(async (q?: string) => {
+    setLoading(true);
+    try {
+      const r = await api.get('/chamados/conhecimento', q ? { params: { q } } : {});
+      setArtigos(r.data ?? []);
+    } catch {}
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { carregar(); }, [carregar]);
+
+  const buscarDebounced = useMemo(() => {
+    let t: ReturnType<typeof setTimeout>;
+    return (v: string) => { clearTimeout(t); t = setTimeout(() => carregar(v || undefined), 350); };
+  }, [carregar]);
+
+  const salvar = async () => {
+    if (!form.titulo.trim() || !form.conteudo.trim()) { toast.error('Título e conteúdo obrigatórios.'); return; }
+    setSalvando(true);
+    try {
+      if (editando) {
+        await api.patch(`/chamados/conhecimento/${editando.id}`, form);
+        toast.success('Artigo atualizado.');
+      } else {
+        await api.post('/chamados/conhecimento', form);
+        toast.success('Artigo criado.');
+      }
+      setShowForm(false); setEditando(null); setForm({ titulo: '', conteudo: '', categoria: '' });
+      carregar();
+    } catch { toast.error('Erro ao salvar artigo.'); }
+    setSalvando(false);
+  };
+
+  const deletar = async (id: string) => {
+    if (!confirm('Excluir artigo?')) return;
+    try { await api.delete(`/chamados/conhecimento/${id}`); carregar(); } catch {}
+  };
+
+  const abrirEditar = (a: Conhecimento) => {
+    setEditando(a); setForm({ titulo: a.titulo, conteudo: a.conteudo, categoria: a.categoria ?? '' });
+    setShowForm(true); setArtigoAberto(null);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[200] flex justify-end" onClick={onClose}>
+      <div className="bg-white dark:bg-slate-900 w-full max-w-lg h-full shadow-2xl flex flex-col overflow-hidden"
+        onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
+          <div className="flex items-center gap-2">
+            <BookOpen size={18} className="text-purple-600" />
+            <h3 className="font-black text-sm uppercase tracking-tight text-slate-800 dark:text-slate-100">Base de Conhecimento</h3>
+          </div>
+          <div className="flex items-center gap-2">
+            {canWrite && !showForm && (
+              <button onClick={() => { setShowForm(true); setEditando(null); setForm({ titulo: '', conteudo: '', categoria: '' }); }}
+                className="flex items-center gap-1 px-2 py-1 text-[10px] font-black rounded-lg bg-purple-600 text-white hover:bg-purple-700">
+                <Plus size={11} /> Novo
+              </button>
+            )}
+            <button onClick={onClose} className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400"><X size={15} /></button>
+          </div>
+        </div>
+
+        {showForm ? (
+          <div className="flex-1 overflow-y-auto p-5 space-y-4">
+            <p className="text-[10px] font-black uppercase text-slate-400">{editando ? 'Editar Artigo' : 'Novo Artigo'}</p>
+            <input value={form.titulo} onChange={e => setForm(f => ({ ...f, titulo: e.target.value }))} placeholder="Título do artigo *"
+              className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 dark:bg-slate-800 dark:text-slate-100" />
+            <input value={form.categoria} onChange={e => setForm(f => ({ ...f, categoria: e.target.value }))} placeholder="Categoria (ex: Matrículas, Financeiro)"
+              className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 dark:bg-slate-800 dark:text-slate-100" />
+            <textarea value={form.conteudo} onChange={e => setForm(f => ({ ...f, conteudo: e.target.value }))} rows={12} placeholder="Conteúdo / solução *"
+              className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 dark:bg-slate-800 dark:text-slate-100 resize-none" />
+            <div className="flex gap-2">
+              <button onClick={() => { setShowForm(false); setEditando(null); }} className="flex-1 px-3 py-2 text-xs font-black rounded-xl border border-slate-200 dark:border-slate-700 text-slate-500">Cancelar</button>
+              <button onClick={salvar} disabled={salvando} className="flex-1 px-3 py-2 text-xs font-black rounded-xl bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-60">{salvando ? 'Salvando...' : 'Salvar'}</button>
+            </div>
+          </div>
+        ) : artigoAberto ? (
+          <div className="flex-1 overflow-y-auto p-5">
+            <button onClick={() => setArtigoAberto(null)} className="text-[10px] font-black text-purple-600 mb-3 flex items-center gap-1">
+              ← Voltar
+            </button>
+            {artigoAberto.categoria && (
+              <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase bg-purple-50 text-purple-600 px-2 py-0.5 rounded-full mb-2">
+                <Tag size={8} /> {artigoAberto.categoria}
+              </span>
+            )}
+            <h2 className="text-base font-black text-slate-800 dark:text-slate-100 mb-3">{artigoAberto.titulo}</h2>
+            <pre className="text-sm text-slate-700 dark:text-slate-200 whitespace-pre-wrap bg-slate-50 dark:bg-slate-800 rounded-2xl p-4 font-sans">{artigoAberto.conteudo}</pre>
+            <p className="text-[10px] text-slate-400 mt-3">{artigoAberto.autor_nome && `Por ${artigoAberto.autor_nome} · `}{artigoAberto.visualizacoes} visualizações</p>
+            {canWrite && (
+              <div className="flex gap-2 mt-4">
+                <button onClick={() => abrirEditar(artigoAberto)} className="px-3 py-1.5 text-[10px] font-black rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">Editar</button>
+                <button onClick={() => { deletar(artigoAberto.id); setArtigoAberto(null); }} className="px-3 py-1.5 text-[10px] font-black rounded-lg bg-red-50 text-red-500 hover:bg-red-100">Excluir</button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <>
+            <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 shrink-0">
+              <div className="relative">
+                <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input value={busca} onChange={e => { setBusca(e.target.value); buscarDebounced(e.target.value); }}
+                  placeholder="Buscar artigos..."
+                  className="w-full pl-8 pr-3 py-2 text-xs border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-400 dark:bg-slate-800 dark:text-slate-100" />
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
+              {loading ? (
+                <p className="text-center text-xs text-slate-400 py-8">Carregando...</p>
+              ) : artigos.length === 0 ? (
+                <div className="text-center py-10">
+                  <Lightbulb size={28} className="text-slate-300 mx-auto mb-2" />
+                  <p className="text-xs text-slate-400 font-bold">Nenhum artigo encontrado.</p>
+                  {canWrite && <p className="text-[10px] text-slate-400 mt-1">Clique em "Novo" para criar o primeiro.</p>}
+                </div>
+              ) : artigos.map(a => (
+                <button key={a.id} onClick={() => setArtigoAberto(a)}
+                  className="w-full text-left p-3 bg-slate-50 dark:bg-slate-800 hover:bg-purple-50 dark:hover:bg-purple-950 rounded-2xl border border-slate-100 dark:border-slate-700 hover:border-purple-200 transition-colors">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      {a.categoria && <span className="text-[9px] font-black uppercase text-purple-500 mb-0.5 block">{a.categoria}</span>}
+                      <p className="text-xs font-black text-slate-700 dark:text-slate-200 line-clamp-1">{a.titulo}</p>
+                      <p className="text-[10px] text-slate-400 mt-0.5 line-clamp-2">{a.conteudo.slice(0, 120)}</p>
+                    </div>
+                    <BookOpen size={14} className="text-purple-300 shrink-0 mt-0.5" />
+                  </div>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ChamadosPage() {
@@ -366,6 +597,7 @@ export default function ChamadosPage() {
   const [alunos, setAlunos] = useState<Aluno[]>([]);
   const [turmas, setTurmas] = useState<Turma[]>([]);
   const [responsaveis, setResponsaveis] = useState<Responsavel[]>([]);
+  const [filas, setFilas] = useState<Fila[]>([]);
   const [loading, setLoading] = useState(true);
   const [filtroStatus, setFiltroStatus] = useState('');
   const [filtroTipo, setFiltroTipo] = useState('');
@@ -374,12 +606,15 @@ export default function ChamadosPage() {
   const [editando, setEditando] = useState<Chamado | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [acampChamado, setAcampChamado] = useState<Chamado | null>(null);
+  const [satisfacaoChamado, setSatisfacaoChamado] = useState<Chamado | null>(null);
+  const [showKB, setShowKB] = useState(false);
   const [alunoSearch, setAlunoSearch] = useState('');
   const [todoInstituto, setTodoInstituto] = useState(false);
   const [modoResponsavel, setModoResponsavel] = useState<'usuario' | 'equipe'>('usuario');
   const [form, setForm] = useState({
     titulo: '', descricao: '', tipo: 'Social', prioridade: 'normal', status: 'aberto',
-    aluno_id: '', aluno_nome: '', turma_id: '', turma_nome: '', responsavel_nome: '', observacoes: '',
+    aluno_id: '', aluno_nome: '', turma_id: '', turma_nome: '', responsavel_nome: '',
+    observacoes: '', fila_nome: '',
   });
 
   const carregar = useCallback(async () => {
@@ -405,10 +640,12 @@ export default function ChamadosPage() {
       api.get('/academico/alunos').catch(() => ({ data: [] })),
       api.get('/academico/turmas').catch(() => ({ data: [] })),
       api.get('/chamados/responsaveis').catch(() => ({ data: [] })),
-    ]).then(([ra, rt, rr]) => {
+      api.get('/chamados/filas').catch(() => ({ data: [] })),
+    ]).then(([ra, rt, rr, rf]) => {
       setAlunos(ra.data ?? []);
       setTurmas(rt.data ?? []);
       setResponsaveis(rr.data ?? []);
+      setFilas(rf.data ?? []);
     });
   }, []);
 
@@ -433,7 +670,7 @@ export default function ChamadosPage() {
     setAlunoSearch('');
     setTodoInstituto(false);
     setModoResponsavel('usuario');
-    setForm({ titulo: '', descricao: '', tipo: 'Social', prioridade: 'normal', status: 'aberto', aluno_id: '', aluno_nome: '', turma_id: '', turma_nome: '', responsavel_nome: '', observacoes: '' });
+    setForm({ titulo: '', descricao: '', tipo: 'Social', prioridade: 'normal', status: 'aberto', aluno_id: '', aluno_nome: '', turma_id: '', turma_nome: '', responsavel_nome: '', observacoes: '', fila_nome: '' });
     setShowModal(true);
   }
 
@@ -447,6 +684,7 @@ export default function ChamadosPage() {
       status: c.status, aluno_id: c.aluno_id ?? '', aluno_nome: c.aluno_nome ?? '',
       turma_id: c.turma_id ?? '', turma_nome: c.turma_nome ?? '',
       responsavel_nome: c.responsavel_nome ?? '', observacoes: c.observacoes ?? '',
+      fila_nome: c.fila_nome ?? '',
     });
     setShowModal(true);
   }
@@ -473,8 +711,12 @@ export default function ChamadosPage() {
     setSalvando(false);
   }
 
-  async function mudarStatus(id: string, status: string) {
-    try { await api.patch(`/chamados/${id}`, { status }); carregar(); } catch {}
+  async function mudarStatus(id: string, status: string, chamado?: Chamado) {
+    try {
+      await api.patch(`/chamados/${id}`, { status });
+      await carregar();
+      if (status === 'resolvido' && chamado) setSatisfacaoChamado(chamado);
+    } catch {}
   }
 
   async function deletar(id: string) {
@@ -496,10 +738,16 @@ export default function ChamadosPage() {
             <h1 className="text-xl font-black text-slate-800 dark:text-slate-100">Chamados</h1>
             <p className="text-xs text-slate-500 mt-0.5">Registro e acompanhamento de ocorrências</p>
           </div>
-          <button onClick={abrirNovo}
-            className="flex items-center gap-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-black px-4 py-2.5 rounded-xl transition-colors shadow">
-            <Plus size={13} /> Novo Chamado
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setShowKB(true)}
+              className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-purple-50 dark:hover:bg-purple-950 text-slate-600 dark:text-slate-300 hover:text-purple-600 text-xs font-black px-3 py-2.5 rounded-xl transition-colors border border-slate-200 dark:border-slate-700">
+              <BookOpen size={13} /> Base de Conhecimento
+            </button>
+            <button onClick={abrirNovo}
+              className="flex items-center gap-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-black px-4 py-2.5 rounded-xl transition-colors shadow">
+              <Plus size={13} /> Novo Chamado
+            </button>
+          </div>
         </div>
 
         {/* Stats */}
@@ -548,7 +796,7 @@ export default function ChamadosPage() {
         ) : (
           <div className="space-y-3">
             {chamadosFiltrados.map(c => {
-              const sla = calcSLA(c.abertura ?? c.created_at, c.fechamento);
+              const slaBadge = getSLABadge(c);
               const aberturaFmt = fmtDateTime(c.abertura ?? c.created_at);
               const fechamentoFmt = c.fechamento ? fmtDateTime(c.fechamento) : null;
               return (
@@ -562,9 +810,14 @@ export default function ChamadosPage() {
                         <span className="text-[10px] font-bold text-slate-400 uppercase">{c.tipo}</span>
                         <span className="text-[10px] font-bold text-slate-400">·</span>
                         <span className="text-[10px] font-bold text-slate-400 uppercase">{LABEL_PRIO[c.prioridade] ?? c.prioridade}</span>
-                        {sla && (
-                          <span className={`flex items-center gap-0.5 text-[10px] font-black px-1.5 py-0.5 rounded-full ${c.status === 'resolvido' ? 'bg-green-50 text-green-600' : 'bg-orange-50 text-orange-500'}`}>
-                            <Clock size={9} />{sla}
+                        {slaBadge && (
+                          <span className={`flex items-center gap-0.5 text-[10px] font-black px-1.5 py-0.5 rounded-full ${slaBadge.cls}`}>
+                            <Clock size={9} />{slaBadge.label}
+                          </span>
+                        )}
+                        {c.satisfacao && (
+                          <span className="flex items-center gap-0.5 text-[10px] font-black px-1.5 py-0.5 rounded-full bg-yellow-50 text-yellow-600">
+                            <Star size={9} fill="currentColor" />{c.satisfacao}/5
                           </span>
                         )}
                       </div>
@@ -574,6 +827,7 @@ export default function ChamadosPage() {
                         {c.aluno_nome && <span className="flex items-center gap-1"><User size={10} />{c.aluno_nome}</span>}
                         {c.turma_nome && <span className="flex items-center gap-1"><Users size={10} />{c.turma_nome}</span>}
                         {c.responsavel_nome && <span className="flex items-center gap-1"><Shield size={10} />{c.responsavel_nome}</span>}
+                        {c.fila_nome && <span className="flex items-center gap-1 text-purple-500"><Tag size={10} />{c.fila_nome}</span>}
                         {aberturaFmt && <span className="flex items-center gap-1"><Calendar size={10} />Aberto {aberturaFmt}</span>}
                         {fechamentoFmt && <span className="flex items-center gap-1 text-green-500"><CheckSquare size={10} />Fechado {fechamentoFmt}</span>}
                         {c.data_resolucao && !fechamentoFmt && <span className="flex items-center gap-1 text-green-500"><CheckSquare size={10} />Resolvido em {fmtDate(c.data_resolucao)}</span>}
@@ -587,7 +841,7 @@ export default function ChamadosPage() {
                         </button>
                       )}
                       {c.status !== 'resolvido' && (
-                        <button onClick={() => mudarStatus(c.id, 'resolvido')}
+                        <button onClick={() => mudarStatus(c.id, 'resolvido', c)}
                           className="text-[10px] font-black px-2 py-1 rounded-lg bg-green-50 text-green-600 hover:bg-green-100 border border-green-200 transition-colors">
                           Resolver
                         </button>
@@ -707,6 +961,22 @@ export default function ChamadosPage() {
               )}
             </div>
 
+            {/* Fila */}
+            {filas.length > 0 && (
+              <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase text-slate-500">Fila de Atendimento</label>
+                <select value={form.fila_nome} onChange={e => upd('fila_nome', e.target.value)}
+                  className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white dark:bg-slate-800 dark:text-slate-100">
+                  <option value="">Sem fila específica</option>
+                  {filas.map(f => (
+                    <option key={f.id} value={f.nome}>
+                      {f.nome} (SLA: {f.sla_horas_resolucao}h)
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             {/* Responsável */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
@@ -772,6 +1042,23 @@ export default function ChamadosPage() {
           chamado={acampChamado}
           onClose={() => setAcampChamado(null)}
           onAdded={onAcompAdded}
+        />
+      )}
+
+      {/* Satisfação pós-resolução */}
+      {satisfacaoChamado && (
+        <SatisfacaoModal
+          chamado={satisfacaoChamado}
+          onClose={() => setSatisfacaoChamado(null)}
+          onSaved={carregar}
+        />
+      )}
+
+      {/* Base de Conhecimento */}
+      {showKB && (
+        <BaseConhecimentoPanel
+          onClose={() => setShowKB(false)}
+          canWrite={canWrite}
         />
       )}
     </div>
