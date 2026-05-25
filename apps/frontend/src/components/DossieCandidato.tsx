@@ -1,12 +1,13 @@
 "use client";
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   X, User, Edit3, CheckCircle, Save,
   MessageSquare, AlertTriangle, Send, Loader2,
   History, Paperclip, ShieldCheck, ChevronRight,
   Download, ExternalLink, Trash2, ClipboardCheck,
   FileText, Phone, Mail, MapPin, Calendar, Hash,
-  BookOpen, CreditCard, Building2,
+  BookOpen, CreditCard, Building2, Heart, Users, Sparkles,
+  GraduationCap, Home, UserCheck,
 } from 'lucide-react';
 import api from '@/services/api';
 
@@ -41,16 +42,27 @@ interface FichaData {
 }
 interface DossieProps { aluno: InscricaoData; onClose: () => void; onSuccess?: () => void; fichaData?: FichaData; }
 
-const STATUS_MAP: Record<string, { label: string; cls: string }> = {
-  'Pendente':                   { label: 'Pendente',          cls: 'bg-gray-100 text-gray-600 border-gray-300' },
-  'Aguardando Assinatura LGPD': { label: 'Aguard. LGPD',     cls: 'bg-orange-50 text-orange-700 border-orange-300' },
-  'Em Validação':               { label: 'Em Validação',      cls: 'bg-blue-50 text-blue-700 border-blue-300' },
-  'Aguardando Documentos':      { label: 'Aguard. Docs',      cls: 'bg-amber-50 text-amber-700 border-amber-300' },
-  'Documentos Enviados':        { label: 'Docs Enviados',     cls: 'bg-cyan-50 text-cyan-700 border-cyan-300' },
-  'Matriculado':                { label: 'Matriculado',       cls: 'bg-green-50 text-green-700 border-green-300' },
-  'Incompleto':                 { label: 'Incompleto',        cls: 'bg-red-50 text-red-700 border-red-300' },
-  'Desistente':                 { label: 'Desistente',        cls: 'bg-gray-100 text-gray-500 border-gray-300' },
-  'Cancelada':                  { label: 'Cancelada',         cls: 'bg-red-100 text-red-800 border-red-300' },
+const STATUS_MAP: Record<string, { label: string; bg: string; text: string; border: string; dot: string }> = {
+  'Pendente':                   { label: 'Pendente',          bg: 'bg-gray-100',   text: 'text-gray-600',    border: 'border-gray-300',  dot: 'bg-gray-400' },
+  'Aguardando Assinatura LGPD': { label: 'Aguard. LGPD',     bg: 'bg-orange-100', text: 'text-orange-700',  border: 'border-orange-300',dot: 'bg-orange-500' },
+  'Em Validação':               { label: 'Em Validação',      bg: 'bg-blue-100',   text: 'text-blue-700',    border: 'border-blue-300',  dot: 'bg-blue-500' },
+  'Aguardando Documentos':      { label: 'Aguard. Docs',      bg: 'bg-amber-100',  text: 'text-amber-700',   border: 'border-amber-300', dot: 'bg-amber-500' },
+  'Documentos Enviados':        { label: 'Docs Enviados',     bg: 'bg-cyan-100',   text: 'text-cyan-700',    border: 'border-cyan-300',  dot: 'bg-cyan-500' },
+  'Matriculado':                { label: 'Matriculado',       bg: 'bg-green-100',  text: 'text-green-700',   border: 'border-green-300', dot: 'bg-green-500' },
+  'Incompleto':                 { label: 'Incompleto',        bg: 'bg-red-100',    text: 'text-red-700',     border: 'border-red-300',   dot: 'bg-red-500' },
+  'Desistente':                 { label: 'Desistente',        bg: 'bg-gray-100',   text: 'text-gray-500',    border: 'border-gray-300',  dot: 'bg-gray-400' },
+  'Cancelada':                  { label: 'Cancelada',         bg: 'bg-red-100',    text: 'text-red-800',     border: 'border-red-300',   dot: 'bg-red-600' },
+};
+
+// Gradiente de fundo do header por status
+const STATUS_HEADER_GRADIENT: Record<string, string> = {
+  'Matriculado':                'from-green-50 to-emerald-50/40',
+  'Em Validação':               'from-blue-50 to-sky-50/40',
+  'Aguardando Assinatura LGPD': 'from-orange-50 to-amber-50/40',
+  'Aguardando Documentos':      'from-amber-50 to-yellow-50/40',
+  'Documentos Enviados':        'from-cyan-50 to-sky-50/40',
+  'Incompleto':                 'from-red-50 to-rose-50/40',
+  'Desistente':                 'from-gray-50 to-slate-50/40',
 };
 
 const DOC_LABELS: Record<string, string> = {
@@ -72,6 +84,9 @@ function isCursoEspecial(turmas: any[], cursosDesejados?: string) {
 export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData }: DossieProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState<InscricaoData>({ ...aluno });
+  // ref guarda o snapshot carregado da API — Cancel restaura ele (não o prop parcial)
+  const loadedDataRef = useRef<InscricaoData | null>(null);
+
   const [loading, setLoading] = useState(false);
   type TabId = 'cadastro' | 'anotacoes' | 'movimentacoes' | 'documentos' | 'presenca';
   const [abaAtiva, setAbaAtiva] = useState<TabId>('cadastro');
@@ -136,12 +151,18 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData }
         ]);
         if (resInscricao.status === 'fulfilled') {
           const d = resInscricao.value.data;
-          setFormData(d);
+          // Mescla com aluno prop para garantir que nenhum campo seja perdido
+          const merged = { ...aluno, ...d };
+          setFormData(merged);
+          loadedDataRef.current = merged; // snapshot para o botão Cancelar
           if (d?.aluno?.id) {
             api.get(`/alunos/${d.aluno.id}/complemento`).then(r => { if (r.data) setComplemento(p => ({ ...p, ...r.data })); }).catch(() => {});
             if (d.aluno?.auto_declaracao) setFormData(p => ({ ...p, auto_declaracao: d.aluno.auto_declaracao }));
             setComplementoCarregado(true);
           }
+        } else {
+          // Se a requisição falhou, pelo menos salva o prop como snapshot
+          loadedDataRef.current = { ...aluno };
         }
         if (resCursos.status === 'fulfilled') setCursosAcademico(Array.isArray(resCursos.value.data) ? resCursos.value.data : []);
         setCursosCarregados(true);
@@ -159,6 +180,12 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData }
     if (fichaData.complemento) { setComplemento(p => ({ ...p, ...fichaData.complemento })); setComplementoCarregado(true); }
     if (fichaData.auto_declaracao) setFormData(p => ({ ...p, auto_declaracao: fichaData.auto_declaracao! }));
   }, [fichaData]);
+
+  const handleCancelEdit = useCallback(() => {
+    // Restaura snapshot da API (completo), não o prop parcial da lista
+    setFormData(loadedDataRef.current ?? { ...aluno });
+    setIsEditing(false);
+  }, [aluno]);
 
   const handleUpdateStatus = async (novoStatus: string, motivo?: string) => {
     setLoading(true);
@@ -252,6 +279,8 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData }
         const falhou = results.find(r => r.status === 'rejected') as PromiseRejectedResult | undefined;
         if (falhou) alert('Dados principais salvos, mas dados complementares falharam.\n' + ((falhou.reason as any)?.response?.data?.message || ''));
       }
+      // Atualiza o snapshot salvo com os dados editados
+      loadedDataRef.current = { ...formData };
       setIsEditing(false);
       const resMov = await api.get(`/matriculas/inscricao/${aluno.id}/movimentacoes`);
       setMovimentacoes(resMov.data);
@@ -308,136 +337,148 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData }
     ...(fichaData ? [{ id: 'presenca' as TabId,  label: 'Presença', icon: ClipboardCheck }] : []),
   ];
 
-  const statusInfo = STATUS_MAP[formData.status_matricula] || { label: formData.status_matricula, cls: 'bg-gray-100 text-gray-600 border-gray-300' };
+  const statusInfo = STATUS_MAP[formData.status_matricula] ?? { label: formData.status_matricula, bg: 'bg-gray-100', text: 'text-gray-600', border: 'border-gray-300', dot: 'bg-gray-400' };
+  const headerGradient = STATUS_HEADER_GRADIENT[formData.status_matricula] ?? 'from-purple-50 to-violet-50/40';
+
+  // Iniciais do avatar
+  const initials = (formData.nome_completo || '?').split(' ').filter(Boolean).slice(0, 2).map(n => n[0]).join('').toUpperCase();
 
   return (
     <div className="fixed inset-0 z-[200] flex" onMouseDown={e => e.stopPropagation()}>
-      <div className="flex-1 bg-black/40" onMouseDown={onClose} />
+      <div className="flex-1 bg-black/50 backdrop-blur-sm" onMouseDown={onClose} />
 
-      <div className="w-full max-w-3xl bg-white flex flex-col h-full border-l border-gray-200 shadow-2xl" onMouseDown={e => e.stopPropagation()}>
+      <div className="w-full max-w-3xl bg-white flex flex-col h-full shadow-2xl" onMouseDown={e => e.stopPropagation()}>
 
         {/* ── CABEÇALHO ─────────────────────────────────────────── */}
-        <div className="shrink-0 border-b border-gray-200">
-          {/* Barra de identidade */}
-          <div className="px-5 pt-4 pb-3 flex items-start gap-4">
-            {/* Avatar */}
-            <div className="relative shrink-0">
-              <div className="w-14 h-14 rounded-full overflow-hidden bg-gray-100 border-2 border-white ring-2 ring-gray-200">
-                {fotoUrl
-                  ? <img src={fotoUrl} className="w-full h-full object-cover" alt="" />
-                  : <div className="w-full h-full flex items-center justify-center bg-purple-50">
-                      <span className="text-xl font-bold text-purple-700">{(formData.nome_completo?.[0] || '?').toUpperCase()}</span>
-                    </div>}
+        <div className="shrink-0">
+          {/* Banner de status com gradiente */}
+          <div className={`bg-gradient-to-r ${headerGradient} border-b border-gray-200`}>
+            <div className="px-5 pt-4 pb-3 flex items-start gap-4">
+              {/* Avatar */}
+              <div className="relative shrink-0">
+                <div className={`w-16 h-16 rounded-2xl overflow-hidden border-2 border-white shadow-md ${!fotoUrl ? 'bg-gradient-to-br from-purple-500 to-violet-600' : ''}`}>
+                  {fotoUrl
+                    ? <img src={fotoUrl} className="w-full h-full object-cover" alt="" />
+                    : <div className="w-full h-full flex items-center justify-center">
+                        <span className="text-2xl font-bold text-white">{initials}</span>
+                      </div>}
+                </div>
+                {/* Dot de status */}
+                <span className={`absolute -bottom-1 -right-1 w-4 h-4 ${statusInfo.dot} border-2 border-white rounded-full shadow-sm`} />
               </div>
-              {formData.status_matricula === 'Matriculado' && (
-                <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-green-500 border-2 border-white rounded-full" />
-              )}
-            </div>
 
-            {/* Identidade */}
-            <div className="flex-1 min-w-0">
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <h2 className="text-base font-semibold text-gray-900 leading-tight">{formData.nome_completo}</h2>
-                  {formData.aluno?.numero_matricula && (
-                    <p className="text-xs text-gray-400 font-mono mt-0.5">{formData.aluno.numero_matricula}</p>
+              {/* Identidade */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <h2 className="text-lg font-bold text-gray-900 leading-tight truncate">{formData.nome_completo}</h2>
+                    {formData.aluno?.numero_matricula && (
+                      <p className="text-xs text-purple-600 font-mono font-semibold mt-0.5">{formData.aluno.numero_matricula}</p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border ${statusInfo.bg} ${statusInfo.text} ${statusInfo.border}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${statusInfo.dot}`} />
+                      {statusInfo.label}
+                    </span>
+                    <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/70 text-gray-400 hover:text-gray-700 transition-colors">
+                      <X size={16} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Metadados compactos */}
+                <div className="flex items-center gap-3 mt-2 flex-wrap">
+                  {formData.cpf && (
+                    <span className="flex items-center gap-1 text-xs text-gray-500 bg-white/70 rounded px-1.5 py-0.5">
+                      <Hash size={10} className="shrink-0 text-gray-400" /> {formData.cpf}
+                    </span>
+                  )}
+                  {formData.celular && (
+                    <a href={`https://wa.me/55${formData.celular.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer"
+                      className="flex items-center gap-1 text-xs text-green-600 hover:text-green-700 bg-white/70 rounded px-1.5 py-0.5 transition-colors">
+                      <Phone size={10} className="shrink-0" /> {formData.celular}
+                    </a>
+                  )}
+                  {formData.email && (
+                    <span className="flex items-center gap-1 text-xs text-gray-500 bg-white/70 rounded px-1.5 py-0.5">
+                      <Mail size={10} className="shrink-0 text-gray-400" /> {formData.email}
+                    </span>
+                  )}
+                  {formData.data_inscricao && (
+                    <span className="flex items-center gap-1 text-xs text-gray-400 bg-white/70 rounded px-1.5 py-0.5">
+                      <Calendar size={10} className="shrink-0" /> {fmtDate(formData.data_inscricao)}
+                    </span>
                   )}
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className={`text-[11px] font-medium px-2.5 py-0.5 rounded-full border ${statusInfo.cls}`}>{statusInfo.label}</span>
-                  <button onClick={onClose} className="p-1.5 rounded-md hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors">
-                    <X size={16} />
-                  </button>
-                </div>
-              </div>
 
-              {/* Metadados em linha */}
-              <div className="flex items-center gap-4 mt-2 flex-wrap">
-                {formData.cpf && (
-                  <span className="flex items-center gap-1 text-xs text-gray-500">
-                    <Hash size={11} className="shrink-0" /> {formData.cpf}
-                  </span>
-                )}
-                {formData.celular && (
-                  <a href={`https://wa.me/55${formData.celular.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer"
-                    className="flex items-center gap-1 text-xs text-green-600 hover:text-green-700 transition-colors">
-                    <Phone size={11} className="shrink-0" /> {formData.celular}
-                  </a>
-                )}
-                {formData.email && (
-                  <span className="flex items-center gap-1 text-xs text-gray-500">
-                    <Mail size={11} className="shrink-0" /> {formData.email}
-                  </span>
-                )}
-                {formData.data_inscricao && (
-                  <span className="flex items-center gap-1 text-xs text-gray-400">
-                    <Calendar size={11} className="shrink-0" /> {fmtDate(formData.data_inscricao)}
-                  </span>
+                {/* Turmas ativas */}
+                {turmasAtivas.length > 0 && (
+                  <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                    {turmasAtivas.map((t: any) => (
+                      <span key={t.id} className="text-[10px] font-semibold px-2 py-0.5 rounded-md text-white shadow-sm"
+                        style={{ backgroundColor: t.turma_cor || '#7c3aed' }}>
+                        {t.turma_nome}
+                      </span>
+                    ))}
+                  </div>
                 )}
               </div>
-
-              {/* Turmas ativas */}
-              {turmasAtivas.length > 0 && (
-                <div className="flex items-center gap-1.5 mt-2 flex-wrap">
-                  {turmasAtivas.map((t: any) => (
-                    <span key={t.id} className="text-[10px] font-medium px-2 py-0.5 rounded-full text-white"
-                      style={{ backgroundColor: t.turma_cor || '#7c3aed' }}>
-                      {t.turma_nome}
-                    </span>
-                  ))}
-                </div>
-              )}
             </div>
+
+            {/* Alerta de maioridade */}
+            {erroMaioridade && (
+              <div className="mx-5 mb-3 flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700">
+                <AlertTriangle size={13} className="shrink-0 text-red-500" />
+                <span><strong>Conflito:</strong> Marcado como maior de 18 anos, mas idade cadastrada é {formData.idade} anos.</span>
+              </div>
+            )}
           </div>
 
-          {/* Alerta de maioridade */}
-          {erroMaioridade && (
-            <div className="mx-5 mb-3 flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-md text-xs text-red-700">
-              <AlertTriangle size={13} className="shrink-0 text-red-500" />
-              <span><strong>Conflito de maioridade:</strong> Responsável informou maior de 18 anos, mas idade cadastrada é {formData.idade} anos.</span>
-            </div>
-          )}
-
           {/* Abas */}
-          <div className="flex px-5 overflow-x-auto border-t border-gray-100">
-            {tabs.map(tab => (
-              <button key={tab.id} onClick={() => setAbaAtiva(tab.id)}
-                className={`relative flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium border-b-2 transition-colors whitespace-nowrap -mb-px ${
-                  abaAtiva === tab.id
-                    ? 'border-purple-600 text-purple-700'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}>
-                <tab.icon size={13} />
-                {tab.label}
-                {tab.badge != null && tab.badge > 0 && (
-                  <span className="ml-0.5 bg-purple-100 text-purple-700 text-[10px] font-semibold px-1.5 py-0.5 rounded-full">{tab.badge}</span>
-                )}
-                {tab.error && <AlertTriangle size={11} className="text-red-500 ml-0.5" />}
-              </button>
-            ))}
+          <div className="flex px-2 overflow-x-auto bg-white border-b border-gray-200">
+            {tabs.map(tab => {
+              const active = abaAtiva === tab.id;
+              return (
+                <button key={tab.id} onClick={() => setAbaAtiva(tab.id)}
+                  className={`relative flex items-center gap-1.5 px-4 py-3 text-xs font-semibold border-b-2 transition-all whitespace-nowrap -mb-px ${
+                    active
+                      ? 'border-purple-600 text-purple-700'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}>
+                  <tab.icon size={13} className={active ? 'text-purple-600' : ''} />
+                  {tab.label}
+                  {tab.badge != null && tab.badge > 0 && (
+                    <span className={`ml-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full ${active ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-600'}`}>{tab.badge}</span>
+                  )}
+                  {tab.error && <AlertTriangle size={11} className="text-red-500 ml-0.5" />}
+                </button>
+              );
+            })}
           </div>
         </div>
 
         {/* ── CONTEÚDO ──────────────────────────────────────────── */}
-        <div className="flex-1 overflow-y-auto bg-gray-50/60">
+        <div className="flex-1 overflow-y-auto bg-slate-50">
           {loading && (
-            <div className="flex items-center justify-center py-20">
-              <Loader2 className="animate-spin text-purple-500" size={24} />
+            <div className="flex flex-col items-center justify-center py-24 gap-3">
+              <Loader2 className="animate-spin text-purple-500" size={28} />
+              <p className="text-sm text-gray-400">Carregando dados...</p>
             </div>
           )}
 
-          {/* CADASTRO */}
+          {/* ─── CADASTRO ─────────────────────────────────────── */}
           {!loading && abaAtiva === 'cadastro' && (
-            <div className="p-5 space-y-4">
+            <div className="p-4 space-y-3">
 
-              <Section title="Dados Pessoais">
+              <ColorSection title="Dados Pessoais" icon={<User size={14} />} color="purple">
                 <Grid cols={3}>
                   <div className="col-span-3">
                     <EF label="Nome Completo" field="nome_completo" value={formData.nome_completo} editing={isEditing} onChange={handleFieldChange} />
                   </div>
                   <EF label="CPF" field="cpf" value={formData.cpf} editing={isEditing} onChange={handleFieldChange} />
                   <EF label="Data de Nascimento" field="data_nascimento" value={formData.data_nascimento} editing={isEditing} type="date" onChange={handleFieldChange} />
-                  <div className="flex flex-col gap-1">
+                  <div className="flex flex-col gap-0.5">
                     <FieldLabel>Idade</FieldLabel>
                     <FieldValue>{formData.idade != null ? `${formData.idade} anos` : '—'}</FieldValue>
                   </div>
@@ -450,12 +491,12 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData }
                     <EF label="Cursos de Interesse" field="cursos_desejados" value={formData.cursos_desejados} editing={isEditing} onChange={handleFieldChange} />
                   </div>
                 </Grid>
-              </Section>
+              </ColorSection>
 
-              <Section title="Endereço">
+              <ColorSection title="Endereço" icon={<Home size={14} />} color="sky">
                 <Grid cols={3}>
-                  <div className="flex flex-col gap-1">
-                    <FieldLabel>CEP {buscandoCep && <span className="text-purple-500 font-normal">(buscando...)</span>}</FieldLabel>
+                  <div className="flex flex-col gap-0.5">
+                    <FieldLabel>CEP {buscandoCep && <span className="text-sky-500 font-normal">(buscando...)</span>}</FieldLabel>
                     {isEditing
                       ? <input type="text" value={formData.cep ?? ''} maxLength={9} placeholder="00000-000"
                           onChange={e => { const v = e.target.value; handleFieldChange('cep', v); if (v.replace(/\D/g, '').length === 8) buscarCep(v); }}
@@ -470,9 +511,9 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData }
                   <EF label="Cidade" field="cidade" value={formData.cidade} editing={isEditing} onChange={handleFieldChange} />
                   <EF label="Estado (UF)" field="estado_uf" value={formData.estado_uf} editing={isEditing} onChange={handleFieldChange} />
                 </Grid>
-              </Section>
+              </ColorSection>
 
-              <Section title="Escolaridade">
+              <ColorSection title="Escolaridade" icon={<GraduationCap size={14} />} color="indigo">
                 <Grid cols={2}>
                   <EF label="Nível de Escolaridade" field="escolaridade" value={formData.escolaridade} editing={isEditing} type="select"
                     options={['Ensino Fundamental Incompleto', 'Ensino Fundamental Completo', 'Ensino Médio Incompleto', 'Ensino Médio Completo', 'Ensino Superior Incompleto', 'Ensino Superior Completo', 'Pós-Graduação', 'Não informado']}
@@ -480,9 +521,9 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData }
                   <EF label="Turno Escolar" field="turno_escolar" value={formData.turno_escolar} editing={isEditing} type="select"
                     options={['Manhã', 'Tarde', 'Noite', 'Integral', 'Não estuda no momento']} onChange={handleFieldChange} />
                 </Grid>
-              </Section>
+              </ColorSection>
 
-              <Section title="Saúde">
+              <ColorSection title="Saúde" icon={<Heart size={14} />} color="rose">
                 <Grid cols={3}>
                   <EF label="Alergias" field="possui_alergias" value={formData.possui_alergias} editing={isEditing} onChange={handleFieldChange} />
                   <EF label="Cuidado Especial" field="cuidado_especial" value={formData.cuidado_especial} editing={isEditing} onChange={handleFieldChange} />
@@ -491,9 +532,9 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData }
                     <EF label="Detalhes" field="detalhes_cuidado" value={formData.detalhes_cuidado} editing={isEditing} type="textarea" onChange={handleFieldChange} />
                   </div>
                 </Grid>
-              </Section>
+              </ColorSection>
 
-              <Section title="Identidade Social">
+              <ColorSection title="Identidade Social" icon={<Sparkles size={14} />} color="fuchsia">
                 <Grid cols={3}>
                   <SelectField label="Autodeclaração Racial" value={formData.auto_declaracao ?? ''} editing={isEditing}
                     onChange={v => handleFieldChange('auto_declaracao', v)}
@@ -505,9 +546,9 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData }
                     onChange={v => setComplemento(p => ({ ...p, genero: v }))}
                     options={[['', 'Prefiro não informar'], ['masculino', 'Masculino'], ['feminino', 'Feminino'], ['nao_binario', 'Não-binário']]} />
                 </Grid>
-              </Section>
+              </ColorSection>
 
-              <Section title="Responsável / Filiação">
+              <ColorSection title="Responsável / Filiação" icon={<Users size={14} />} color="amber">
                 <Grid cols={3}>
                   <div className="col-span-3">
                     <EF label="Maior de 18 anos" field="maior_18_anos" value={formData.maior_18_anos} editing={isEditing} type="checkbox" onChange={handleFieldChange} />
@@ -521,14 +562,14 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData }
                     <EF label="Email do Responsável" field="email_responsavel" value={formData.email_responsavel} editing={isEditing} onChange={handleFieldChange} />
                   </>)}
                 </Grid>
-              </Section>
+              </ColorSection>
 
-              {/* Dados Complementares — apenas cursos especiais (ENCCEJA / Vestibular) */}
+              {/* Dados Complementares — apenas cursos especiais */}
               {mostrarComplemento && (
-                <Section title="Dados Complementares — Pré-ENCCEJA / Pré-Vestibular" accent>
+                <ColorSection title="Dados Complementares — Pré-ENCCEJA / Pré-Vestibular" icon={<CreditCard size={14} />} color="emerald">
                   <Grid cols={3}>
                     <div className="col-span-3">
-                      <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wide mb-3">Documentação Civil</p>
+                      <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-3">Documentação Civil</p>
                     </div>
                     <CF label="RG" field="rg" comp={complemento} editing={isEditing} onChange={v => setComplemento(p => ({ ...p, rg: v }))} />
                     <CF label="Órgão Expedidor" field="orgao_expedidor" comp={complemento} editing={isEditing} onChange={v => setComplemento(p => ({ ...p, orgao_expedidor: v }))} />
@@ -548,7 +589,7 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData }
                     <CF label="Conta" field="conta_corrente" comp={complemento} editing={isEditing} onChange={v => setComplemento(p => ({ ...p, conta_corrente: v }))} />
                     <CF label="Dígito Conta" field="conta_digito" comp={complemento} editing={isEditing} onChange={v => setComplemento(p => ({ ...p, conta_digito: v }))} />
                   </Grid>
-                </Section>
+                </ColorSection>
               )}
 
               {/* LGPD */}
@@ -560,47 +601,47 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData }
                 const venc = dataAss ? new Date(dataAss.getTime()) : null;
                 if (venc) venc.setFullYear(venc.getFullYear() + 1);
                 return (
-                  <Section title="LGPD">
+                  <ColorSection title="LGPD" icon={<ShieldCheck size={14} />} color="teal">
                     <div className="flex items-center justify-between gap-4 flex-wrap">
                       <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className={`text-xs font-medium px-2.5 py-0.5 rounded-full border ${
-                            precisaRenovar ? 'bg-orange-50 text-orange-700 border-orange-200'
-                              : assinado ? 'bg-green-50 text-green-700 border-green-200'
-                              : formData.lgpd_aceito ? 'bg-blue-50 text-blue-700 border-blue-200'
-                              : 'bg-amber-50 text-amber-700 border-amber-200'
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border ${
+                            precisaRenovar ? 'bg-orange-100 text-orange-700 border-orange-300'
+                              : assinado ? 'bg-green-100 text-green-700 border-green-300'
+                              : formData.lgpd_aceito ? 'bg-blue-100 text-blue-700 border-blue-300'
+                              : 'bg-amber-100 text-amber-700 border-amber-300'
                           }`}>
-                            {precisaRenovar ? 'Renovação necessária' : assinado ? 'Assinado' : formData.lgpd_aceito ? 'Confirmado' : 'Pendente'}
+                            {precisaRenovar ? '⚠ Renovação necessária' : assinado ? '✓ Assinado' : formData.lgpd_aceito ? '✓ Confirmado' : '○ Pendente'}
                           </span>
                           {assinado && <span className="text-xs text-gray-400">em {dataAss!.toLocaleDateString('pt-BR')}</span>}
                           {precisaRenovar && <span className="text-xs text-orange-600">Vencimento: {venc?.toLocaleDateString('pt-BR')}</span>}
                         </div>
-                        {assinado && formData.lgpd_ip && <p className="text-xs text-gray-400">IP: <span className="font-mono">{formData.lgpd_ip}</span></p>}
+                        {assinado && formData.lgpd_ip && <p className="text-xs text-gray-400 mt-1">IP: <span className="font-mono">{formData.lgpd_ip}</span></p>}
                       </div>
                       <div className="flex gap-2">
                         {assinado && (
                           <button onClick={gerarPdfLGPD} disabled={pdfLoading}
-                            className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 rounded-md text-xs text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-60">
+                            className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 rounded-lg text-xs text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-60">
                             {pdfLoading ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />} PDF
                           </button>
                         )}
                         <button onClick={handleEnviarLGPD} disabled={lgpdLoading}
-                          className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-md text-xs font-medium transition-colors disabled:opacity-60">
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-medium transition-colors disabled:opacity-60">
                           {lgpdLoading ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
                           {assinado ? 'Renovar' : formData.lgpd_aceito ? 'Reenviar' : 'Enviar Termo'}
                         </button>
                       </div>
                     </div>
-                  </Section>
+                  </ColorSection>
                 );
               })()}
             </div>
           )}
 
-          {/* ANOTAÇÕES */}
+          {/* ─── ANOTAÇÕES ────────────────────────────────────── */}
           {!loading && abaAtiva === 'anotacoes' && (
-            <div className="p-5 space-y-3">
-              <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+            <div className="p-4 space-y-3">
+              <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
                 <div className="p-4">
                   <textarea value={novaAnotacaoTexto} onChange={e => setNovaAnotacaoTexto(e.target.value)}
                     placeholder="Registrar anotação interna..."
@@ -608,21 +649,21 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData }
                 </div>
                 <div className="px-4 py-2.5 bg-gray-50 border-t border-gray-100 flex justify-end">
                   <button onClick={handleAddAnotacao} disabled={loading || !novaAnotacaoTexto.trim()}
-                    className="flex items-center gap-1.5 px-4 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-md text-xs font-medium disabled:opacity-50 transition-colors">
+                    className="flex items-center gap-1.5 px-4 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-semibold disabled:opacity-50 transition-colors">
                     <Send size={11} /> Registrar
                   </button>
                 </div>
               </div>
 
               {anotacoes.length === 0
-                ? <EmptyState icon={<MessageSquare size={20} />} text="Nenhuma anotação registrada." />
-                : anotacoes.map(anot => (
-                    <div key={anot.id} className="bg-white border border-gray-200 rounded-lg p-4">
-                      <div className="flex items-center gap-2.5 mb-2">
-                        <div className="w-7 h-7 rounded-full bg-purple-50 border border-purple-100 flex items-center justify-center overflow-hidden shrink-0">
+                ? <EmptyState icon={<MessageSquare size={22} />} text="Nenhuma anotação registrada." />
+                : anotacoes.map((anot, idx) => (
+                    <div key={anot.id} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                      <div className="flex items-center gap-2.5 mb-2.5">
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-400 to-violet-500 border-2 border-white shadow flex items-center justify-center overflow-hidden shrink-0">
                           {anot.usuario_foto
                             ? <img src={(() => { const f = anot.usuario_foto; if (!f) return ''; return f.startsWith('http') || f.startsWith('/uploads/') ? f : `${API_ORIGIN}${f}`; })()} className="w-full h-full object-cover" alt="" />
-                            : <User size={12} className="text-purple-400" />}
+                            : <span className="text-xs font-bold text-white">{(anot.usuario_nome || '?')[0].toUpperCase()}</span>}
                         </div>
                         <div>
                           <p className="text-xs font-semibold text-gray-800">{anot.usuario_nome || 'Usuário'}</p>
@@ -635,17 +676,17 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData }
             </div>
           )}
 
-          {/* HISTÓRICO */}
+          {/* ─── HISTÓRICO ────────────────────────────────────── */}
           {!loading && abaAtiva === 'movimentacoes' && (
-            <div className="p-5">
+            <div className="p-4">
               {movimentacoes.length === 0
-                ? <EmptyState icon={<History size={20} />} text="Nenhuma movimentação registrada." />
-                : <div className="bg-white border border-gray-200 rounded-lg divide-y divide-gray-100">
+                ? <EmptyState icon={<History size={22} />} text="Nenhuma movimentação registrada." />
+                : <div className="bg-white border border-gray-200 rounded-xl divide-y divide-gray-100 shadow-sm overflow-hidden">
                     {movimentacoes.map(mov => (
-                      <div key={mov.id} className="px-4 py-3">
+                      <div key={mov.id} className="px-4 py-3 hover:bg-gray-50/60 transition-colors">
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className={`text-[11px] font-medium px-2 py-0.5 rounded border ${
+                            <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-md border ${
                               mov.tipo === 'Status' ? 'bg-blue-50 text-blue-700 border-blue-200'
                                 : mov.tipo === 'Edição' ? 'bg-amber-50 text-amber-700 border-amber-200'
                                 : 'bg-red-50 text-red-700 border-red-200'
@@ -658,7 +699,7 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData }
                           <div className="flex items-center gap-2 mt-1.5 text-xs font-mono">
                             <span className="text-gray-400 line-through">{mov.valor_antes || '(vazio)'}</span>
                             <ChevronRight size={10} className="text-gray-400 shrink-0" />
-                            <span className="text-gray-800">{mov.valor_depois || '(vazio)'}</span>
+                            <span className="text-gray-800 font-semibold">{mov.valor_depois || '(vazio)'}</span>
                           </div>
                         )}
                         <p className="text-[11px] text-gray-400 mt-1">{mov.usuario_nome}</p>
@@ -668,26 +709,26 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData }
             </div>
           )}
 
-          {/* DOCUMENTOS */}
+          {/* ─── DOCUMENTOS ───────────────────────────────────── */}
           {!loading && abaAtiva === 'documentos' && (
-            <div className="p-5 space-y-3">
+            <div className="p-4 space-y-3">
               {!loadingDocs && (
-                <div className={`flex items-center justify-between gap-3 px-4 py-3 rounded-lg border ${docsCompleto ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'}`}>
+                <div className={`flex items-center justify-between gap-3 px-4 py-3 rounded-xl border shadow-sm ${docsCompleto ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'}`}>
                   <div>
-                    <p className="text-sm font-medium text-gray-900">Documentação {docsCompleto ? 'completa' : 'incompleta'}</p>
+                    <p className="text-sm font-semibold text-gray-900">Documentação {docsCompleto ? 'completa' : 'incompleta'}</p>
                     {obrigatoriosPendentes.length > 0 && (
                       <p className="text-xs text-gray-500 mt-0.5">Pendentes: {obrigatoriosPendentes.map(t => DOC_LABELS[t] ?? t).join(', ')}</p>
                     )}
                   </div>
-                  <span className={`text-xs font-medium px-2.5 py-1 rounded-full border ${docsCompleto ? 'bg-green-100 text-green-700 border-green-200' : 'bg-amber-100 text-amber-700 border-amber-200'}`}>
+                  <span className={`text-xs font-semibold px-3 py-1 rounded-full border ${docsCompleto ? 'bg-green-100 text-green-700 border-green-200' : 'bg-amber-100 text-amber-700 border-amber-200'}`}>
                     {docsCompleto ? '✓ Completo' : 'Pendente'}
                   </span>
                 </div>
               )}
 
               {/* Upload */}
-              <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-3">
-                <p className="text-xs font-semibold text-gray-600">Adicionar documento</p>
+              <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3 shadow-sm">
+                <p className="text-xs font-semibold text-gray-700">Adicionar documento</p>
                 <div className="flex gap-2 flex-wrap">
                   <select value={uploadTipo} onChange={e => setUploadTipo(e.target.value)} className={`${INPUT_CLS} flex-1 min-w-[180px]`}>
                     {Object.entries(DOC_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
@@ -697,9 +738,9 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData }
                     <input type="text" placeholder="Nome do documento" value={uploadNomeExtra} onChange={e => setUploadNomeExtra(e.target.value)} className={`${INPUT_CLS} flex-1 min-w-[140px]`} />
                   )}
                 </div>
-                <label className={`flex items-center justify-center gap-2 w-full py-2.5 border rounded-md cursor-pointer transition-colors text-xs ${
+                <label className={`flex items-center justify-center gap-2 w-full py-3 border rounded-xl cursor-pointer transition-colors text-xs font-medium ${
                   uploadingDoc ? 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed'
-                    : 'border-dashed border-gray-300 hover:border-purple-400 hover:bg-purple-50/50 text-gray-500 hover:text-purple-600'
+                    : 'border-dashed border-purple-300 hover:border-purple-500 hover:bg-purple-50/40 text-gray-500 hover:text-purple-700'
                 }`}>
                   {uploadingDoc ? <><Loader2 size={13} className="animate-spin" /> Enviando...</> : <><Paperclip size={13} /> Selecionar arquivo (JPG, PNG, PDF · máx 8 MB)</>}
                   <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" disabled={uploadingDoc} className="hidden"
@@ -717,7 +758,7 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData }
               </div>
 
               {(formData.url_documentos_zip || formData.url_termo_lgpd) && (
-                <div className="space-y-1">
+                <div className="space-y-1.5">
                   <p className="text-[11px] text-gray-400 font-medium px-1">Enviados via Google Forms</p>
                   <DocLink label="Pacote de documentos (ZIP)" url={formData.url_documentos_zip} icon={<Paperclip size={13} />} />
                   <DocLink label="Termo LGPD assinado" url={formData.url_termo_lgpd} icon={<ShieldCheck size={13} />} />
@@ -727,7 +768,7 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData }
               {loadingDocs
                 ? <div className="flex justify-center py-8"><Loader2 className="animate-spin text-gray-400" size={20} /></div>
                 : uploadedDocs.length > 0
-                  ? <div className="bg-white border border-gray-200 rounded-lg divide-y divide-gray-100">
+                  ? <div className="bg-white border border-gray-200 rounded-xl divide-y divide-gray-100 shadow-sm overflow-hidden">
                       {uploadedDocs.map(doc => {
                         const nome = DOC_LABELS[doc.tipo] ?? doc.nome_extra ?? doc.tipo;
                         const fileUrl = (doc.url_arquivo.startsWith('data:') || doc.url_arquivo.startsWith('http')) ? doc.url_arquivo : `${API_ORIGIN}${doc.url_arquivo}`;
@@ -736,19 +777,21 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData }
                         return (
                           <div key={doc.id} className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-gray-50 transition-colors">
                             <div className="flex items-center gap-3 min-w-0">
-                              <FileText size={15} className="text-gray-400 shrink-0" />
+                              <div className="w-8 h-8 rounded-lg bg-purple-50 border border-purple-100 flex items-center justify-center shrink-0">
+                                <FileText size={14} className="text-purple-500" />
+                              </div>
                               <div className="min-w-0">
-                                <p className="text-sm text-gray-800 truncate">{nome}</p>
+                                <p className="text-sm text-gray-800 font-medium truncate">{nome}</p>
                                 <p className="text-[11px] text-gray-400">{fmtDate(doc.createdAt)} · {size}</p>
                               </div>
                             </div>
                             <div className="flex gap-1 shrink-0">
                               <a href={safeUrl(fileUrl)} target="_blank" rel="noopener noreferrer"
-                                className="flex items-center gap-1 px-2.5 py-1 border border-gray-200 rounded text-xs text-gray-600 hover:bg-gray-100 transition-colors">
+                                className="flex items-center gap-1 px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs text-gray-600 hover:bg-gray-100 transition-colors">
                                 <ExternalLink size={11} /> Abrir
                               </a>
                               <button onClick={async () => { if (!confirm(`Remover "${nome}"?`)) return; try { await api.delete(`/matriculas/documentos/${doc.id}`); recarregarDocumentos(); } catch { alert('Erro ao remover.'); } }}
-                                className="flex items-center px-2.5 py-1 border border-gray-200 rounded text-xs text-red-500 hover:bg-red-50 hover:border-red-200 transition-colors">
+                                className="flex items-center px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs text-red-500 hover:bg-red-50 hover:border-red-200 transition-colors">
                                 <Trash2 size={11} />
                               </button>
                             </div>
@@ -756,13 +799,13 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData }
                         );
                       })}
                     </div>
-                  : <EmptyState icon={<Paperclip size={20} />} text="Nenhum documento enviado." />}
+                  : <EmptyState icon={<Paperclip size={22} />} text="Nenhum documento enviado." />}
 
               {/* Efetivar Matrícula */}
               {['Em Validação', 'Aguardando Documentos', 'Documentos Enviados'].includes(formData.status_matricula) && (
-                <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-4">
+                <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-4 shadow-sm">
                   <div className="flex items-center justify-between flex-wrap gap-2">
-                    <p className="text-sm font-semibold text-gray-900">Efetivar Matrícula</p>
+                    <p className="text-sm font-bold text-gray-900">Efetivar Matrícula</p>
                     {formData.cursos_desejados && <span className="text-xs text-gray-400">Interesse: <span className="text-gray-700">{formData.cursos_desejados}</span></span>}
                   </div>
                   {!cursosCarregados ? <p className="text-xs text-gray-500">Carregando turmas...</p>
@@ -770,12 +813,12 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData }
                     : <div className="space-y-3">
                         {cursosAcademico.map(curso => (
                           <div key={curso.id}>
-                            <p className="text-xs font-medium text-gray-500 mb-1.5">{curso.sigla} — {curso.nome}</p>
+                            <p className="text-xs font-semibold text-gray-500 mb-2">{curso.sigla} — {curso.nome}</p>
                             <div className="grid grid-cols-2 gap-1.5">
                               {curso.turmas.map(t => {
                                 const ativo = cursosSelecionados.includes(t.id);
                                 return (
-                                  <label key={t.id} className={`flex items-center gap-2 px-3 py-2 rounded-md border cursor-pointer transition-colors select-none ${ativo ? 'border-purple-400 bg-purple-50 text-purple-700' : 'border-gray-200 bg-white text-gray-700 hover:border-purple-200 hover:bg-purple-50/30'}`}>
+                                  <label key={t.id} className={`flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer transition-all select-none ${ativo ? 'border-purple-400 bg-purple-50 text-purple-700 shadow-sm' : 'border-gray-200 bg-white text-gray-700 hover:border-purple-200 hover:bg-purple-50/20'}`}>
                                     <input type="checkbox" checked={ativo} onChange={() => setCursosSelecionados(p => p.includes(t.id) ? p.filter(c => c !== t.id) : [...p, t.id])}
                                       className="w-3.5 h-3.5 shrink-0 accent-purple-600" />
                                     <span className="text-xs font-medium">{t.nome}{t.codigo ? <span className="font-normal text-gray-400 ml-1">({t.codigo})</span> : ''}</span>
@@ -787,7 +830,7 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData }
                         ))}
                       </div>}
                   <button onClick={handleEfetivarMatricula} disabled={!cursosSelecionados.length || loading}
-                    className="w-full py-2 bg-green-600 hover:bg-green-700 text-white rounded-md text-sm font-medium flex items-center justify-center gap-2 transition-colors disabled:opacity-50">
+                    className="w-full py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-colors disabled:opacity-50 shadow-sm">
                     {loading ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle size={14} />}
                     Efetivar Matrícula{cursosSelecionados.length > 0 ? ` (${cursosSelecionados.length} turma${cursosSelecionados.length > 1 ? 's' : ''})` : ''}
                   </button>
@@ -796,24 +839,24 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData }
             </div>
           )}
 
-          {/* PRESENÇA */}
+          {/* ─── PRESENÇA ─────────────────────────────────────── */}
           {!loading && abaAtiva === 'presenca' && fichaData && (
-            <div className="p-5 space-y-3">
+            <div className="p-4 space-y-3">
               <div className="grid grid-cols-3 gap-3">
                 {[
-                  { label: 'Presenças', val: totalPresencas, cls: 'border-green-200 bg-green-50', num: 'text-green-700', lbl: 'text-green-600' },
-                  { label: 'Faltas', val: totalFaltas, cls: 'border-red-200 bg-red-50', num: 'text-red-700', lbl: 'text-red-500' },
-                  { label: 'Frequência', val: totalPresencas + totalFaltas > 0 ? `${Math.round((totalPresencas / (totalPresencas + totalFaltas)) * 100)}%` : '—', cls: 'border-purple-200 bg-purple-50', num: 'text-purple-700', lbl: 'text-purple-600' },
+                  { label: 'Presenças', val: totalPresencas, bg: 'bg-green-500', light: 'bg-green-50', border: 'border-green-200', num: 'text-green-700', lbl: 'text-green-600' },
+                  { label: 'Faltas', val: totalFaltas, bg: 'bg-red-500', light: 'bg-red-50', border: 'border-red-200', num: 'text-red-700', lbl: 'text-red-500' },
+                  { label: 'Frequência', val: totalPresencas + totalFaltas > 0 ? `${Math.round((totalPresencas / (totalPresencas + totalFaltas)) * 100)}%` : '—', bg: 'bg-purple-500', light: 'bg-purple-50', border: 'border-purple-200', num: 'text-purple-700', lbl: 'text-purple-600' },
                 ].map(k => (
-                  <div key={k.label} className={`border rounded-lg p-4 text-center ${k.cls}`}>
-                    <p className={`text-[11px] font-medium mb-1 ${k.lbl}`}>{k.label}</p>
-                    <p className={`text-2xl font-bold ${k.num}`}>{k.val}</p>
+                  <div key={k.label} className={`${k.light} border ${k.border} rounded-xl p-4 text-center shadow-sm`}>
+                    <p className={`text-[11px] font-semibold mb-1 ${k.lbl}`}>{k.label}</p>
+                    <p className={`text-3xl font-black ${k.num}`}>{k.val}</p>
                   </div>
                 ))}
               </div>
 
               {frequencia.length > 0
-                ? <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                ? <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
                     <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-100">
                       <p className="text-xs font-semibold text-gray-600">Registro por aula</p>
                     </div>
@@ -822,29 +865,29 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData }
                         <div key={f.id} className="flex items-center gap-3 px-4 py-2.5">
                           <div className={`w-2 h-2 rounded-full shrink-0 ${f.descricao === 'Presente' ? 'bg-green-500' : 'bg-red-400'}`} />
                           <span className="text-sm text-gray-700 flex-1">{fmtDate(f.data)}</span>
-                          <span className={`text-xs font-medium ${f.descricao === 'Presente' ? 'text-green-600' : 'text-red-500'}`}>{f.descricao}</span>
-                          {f.justificada && <span className="text-[11px] text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">Justificada</span>}
+                          <span className={`text-xs font-semibold ${f.descricao === 'Presente' ? 'text-green-600' : 'text-red-500'}`}>{f.descricao}</span>
+                          {f.justificada && <span className="text-[11px] text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-md border border-blue-100">Justificada</span>}
                         </div>
                       ))}
                     </div>
                   </div>
-                : <EmptyState icon={<ClipboardCheck size={20} />} text="Nenhum registro de presença." />}
+                : <EmptyState icon={<ClipboardCheck size={22} />} text="Nenhum registro de presença." />}
 
               {historico.filter((h: any) => h.tipo !== 'Presença').length > 0 && (
-                <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
                   <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-100">
                     <p className="text-xs font-semibold text-gray-600">Ocorrências</p>
                   </div>
                   <div className="divide-y divide-gray-100">
                     {historico.filter((h: any) => h.tipo !== 'Presença').map((h: any) => (
                       <div key={h.id} className="px-4 py-3 flex gap-3">
-                        <span className={`text-[11px] font-medium px-1.5 py-0.5 rounded border self-start shrink-0 ${
+                        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-md border self-start shrink-0 ${
                           h.tipo === 'Incidente' ? 'bg-red-50 text-red-700 border-red-200'
                             : h.tipo === 'Advertência' ? 'bg-orange-50 text-orange-700 border-orange-200'
                             : 'bg-purple-50 text-purple-700 border-purple-200'
                         }`}>{h.tipo}</span>
                         <div>
-                          {h.titulo && <p className="text-sm font-medium text-gray-900">{h.titulo}</p>}
+                          {h.titulo && <p className="text-sm font-semibold text-gray-900">{h.titulo}</p>}
                           {h.descricao && <p className="text-xs text-gray-500 mt-0.5">{h.descricao}</p>}
                           <p className="text-[11px] text-gray-400 mt-1">{fmtDate(h.data)} · {h.usuario_nome}</p>
                         </div>
@@ -858,10 +901,10 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData }
         </div>
 
         {/* ── RODAPÉ ────────────────────────────────────────────── */}
-        <div className="shrink-0 border-t border-gray-200 bg-white px-5 py-3 flex items-center gap-2 flex-wrap">
+        <div className="shrink-0 border-t border-gray-200 bg-white px-4 py-3 flex items-center gap-2 flex-wrap">
           {['Em Validação', 'Aguardando Documentos'].includes(formData.status_matricula) && (
             <button onClick={handleSolicitarDocumentos} disabled={docLoading}
-              className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 rounded-md text-xs text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-60">
+              className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 rounded-lg text-xs text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-60">
               {docLoading ? <Loader2 size={11} className="animate-spin" /> : <Send size={11} />}
               {formData.doc_token ? 'Reenviar link de docs' : 'Solicitar documentos'}
               {formData.doc_token && <span className="text-green-600 ml-0.5">✓</span>}
@@ -871,26 +914,26 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData }
           <div className="flex-1" />
 
           <button onClick={() => setShowMotivoModal({ show: true, status: 'Incompleto' })}
-            className="px-3 py-1.5 border border-amber-300 text-amber-700 rounded-md text-xs font-medium hover:bg-amber-50 transition-colors">
+            className="px-3 py-1.5 border border-amber-300 text-amber-700 rounded-lg text-xs font-semibold hover:bg-amber-50 transition-colors">
             Incompleto
           </button>
           <button onClick={() => setShowMotivoModal({ show: true, status: 'Desistente' })}
-            className="px-3 py-1.5 border border-red-300 text-red-700 rounded-md text-xs font-medium hover:bg-red-50 transition-colors">
+            className="px-3 py-1.5 border border-red-300 text-red-700 rounded-lg text-xs font-semibold hover:bg-red-50 transition-colors">
             Desistência
           </button>
 
           {isEditing ? (<>
-            <button onClick={() => { setIsEditing(false); setFormData({ ...aluno }); }}
-              className="px-3 py-1.5 border border-gray-300 rounded-md text-xs text-gray-600 hover:bg-gray-50 transition-colors">
+            <button onClick={handleCancelEdit}
+              className="px-3 py-1.5 border border-gray-300 rounded-lg text-xs text-gray-600 hover:bg-gray-50 transition-colors">
               Cancelar
             </button>
             <button onClick={handleSaveEdit} disabled={loading}
-              className="flex items-center gap-1.5 px-4 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-md text-xs font-medium transition-colors disabled:opacity-60">
+              className="flex items-center gap-1.5 px-4 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-semibold transition-colors disabled:opacity-60 shadow-sm">
               {loading ? <Loader2 size={11} className="animate-spin" /> : <Save size={11} />} Salvar
             </button>
           </>) : (
             <button onClick={() => setIsEditing(true)}
-              className="flex items-center gap-1.5 px-4 py-1.5 border border-gray-300 rounded-md text-xs text-gray-700 hover:bg-gray-50 transition-colors">
+              className="flex items-center gap-1.5 px-4 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-semibold transition-colors shadow-sm">
               <Edit3 size={11} /> Editar
             </button>
           )}
@@ -899,19 +942,19 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData }
 
       {/* MODAL: Matrícula efetivada */}
       {matriculaNumero && (
-        <div className="fixed inset-0 bg-black/50 z-[350] flex items-center justify-center p-6">
-          <div className="bg-white w-full max-w-sm rounded-xl p-6 shadow-2xl text-center border border-gray-200">
-            <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <CheckCircle size={24} className="text-green-600" />
+        <div className="fixed inset-0 bg-black/60 z-[350] flex items-center justify-center p-6">
+          <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl text-center">
+            <div className="w-14 h-14 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <CheckCircle size={28} className="text-green-600" />
             </div>
             <p className="text-xs text-gray-400 mb-1">Matrícula efetivada com sucesso</p>
-            <h2 className="text-base font-semibold text-gray-900 mb-4">{formData.nome_completo.split(' ')[0]}</h2>
-            <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 mb-5">
-              <p className="text-xs text-gray-500 mb-1">Número de Matrícula</p>
-              <p className="text-xl font-bold text-gray-900 font-mono tracking-wide">{matriculaNumero}</p>
+            <h2 className="text-lg font-bold text-gray-900 mb-4">{formData.nome_completo.split(' ')[0]}</h2>
+            <div className="bg-gradient-to-br from-purple-50 to-violet-50 border border-purple-200 rounded-xl px-4 py-3 mb-5">
+              <p className="text-xs text-purple-500 mb-1 font-medium">Número de Matrícula</p>
+              <p className="text-2xl font-black text-purple-700 font-mono tracking-wider">{matriculaNumero}</p>
             </div>
             <button onClick={() => { setMatriculaNumero(null); onClose(); }}
-              className="w-full py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium transition-colors">
+              className="w-full py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-sm font-semibold transition-colors">
               Fechar
             </button>
           </div>
@@ -920,20 +963,20 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData }
 
       {/* MODAL: Justificativa */}
       {showMotivoModal.show && (
-        <div className="fixed inset-0 bg-black/40 z-[300] flex items-center justify-center p-6">
-          <div className="bg-white w-full max-w-md rounded-xl p-5 shadow-2xl border border-gray-200">
-            <h3 className="text-sm font-semibold text-gray-900 mb-0.5">Alterar status</h3>
+        <div className="fixed inset-0 bg-black/50 z-[300] flex items-center justify-center p-6">
+          <div className="bg-white w-full max-w-md rounded-2xl p-5 shadow-2xl">
+            <h3 className="text-sm font-bold text-gray-900 mb-0.5">Alterar status</h3>
             <p className="text-xs text-gray-500 mb-4">Novo status: <span className="font-semibold text-gray-800">{showMotivoModal.status}</span></p>
             <textarea value={motivoTexto} onChange={e => setMotivoTexto(e.target.value)}
               placeholder="Descreva o motivo da alteração..."
-              className="w-full border border-gray-300 rounded-lg p-3 text-sm text-gray-900 h-28 outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500 resize-none" />
+              className="w-full border border-gray-200 rounded-xl p-3 text-sm text-gray-900 h-28 outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 resize-none" />
             <div className="flex gap-2 mt-4 justify-end">
               <button onClick={() => { setShowMotivoModal({ show: false, status: null }); setMotivoTexto(''); }}
-                className="px-4 py-1.5 border border-gray-300 rounded-md text-sm text-gray-600 hover:bg-gray-50 transition-colors">
+                className="px-4 py-2 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-colors">
                 Cancelar
               </button>
               <button onClick={() => handleUpdateStatus(showMotivoModal.status!, motivoTexto)} disabled={!motivoTexto.trim() || loading}
-                className="px-5 py-1.5 bg-gray-900 hover:bg-gray-800 text-white rounded-md text-sm font-medium disabled:opacity-50 transition-colors">
+                className="px-5 py-2 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-sm font-semibold disabled:opacity-50 transition-colors">
                 {loading ? <Loader2 size={13} className="animate-spin mx-auto" /> : 'Confirmar'}
               </button>
             </div>
@@ -946,16 +989,33 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData }
 
 // ── Constantes de estilo ───────────────────────────────────────
 
-const INPUT_CLS = 'h-8 px-2.5 border border-gray-300 rounded-md text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500 w-full';
+const INPUT_CLS = 'h-8 px-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 w-full bg-white';
+
+// ── Mapa de cores por seção ────────────────────────────────────
+
+const COLOR_MAP = {
+  purple:  { header: 'bg-purple-50',  border: 'border-purple-200',  icon: 'text-purple-600',  bar: 'bg-purple-500',  title: 'text-purple-800' },
+  sky:     { header: 'bg-sky-50',     border: 'border-sky-200',     icon: 'text-sky-600',     bar: 'bg-sky-500',     title: 'text-sky-800' },
+  indigo:  { header: 'bg-indigo-50',  border: 'border-indigo-200',  icon: 'text-indigo-600',  bar: 'bg-indigo-500',  title: 'text-indigo-800' },
+  rose:    { header: 'bg-rose-50',    border: 'border-rose-200',    icon: 'text-rose-600',    bar: 'bg-rose-500',    title: 'text-rose-800' },
+  fuchsia: { header: 'bg-fuchsia-50', border: 'border-fuchsia-200', icon: 'text-fuchsia-600', bar: 'bg-fuchsia-500', title: 'text-fuchsia-800' },
+  amber:   { header: 'bg-amber-50',   border: 'border-amber-200',   icon: 'text-amber-600',   bar: 'bg-amber-500',   title: 'text-amber-800' },
+  emerald: { header: 'bg-emerald-50', border: 'border-emerald-200', icon: 'text-emerald-600', bar: 'bg-emerald-500', title: 'text-emerald-800' },
+  teal:    { header: 'bg-teal-50',    border: 'border-teal-200',    icon: 'text-teal-600',    bar: 'bg-teal-500',    title: 'text-teal-800' },
+} as const;
+
+type ColorKey = keyof typeof COLOR_MAP;
 
 // ── Componentes de layout ──────────────────────────────────────
 
-function Section({ title, children, accent = false }: { title: string; children: React.ReactNode; accent?: boolean }) {
+function ColorSection({ title, icon, color, children }: { title: string; icon: React.ReactNode; color: ColorKey; children: React.ReactNode }) {
+  const c = COLOR_MAP[color];
   return (
-    <div className={`bg-white rounded-lg border ${accent ? 'border-purple-200' : 'border-gray-200'} overflow-hidden`}>
-      <div className={`px-4 py-2.5 border-b ${accent ? 'bg-purple-50 border-purple-100' : 'bg-gray-50 border-gray-100'} flex items-center gap-2`}>
-        {accent && <span className="w-1 h-4 bg-purple-500 rounded-full shrink-0" />}
-        <h3 className={`text-xs font-semibold ${accent ? 'text-purple-700' : 'text-gray-600'}`}>{title}</h3>
+    <div className={`bg-white rounded-xl border ${c.border} overflow-hidden shadow-sm`}>
+      <div className={`${c.header} border-b ${c.border} px-4 py-2.5 flex items-center gap-2`}>
+        <span className={`w-1 h-4 ${c.bar} rounded-full shrink-0`} />
+        <span className={`${c.icon} shrink-0`}>{icon}</span>
+        <h3 className={`text-xs font-bold ${c.title} uppercase tracking-wide`}>{title}</h3>
       </div>
       <div className="p-4">{children}</div>
     </div>
@@ -967,26 +1027,26 @@ function Grid({ cols, children }: { cols: 2 | 3; children: React.ReactNode }) {
 }
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
-  return <label className="text-[11px] font-medium text-gray-400 uppercase tracking-wide block">{children}</label>;
+  return <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest block">{children}</label>;
 }
 
 function FieldValue({ children }: { children: React.ReactNode }) {
-  return <p className="text-sm text-gray-900 mt-0.5">{children || '—'}</p>;
+  return <p className="text-sm text-gray-900 mt-0.5 font-medium">{children || '—'}</p>;
 }
 
 function Divider({ label }: { label: string }) {
   return (
     <div className="col-span-3 pt-1 border-t border-gray-100 flex items-center gap-2">
-      <span className="text-[11px] font-medium text-gray-400 uppercase tracking-wide">{label}</span>
+      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{label}</span>
     </div>
   );
 }
 
 function EmptyState({ icon, text }: { icon: React.ReactNode; text: string }) {
   return (
-    <div className="flex flex-col items-center justify-center py-14 text-gray-400">
-      <span className="mb-2 opacity-40">{icon}</span>
-      <p className="text-sm">{text}</p>
+    <div className="flex flex-col items-center justify-center py-16 text-gray-300">
+      <span className="mb-3 text-gray-200">{icon}</span>
+      <p className="text-sm text-gray-400">{text}</p>
     </div>
   );
 }
@@ -1004,7 +1064,7 @@ function EF({ label, field, value, editing, type = 'text', onChange, options }: 
       {editing ? (
         type === 'textarea'
           ? <textarea value={value ?? ''} onChange={e => onChange(field, e.target.value)} rows={3}
-              className="px-2.5 py-1.5 border border-gray-300 rounded-md text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500 resize-none" />
+              className="px-2.5 py-1.5 border border-gray-200 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 resize-none bg-white" />
           : type === 'select' && options
             ? <select value={value ?? ''} onChange={e => onChange(field, e.target.value)} className={INPUT_CLS}>
                 <option value="">—</option>
@@ -1012,8 +1072,8 @@ function EF({ label, field, value, editing, type = 'text', onChange, options }: 
               </select>
             : type === 'checkbox'
               ? <label className="flex items-center gap-2 cursor-pointer mt-1">
-                  <input type="checkbox" checked={!!value} onChange={e => onChange(field, e.target.checked)} className="w-4 h-4 accent-purple-600" />
-                  <span className="text-sm text-gray-900">{value ? 'Sim' : 'Não'}</span>
+                  <input type="checkbox" checked={!!value} onChange={e => onChange(field, e.target.checked)} className="w-4 h-4 accent-purple-600 rounded" />
+                  <span className="text-sm text-gray-900 font-medium">{value ? 'Sim' : 'Não'}</span>
                 </label>
               : type === 'date'
                 ? <input type="date" value={value ? String(value).slice(0, 10) : ''} onChange={e => onChange(field, e.target.value)} className={INPUT_CLS} />
@@ -1067,10 +1127,10 @@ function DocLink({ label, url, icon }: { label: string; url?: string; icon: Reac
   if (!url) return null;
   return (
     <a href={safeUrl(url)} target="_blank" rel="noopener noreferrer"
-      className="flex items-center gap-3 px-4 py-2.5 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors group">
+      className="flex items-center gap-3 px-4 py-2.5 bg-white border border-gray-200 rounded-xl hover:bg-purple-50/40 hover:border-purple-200 transition-colors group shadow-sm">
       <span className="text-gray-400 group-hover:text-purple-500 transition-colors shrink-0">{icon}</span>
-      <span className="text-sm text-gray-700 flex-1">{label}</span>
-      <ExternalLink size={12} className="text-gray-400" />
+      <span className="text-sm text-gray-700 flex-1 font-medium">{label}</span>
+      <ExternalLink size={12} className="text-gray-400 group-hover:text-purple-400" />
     </a>
   );
 }
