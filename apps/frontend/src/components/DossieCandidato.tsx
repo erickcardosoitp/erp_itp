@@ -40,7 +40,14 @@ interface FichaData {
   turmasDoAluno?: any[]; totalPresencas?: number; totalFaltas?: number;
   foto_url?: string | null; complemento?: Record<string, string> | null; auto_declaracao?: string | null;
 }
-interface DossieProps { aluno: InscricaoData; onClose: () => void; onSuccess?: () => void; fichaData?: FichaData; }
+interface DossieProps {
+  aluno: InscricaoData;
+  onClose: () => void;
+  onSuccess?: () => void;
+  fichaData?: FichaData;
+  onVerNoAcademico?: () => void;
+  onVerInscricao?: () => void;
+}
 
 const STATUS_MAP: Record<string, { label: string; bg: string; text: string; border: string; dot: string }> = {
   'Pendente':                   { label: 'Pendente',          bg: 'bg-gray-100',   text: 'text-gray-600',    border: 'border-gray-300',  dot: 'bg-gray-400' },
@@ -81,7 +88,7 @@ function isCursoEspecial(turmas: any[], cursosDesejados?: string) {
   return emTurma || noCurso;
 }
 
-export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData }: DossieProps) {
+export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, onVerNoAcademico, onVerInscricao }: DossieProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState<InscricaoData>({ ...aluno });
   // ref guarda o snapshot carregado da API — Cancel restaura ele (não o prop parcial)
@@ -381,6 +388,20 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData }
                       <span className={`w-1.5 h-1.5 rounded-full ${statusInfo.dot}`} />
                       {statusInfo.label}
                     </span>
+                    {onVerNoAcademico && (
+                      <button onClick={onVerNoAcademico}
+                        title="Abrir ficha no Acadêmico"
+                        className="flex items-center gap-1 px-2 py-1 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-[10px] font-black uppercase tracking-wide transition-colors shadow-sm">
+                        <GraduationCap size={11} /> Acadêmico
+                      </button>
+                    )}
+                    {onVerInscricao && (
+                      <button onClick={onVerInscricao}
+                        title="Abrir inscrição original em Matrículas"
+                        className="flex items-center gap-1 px-2 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black uppercase tracking-wide transition-colors shadow-sm">
+                        <ClipboardCheck size={11} /> Inscrição
+                      </button>
+                    )}
                     <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/70 text-gray-400 hover:text-gray-700 transition-colors">
                       <X size={16} />
                     </button>

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import DossieCandidato from '@/components/DossieCandidato';
 import {
   GraduationCap, Users, BookOpen, LayoutGrid, History,
@@ -784,6 +785,8 @@ function KpisTurmas({ alunos, turmas }: { alunos: Aluno[]; turmas: Turma[] }) {
 }
 
 function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Turma[]; podeEditar: boolean }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [alunos, setAlunos] = useState<Aluno[]>([]);
   const [loading, setLoading] = useState(true);
   const [inativandoId, setInativandoId] = useState<string | null>(null);
@@ -850,6 +853,14 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
   }, [filtroNome, filtroCursoNome, filtroTurmaId, filtroStatus, filtroTurno, filtroSexo, filtroCidade]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Auto-abre ficha quando URL contém ?aluno=<uuid> (vindo do módulo Matrículas)
+  useEffect(() => {
+    const alunoId = searchParams.get('aluno');
+    if (!alunoId || alunos.length === 0) return;
+    verFicha(alunoId);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, alunos.length > 0 ? 'loaded' : 'loading']);
 
   useEffect(() => {
     api.get('/academico/alunos/pendentes').then(r => setPendentes(r.data)).catch(() => {});
@@ -1302,6 +1313,9 @@ function AlunosTab({ cursos, turmas, podeEditar }: { cursos: Curso[]; turmas: Tu
           fichaData={dossieAberto.fichaData}
           onClose={() => setDossieAberto(null)}
           onSuccess={() => load()}
+          onVerInscricao={dossieAberto.fichaData?.inscricao_id
+            ? () => router.push(`/matriculas?inscricao=${dossieAberto.fichaData.inscricao_id}`)
+            : undefined}
         />
       )}
 
@@ -5907,8 +5921,10 @@ function ControlesTab({ podeEditar }: { podeEditar: boolean }) {
 export default function AcademicoPage() {
   const [activeTab, setActiveTab] = useState(() => {
     if (typeof window === 'undefined') return 'grade';
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('aluno')) return 'alunos';
     const VALID = ['grade','alunos','presenca','cursos','turmas','diario','acervo','chamados','monitoramento','controles'];
-    const tab = new URLSearchParams(window.location.search).get('tab') ?? 'grade';
+    const tab = params.get('tab') ?? 'grade';
     return VALID.includes(tab) ? tab : 'grade';
   });
   const [cursos, setCursos] = useState<Curso[]>([]);

@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 // ✅ IMPORTANTE: Instância configurada com porta 3001 e Credentials
 import api from '@/services/api'; 
 // xlsx carregado dinamicamente apenas ao exportar (evita ~1 MB no bundle inicial)
@@ -38,6 +39,8 @@ const OPCOES_CUIDADO_ESPECIAL = [
 ];
 
 export default function GestaoMatriculas() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [matriculas, setMatriculas] = useState<any[]>([]);
   const [candidatoSelecionado, setCandidatoSelecionado] = useState<any>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -279,6 +282,23 @@ export default function GestaoMatriculas() {
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pagina, filtroNome, filtroCpf, filtroStatus, filtroCidade, filtroBairro, filtroSexo, filtroAlergia, sortKey, sortAsc, refreshTick]);
+
+  // Auto-abre dossie quando URL contém ?inscricao=<id> (vindo do módulo Acadêmico)
+  useEffect(() => {
+    const inscricaoId = searchParams.get('inscricao');
+    if (!inscricaoId || matriculas.length === 0) return;
+    const found = matriculas.find(m => String(m.id) === inscricaoId);
+    if (found) {
+      setCandidatoSelecionado(found);
+      setIsModalOpen(true);
+    } else {
+      // Busca diretamente pelo ID se não estiver na página atual
+      api.get(`/matriculas/inscricao/${inscricaoId}`)
+        .then(r => { setCandidatoSelecionado(r.data); setIsModalOpen(true); })
+        .catch(() => {});
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, matriculas.length > 0 ? 'loaded' : 'loading']);
 
   // Bairros disponíveis para a cidade selecionada (dados do servidor)
   const bairrosDisponiveis = useMemo(
@@ -706,6 +726,9 @@ export default function GestaoMatriculas() {
           aluno={candidatoSelecionado}
           onClose={() => setIsModalOpen(false)}
           onSuccess={fetchMatriculas}
+          onVerNoAcademico={candidatoSelecionado.aluno?.id
+            ? () => router.push(`/academico?aluno=${candidatoSelecionado.aluno.id}`)
+            : undefined}
         />
       )}
 
