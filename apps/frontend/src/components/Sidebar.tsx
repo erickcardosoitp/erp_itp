@@ -40,20 +40,20 @@ export default function Sidebar({ isCollapsed, setIsCollapsed, mobileOpen, setMo
   const { user, loading } = useAuth();
   const [isLoggingOut, setIsLoggingOut] = React.useState(false);
 
-  // Menu atualizado com a taxonomia do ITP ERP
+  // Menu em ordem alfabética — Dashboard fixo no topo, Config/Logout no rodapé
   const primaryMenu = [
     { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-    { name: 'Cadastro Básico', path: '/cadastro', icon: UserPlus },
-    { name: 'Matrículas', path: '/matriculas', icon: ClipboardList },
     { name: 'Acadêmico', path: '/academico', icon: GraduationCap },
-    { name: 'Financeiro', path: '/financeiro', icon: DollarSign },
+    { name: 'Cadastro Básico', path: '/cadastro', icon: UserPlus },
+    { name: 'Captação', path: '/captacao', icon: Target },
+    { name: 'Chamados', path: '/chamados', icon: MessageSquare },
     { name: 'Doações', path: '/doacoes', icon: Heart },
     { name: 'Estoque', path: '/estoque', icon: Package },
-    { name: 'Relatórios', path: '/relatorios', icon: BarChart2 },
+    { name: 'Financeiro', path: '/financeiro', icon: DollarSign },
     { name: 'Gente', path: '/gente', icon: Users2 },
-    { name: 'Chamados', path: '/chamados', icon: MessageSquare },
+    { name: 'Matrículas', path: '/matriculas', icon: ClipboardList },
     { name: 'Projetos', path: '/projetos', icon: FolderOpen },
-    { name: 'Captação', path: '/captacao', icon: Target },
+    { name: 'Relatórios', path: '/relatorios', icon: BarChart2 },
   ];
 
   // Filtra módulos com base nas permissões do grupo
