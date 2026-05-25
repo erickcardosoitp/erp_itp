@@ -416,13 +416,37 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData }
                 {turmasAtivas.length > 0 && (
                   <div className="flex items-center gap-1.5 mt-2 flex-wrap">
                     {turmasAtivas.map((t: any) => (
-                      <span key={t.id} className="text-[10px] font-semibold px-2 py-0.5 rounded-md text-white shadow-sm"
+                      <span key={t.id} className="text-[10px] font-semibold px-2.5 py-0.5 rounded-full text-white shadow-sm ring-1 ring-black/10"
                         style={{ backgroundColor: t.turma_cor || '#7c3aed' }}>
                         {t.turma_nome}
                       </span>
                     ))}
                   </div>
                 )}
+
+                {/* Quick chips */}
+                <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                  {formData.idade != null && (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/80 border border-gray-200 text-gray-600">
+                      {formData.idade} anos
+                    </span>
+                  )}
+                  {formData.origem_inscricao && (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/80 border border-gray-200 text-gray-600">
+                      via {formData.origem_inscricao}
+                    </span>
+                  )}
+                  {formData.lgpd_aceito && (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-100 border border-green-200 text-green-700">
+                      LGPD ✓
+                    </span>
+                  )}
+                  {formData.escolaridade && (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/80 border border-gray-200 text-gray-600 max-w-[160px] truncate">
+                      {formData.escolaridade}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -657,20 +681,22 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData }
 
               {anotacoes.length === 0
                 ? <EmptyState icon={<MessageSquare size={22} />} text="Nenhuma anotação registrada." />
-                : anotacoes.map((anot, idx) => (
-                    <div key={anot.id} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-                      <div className="flex items-center gap-2.5 mb-2.5">
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-400 to-violet-500 border-2 border-white shadow flex items-center justify-center overflow-hidden shrink-0">
-                          {anot.usuario_foto
-                            ? <img src={(() => { const f = anot.usuario_foto; if (!f) return ''; return f.startsWith('http') || f.startsWith('/uploads/') ? f : `${API_ORIGIN}${f}`; })()} className="w-full h-full object-cover" alt="" />
-                            : <span className="text-xs font-bold text-white">{(anot.usuario_nome || '?')[0].toUpperCase()}</span>}
-                        </div>
-                        <div>
-                          <p className="text-xs font-semibold text-gray-800">{anot.usuario_nome || 'Usuário'}</p>
-                          <p className="text-[11px] text-gray-400">{fmtDateTime(anot.created_at)}</p>
+                : anotacoes.map((anot) => (
+                    <div key={anot.id} className="flex gap-3">
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-400 to-violet-500 border-2 border-white shadow flex items-center justify-center overflow-hidden shrink-0 mt-0.5">
+                        {anot.usuario_foto
+                          ? <img src={(() => { const f = anot.usuario_foto; if (!f) return ''; return f.startsWith('http') || f.startsWith('/uploads/') ? f : `${API_ORIGIN}${f}`; })()} className="w-full h-full object-cover" alt="" />
+                          : <span className="text-xs font-bold text-white">{(anot.usuario_nome || '?')[0].toUpperCase()}</span>}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="bg-white border border-gray-200 rounded-xl rounded-tl-sm px-4 py-3 shadow-sm">
+                          <div className="flex items-center justify-between gap-2 mb-1.5">
+                            <p className="text-xs font-semibold text-gray-800">{anot.usuario_nome || 'Usuário'}</p>
+                            <p className="text-[11px] text-gray-400">{fmtDateTime(anot.created_at)}</p>
+                          </div>
+                          <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{anot.texto_anotacao}</p>
                         </div>
                       </div>
-                      <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{anot.texto_anotacao}</p>
                     </div>
                   ))}
             </div>
@@ -681,30 +707,37 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData }
             <div className="p-4">
               {movimentacoes.length === 0
                 ? <EmptyState icon={<History size={22} />} text="Nenhuma movimentação registrada." />
-                : <div className="bg-white border border-gray-200 rounded-xl divide-y divide-gray-100 shadow-sm overflow-hidden">
-                    {movimentacoes.map(mov => (
-                      <div key={mov.id} className="px-4 py-3 hover:bg-gray-50/60 transition-colors">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-md border ${
-                              mov.tipo === 'Status' ? 'bg-blue-50 text-blue-700 border-blue-200'
-                                : mov.tipo === 'Edição' ? 'bg-amber-50 text-amber-700 border-amber-200'
-                                : 'bg-red-50 text-red-700 border-red-200'
-                            }`}>{mov.tipo}</span>
-                            {mov.categoria && <span className="text-xs text-gray-500">{mov.categoria.replace(/_/g, ' ')}</span>}
+                : <div className="relative pl-6">
+                    {/* Linha vertical da timeline */}
+                    <div className="absolute left-2.5 top-4 bottom-4 w-0.5 bg-gray-200 rounded-full" />
+                    <div className="space-y-3">
+                      {movimentacoes.map(mov => {
+                        const dotColor = mov.tipo === 'Status' ? 'bg-blue-500' : mov.tipo === 'Edição' ? 'bg-amber-400' : 'bg-red-500';
+                        const badgeCls = mov.tipo === 'Status' ? 'bg-blue-50 text-blue-700 border-blue-200' : mov.tipo === 'Edição' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-red-50 text-red-700 border-red-200';
+                        return (
+                          <div key={mov.id} className="relative">
+                            <div className={`absolute -left-[17px] top-3.5 w-3 h-3 rounded-full ${dotColor} border-2 border-white shadow-sm z-10`} />
+                            <div className="bg-white border border-gray-200 rounded-xl p-3 shadow-sm hover:shadow-md transition-shadow">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-md border ${badgeCls}`}>{mov.tipo}</span>
+                                  {mov.categoria && <span className="text-xs text-gray-500">{mov.categoria.replace(/_/g, ' ')}</span>}
+                                </div>
+                                <span className="text-[11px] text-gray-400 whitespace-nowrap shrink-0">{fmtDateTime(mov.created_at)}</span>
+                              </div>
+                              {mov.valor_antes !== mov.valor_depois && (
+                                <div className="flex items-center gap-2 mt-2 text-xs font-mono bg-gray-50 border border-gray-100 rounded-lg px-2.5 py-1.5">
+                                  <span className="text-gray-400 line-through truncate max-w-[120px]">{mov.valor_antes || '(vazio)'}</span>
+                                  <ChevronRight size={10} className="text-gray-400 shrink-0" />
+                                  <span className="text-gray-800 font-semibold truncate max-w-[120px]">{mov.valor_depois || '(vazio)'}</span>
+                                </div>
+                              )}
+                              <p className="text-[11px] text-gray-400 mt-1.5">{mov.usuario_nome}</p>
+                            </div>
                           </div>
-                          <span className="text-[11px] text-gray-400 whitespace-nowrap shrink-0">{fmtDateTime(mov.created_at)}</span>
-                        </div>
-                        {mov.valor_antes !== mov.valor_depois && (
-                          <div className="flex items-center gap-2 mt-1.5 text-xs font-mono">
-                            <span className="text-gray-400 line-through">{mov.valor_antes || '(vazio)'}</span>
-                            <ChevronRight size={10} className="text-gray-400 shrink-0" />
-                            <span className="text-gray-800 font-semibold">{mov.valor_depois || '(vazio)'}</span>
-                          </div>
-                        )}
-                        <p className="text-[11px] text-gray-400 mt-1">{mov.usuario_nome}</p>
-                      </div>
-                    ))}
+                        );
+                      })}
+                    </div>
                   </div>}
             </div>
           )}
@@ -713,16 +746,34 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData }
           {!loading && abaAtiva === 'documentos' && (
             <div className="p-4 space-y-3">
               {!loadingDocs && (
-                <div className={`flex items-center justify-between gap-3 px-4 py-3 rounded-xl border shadow-sm ${docsCompleto ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'}`}>
-                  <div>
-                    <p className="text-sm font-semibold text-gray-900">Documentação {docsCompleto ? 'completa' : 'incompleta'}</p>
-                    {obrigatoriosPendentes.length > 0 && (
-                      <p className="text-xs text-gray-500 mt-0.5">Pendentes: {obrigatoriosPendentes.map(t => DOC_LABELS[t] ?? t).join(', ')}</p>
-                    )}
+                <div className={`px-4 py-3 rounded-xl border shadow-sm ${docsCompleto ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'}`}>
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-gray-900">Documentação {docsCompleto ? 'completa' : 'incompleta'}</p>
+                      {obrigatoriosPendentes.length > 0 && (
+                        <p className="text-xs text-gray-500 mt-0.5">Pendentes: {obrigatoriosPendentes.map(t => DOC_LABELS[t] ?? t).join(', ')}</p>
+                      )}
+                    </div>
+                    <span className={`text-xs font-semibold px-3 py-1 rounded-full border shrink-0 ${docsCompleto ? 'bg-green-100 text-green-700 border-green-200' : 'bg-amber-100 text-amber-700 border-amber-200'}`}>
+                      {docsCompleto ? '✓ Completo' : 'Pendente'}
+                    </span>
                   </div>
-                  <span className={`text-xs font-semibold px-3 py-1 rounded-full border ${docsCompleto ? 'bg-green-100 text-green-700 border-green-200' : 'bg-amber-100 text-amber-700 border-amber-200'}`}>
-                    {docsCompleto ? '✓ Completo' : 'Pendente'}
-                  </span>
+                  {(() => {
+                    const total = Object.keys(DOC_LABELS).length;
+                    const done = total - obrigatoriosPendentes.length;
+                    const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+                    return (
+                      <div className="mt-3">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[11px] text-gray-500">{done} de {total} documentos</span>
+                          <span className="text-[11px] font-bold text-gray-700">{pct}%</span>
+                        </div>
+                        <div className="h-1.5 bg-white/70 rounded-full overflow-hidden border border-gray-200/60">
+                          <div className={`h-full rounded-full transition-all duration-500 ${docsCompleto ? 'bg-green-500' : 'bg-amber-400'}`} style={{ width: `${pct}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
 
@@ -1031,7 +1082,12 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
 }
 
 function FieldValue({ children }: { children: React.ReactNode }) {
-  return <p className="text-sm text-gray-900 mt-0.5 font-medium">{children || '—'}</p>;
+  const empty = !children;
+  return (
+    <div className={`mt-0.5 px-2.5 py-1.5 rounded-lg border min-h-[32px] flex items-center ${empty ? 'bg-transparent border-transparent' : 'bg-gray-50 border-gray-100'}`}>
+      <span className={`text-sm font-medium leading-snug ${empty ? 'text-gray-300' : 'text-gray-900'}`}>{children || '—'}</span>
+    </div>
+  );
 }
 
 function Divider({ label }: { label: string }) {
