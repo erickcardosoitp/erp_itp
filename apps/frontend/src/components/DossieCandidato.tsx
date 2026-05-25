@@ -541,7 +541,7 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData }
                 <Grid cols={2}>
                   <EF label="Nível de Escolaridade" field="escolaridade" value={formData.escolaridade} editing={isEditing} type="select"
                     options={['Ensino Fundamental Incompleto', 'Ensino Fundamental Completo', 'Ensino Médio Incompleto', 'Ensino Médio Completo', 'Ensino Superior Incompleto', 'Ensino Superior Completo', 'Pós-Graduação', 'Não informado']}
-                    onChange={handleFieldChange} />
+                    onChange={handleFieldChange} fullWidth />
                   <EF label="Turno Escolar" field="turno_escolar" value={formData.turno_escolar} editing={isEditing} type="select"
                     options={['Manhã', 'Tarde', 'Noite', 'Integral', 'Não estuda no momento']} onChange={handleFieldChange} />
                 </Grid>
@@ -1076,11 +1076,11 @@ function ColorSection({ title, icon, color, children }: { title: string; icon: R
 }
 
 function Grid({ cols, children }: { cols: 2 | 3; children: React.ReactNode }) {
-  return <div className={`grid gap-x-5 gap-y-4 ${cols === 3 ? 'grid-cols-3' : 'grid-cols-2'}`}>{children}</div>;
+  return <div className={`grid gap-x-4 gap-y-4 ${cols === 3 ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-1 sm:grid-cols-2'}`}>{children}</div>;
 }
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
-  return <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest block">{children}</label>;
+  return <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide leading-tight block mb-0.5">{children}</label>;
 }
 
 function FieldValue({ children }: { children: React.ReactNode }) {
@@ -1111,13 +1111,13 @@ function EmptyState({ icon, text }: { icon: React.ReactNode; text: string }) {
 
 // ── Componentes de campo ───────────────────────────────────────
 
-function EF({ label, field, value, editing, type = 'text', onChange, options }: {
+function EF({ label, field, value, editing, type = 'text', onChange, options, fullWidth }: {
   label: string; field: string; value: any; editing: boolean;
   type?: 'text' | 'number' | 'date' | 'textarea' | 'select' | 'checkbox';
-  onChange: (f: string, v: any) => void; options?: string[];
+  onChange: (f: string, v: any) => void; options?: string[]; fullWidth?: boolean;
 }) {
   return (
-    <div className="flex flex-col gap-0.5">
+    <div className={`flex flex-col gap-0.5 ${fullWidth ? 'sm:col-span-2' : ''}`}>
       <FieldLabel>{label}</FieldLabel>
       {editing ? (
         type === 'textarea'
