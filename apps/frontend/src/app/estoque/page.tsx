@@ -272,423 +272,66 @@ export default function EstoquePage() {
           ))}
         </div>
 
-        {/* ── ABA: VISÃO GERAL ─────────────────────────────────────────────── */}
+        {/* ABAS */}
         {aba === 'visao' && (
-          <div className="space-y-6">
-            {loading ? (
-              <div className="py-16 text-center text-slate-400"><RefreshCw size={24} className="animate-spin mx-auto mb-2" /></div>
-            ) : produtos.filter(p => p.ativo).length === 0 ? (
-              <div className="py-16 text-center text-slate-400"><Package size={40} className="mx-auto mb-3 opacity-30" /><p className="font-black text-sm">Nenhum produto cadastrado.</p></div>
-            ) : (
-              nomCategorias.map(cat => {
-                const prods = produtos.filter(p => p.ativo && p.categoria === cat);
-                if (prods.length === 0) return null;
-                return (
-                  <div key={cat}>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">{cat}</p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                      {prods.map(p => {
-                        const alerta = emAlerta(p);
-                        const pct = pctEstoque(p);
-                        const barColor = alerta ? 'bg-red-500' : pct < 150 ? 'bg-yellow-400' : 'bg-green-500';
-                        return (
-                          <div key={p.id} className={`bg-white dark:bg-slate-800 border rounded-2xl p-4 space-y-3 ${alerta ? 'border-red-300 dark:border-red-700/50' : 'border-slate-100 dark:border-slate-700'}`}>
-                            <div className="flex items-start justify-between gap-2">
-                              <p className="font-black text-sm text-slate-800 dark:text-slate-100 leading-tight">{p.nome}</p>
-                              {alerta && <AlertTriangle size={14} className="text-red-500 flex-shrink-0 mt-0.5" />}
-                            </div>
-                            <div className="flex items-baseline gap-1">
-                              <p className={`font-mono font-black text-2xl tracking-tight ${alerta ? 'text-red-500' : 'text-green-600'}`}>{fmt(p.quantidade_atual)}</p>
-                              <p className="text-xs text-slate-400 font-mono">{p.unidade_medida}</p>
-                            </div>
-                            {Number(p.estoque_minimo) > 0 && (
-                              <div>
-                                <div className="flex justify-between text-[10px] text-slate-400 mb-1">
-                                  <span>Mín: {fmt(p.estoque_minimo)} {p.unidade_medida}</span>
-                                  <span className={alerta ? 'text-red-500 font-black' : 'text-green-600 font-bold'}>{alerta ? '⚠ Abaixo' : 'OK'}</span>
-                                </div>
-                                <div className="w-full h-1.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
-                                  <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${Math.min(pct, 100)}%` }} />
-                                </div>
-                              </div>
-                            )}
-                            <div className="flex gap-1.5 pt-1">
-                              <button onClick={() => abrirMov('entrada', p)} className="flex-1 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-white text-[10px] font-black uppercase transition-colors flex items-center justify-center gap-1">
-                                <PackagePlus size={11} /> Entrada
-                              </button>
-                              <button onClick={() => abrirMov('baixa', p)} className="flex-1 py-1.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-[10px] font-black uppercase transition-colors flex items-center justify-center gap-1">
-                                <PackageMinus size={11} /> Baixa
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
+          <VisaoTab
+            loading={loading}
+            produtos={produtos}
+            nomCategorias={nomCategorias}
+            alertas={alertas}
+            categorias={categorias}
+            onEntrada={p => abrirMov('entrada', p)}
+            onBaixa={p => abrirMov('baixa', p)}
+          />
         )}
-
-        {/* ── ABA: PRODUTOS ────────────────────────────────────────────────── */}
         {aba === 'produtos' && (
-          <div className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl overflow-hidden">
-            <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-700 flex flex-wrap items-center gap-3">
-              <div className="relative flex-1 min-w-[180px]">
-                <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar produto..."
-                  className="w-full border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-xl pl-8 pr-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-green-400" />
-              </div>
-              <select value={filtroCategoria} onChange={e => setFiltroCategoria(e.target.value)}
-                className="border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-green-400">
-                <option value="">Todas as categorias</option>
-                {nomCategorias.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-              <button onClick={() => setShowInativos(v => !v)}
-                className={`px-3 py-2 rounded-xl border text-xs font-bold transition-all ${showInativos ? 'bg-slate-100 dark:bg-slate-700 border-slate-300 dark:border-slate-500' : 'border-slate-200 dark:border-slate-600 text-slate-500'}`}>
-                {showInativos ? 'Ocultar Inativos' : 'Mostrar Inativos'}
-              </button>
-            </div>
-            {loading ? (
-              <div className="py-16 text-center text-slate-400"><RefreshCw size={20} className="animate-spin mx-auto mb-2" /></div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="bg-slate-50 dark:bg-slate-700/40">
-                      {['Nome', 'Categoria', 'Un.', 'Qtd Atual', 'Mínimo', 'Status', 'Ações'].map(h => (
-                        <th key={h} className={`px-5 py-4 font-black text-[10px] uppercase tracking-widest text-slate-500 dark:text-slate-400 ${h === 'Ações' ? 'text-right' : 'text-left'}`}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50 dark:divide-slate-700/50">
-                    {produtosFiltrados.length === 0 ? (
-                      <tr><td colSpan={7} className="text-center py-12 text-slate-400 text-xs font-bold">Nenhum produto encontrado.</td></tr>
-                    ) : produtosFiltrados.map(p => (
-                      <tr key={p.id} className={`hover:bg-slate-50/50 dark:hover:bg-slate-700/20 transition-colors ${!p.ativo ? 'opacity-50' : ''}`}>
-                        <td className="px-5 py-3.5 font-bold text-sm text-slate-800 dark:text-slate-200">{p.nome}</td>
-                        <td className="px-5 py-3.5 text-[11px] text-slate-500 dark:text-slate-400 font-medium">{p.categoria}</td>
-                        <td className="px-5 py-3.5 font-mono text-xs text-slate-500">{p.unidade_medida}</td>
-                        <td className="px-5 py-3.5 font-mono font-black text-sm text-slate-800 dark:text-slate-200">{fmt(p.quantidade_atual)}</td>
-                        <td className="px-5 py-3.5 font-mono text-xs text-slate-500">{Number(p.estoque_minimo) > 0 ? fmt(p.estoque_minimo) : '—'}</td>
-                        <td className="px-5 py-3.5">
-                          {!p.ativo ? (
-                            <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-slate-100 dark:bg-slate-700 text-slate-400">Inativo</span>
-                          ) : emAlerta(p) ? (
-                            <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400">⚠ Alerta</span>
-                          ) : (
-                            <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">OK</span>
-                          )}
-                        </td>
-                        <td className="px-5 py-3.5 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
-                            {p.ativo && <>
-                              <button onClick={() => abrirMov('entrada', p)} title="Entrada" className="p-1.5 rounded-lg bg-green-50 dark:bg-green-900/20 text-green-600 hover:bg-green-100 transition-colors"><PackagePlus size={13} /></button>
-                              <button onClick={() => abrirMov('baixa', p)} title="Baixa" className="p-1.5 rounded-lg bg-orange-50 dark:bg-orange-900/20 text-orange-500 hover:bg-orange-100 transition-colors"><PackageMinus size={13} /></button>
-                            </>}
-                            <button onClick={() => abrirEditar(p)} title="Editar" className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-500 hover:bg-slate-200 transition-colors"><Edit2 size={13} /></button>
-                            {p.ativo && <button onClick={() => deletarProduto(p)} title="Desativar" className="p-1.5 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-500 hover:bg-red-100 transition-colors"><Trash2 size={13} /></button>}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
+          <ProdutosTab
+            loading={loading}
+            produtosFiltrados={produtosFiltrados}
+            nomCategorias={nomCategorias}
+            busca={busca}
+            setBusca={setBusca}
+            filtroCategoria={filtroCategoria}
+            setFiltroCategoria={setFiltroCategoria}
+            showInativos={showInativos}
+            setShowInativos={setShowInativos}
+            onEntrada={p => abrirMov('entrada', p)}
+            onBaixa={p => abrirMov('baixa', p)}
+            onEditar={abrirEditar}
+            onDeletar={deletarProduto}
+          />
         )}
-
-        {/* ── ABA: MOVIMENTOS ──────────────────────────────────────────────── */}
-        {aba === 'movimentos' && (() => {
-          const movFiltrados = movimentos.filter(m => {
-            if (filtroTipoMov && m.tipo !== filtroTipoMov) return false;
-            if (buscaMov) {
-              const q = buscaMov.toLowerCase();
-              return (m.produto?.nome ?? '').toLowerCase().includes(q) || (m.observacao ?? '').toLowerCase().includes(q) || (m.usuario_nome ?? '').toLowerCase().includes(q);
-            }
-            return true;
-          });
-          return (
-          <div className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl overflow-hidden">
-            <div className="px-5 py-3 border-b border-slate-100 dark:border-slate-700 flex flex-wrap gap-3">
-              <div className="relative flex-1 min-w-[160px]">
-                <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input value={buscaMov} onChange={e => setBuscaMov(e.target.value)} placeholder="Buscar produto, observação..."
-                  className="w-full pl-8 pr-3 py-2 border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-green-400" />
-              </div>
-              <select value={filtroTipoMov} onChange={e => setFiltroTipoMov(e.target.value as any)}
-                className="border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-green-400">
-                <option value="">Todos os tipos</option>
-                <option value="entrada">Entradas</option>
-                <option value="baixa">Baixas</option>
-              </select>
-              <span className="text-[10px] text-slate-400 self-center">{movFiltrados.length} mov.</span>
-            </div>
-            {loading ? (
-              <div className="py-16 text-center text-slate-400"><RefreshCw size={20} className="animate-spin mx-auto mb-2" /></div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="bg-slate-50 dark:bg-slate-700/40">
-                      {['Produto', 'Tipo', '± Quantidade', 'Observação', 'Usuário / Operador', 'Data/Hora'].map(h => (
-                        <th key={h} className="px-5 py-4 text-left font-black text-[10px] uppercase tracking-widest text-slate-500 dark:text-slate-400">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50 dark:divide-slate-700/50">
-                    {movFiltrados.length === 0 ? (
-                      <tr><td colSpan={6} className="text-center py-12 text-slate-400 text-xs font-bold">Nenhum movimento encontrado.</td></tr>
-                    ) : movFiltrados.map(m => (
-                      <tr key={m.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-700/20 transition-colors">
-                        <td className="px-5 py-3 font-bold text-sm text-slate-800 dark:text-slate-200">{m.produto?.nome || '—'}</td>
-                        <td className="px-5 py-3">
-                          <span className={`px-2.5 py-1 rounded-full text-[10px] font-black ${m.tipo === 'entrada' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' : 'bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400'}`}>
-                            {m.tipo === 'entrada' ? '▲ Entrada' : '▼ Baixa'}
-                          </span>
-                        </td>
-                        <td className="px-5 py-3">
-                          <span className={`font-mono font-black text-sm ${m.tipo === 'entrada' ? 'text-green-600' : 'text-orange-500'}`}>
-                            {m.tipo === 'entrada' ? '+' : '-'}{fmt(m.quantidade)}
-                          </span>
-                          <span className="text-[10px] text-slate-400 ml-1">{m.produto?.unidade_medida}</span>
-                        </td>
-                        <td className="px-5 py-3 text-xs text-slate-500 max-w-[200px] truncate">{m.observacao || '—'}</td>
-                        <td className="px-5 py-3 text-xs text-slate-500">{m.usuario_nome || '—'}</td>
-                        <td className="px-5 py-3 text-right font-mono text-[11px] text-slate-500">{fmtData(m.createdAt)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-          );
-        })()}
-
-        {/* ── ABA: CATEGORIAS ──────────────────────────────────────────────── */}
+        {aba === 'movimentos' && (
+          <MovimentosTab
+            loading={loading}
+            movimentos={movimentos}
+            buscaMov={buscaMov}
+            setBuscaMov={setBuscaMov}
+            filtroTipoMov={filtroTipoMov}
+            setFiltroTipoMov={setFiltroTipoMov}
+          />
+        )}
         {aba === 'categorias' && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-black uppercase tracking-widest text-slate-400">Categorias cadastradas</p>
-              <button onClick={abrirNovaCategoria} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-green-600 hover:bg-green-700 text-white font-black text-xs uppercase tracking-widest transition-all">
-                <Plus size={13} /> Nova Categoria
-              </button>
-            </div>
-            <div className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl overflow-hidden">
-              {loading ? (
-                <div className="py-16 text-center text-slate-400"><RefreshCw size={20} className="animate-spin mx-auto mb-2" /></div>
-              ) : categorias.length === 0 ? (
-                <div className="py-12 text-center text-slate-400"><Tag size={32} className="mx-auto mb-2 opacity-30" /><p className="text-xs font-bold">Nenhuma categoria cadastrada.</p></div>
-              ) : (
-                <table className="w-full">
-                  <thead>
-                    <tr className="bg-slate-50 dark:bg-slate-700/40">
-                      <th className="px-5 py-4 text-left font-black text-[10px] uppercase tracking-widest text-slate-500">Nome</th>
-                      <th className="px-5 py-4 text-left font-black text-[10px] uppercase tracking-widest text-slate-500">Produtos</th>
-                      <th className="px-5 py-4 text-right font-black text-[10px] uppercase tracking-widest text-slate-500">Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50 dark:divide-slate-700/50">
-                    {categorias.map(c => {
-                      const total = produtos.filter(p => p.ativo && p.categoria === c.nome).length;
-                      return (
-                        <tr key={c.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-700/20 transition-colors">
-                          <td className="px-5 py-3.5 font-bold text-sm text-slate-800 dark:text-slate-200">{c.nome}</td>
-                          <td className="px-5 py-3.5 text-xs text-slate-500">{total} produto{total !== 1 ? 's' : ''}</td>
-                          <td className="px-5 py-3.5 text-right">
-                            <div className="flex items-center justify-end gap-1.5">
-                              <button onClick={() => abrirEditarCategoria(c)} className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-500 hover:bg-slate-200 transition-colors"><Edit2 size={13} /></button>
-                              <button onClick={() => deletarCategoria(c)} className="p-1.5 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-500 hover:bg-red-100 transition-colors"><Trash2 size={13} /></button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          </div>
+          <CategoriasTab
+            loading={loading}
+            categorias={categorias}
+            produtos={produtos}
+            onNova={abrirNovaCategoria}
+            onEditar={abrirEditarCategoria}
+            onDeletar={deletarCategoria}
+          />
         )}
-
-        {/* ── ABA: COTAÇÃO ────────────────────────────────────────────────── */}
-        {aba === 'valor' && (() => {
-          const prodAtivos = produtos.filter(p => p.ativo);
-          const comPreco = prodAtivos.filter(p => p.valor_compra != null);
-          const valorTotal = comPreco.reduce((acc, p) => acc + Number(p.quantidade_atual) * Number(p.valor_compra!), 0);
-
-          const prodFiltrados = prodAtivos.filter(p =>
-            !buscaCotacao || p.nome.toLowerCase().includes(buscaCotacao.toLowerCase()) || p.categoria.toLowerCase().includes(buscaCotacao.toLowerCase())
-          );
-
-          const totalCotacao = prodFiltrados
-            .filter(p => cotacaoSelecionados.size === 0 || cotacaoSelecionados.has(p.id))
-            .reduce((acc, p) => {
-              const qty = Number(simulacao[p.id] || 0);
-              return acc + qty * Number(p.valor_compra || 0);
-            }, 0);
-
-          const toggleSelecionado = (id: string) => {
-            setCotacaoSelecionados(prev => {
-              const next = new Set(prev);
-              next.has(id) ? next.delete(id) : next.add(id);
-              return next;
-            });
-          };
-
-          const selecionarTodos = () => {
-            if (cotacaoSelecionados.size === prodFiltrados.length) {
-              setCotacaoSelecionados(new Set());
-            } else {
-              setCotacaoSelecionados(new Set(prodFiltrados.map(p => p.id)));
-            }
-          };
-
-          const imprimirCotacao = () => {
-            const itens = prodFiltrados.filter(p => cotacaoSelecionados.size === 0 || cotacaoSelecionados.has(p.id));
-            const totalImp = itens.reduce((acc, p) => {
-              const qty = Number(simulacao[p.id] || 0);
-              return acc + qty * Number(p.valor_compra || 0);
-            }, 0);
-            const linhas = itens.map(p => {
-              const qty = Number(simulacao[p.id] || 0);
-              const custo = p.valor_compra != null && qty > 0 ? (qty * Number(p.valor_compra)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—';
-              return `<tr>
-                <td>${p.nome}</td><td>${p.categoria}</td>
-                <td>${fmt(p.quantidade_atual)} ${p.unidade_medida}</td>
-                <td>${p.valor_compra != null ? Number(p.valor_compra).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—'}</td>
-                <td>${qty > 0 ? fmt(qty) : '—'}</td>
-                <td>${custo}</td>
-              </tr>`;
-            }).join('');
-            const html = `<!DOCTYPE html><html><head><title>Cotação — ITP</title>
-<style>body{font-family:Arial,sans-serif;font-size:12px;padding:24px}h1{font-size:16px;margin-bottom:4px}p.sub{color:#666;font-size:11px;margin-bottom:16px}
-table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:6px 10px;text-align:left}th{background:#f0f0f0;font-weight:700;font-size:11px;text-transform:uppercase}
-.tot td{font-weight:700;background:#eff6ff;font-size:13px}</style></head>
-<body><h1>Cotação de Compra</h1><p class="sub">Instituto Tia Pretinha · Gerado em ${new Date().toLocaleString('pt-BR')}</p>
-<table><thead><tr><th>Produto</th><th>Categoria</th><th>Qtd Atual</th><th>Custo Unitário</th><th>Qtd a Comprar</th><th>Custo Total</th></tr></thead>
-<tbody>${linhas}</tbody>${totalImp > 0 ? `<tfoot><tr class="tot"><td colspan="5" style="text-align:right">TOTAL DA COTAÇÃO</td><td>${totalImp.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td></tr></tfoot>` : ''}
-</table></body></html>`;
-            const win = window.open('', '_blank');
-            if (win) { win.document.write(html); win.document.close(); win.print(); }
-          };
-
-          return (
-            <div className="space-y-6">
-              {/* KPIs */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl p-5 flex items-center gap-4">
-                  <div className="bg-emerald-600 p-3 rounded-xl text-white"><DollarSign size={18} /></div>
-                  <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Valor Total em Estoque</p>
-                    <p className="text-xl font-black text-slate-800 dark:text-slate-100 tracking-tighter">{fmtMoeda(valorTotal)}</p>
-                    <p className="text-[9px] text-slate-400">{comPreco.length} de {prodAtivos.length} itens com custo</p>
-                  </div>
-                </div>
-                <div className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl p-5 flex items-center gap-4">
-                  <div className="bg-blue-600 p-3 rounded-xl text-white"><ShoppingCart size={18} /></div>
-                  <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total da Cotação</p>
-                    <p className="text-xl font-black text-slate-800 dark:text-slate-100 tracking-tighter">{fmtMoeda(totalCotacao)}</p>
-                    <p className="text-[9px] text-slate-400">{cotacaoSelecionados.size > 0 ? `${cotacaoSelecionados.size} itens selecionados` : 'Preencha as qtds abaixo'}</p>
-                  </div>
-                </div>
-                <div className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl p-5 flex items-center gap-4">
-                  <div className="bg-purple-600 p-3 rounded-xl text-white"><Calculator size={18} /></div>
-                  <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Sem Custo Cadastrado</p>
-                    <p className="text-xl font-black text-slate-800 dark:text-slate-100 tracking-tighter">{prodAtivos.length - comPreco.length}</p>
-                    <p className="text-[9px] text-slate-400">itens sem custo unitário</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Tabela de cotação */}
-              <div className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl overflow-hidden">
-                <div className="px-5 py-3 border-b border-slate-100 dark:border-slate-700 flex flex-wrap items-center gap-3">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex-1">Cotação de Compra</p>
-                  <div className="relative">
-                    <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                    <input value={buscaCotacao} onChange={e => setBuscaCotacao(e.target.value)} placeholder="Buscar produto..."
-                      className="pl-7 pr-3 py-1.5 border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-400 w-40" />
-                  </div>
-                  <button onClick={selecionarTodos}
-                    className="text-[9px] font-black uppercase text-slate-500 hover:text-blue-600 border border-slate-200 dark:border-slate-600 rounded-lg px-2.5 py-1.5 transition-colors">
-                    {cotacaoSelecionados.size === prodFiltrados.length && prodFiltrados.length > 0 ? 'Limpar seleção' : 'Selecionar todos'}
-                  </button>
-                  <button onClick={() => setSimulacao({})}
-                    className="text-[9px] font-black uppercase text-slate-400 hover:text-red-500 border border-slate-200 dark:border-slate-600 rounded-lg px-2.5 py-1.5 transition-colors">
-                    Limpar qtds
-                  </button>
-                  <button onClick={imprimirCotacao}
-                    className="flex items-center gap-1.5 text-[9px] font-black uppercase bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-3 py-1.5 transition-colors">
-                    <Printer size={11}/> Imprimir / PDF
-                  </button>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="bg-slate-50 dark:bg-slate-700/40">
-                        <th className="px-4 py-3 w-8">
-                          <input type="checkbox" checked={cotacaoSelecionados.size === prodFiltrados.length && prodFiltrados.length > 0}
-                            onChange={selecionarTodos} className="accent-blue-600 w-3.5 h-3.5" />
-                        </th>
-                        {['Produto', 'Categoria', 'Qtd Atual', 'Custo Unitário', 'Valor em Estoque', 'Qtd a Comprar', 'Custo Total'].map(h => (
-                          <th key={h} className="px-4 py-3 text-left font-black text-[10px] uppercase tracking-widest text-slate-500 dark:text-slate-400">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-50 dark:divide-slate-700/50">
-                      {prodFiltrados.length === 0 ? (
-                        <tr><td colSpan={8} className="text-center py-12 text-slate-400 text-xs font-bold">Nenhum produto encontrado.</td></tr>
-                      ) : prodFiltrados.map(p => {
-                        const valorEstoque = p.valor_compra != null ? Number(p.quantidade_atual) * Number(p.valor_compra) : null;
-                        const qtdSim = Number(simulacao[p.id] || 0);
-                        const custoSim = p.valor_compra != null ? qtdSim * Number(p.valor_compra) : null;
-                        const selecionado = cotacaoSelecionados.has(p.id);
-                        return (
-                          <tr key={p.id} className={`hover:bg-slate-50/50 dark:hover:bg-slate-700/20 transition-colors ${selecionado ? 'bg-blue-50/40 dark:bg-blue-900/10' : ''}`}>
-                            <td className="px-4 py-3">
-                              <input type="checkbox" checked={selecionado} onChange={() => toggleSelecionado(p.id)} className="accent-blue-600 w-3.5 h-3.5" />
-                            </td>
-                            <td className="px-4 py-3 font-bold text-sm text-slate-800 dark:text-slate-200">{p.nome}</td>
-                            <td className="px-4 py-3 text-[11px] text-slate-500">{p.categoria}</td>
-                            <td className="px-4 py-3 font-mono font-black text-sm text-slate-700 dark:text-slate-300">{fmt(p.quantidade_atual)} {p.unidade_medida}</td>
-                            <td className="px-4 py-3 font-mono text-sm text-emerald-700 dark:text-emerald-400 font-black">{fmtMoeda(p.valor_compra)}</td>
-                            <td className="px-4 py-3 font-mono text-sm font-black text-slate-800 dark:text-slate-100">{fmtMoeda(valorEstoque)}</td>
-                            <td className="px-4 py-3">
-                              <input type="number" min="0" step="0.001"
-                                value={simulacao[p.id] ?? ''}
-                                onChange={e => setSimulacao(prev => ({ ...prev, [p.id]: e.target.value }))}
-                                placeholder="0"
-                                className="w-24 border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg px-2 py-1 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-400"
-                              />
-                            </td>
-                            <td className="px-4 py-3 font-mono text-sm font-black text-blue-700 dark:text-blue-400">
-                              {custoSim != null && qtdSim > 0 ? fmtMoeda(custoSim) : <span className="text-slate-300">—</span>}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                    {totalCotacao > 0 && (
-                      <tfoot>
-                        <tr className="bg-blue-50 dark:bg-blue-900/20 border-t-2 border-blue-200 dark:border-blue-700">
-                          <td colSpan={7} className="px-4 py-3 font-black text-sm text-blue-700 dark:text-blue-300 text-right uppercase tracking-widest">Total da Cotação</td>
-                          <td className="px-4 py-3 font-black text-lg text-blue-700 dark:text-blue-300">{fmtMoeda(totalCotacao)}</td>
-                        </tr>
-                      </tfoot>
-                    )}
-                  </table>
-                </div>
-              </div>
-              <p className="text-[10px] text-slate-400 text-center">* Custo unitário é configurado ao criar/editar produto ou ao registrar uma entrada com preço pago.</p>
-            </div>
-          );
-        })()}
+        {aba === 'valor' && (
+          <CotacaoTab
+            produtos={produtos}
+            simulacao={simulacao}
+            setSimulacao={setSimulacao}
+            buscaCotacao={buscaCotacao}
+            setBuscaCotacao={setBuscaCotacao}
+            cotacaoSelecionados={cotacaoSelecionados}
+            setCotacaoSelecionados={setCotacaoSelecionados}
+          />
+        )}
 
       </div>
 
@@ -801,6 +444,514 @@ table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:6p
     </div>
   );
 }
+
+// ── Sub-componentes de Aba ─────────────────────────────────────────────────
+
+interface VisaoTabProps {
+  loading: boolean;
+  produtos: Produto[];
+  nomCategorias: string[];
+  alertas: Produto[];
+  categorias: CategoriaInsumo[];
+  onEntrada: (p: Produto) => void;
+  onBaixa: (p: Produto) => void;
+}
+function VisaoTab({ loading, produtos, nomCategorias, alertas, categorias, onEntrada, onBaixa }: VisaoTabProps) {
+  const totalAtivos = produtos.filter(p => p.ativo).length;
+  const totalCategorias = categorias.length;
+
+  return (
+    <div className="space-y-6">
+      {/* Mini-dashboard de resumo */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl px-4 py-3 flex items-center gap-3">
+          <div className="bg-green-100 dark:bg-green-900/30 p-2 rounded-xl text-green-600">
+            <Package size={15} />
+          </div>
+          <div>
+            <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Itens ativos</p>
+            <p className="text-xl font-black text-slate-800 dark:text-slate-100 tracking-tighter">{totalAtivos}</p>
+          </div>
+        </div>
+        <div className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl px-4 py-3 flex items-center gap-3">
+          <div className={`p-2 rounded-xl ${alertas.length > 0 ? 'bg-red-100 dark:bg-red-900/30 text-red-500' : 'bg-slate-100 dark:bg-slate-700 text-slate-400'}`}>
+            <AlertTriangle size={15} />
+          </div>
+          <div>
+            <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Em alerta</p>
+            <p className={`text-xl font-black tracking-tighter ${alertas.length > 0 ? 'text-red-500' : 'text-slate-800 dark:text-slate-100'}`}>{alertas.length}</p>
+          </div>
+        </div>
+        <div className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl px-4 py-3 flex items-center gap-3">
+          <div className="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-xl text-blue-600">
+            <Tag size={15} />
+          </div>
+          <div>
+            <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Categorias ativas</p>
+            <p className="text-xl font-black text-slate-800 dark:text-slate-100 tracking-tighter">{totalCategorias}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Cards por categoria */}
+      {loading ? (
+        <div className="py-16 text-center text-slate-400"><RefreshCw size={24} className="animate-spin mx-auto mb-2" /></div>
+      ) : produtos.filter(p => p.ativo).length === 0 ? (
+        <div className="py-16 text-center text-slate-400"><Package size={40} className="mx-auto mb-3 opacity-30" /><p className="font-black text-sm">Nenhum produto cadastrado.</p></div>
+      ) : (
+        nomCategorias.map(cat => {
+          const prods = produtos.filter(p => p.ativo && p.categoria === cat);
+          if (prods.length === 0) return null;
+          return (
+            <div key={cat}>
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">{cat}</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                {prods.map(p => {
+                  const alerta = emAlerta(p);
+                  const pct = pctEstoque(p);
+                  const barColor = alerta ? 'bg-red-500' : pct < 150 ? 'bg-yellow-400' : 'bg-green-500';
+                  return (
+                    <div key={p.id} className={`bg-white dark:bg-slate-800 border rounded-2xl p-4 space-y-3 ${alerta ? 'border-red-300 dark:border-red-700/50' : 'border-slate-100 dark:border-slate-700'}`}>
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="font-black text-sm text-slate-800 dark:text-slate-100 leading-tight">{p.nome}</p>
+                        {alerta && <AlertTriangle size={14} className="text-red-500 flex-shrink-0 mt-0.5" />}
+                      </div>
+                      <div className="flex items-baseline gap-1">
+                        <p className={`font-mono font-black text-2xl tracking-tight ${alerta ? 'text-red-500' : 'text-green-600'}`}>{fmt(p.quantidade_atual)}</p>
+                        <p className="text-xs text-slate-400 font-mono">{p.unidade_medida}</p>
+                      </div>
+                      {Number(p.estoque_minimo) > 0 && (
+                        <div>
+                          <div className="flex justify-between text-[10px] text-slate-400 mb-1">
+                            <span>Mín: {fmt(p.estoque_minimo)} {p.unidade_medida}</span>
+                            <span className={alerta ? 'text-red-500 font-black' : 'text-green-600 font-bold'}>{alerta ? '⚠ Abaixo' : 'OK'}</span>
+                          </div>
+                          <div className="w-full h-1.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                            <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${Math.min(pct, 100)}%` }} />
+                          </div>
+                        </div>
+                      )}
+                      <div className="flex gap-1.5 pt-1">
+                        <button onClick={() => onEntrada(p)} className="flex-1 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-white text-[10px] font-black uppercase transition-colors flex items-center justify-center gap-1">
+                          <PackagePlus size={11} /> Entrada
+                        </button>
+                        <button onClick={() => onBaixa(p)} className="flex-1 py-1.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-[10px] font-black uppercase transition-colors flex items-center justify-center gap-1">
+                          <PackageMinus size={11} /> Baixa
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })
+      )}
+    </div>
+  );
+}
+
+interface ProdutosTabProps {
+  loading: boolean;
+  produtosFiltrados: Produto[];
+  nomCategorias: string[];
+  busca: string;
+  setBusca: (v: string) => void;
+  filtroCategoria: string;
+  setFiltroCategoria: (v: string) => void;
+  showInativos: boolean;
+  setShowInativos: (v: boolean) => void;
+  onEntrada: (p: Produto) => void;
+  onBaixa: (p: Produto) => void;
+  onEditar: (p: Produto) => void;
+  onDeletar: (p: Produto) => void;
+}
+function ProdutosTab({ loading, produtosFiltrados, nomCategorias, busca, setBusca, filtroCategoria, setFiltroCategoria, showInativos, setShowInativos, onEntrada, onBaixa, onEditar, onDeletar }: ProdutosTabProps) {
+  return (
+    <div className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl overflow-hidden">
+      <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-700 flex flex-wrap items-center gap-3">
+        <div className="relative flex-1 min-w-[180px]">
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar produto..."
+            className="w-full border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-xl pl-8 pr-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-green-400" />
+        </div>
+        <select value={filtroCategoria} onChange={e => setFiltroCategoria(e.target.value)}
+          className="border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-green-400">
+          <option value="">Todas as categorias</option>
+          {nomCategorias.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <button onClick={() => setShowInativos(!showInativos)}
+          className={`px-3 py-2 rounded-xl border text-xs font-bold transition-all ${showInativos ? 'bg-slate-100 dark:bg-slate-700 border-slate-300 dark:border-slate-500' : 'border-slate-200 dark:border-slate-600 text-slate-500'}`}>
+          {showInativos ? 'Ocultar Inativos' : 'Mostrar Inativos'}
+        </button>
+      </div>
+      {loading ? (
+        <div className="py-16 text-center text-slate-400"><RefreshCw size={20} className="animate-spin mx-auto mb-2" /></div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="bg-slate-50 dark:bg-slate-700/40">
+                {['Nome', 'Categoria', 'Un.', 'Qtd Atual', 'Mínimo', 'Status', 'Ações'].map(h => (
+                  <th key={h} className={`px-5 py-4 font-black text-[10px] uppercase tracking-widest text-slate-500 dark:text-slate-400 ${h === 'Ações' ? 'text-right' : 'text-left'}`}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50 dark:divide-slate-700/50">
+              {produtosFiltrados.length === 0 ? (
+                <tr><td colSpan={7} className="text-center py-12 text-slate-400 text-xs font-bold">Nenhum produto encontrado.</td></tr>
+              ) : produtosFiltrados.map(p => (
+                <tr key={p.id} className={`hover:bg-slate-50/50 dark:hover:bg-slate-700/20 transition-colors ${!p.ativo ? 'opacity-50' : ''}`}>
+                  <td className="px-5 py-3.5 font-bold text-sm text-slate-800 dark:text-slate-200">{p.nome}</td>
+                  <td className="px-5 py-3.5 text-[11px] text-slate-500 dark:text-slate-400 font-medium">{p.categoria}</td>
+                  <td className="px-5 py-3.5 font-mono text-xs text-slate-500">{p.unidade_medida}</td>
+                  <td className="px-5 py-3.5 font-mono font-black text-sm text-slate-800 dark:text-slate-200">{fmt(p.quantidade_atual)}</td>
+                  <td className="px-5 py-3.5 font-mono text-xs text-slate-500">{Number(p.estoque_minimo) > 0 ? fmt(p.estoque_minimo) : '—'}</td>
+                  <td className="px-5 py-3.5">
+                    {!p.ativo ? (
+                      <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-slate-100 dark:bg-slate-700 text-slate-400">Inativo</span>
+                    ) : emAlerta(p) ? (
+                      <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400">⚠ Alerta</span>
+                    ) : (
+                      <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">OK</span>
+                    )}
+                  </td>
+                  <td className="px-5 py-3.5 text-right">
+                    <div className="flex items-center justify-end gap-1.5">
+                      {p.ativo && <>
+                        <button onClick={() => onEntrada(p)} title="Entrada" className="p-1.5 rounded-lg bg-green-50 dark:bg-green-900/20 text-green-600 hover:bg-green-100 transition-colors"><PackagePlus size={13} /></button>
+                        <button onClick={() => onBaixa(p)} title="Baixa" className="p-1.5 rounded-lg bg-orange-50 dark:bg-orange-900/20 text-orange-500 hover:bg-orange-100 transition-colors"><PackageMinus size={13} /></button>
+                      </>}
+                      <button onClick={() => onEditar(p)} title="Editar" className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-500 hover:bg-slate-200 transition-colors"><Edit2 size={13} /></button>
+                      {p.ativo && <button onClick={() => onDeletar(p)} title="Desativar" className="p-1.5 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-500 hover:bg-red-100 transition-colors"><Trash2 size={13} /></button>}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface MovimentosTabProps {
+  loading: boolean;
+  movimentos: Movimento[];
+  buscaMov: string;
+  setBuscaMov: (v: string) => void;
+  filtroTipoMov: '' | 'entrada' | 'baixa';
+  setFiltroTipoMov: (v: '' | 'entrada' | 'baixa') => void;
+}
+function MovimentosTab({ loading, movimentos, buscaMov, setBuscaMov, filtroTipoMov, setFiltroTipoMov }: MovimentosTabProps) {
+  const movFiltrados = movimentos.filter(m => {
+    if (filtroTipoMov && m.tipo !== filtroTipoMov) return false;
+    if (buscaMov) {
+      const q = buscaMov.toLowerCase();
+      return (m.produto?.nome ?? '').toLowerCase().includes(q) || (m.observacao ?? '').toLowerCase().includes(q) || (m.usuario_nome ?? '').toLowerCase().includes(q);
+    }
+    return true;
+  });
+
+  return (
+    <div className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl overflow-hidden">
+      <div className="px-5 py-3 border-b border-slate-100 dark:border-slate-700 flex flex-wrap gap-3">
+        <div className="relative flex-1 min-w-[160px]">
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input value={buscaMov} onChange={e => setBuscaMov(e.target.value)} placeholder="Buscar produto, observação..."
+            className="w-full pl-8 pr-3 py-2 border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-green-400" />
+        </div>
+        <select value={filtroTipoMov} onChange={e => setFiltroTipoMov(e.target.value as '' | 'entrada' | 'baixa')}
+          className="border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-green-400">
+          <option value="">Todos os tipos</option>
+          <option value="entrada">Entradas</option>
+          <option value="baixa">Baixas</option>
+        </select>
+        <span className="text-[10px] text-slate-400 self-center">{movFiltrados.length} mov.</span>
+      </div>
+      {loading ? (
+        <div className="py-16 text-center text-slate-400"><RefreshCw size={20} className="animate-spin mx-auto mb-2" /></div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="bg-slate-50 dark:bg-slate-700/40">
+                {['Produto', 'Tipo', '± Quantidade', 'Observação', 'Usuário / Operador', 'Data/Hora'].map(h => (
+                  <th key={h} className="px-5 py-4 text-left font-black text-[10px] uppercase tracking-widest text-slate-500 dark:text-slate-400">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50 dark:divide-slate-700/50">
+              {movFiltrados.length === 0 ? (
+                <tr><td colSpan={6} className="text-center py-12 text-slate-400 text-xs font-bold">Nenhum movimento encontrado.</td></tr>
+              ) : movFiltrados.map(m => (
+                <tr key={m.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-700/20 transition-colors">
+                  <td className="px-5 py-3 font-bold text-sm text-slate-800 dark:text-slate-200">{m.produto?.nome || '—'}</td>
+                  <td className="px-5 py-3">
+                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-black ${m.tipo === 'entrada' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' : 'bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400'}`}>
+                      {m.tipo === 'entrada' ? '▲ Entrada' : '▼ Baixa'}
+                    </span>
+                  </td>
+                  <td className="px-5 py-3">
+                    <span className={`font-mono font-black text-sm ${m.tipo === 'entrada' ? 'text-green-600' : 'text-orange-500'}`}>
+                      {m.tipo === 'entrada' ? '+' : '-'}{fmt(m.quantidade)}
+                    </span>
+                    <span className="text-[10px] text-slate-400 ml-1">{m.produto?.unidade_medida}</span>
+                  </td>
+                  <td className="px-5 py-3 text-xs text-slate-500 max-w-[200px] truncate">{m.observacao || '—'}</td>
+                  <td className="px-5 py-3 text-xs text-slate-500">{m.usuario_nome || '—'}</td>
+                  <td className="px-5 py-3 text-right font-mono text-[11px] text-slate-500">{fmtData(m.createdAt)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface CategoriasTabProps {
+  loading: boolean;
+  categorias: CategoriaInsumo[];
+  produtos: Produto[];
+  onNova: () => void;
+  onEditar: (c: CategoriaInsumo) => void;
+  onDeletar: (c: CategoriaInsumo) => void;
+}
+function CategoriasTab({ loading, categorias, produtos, onNova, onEditar, onDeletar }: CategoriasTabProps) {
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-black uppercase tracking-widest text-slate-400">Categorias cadastradas</p>
+        <button onClick={onNova} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-green-600 hover:bg-green-700 text-white font-black text-xs uppercase tracking-widest transition-all">
+          <Plus size={13} /> Nova Categoria
+        </button>
+      </div>
+      <div className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl overflow-hidden">
+        {loading ? (
+          <div className="py-16 text-center text-slate-400"><RefreshCw size={20} className="animate-spin mx-auto mb-2" /></div>
+        ) : categorias.length === 0 ? (
+          <div className="py-12 text-center text-slate-400"><Tag size={32} className="mx-auto mb-2 opacity-30" /><p className="text-xs font-bold">Nenhuma categoria cadastrada.</p></div>
+        ) : (
+          <table className="w-full">
+            <thead>
+              <tr className="bg-slate-50 dark:bg-slate-700/40">
+                <th className="px-5 py-4 text-left font-black text-[10px] uppercase tracking-widest text-slate-500">Nome</th>
+                <th className="px-5 py-4 text-left font-black text-[10px] uppercase tracking-widest text-slate-500">Produtos</th>
+                <th className="px-5 py-4 text-right font-black text-[10px] uppercase tracking-widest text-slate-500">Ações</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50 dark:divide-slate-700/50">
+              {categorias.map(c => {
+                const total = produtos.filter(p => p.ativo && p.categoria === c.nome).length;
+                return (
+                  <tr key={c.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-700/20 transition-colors">
+                    <td className="px-5 py-3.5 font-bold text-sm text-slate-800 dark:text-slate-200">{c.nome}</td>
+                    <td className="px-5 py-3.5 text-xs text-slate-500">{total} produto{total !== 1 ? 's' : ''}</td>
+                    <td className="px-5 py-3.5 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button onClick={() => onEditar(c)} className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-500 hover:bg-slate-200 transition-colors"><Edit2 size={13} /></button>
+                        <button onClick={() => onDeletar(c)} className="p-1.5 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-500 hover:bg-red-100 transition-colors"><Trash2 size={13} /></button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
+interface CotacaoTabProps {
+  produtos: Produto[];
+  simulacao: Record<string, string>;
+  setSimulacao: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  buscaCotacao: string;
+  setBuscaCotacao: (v: string) => void;
+  cotacaoSelecionados: Set<string>;
+  setCotacaoSelecionados: React.Dispatch<React.SetStateAction<Set<string>>>;
+}
+function CotacaoTab({ produtos, simulacao, setSimulacao, buscaCotacao, setBuscaCotacao, cotacaoSelecionados, setCotacaoSelecionados }: CotacaoTabProps) {
+  const prodAtivos = produtos.filter(p => p.ativo);
+  const comPreco = prodAtivos.filter(p => p.valor_compra != null);
+  const valorTotal = comPreco.reduce((acc, p) => acc + Number(p.quantidade_atual) * Number(p.valor_compra!), 0);
+
+  const prodFiltrados = prodAtivos.filter(p =>
+    !buscaCotacao || p.nome.toLowerCase().includes(buscaCotacao.toLowerCase()) || p.categoria.toLowerCase().includes(buscaCotacao.toLowerCase())
+  );
+
+  const totalCotacao = prodFiltrados
+    .filter(p => cotacaoSelecionados.size === 0 || cotacaoSelecionados.has(p.id))
+    .reduce((acc, p) => {
+      const qty = Number(simulacao[p.id] || 0);
+      return acc + qty * Number(p.valor_compra || 0);
+    }, 0);
+
+  const toggleSelecionado = (id: string) => {
+    setCotacaoSelecionados(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const selecionarTodos = () => {
+    if (cotacaoSelecionados.size === prodFiltrados.length) {
+      setCotacaoSelecionados(new Set());
+    } else {
+      setCotacaoSelecionados(new Set(prodFiltrados.map(p => p.id)));
+    }
+  };
+
+  const imprimirCotacao = () => {
+    const itens = prodFiltrados.filter(p => cotacaoSelecionados.size === 0 || cotacaoSelecionados.has(p.id));
+    const totalImp = itens.reduce((acc, p) => {
+      const qty = Number(simulacao[p.id] || 0);
+      return acc + qty * Number(p.valor_compra || 0);
+    }, 0);
+    const linhas = itens.map(p => {
+      const qty = Number(simulacao[p.id] || 0);
+      const custo = p.valor_compra != null && qty > 0 ? (qty * Number(p.valor_compra)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—';
+      return `<tr>
+        <td>${p.nome}</td><td>${p.categoria}</td>
+        <td>${fmt(p.quantidade_atual)} ${p.unidade_medida}</td>
+        <td>${p.valor_compra != null ? Number(p.valor_compra).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—'}</td>
+        <td>${qty > 0 ? fmt(qty) : '—'}</td>
+        <td>${custo}</td>
+      </tr>`;
+    }).join('');
+    const html = `<!DOCTYPE html><html><head><title>Cotação — ITP</title>
+<style>body{font-family:Arial,sans-serif;font-size:12px;padding:24px}h1{font-size:16px;margin-bottom:4px}p.sub{color:#666;font-size:11px;margin-bottom:16px}
+table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:6px 10px;text-align:left}th{background:#f0f0f0;font-weight:700;font-size:11px;text-transform:uppercase}
+.tot td{font-weight:700;background:#eff6ff;font-size:13px}</style></head>
+<body><h1>Cotação de Compra</h1><p class="sub">Instituto Tia Pretinha · Gerado em ${new Date().toLocaleString('pt-BR')}</p>
+<table><thead><tr><th>Produto</th><th>Categoria</th><th>Qtd Atual</th><th>Custo Unitário</th><th>Qtd a Comprar</th><th>Custo Total</th></tr></thead>
+<tbody>${linhas}</tbody>${totalImp > 0 ? `<tfoot><tr class="tot"><td colspan="5" style="text-align:right">TOTAL DA COTAÇÃO</td><td>${totalImp.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td></tr></tfoot>` : ''}
+</table></body></html>`;
+    const win = window.open('', '_blank');
+    if (win) { win.document.write(html); win.document.close(); win.print(); }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* KPIs */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl p-5 flex items-center gap-4">
+          <div className="bg-emerald-600 p-3 rounded-xl text-white"><DollarSign size={18} /></div>
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Valor Total em Estoque</p>
+            <p className="text-xl font-black text-slate-800 dark:text-slate-100 tracking-tighter">{fmtMoeda(valorTotal)}</p>
+            <p className="text-[9px] text-slate-400">{comPreco.length} de {prodAtivos.length} itens com custo</p>
+          </div>
+        </div>
+        <div className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl p-5 flex items-center gap-4">
+          <div className="bg-blue-600 p-3 rounded-xl text-white"><ShoppingCart size={18} /></div>
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total da Cotação</p>
+            <p className="text-xl font-black text-slate-800 dark:text-slate-100 tracking-tighter">{fmtMoeda(totalCotacao)}</p>
+            <p className="text-[9px] text-slate-400">{cotacaoSelecionados.size > 0 ? `${cotacaoSelecionados.size} itens selecionados` : 'Preencha as qtds abaixo'}</p>
+          </div>
+        </div>
+        <div className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl p-5 flex items-center gap-4">
+          <div className="bg-purple-600 p-3 rounded-xl text-white"><Calculator size={18} /></div>
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Sem Custo Cadastrado</p>
+            <p className="text-xl font-black text-slate-800 dark:text-slate-100 tracking-tighter">{prodAtivos.length - comPreco.length}</p>
+            <p className="text-[9px] text-slate-400">itens sem custo unitário</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Tabela de cotação */}
+      <div className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl overflow-hidden">
+        <div className="px-5 py-3 border-b border-slate-100 dark:border-slate-700 flex flex-wrap items-center gap-3">
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex-1">Cotação de Compra</p>
+          <div className="relative">
+            <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input value={buscaCotacao} onChange={e => setBuscaCotacao(e.target.value)} placeholder="Buscar produto..."
+              className="pl-7 pr-3 py-1.5 border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-400 w-40" />
+          </div>
+          <button onClick={selecionarTodos}
+            className="text-[9px] font-black uppercase text-slate-500 hover:text-blue-600 border border-slate-200 dark:border-slate-600 rounded-lg px-2.5 py-1.5 transition-colors">
+            {cotacaoSelecionados.size === prodFiltrados.length && prodFiltrados.length > 0 ? 'Limpar seleção' : 'Selecionar todos'}
+          </button>
+          <button onClick={() => setSimulacao({})}
+            className="text-[9px] font-black uppercase text-slate-400 hover:text-red-500 border border-slate-200 dark:border-slate-600 rounded-lg px-2.5 py-1.5 transition-colors">
+            Limpar qtds
+          </button>
+          <button onClick={imprimirCotacao}
+            className="flex items-center gap-1.5 text-[9px] font-black uppercase bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-3 py-1.5 transition-colors">
+            <Printer size={11}/> Imprimir / PDF
+          </button>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="bg-slate-50 dark:bg-slate-700/40">
+                <th className="px-4 py-3 w-8">
+                  <input type="checkbox" checked={cotacaoSelecionados.size === prodFiltrados.length && prodFiltrados.length > 0}
+                    onChange={selecionarTodos} className="accent-blue-600 w-3.5 h-3.5" />
+                </th>
+                {['Produto', 'Categoria', 'Qtd Atual', 'Custo Unitário', 'Valor em Estoque', 'Qtd a Comprar', 'Custo Total'].map(h => (
+                  <th key={h} className="px-4 py-3 text-left font-black text-[10px] uppercase tracking-widest text-slate-500 dark:text-slate-400">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50 dark:divide-slate-700/50">
+              {prodFiltrados.length === 0 ? (
+                <tr><td colSpan={8} className="text-center py-12 text-slate-400 text-xs font-bold">Nenhum produto encontrado.</td></tr>
+              ) : prodFiltrados.map(p => {
+                const valorEstoque = p.valor_compra != null ? Number(p.quantidade_atual) * Number(p.valor_compra) : null;
+                const qtdSim = Number(simulacao[p.id] || 0);
+                const custoSim = p.valor_compra != null ? qtdSim * Number(p.valor_compra) : null;
+                const selecionado = cotacaoSelecionados.has(p.id);
+                return (
+                  <tr key={p.id} className={`hover:bg-slate-50/50 dark:hover:bg-slate-700/20 transition-colors ${selecionado ? 'bg-blue-50/40 dark:bg-blue-900/10' : ''}`}>
+                    <td className="px-4 py-3">
+                      <input type="checkbox" checked={selecionado} onChange={() => toggleSelecionado(p.id)} className="accent-blue-600 w-3.5 h-3.5" />
+                    </td>
+                    <td className="px-4 py-3 font-bold text-sm text-slate-800 dark:text-slate-200">{p.nome}</td>
+                    <td className="px-4 py-3 text-[11px] text-slate-500">{p.categoria}</td>
+                    <td className="px-4 py-3 font-mono font-black text-sm text-slate-700 dark:text-slate-300">{fmt(p.quantidade_atual)} {p.unidade_medida}</td>
+                    <td className="px-4 py-3 font-mono text-sm text-emerald-700 dark:text-emerald-400 font-black">{fmtMoeda(p.valor_compra)}</td>
+                    <td className="px-4 py-3 font-mono text-sm font-black text-slate-800 dark:text-slate-100">{fmtMoeda(valorEstoque)}</td>
+                    <td className="px-4 py-3">
+                      <input type="number" min="0" step="0.001"
+                        value={simulacao[p.id] ?? ''}
+                        onChange={e => setSimulacao(prev => ({ ...prev, [p.id]: e.target.value }))}
+                        placeholder="0"
+                        className="w-24 border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg px-2 py-1 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-400"
+                      />
+                    </td>
+                    <td className="px-4 py-3 font-mono text-sm font-black text-blue-700 dark:text-blue-400">
+                      {custoSim != null && qtdSim > 0 ? fmtMoeda(custoSim) : <span className="text-slate-300">—</span>}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            {totalCotacao > 0 && (
+              <tfoot>
+                <tr className="bg-blue-50 dark:bg-blue-900/20 border-t-2 border-blue-200 dark:border-blue-700">
+                  <td colSpan={7} className="px-4 py-3 font-black text-sm text-blue-700 dark:text-blue-300 text-right uppercase tracking-widest">Total da Cotação</td>
+                  <td className="px-4 py-3 font-black text-lg text-blue-700 dark:text-blue-300">{fmtMoeda(totalCotacao)}</td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
+      </div>
+      <p className="text-[10px] text-slate-400 text-center">* Custo unitário é configurado ao criar/editar produto ou ao registrar uma entrada com preço pago.</p>
+    </div>
+  );
+}
+
+// ── Componentes utilitários ────────────────────────────────────────────────
 
 function KPICard({ label, value, icon, color }: { label: string; value: number; icon: React.ReactNode; color: string }) {
   return (
