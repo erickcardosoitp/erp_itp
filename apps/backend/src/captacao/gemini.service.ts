@@ -43,14 +43,28 @@ PROCESSO DE ANÁLISE (execute em ordem):
 5. Verifique prazos e valide URLs
 
 FONTES PRIORITÁRIAS A PESQUISAR:
+Governo federal:
 - portaldatransparencia.gov.br (convênios federais com OSCs)
 - plataformamaisbrasil.gov.br (transferências voluntárias)
-- bndes.gov.br/transparencia
-- mapaosc.ipea.gov.br (perfil de OSCs similares aprovadas)
-- cultura.gov.br (Lei Rouanet / SEFIC)
-- esporte.gov.br / secretaria estadual de esporte RJ
-- faperj.br / fundações estaduais RJ
-- empresas com programas de responsabilidade social (Lei do Esporte, Lei Rouanet)
+- fnde.gov.br — programas de apoio a entidades sem fins lucrativos (educação)
+- bndes.gov.br/fundo-social — BNDES Fundo Social (projetos sociais, periferia)
+- cultura.gov.br / salic.cultura.gov.br (Lei Rouanet / SEFIC / Cultura Viva)
+- esporte.gov.br (Lei de Incentivo ao Esporte)
+- mds.gov.br (transferências a OSCs — assistência social)
+
+Governo RJ / municipal:
+- faperj.br (fundação estadual de pesquisa — extensão social)
+- secretaria estadual de cultura RJ / esporte RJ
+- prefeitura.rio (editais municipais do Rio de Janeiro)
+
+Fundações privadas e empresas:
+- itausocial.org.br (Itaú Social — educação, criança, periferia)
+- fundacaobradesco.org.br (educação, esporte, cultura)
+- frm.org.br (Fundação Roberto Marinho — educação, cultura)
+- petrobras.com.br/social (Petrobras Social — projetos sociais, RJ)
+- mapaosc.ipea.gov.br (perfil de OSCs similares aprovadas por esses financiadores)
+
+ATENÇÃO: Para cada oportunidade, pesquise TAMBÉM: "[nome financiador] OSC aprovada Rio de Janeiro site:portaldatransparencia.gov.br" para evidenciar histórico real de aprovações similares ao ITP.
 
 RETORNE APENAS JSON array válido (sem markdown) com até 8 oportunidades:
 [

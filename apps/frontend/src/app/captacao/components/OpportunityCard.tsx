@@ -11,9 +11,18 @@ interface Props {
   dragging?: boolean;
 }
 
+function valorKanban(o: Opportunity): string | null {
+  if (o.valor_minimo && o.valor_maximo) return `${formatBRL(o.valor_minimo)} – ${formatBRL(o.valor_maximo)}`;
+  if (o.valor_maximo) return `Até ${formatBRL(o.valor_maximo)}`;
+  if (o.valor_minimo) return `A partir de ${formatBRL(o.valor_minimo)}`;
+  if (o.estimated_value != null) return formatBRL(o.estimated_value);
+  return null;
+}
+
 export function OpportunityCard({ opportunity: o, onOpen, onDelete, dragging }: Props) {
   const expiring = isExpiringSoon(o.deadline);
   const statusStyle = STATUS_COLORS[o.status];
+  const valor = valorKanban(o);
 
   return (
     <div
@@ -48,10 +57,10 @@ export function OpportunityCard({ opportunity: o, onOpen, onDelete, dragging }: 
             {formatDate(o.deadline)}
           </div>
         )}
-        {o.estimated_value != null && (
+        {valor && (
           <div className="flex items-center gap-0.5 text-[10px] font-semibold text-green-600 dark:text-green-400">
             <DollarSign size={9} />
-            {formatBRL(o.estimated_value)}
+            {valor}
           </div>
         )}
       </div>
