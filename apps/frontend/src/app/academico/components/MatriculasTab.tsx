@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 
-const FichaDrawer = dynamic(() => import('./FichaDrawer'), { ssr: false });
+const FichaDrawer = dynamic(() => import('@/components/DossieCandidato'), { ssr: false });
 const CadastroDiretoModal = dynamic(() => import('../../matriculas/components/CadastroDiretoModal'), { ssr: false });
 
 // Formata datas com segurança (evita "Invalid Date")
