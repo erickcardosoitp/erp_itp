@@ -95,7 +95,7 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
   const loadedDataRef = useRef<InscricaoData | null>(null);
 
   const [loading, setLoading] = useState(false);
-  type TabId = 'cadastro' | 'anotacoes' | 'movimentacoes' | 'documentos' | 'presenca';
+  type TabId = 'cadastro' | 'anotacoes' | 'movimentacoes' | 'documentos' | 'presenca' | 'turmas_aluno' | 'complemento_aluno';
   const [abaAtiva, setAbaAtiva] = useState<TabId>('cadastro');
   const [cursosAcademico, setCursosAcademico] = useState<Array<{ id: string; nome: string; sigla: string; turmas: Array<{ id: string; nome: string; codigo: string }> }>>([]);
   const [cursosCarregados, setCursosCarregados] = useState(false);
@@ -335,6 +335,7 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
   const fmtDate = (v?: string | null) => { if (!v) return '—'; if (/^\d{2}\/\d{2}\/\d{4}$/.test(v)) return v; const s = /^\d{4}-\d{2}-\d{2}$/.test(v) ? v + 'T12:00:00' : v; const d = new Date(s); return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('pt-BR'); };
   const fmtDateTime = (v?: string | null) => { if (!v) return '—'; const d = new Date(v); return isNaN(d.getTime()) ? '—' : d.toLocaleString('pt-BR'); };
 
+  const alunoId = formData.aluno?.id ?? null;
   type TabDef = { id: TabId; label: string; icon: any; badge?: number; error?: boolean };
   const tabs: TabDef[] = [
     { id: 'cadastro',      label: 'Cadastro',     icon: User,          error: erroMaioridade },
@@ -342,6 +343,10 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
     { id: 'movimentacoes', label: 'Histórico',    icon: History },
     { id: 'documentos',    label: 'Documentos',   icon: Paperclip },
     ...(fichaData ? [{ id: 'presenca' as TabId,  label: 'Presença', icon: ClipboardCheck }] : []),
+    ...(alunoId ? [
+      { id: 'turmas_aluno' as TabId, label: 'Turmas', icon: GraduationCap },
+      { id: 'complemento_aluno' as TabId, label: 'Complemento', icon: UserCheck },
+    ] : []),
   ];
 
   const statusInfo = STATUS_MAP[formData.status_matricula] ?? { label: formData.status_matricula, bg: 'bg-gray-100', text: 'text-gray-600', border: 'border-gray-300', dot: 'bg-gray-400' };
@@ -914,6 +919,63 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
           )}
 
           {/* ─── PRESENÇA ─────────────────────────────────────── */}
+          {/* ─── TURMAS DO ALUNO ──────────────────────────────── */}
+          {!loading && abaAtiva === 'turmas_aluno' && alunoId && (
+            <div className="p-4 space-y-3">
+              {turmasDoAluno.length === 0
+                ? <EmptyState icon={<GraduationCap size={22} />} text="Nenhuma turma vinculada." />
+                : (
+                  <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                    <div className="divide-y divide-gray-100">
+                      {turmasDoAluno.map((t: any) => (
+                        <div key={t.id ?? t.turma_id} className="flex items-center gap-3 px-4 py-3">
+                          <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: t.turma_cor || '#7c3aed' }} />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-gray-900 truncate">{t.turma_nome}</p>
+                            {t.curso_nome && <p className="text-xs text-gray-400">{t.curso_nome}</p>}
+                          </div>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                            t.status === 'ativo'
+                              ? 'bg-green-50 text-green-700 border-green-200'
+                              : 'bg-gray-100 text-gray-500 border-gray-200'
+                          }`}>{t.status === 'ativo' ? 'Ativo' : 'Inativo'}</span>
+                          {t.data_entrada && (
+                            <span className="text-[10px] text-gray-400">{fmtDate(t.data_entrada)}</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+            </div>
+          )}
+
+          {/* ─── COMPLEMENTO DO ALUNO ─────────────────────────── */}
+          {!loading && abaAtiva === 'complemento_aluno' && alunoId && (
+            <div className="p-4 space-y-3">
+              <ColorSection title="Dados Complementares" icon={<UserCheck size={14} />} color="indigo">
+                <Grid cols={3}>
+                  <CF label="RG" field="rg" comp={complemento} editing={false} onChange={() => {}} />
+                  <CF label="Órgão Expedidor" field="orgao_expedidor" comp={complemento} editing={false} onChange={() => {}} />
+                  <CF label="UF Expedição" field="uf_expedicao" comp={complemento} editing={false} onChange={() => {}} />
+                  <CF label="Gênero" field="genero" comp={complemento} editing={false} onChange={() => {}} />
+                  <CF label="Orientação Sexual" field="orientacao_sexual" comp={complemento} editing={false} onChange={() => {}} />
+                  <CF label="Nome da Mãe" field="nome_mae" comp={complemento} editing={false} onChange={() => {}} />
+                </Grid>
+              </ColorSection>
+              <ColorSection title="Dados Bancários" icon={<CreditCard size={14} />} color="green">
+                <Grid cols={3}>
+                  <CF label="Banco" field="banco" comp={complemento} editing={false} onChange={() => {}} />
+                  <CF label="Agência" field="agencia" comp={complemento} editing={false} onChange={() => {}} />
+                  <CF label="Dígito Agência" field="agencia_digito" comp={complemento} editing={false} onChange={() => {}} />
+                  <CF label="Conta Corrente" field="conta_corrente" comp={complemento} editing={false} onChange={() => {}} />
+                  <CF label="Dígito Conta" field="conta_digito" comp={complemento} editing={false} onChange={() => {}} />
+                  <CF label="Tipo de Conta" field="tipo_conta" comp={complemento} editing={false} onChange={() => {}} />
+                </Grid>
+              </ColorSection>
+            </div>
+          )}
+
           {!loading && abaAtiva === 'presenca' && fichaData && (
             <div className="p-4 space-y-3">
               <div className="grid grid-cols-3 gap-3">
