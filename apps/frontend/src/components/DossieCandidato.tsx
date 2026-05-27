@@ -963,7 +963,7 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
                   <CF label="Nome da Mãe" field="nome_mae" comp={complemento} editing={false} onChange={() => {}} />
                 </Grid>
               </ColorSection>
-              <ColorSection title="Dados Bancários" icon={<CreditCard size={14} />} color="green">
+              <ColorSection title="Dados Bancários" icon={<CreditCard size={14} />} color="emerald">
                 <Grid cols={3}>
                   <CF label="Banco" field="banco" comp={complemento} editing={false} onChange={() => {}} />
                   <CF label="Agência" field="agencia" comp={complemento} editing={false} onChange={() => {}} />
