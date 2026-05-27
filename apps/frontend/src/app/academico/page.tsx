@@ -25,6 +25,24 @@ import MonitoramentoTab from './components/MonitoramentoTab';
 import ControlesTab    from './components/ControlesTab';
 import MatriculasTab   from './components/MatriculasTab';
 
+// ─── Cache helpers (12h TTL, localStorage) ────────────────────────────────────
+
+const CACHE_TTL = 12 * 60 * 60 * 1000; // 12 hours in ms
+
+function getCached<T>(key: string): T | null {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const { data, ts } = JSON.parse(raw);
+    if (Date.now() - ts > CACHE_TTL) { localStorage.removeItem(key); return null; }
+    return data as T;
+  } catch { return null; }
+}
+
+function setCache(key: string, data: unknown) {
+  try { localStorage.setItem(key, JSON.stringify({ data, ts: Date.now() })); } catch {}
+}
+
 // ─── AcademicoPage ────────────────────────────────────────────────────────────
 
 export default function AcademicoPage() {
@@ -45,9 +63,23 @@ export default function AcademicoPage() {
   const { user } = useAuth();
   const { canWrite: podeEditar } = usePermissions(user);
 
-  const loadBase = useCallback(async () => {
+  const loadBase = useCallback(async (forceRefresh = false) => {
     setRefreshing(true);
     try {
+      if (!forceRefresh) {
+        const cachedCursos    = getCached<Curso[]>('academico_cursos');
+        const cachedProfs     = getCached<Professor[]>('academico_professores');
+        const cachedTurmas    = getCached<Turma[]>('academico_turmas');
+        const cachedAlunos    = getCached<Aluno[]>('academico_alunos');
+        if (cachedCursos && cachedProfs && cachedTurmas && cachedAlunos) {
+          setCursos(cachedCursos);
+          setProfessores(cachedProfs);
+          setTurmas(cachedTurmas);
+          setAlunos(cachedAlunos);
+          setRefreshing(false);
+          return;
+        }
+      }
       const [rc, rp, rt, ra] = await Promise.all([
         api.get('/academico/cursos'),
         api.get('/academico/professores'),
@@ -58,6 +90,10 @@ export default function AcademicoPage() {
       setProfessores(rp.data);
       setTurmas(rt.data);
       setAlunos(ra.data);
+      setCache('academico_cursos', rc.data);
+      setCache('academico_professores', rp.data);
+      setCache('academico_turmas', rt.data);
+      setCache('academico_alunos', ra.data);
     } catch {}
     setRefreshing(false);
   }, []);
@@ -102,7 +138,7 @@ export default function AcademicoPage() {
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={loadBase}
+              onClick={() => loadBase(true)}
               disabled={refreshing}
               title="Atualizar dados"
               className="p-2 rounded-xl bg-slate-100 dark:bg-slate-700 hover:bg-purple-100 dark:hover:bg-purple-900/30 text-slate-500 dark:text-slate-300 hover:text-purple-600 transition-all disabled:opacity-60"

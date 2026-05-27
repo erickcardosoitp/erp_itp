@@ -341,18 +341,17 @@ export class AcademicoService {
       this.logger.warn(`[listarAlunos] turmas falhou: ${e?.message}`);
     }
 
-    let fotoMap: Record<string, string> = {};
+    let fotoMap: Record<string, boolean> = {};
     try {
-      // Usa inscricoes.aluno_id para cobrir alunos onde alunos.inscricao_id ainda é NULL (registros antigos)
+      // Retorna apenas boolean (tem foto?) — evita transferir base64 ~150KB por aluno
       const fotoRows = await this.dataSource.query(
-        `SELECT DISTINCT ON (a.id) a.id::text AS aluno_id, d.url_arquivo AS foto_url
+        `SELECT DISTINCT a.id::text AS aluno_id, true AS tem_foto
          FROM alunos a
          JOIN inscricoes i ON i.aluno_id::text = a.id::text
          JOIN documentos_inscricao d ON d.inscricao_id = i.id AND d.tipo = 'foto_aluno'
-         WHERE a.id::text IN (${alunoIds})
-         ORDER BY a.id, d.created_at DESC`,
+         WHERE a.id::text IN (${alunoIds})`,
       );
-      fotoRows.forEach((r: any) => { fotoMap[r.aluno_id] = r.foto_url; });
+      fotoRows.forEach((r: any) => { fotoMap[r.aluno_id] = true; });
     } catch (e: any) {
       this.logger.warn(`[listarAlunos] fotos falhou: ${e?.message}`);
     }
@@ -379,7 +378,7 @@ export class AcademicoService {
         celular:        a.celular        || insc?.celular        || null,
         data_nascimento: a.data_nascimento || insc?.data_nascimento || null,
         turmas: turmaMap[a.id] ?? [],
-        foto_url: fotoMap[a.id] ?? null,
+        tem_foto: fotoMap[a.id] ?? false,
         turma_status: (turmaMap[a.id] ?? []).find((t: any) => t.status === 'ativo') ? 'ativo' : ((turmaMap[a.id] ?? []).length ? 'backlog' : 'sem_turma'),
         turma_nome: (turmaMap[a.id] ?? []).find((t: any) => t.status === 'ativo')?.nome ?? null,
       };
