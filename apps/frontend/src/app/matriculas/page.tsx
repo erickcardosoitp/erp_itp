@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 // ✅ IMPORTANTE: Instância configurada com porta 3001 e Credentials
 import api from '@/services/api'; 
@@ -39,7 +39,11 @@ const OPCOES_CUIDADO_ESPECIAL = [
   'Outro',
 ];
 
-export default function GestaoMatriculas() {
+export default function MatriculasPage() {
+  return <Suspense><GestaoMatriculas /></Suspense>;
+}
+
+function GestaoMatriculas() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [matriculas, setMatriculas] = useState<any[]>([]);
