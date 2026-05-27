@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   GraduationCap, Users, BookOpen, LayoutGrid, History,
   ClipboardList, AlertCircle, RefreshCw, ClipboardCheck,
-  FileText, Activity, Shield,
+  FileText, Activity, Shield, UserPlus,
 } from 'lucide-react';
 import api from '@/services/api';
 import { useAuth } from '@/context/auth-context';
@@ -23,17 +23,18 @@ import AcervoTab       from './components/AcervoTab';
 import ChamadosTab     from './components/ChamadosTab';
 import MonitoramentoTab from './components/MonitoramentoTab';
 import ControlesTab    from './components/ControlesTab';
+import MatriculasTab   from './components/MatriculasTab';
 
 // ─── AcademicoPage ────────────────────────────────────────────────────────────
 
 export default function AcademicoPage() {
   const [activeTab, setActiveTab] = useState(() => {
-    if (typeof window === 'undefined') return 'grade';
+    if (typeof window === 'undefined') return 'matriculas';
     const params = new URLSearchParams(window.location.search);
     if (params.get('aluno')) return 'alunos';
-    const VALID = ['grade','alunos','presenca','cursos','turmas','diario','acervo','chamados','monitoramento','controles'];
-    const tab = params.get('tab') ?? 'grade';
-    return VALID.includes(tab) ? tab : 'grade';
+    const VALID = ['matriculas','grade','alunos','presenca','cursos','turmas','diario','acervo','chamados','monitoramento','controles'];
+    const tab = params.get('tab') ?? 'matriculas';
+    return VALID.includes(tab) ? tab : 'matriculas';
   });
   const [cursos, setCursos] = useState<Curso[]>([]);
   const [professores, setProfessores] = useState<Professor[]>([]);
@@ -69,6 +70,7 @@ export default function AcademicoPage() {
   if (!isMounted) return null;
 
   const TABS = [
+    { id: 'matriculas',    label: 'Matrículas',    Icon: UserPlus },
     { id: 'grade',         label: 'Grade',         Icon: LayoutGrid },
     { id: 'alunos',        label: 'Alunos',        Icon: Users },
     { id: 'presenca',      label: 'Presença',      Icon: ClipboardCheck },
@@ -94,7 +96,7 @@ export default function AcademicoPage() {
                 Acadêmico<span className="text-purple-400">.ITP</span>
               </h1>
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">
-                Gestão Educacional e Grade Curricular
+                Matrículas · Grade · Alunos · Presença
               </p>
             </div>
           </div>
@@ -113,6 +115,7 @@ export default function AcademicoPage() {
           </div>
         </header>
         <main>
+          {activeTab === 'matriculas'    && <MatriculasTab podeEditar={podeEditar} />}
           {activeTab === 'grade'         && <GradeTab podeEditar={podeEditar} turmas={turmas} />}
           {activeTab === 'alunos'        && <AlunosTab cursos={cursos} turmas={turmas} podeEditar={podeEditar} />}
           {activeTab === 'presenca'      && <PresencaTab turmas={turmas} podeEditar={podeEditar} />}

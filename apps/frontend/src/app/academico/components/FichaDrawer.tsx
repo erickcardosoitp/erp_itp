@@ -16,7 +16,10 @@ const API_ORIGIN = (process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:30
 
 const safeUrl = (url: string) => {
   if (url.startsWith('data:')) return url;
-  try { const u = new URL(url, window.location.origin); if (u.protocol === 'http:' || u.protocol === 'https:') return url; } catch {}
+  try {
+    const u = new URL(url, window.location.origin);
+    if (u.protocol === 'http:' || u.protocol === 'https:') return url;
+  } catch {}
   return url.startsWith('/') ? url : '#';
 };
 
@@ -25,8 +28,14 @@ interface DocEnviado {
   url_arquivo: string; mimetype: string | null;
   tamanho_bytes: number | null; createdAt: string;
 }
-interface Anotacao { id: number; texto_anotacao: string; usuario_nome: string; usuario_foto?: string; created_at: string; }
-interface Movimentacao { id: number; usuario_nome: string; tipo: string; categoria: string; valor_antes: string; valor_depois: string; created_at: string; }
+interface Anotacao {
+  id: number; texto_anotacao: string; usuario_nome: string;
+  usuario_foto?: string; created_at: string;
+}
+interface Movimentacao {
+  id: number; usuario_nome: string; tipo: string; categoria: string;
+  valor_antes: string; valor_depois: string; created_at: string;
+}
 interface InscricaoData {
   id: number; idade: number; maior_18_anos?: boolean; status_matricula: string;
   nome_completo: string; cpf: string; email: string; lgpd_aceito: boolean;
@@ -38,9 +47,10 @@ interface InscricaoData {
 interface FichaData {
   aluno: any; inscricao_id?: number | null; frequencia?: any[]; historico?: any[];
   turmasDoAluno?: any[]; totalPresencas?: number; totalFaltas?: number;
-  foto_url?: string | null; complemento?: Record<string, string> | null; auto_declaracao?: string | null;
+  foto_url?: string | null; complemento?: Record<string, string> | null;
+  auto_declaracao?: string | null;
 }
-interface DossieProps {
+interface FichaDrawerProps {
   aluno: InscricaoData;
   onClose: () => void;
   onSuccess?: () => void;
@@ -50,18 +60,17 @@ interface DossieProps {
 }
 
 const STATUS_MAP: Record<string, { label: string; bg: string; text: string; border: string; dot: string }> = {
-  'Pendente':                   { label: 'Pendente',          bg: 'bg-gray-100',   text: 'text-gray-600',    border: 'border-gray-300',  dot: 'bg-gray-400' },
-  'Aguardando Assinatura LGPD': { label: 'Aguard. LGPD',     bg: 'bg-orange-100', text: 'text-orange-700',  border: 'border-orange-300',dot: 'bg-orange-500' },
-  'Em Validação':               { label: 'Em Validação',      bg: 'bg-blue-100',   text: 'text-blue-700',    border: 'border-blue-300',  dot: 'bg-blue-500' },
-  'Aguardando Documentos':      { label: 'Aguard. Docs',      bg: 'bg-amber-100',  text: 'text-amber-700',   border: 'border-amber-300', dot: 'bg-amber-500' },
-  'Documentos Enviados':        { label: 'Docs Enviados',     bg: 'bg-cyan-100',   text: 'text-cyan-700',    border: 'border-cyan-300',  dot: 'bg-cyan-500' },
-  'Matriculado':                { label: 'Matriculado',       bg: 'bg-green-100',  text: 'text-green-700',   border: 'border-green-300', dot: 'bg-green-500' },
-  'Incompleto':                 { label: 'Incompleto',        bg: 'bg-red-100',    text: 'text-red-700',     border: 'border-red-300',   dot: 'bg-red-500' },
-  'Desistente':                 { label: 'Desistente',        bg: 'bg-gray-100',   text: 'text-gray-500',    border: 'border-gray-300',  dot: 'bg-gray-400' },
-  'Cancelada':                  { label: 'Cancelada',         bg: 'bg-red-100',    text: 'text-red-800',     border: 'border-red-300',   dot: 'bg-red-600' },
+  'Pendente':                   { label: 'Pendente',        bg: 'bg-gray-100',   text: 'text-gray-600',   border: 'border-gray-300',  dot: 'bg-gray-400' },
+  'Aguardando Assinatura LGPD': { label: 'Aguard. LGPD',   bg: 'bg-orange-100', text: 'text-orange-700', border: 'border-orange-300', dot: 'bg-orange-500' },
+  'Em Validação':               { label: 'Em Validação',    bg: 'bg-blue-100',   text: 'text-blue-700',   border: 'border-blue-300',  dot: 'bg-blue-500' },
+  'Aguardando Documentos':      { label: 'Aguard. Docs',    bg: 'bg-amber-100',  text: 'text-amber-700',  border: 'border-amber-300', dot: 'bg-amber-500' },
+  'Documentos Enviados':        { label: 'Docs Enviados',   bg: 'bg-cyan-100',   text: 'text-cyan-700',   border: 'border-cyan-300',  dot: 'bg-cyan-500' },
+  'Matriculado':                { label: 'Matriculado',     bg: 'bg-green-100',  text: 'text-green-700',  border: 'border-green-300', dot: 'bg-green-500' },
+  'Incompleto':                 { label: 'Incompleto',      bg: 'bg-red-100',    text: 'text-red-700',    border: 'border-red-300',   dot: 'bg-red-500' },
+  'Desistente':                 { label: 'Desistente',      bg: 'bg-gray-100',   text: 'text-gray-500',   border: 'border-gray-300',  dot: 'bg-gray-400' },
+  'Cancelada':                  { label: 'Cancelada',       bg: 'bg-red-100',    text: 'text-red-800',    border: 'border-red-300',   dot: 'bg-red-600' },
 };
 
-// Gradiente de fundo do header por status
 const STATUS_HEADER_GRADIENT: Record<string, string> = {
   'Matriculado':                'from-green-50 to-emerald-50/40',
   'Em Validação':               'from-blue-50 to-sky-50/40',
@@ -73,9 +82,12 @@ const STATUS_HEADER_GRADIENT: Record<string, string> = {
 };
 
 const DOC_LABELS: Record<string, string> = {
-  foto_aluno: 'Foto do Aluno', identidade: 'RG / CNH',
-  comprovante_residencia: 'Comprovante de Residência', certidao_nascimento: 'Certidão de Nascimento',
-  identidade_responsavel: 'Identidade do Responsável', declaracao_escolaridade: 'Declaração de Escolaridade',
+  foto_aluno: 'Foto do Aluno',
+  identidade: 'RG / CNH',
+  comprovante_residencia: 'Comprovante de Residência',
+  certidao_nascimento: 'Certidão de Nascimento',
+  identidade_responsavel: 'Identidade do Responsável',
+  declaracao_escolaridade: 'Declaração de Escolaridade',
 };
 
 const CURSOS_ESPECIAIS_KEYS = ['encceja', 'vestibular'];
@@ -88,44 +100,59 @@ function isCursoEspecial(turmas: any[], cursosDesejados?: string) {
   return emTurma || noCurso;
 }
 
-export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, onVerNoAcademico, onVerInscricao }: DossieProps) {
-  const [drawerVisible, setDrawerVisible] = useState(false);
+export default function FichaDrawer({
+  aluno, onClose, onSuccess, fichaData, onVerNoAcademico, onVerInscricao,
+}: FichaDrawerProps) {
+  // ── Animação de entrada ──────────────────────────────────────────
+  const [visible, setVisible] = useState(false);
+  useEffect(() => { requestAnimationFrame(() => setVisible(true)); }, []);
+
+  // ── Estado principal ─────────────────────────────────────────────
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState<InscricaoData>({ ...aluno });
-  // ref guarda o snapshot carregado da API — Cancel restaura ele (não o prop parcial)
   const loadedDataRef = useRef<InscricaoData | null>(null);
 
   const [loading, setLoading] = useState(false);
-  useEffect(() => { requestAnimationFrame(() => setDrawerVisible(true)); }, []);
-  const handleClose = () => { setDrawerVisible(false); setTimeout(onClose, 280); };
   type TabId = 'cadastro' | 'anotacoes' | 'movimentacoes' | 'documentos' | 'presenca' | 'turmas_aluno' | 'complemento_aluno';
   const [abaAtiva, setAbaAtiva] = useState<TabId>('cadastro');
-  const [cursosAcademico, setCursosAcademico] = useState<Array<{ id: string; nome: string; sigla: string; turmas: Array<{ id: string; nome: string; codigo: string }> }>>([]);
+
+  const [cursosAcademico, setCursosAcademico] = useState<Array<{
+    id: string; nome: string; sigla: string;
+    turmas: Array<{ id: string; nome: string; codigo: string }>;
+  }>>([]);
   const [cursosCarregados, setCursosCarregados] = useState(false);
   const [cursosSelecionados, setCursosSelecionados] = useState<string[]>([]);
+
   const [anotacoes, setAnotacoes] = useState<Anotacao[]>([]);
   const [novaAnotacaoTexto, setNovaAnotacaoTexto] = useState('');
   const [movimentacoes, setMovimentacoes] = useState<Movimentacao[]>([]);
+
   const [showMotivoModal, setShowMotivoModal] = useState<{ show: boolean; status: string | null }>({ show: false, status: null });
   const [motivoTexto, setMotivoTexto] = useState('');
+
   const [lgpdLoading, setLgpdLoading] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [docLoading, setDocLoading] = useState(false);
+
   const [uploadedDocs, setUploadedDocs] = useState<DocEnviado[]>([]);
   const [obrigatoriosPendentes, setObrigatoriosPendentes] = useState<string[]>([]);
   const [docsCompleto, setDocsCompleto] = useState(false);
   const [loadingDocs, setLoadingDocs] = useState(false);
+
   const [matriculaNumero, setMatriculaNumero] = useState<string | null>(null);
   const [uploadingDoc, setUploadingDoc] = useState(false);
   const [uploadTipo, setUploadTipo] = useState('identidade');
   const [uploadNomeExtra, setUploadNomeExtra] = useState('');
+
   const [complemento, setComplemento] = useState<Record<string, string>>({
     rg: '', orgao_expedidor: '', uf_expedicao: '', genero: '', orientacao_sexual: '',
-    banco: '', agencia: '', agencia_digito: '', conta_corrente: '', conta_digito: '', tipo_conta: '', nome_mae: '',
+    banco: '', agencia: '', agencia_digito: '', conta_corrente: '', conta_digito: '',
+    tipo_conta: '', nome_mae: '',
   });
   const [complementoCarregado, setComplementoCarregado] = useState(false);
   const [buscandoCep, setBuscandoCep] = useState(false);
 
+  // ── Derivados ────────────────────────────────────────────────────
   const erroMaioridade = formData.idade < 18 && formData.maior_18_anos === true;
   const totalPresencas = fichaData?.totalPresencas ?? 0;
   const totalFaltas = fichaData?.totalFaltas ?? 0;
@@ -135,18 +162,25 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
   const fotoUrl = fichaData?.foto_url || formData.foto_url;
   const turmasAtivas = turmasDoAluno.filter((t: any) => t.status === 'ativo' && t.turma_id);
   const mostrarComplemento = complementoCarregado && isCursoEspecial(turmasDoAluno, formData.cursos_desejados);
+  const alunoId = formData.aluno?.id ?? null;
 
+  // ── Documentos ───────────────────────────────────────────────────
   const recarregarDocumentos = useCallback(() => {
     if (!formData.id) return;
     setLoadingDocs(true);
     api.get(`/matriculas/inscricao/${formData.id}/documentos`)
-      .then(res => { setUploadedDocs(res.data?.documentos ?? []); setObrigatoriosPendentes(res.data?.obrigatorios_pendentes ?? []); setDocsCompleto(res.data?.completo ?? false); })
+      .then(res => {
+        setUploadedDocs(res.data?.documentos ?? []);
+        setObrigatoriosPendentes(res.data?.obrigatorios_pendentes ?? []);
+        setDocsCompleto(res.data?.completo ?? false);
+      })
       .catch(() => { setUploadedDocs([]); setObrigatoriosPendentes([]); setDocsCompleto(false); })
       .finally(() => setLoadingDocs(false));
   }, [formData.id]);
 
   useEffect(() => { if (abaAtiva === 'documentos') recarregarDocumentos(); }, [abaAtiva, recarregarDocumentos]);
 
+  // ── Load inicial ─────────────────────────────────────────────────
   useEffect(() => {
     if (!aluno?.id) return;
     const load = async () => {
@@ -161,26 +195,33 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
         ]);
         if (resInscricao.status === 'fulfilled') {
           const d = resInscricao.value.data;
-          // Mescla com aluno prop para garantir que nenhum campo seja perdido
           const merged = { ...aluno, ...d };
           setFormData(merged);
-          loadedDataRef.current = merged; // snapshot para o botão Cancelar
+          loadedDataRef.current = merged;
           if (d?.aluno?.id) {
-            api.get(`/alunos/${d.aluno.id}/complemento`).then(r => { if (r.data) setComplemento(p => ({ ...p, ...r.data })); }).catch(() => {});
+            api.get(`/alunos/${d.aluno.id}/complemento`)
+              .then(r => { if (r.data) setComplemento(p => ({ ...p, ...r.data })); })
+              .catch(() => {});
             if (d.aluno?.auto_declaracao) setFormData(p => ({ ...p, auto_declaracao: d.aluno.auto_declaracao }));
             setComplementoCarregado(true);
           }
         } else {
-          // Se a requisição falhou, pelo menos salva o prop como snapshot
           loadedDataRef.current = { ...aluno };
         }
         if (resCursos.status === 'fulfilled') setCursosAcademico(Array.isArray(resCursos.value.data) ? resCursos.value.data : []);
         setCursosCarregados(true);
         if (resAnot.status === 'fulfilled') setAnotacoes(resAnot.value.data);
         if (resMov.status === 'fulfilled') setMovimentacoes(resMov.value.data);
-        if (resDocs.status === 'fulfilled') { setUploadedDocs(resDocs.value.data?.documentos ?? []); setObrigatoriosPendentes(resDocs.value.data?.obrigatorios_pendentes ?? []); setDocsCompleto(resDocs.value.data?.completo ?? false); }
-      } catch (e: any) { console.error('DossieCandidato load:', e.response?.status); }
-      finally { setLoading(false); }
+        if (resDocs.status === 'fulfilled') {
+          setUploadedDocs(resDocs.value.data?.documentos ?? []);
+          setObrigatoriosPendentes(resDocs.value.data?.obrigatorios_pendentes ?? []);
+          setDocsCompleto(resDocs.value.data?.completo ?? false);
+        }
+      } catch (e: any) {
+        console.error('FichaDrawer load:', e.response?.status);
+      } finally {
+        setLoading(false);
+      }
     };
     load();
   }, [aluno.id]);
@@ -191,26 +232,36 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
     if (fichaData.auto_declaracao) setFormData(p => ({ ...p, auto_declaracao: fichaData.auto_declaracao! }));
   }, [fichaData]);
 
+  // ── Handlers ─────────────────────────────────────────────────────
   const handleCancelEdit = useCallback(() => {
-    // Restaura snapshot da API (completo), não o prop parcial da lista
     setFormData(loadedDataRef.current ?? { ...aluno });
     setIsEditing(false);
   }, [aluno]);
 
   const handleUpdateStatus = async (novoStatus: string, motivo?: string) => {
     setLoading(true);
-    try { await api.patch(`/matriculas/${aluno.id}/status`, { status: novoStatus, motivo }); onSuccess?.(); onClose(); }
-    catch (e: any) { alert('Erro ao atualizar status: ' + (e.response?.data?.message || e.message)); }
-    finally { setLoading(false); }
+    try {
+      await api.patch(`/matriculas/${aluno.id}/status`, { status: novoStatus, motivo });
+      onSuccess?.();
+      onClose();
+    } catch (e: any) {
+      alert('Erro ao atualizar status: ' + (e.response?.data?.message || e.message));
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleEnviarLGPD = async () => {
     setLgpdLoading(true);
     try {
       await api.patch(`/matriculas/${aluno.id}/enviar-lgpd`);
-      if (formData.status_matricula !== 'Matriculado') setFormData(p => ({ ...p, status_matricula: 'Aguardando Assinatura LGPD' }));
-    } catch (e: any) { alert('Erro ao enviar LGPD: ' + (e.response?.data?.message || e.message)); }
-    finally { setLgpdLoading(false); }
+      if (formData.status_matricula !== 'Matriculado')
+        setFormData(p => ({ ...p, status_matricula: 'Aguardando Assinatura LGPD' }));
+    } catch (e: any) {
+      alert('Erro ao enviar LGPD: ' + (e.response?.data?.message || e.message));
+    } finally {
+      setLgpdLoading(false);
+    }
   };
 
   const gerarPdfLGPD = async () => {
@@ -220,19 +271,28 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
       const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
       const margin = 20; const pageW = 210; const contentW = pageW - margin * 2; let y = 20;
       const addText = (text: string, size: number, bold = false, color = '#000000') => {
-        doc.setFontSize(size); doc.setFont('helvetica', bold ? 'bold' : 'normal'); doc.setTextColor(color);
-        const lines = doc.splitTextToSize(text, contentW); doc.text(lines, margin, y); y += lines.length * (size * 0.4) + 3;
+        doc.setFontSize(size); doc.setFont('helvetica', bold ? 'bold' : 'normal');
+        doc.setTextColor(color);
+        const lines = doc.splitTextToSize(text, contentW);
+        doc.text(lines, margin, y);
+        y += lines.length * (size * 0.4) + 3;
       };
       const addLine = () => { doc.setDrawColor(200, 200, 200); doc.line(margin, y, pageW - margin, y); y += 4; };
       doc.setFillColor(30, 58, 95); doc.rect(0, 0, pageW, 28, 'F');
-      doc.setFontSize(14); doc.setFont('helvetica', 'bold'); doc.setTextColor('#FFFFFF'); doc.text('Instituto Tia Pretinha', margin, 12);
-      doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.text('CNPJ nº 11.759.851/0001-39', margin, 19);
-      doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.text('Termo de Autorização de Uso de Imagem, Voz e Tratamento de Dados', margin, 25);
+      doc.setFontSize(14); doc.setFont('helvetica', 'bold'); doc.setTextColor('#FFFFFF');
+      doc.text('Instituto Tia Pretinha', margin, 12);
+      doc.setFontSize(9); doc.setFont('helvetica', 'normal');
+      doc.text('CNPJ nº 11.759.851/0001-39', margin, 19);
+      doc.setFontSize(10); doc.setFont('helvetica', 'bold');
+      doc.text('Termo de Autorização de Uso de Imagem, Voz e Tratamento de Dados', margin, 25);
       y = 36;
       addText('DADOS DO CANDIDATO / RESPONSÁVEL', 9, true, '#1e3a5f'); addLine();
       addText(`Candidato(a): ${formData.nome_completo}`, 10);
       if (formData.cpf) addText(`CPF: ${formData.cpf}`, 10);
-      if (formData.maior_18_anos === false && formData.nome_responsavel) { addText(`Responsável: ${formData.nome_responsavel}`, 10); if (formData.cpf_responsavel) addText(`CPF do Responsável: ${formData.cpf_responsavel}`, 10); }
+      if (formData.maior_18_anos === false && formData.nome_responsavel) {
+        addText(`Responsável: ${formData.nome_responsavel}`, 10);
+        if (formData.cpf_responsavel) addText(`CPF do Responsável: ${formData.cpf_responsavel}`, 10);
+      }
       y += 4;
       for (const s of [
         { num: '1', titulo: 'Autorização de Uso de Imagem e Voz', texto: 'Autorizo o INSTITUTO TIA PRETINHA a captar, registrar, utilizar e divulgar imagens, vídeos e registros audiovisuais do participante obtidos durante atividades institucionais.' },
@@ -251,27 +311,46 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
       addText(`Assinado por: ${formData.nome_assinatura_imagem || formData.nome_completo}`, 10);
       addText(`Data e hora: ${formData.data_assinatura_lgpd ? new Date(formData.data_assinatura_lgpd).toLocaleString('pt-BR') : '—'}`, 10);
       if (formData.lgpd_ip) addText(`Endereço IP: ${formData.lgpd_ip}`, 10);
-      if (formData.lgpd_user_agent) { const ua = String(formData.lgpd_user_agent); addText(`Navegador: ${ua.length > 120 ? ua.slice(0, 120) + '…' : ua}`, 9); }
-      y += 6; addText('Este documento tem validade jurídica conforme Lei nº 14.063/2020.', 8, false, '#666666');
+      if (formData.lgpd_user_agent) {
+        const ua = String(formData.lgpd_user_agent);
+        addText(`Navegador: ${ua.length > 120 ? ua.slice(0, 120) + '…' : ua}`, 9);
+      }
+      y += 6;
+      addText('Este documento tem validade jurídica conforme Lei nº 14.063/2020.', 8, false, '#666666');
       addText('Instituto Tia Pretinha · CNPJ 11.759.851/0001-39', 8, false, '#666666');
       doc.save(`LGPD_${formData.nome_completo.replace(/\s+/g, '_')}_${new Date().getFullYear()}.pdf`);
-    } catch (e: any) { alert('Erro ao gerar PDF: ' + e.message); }
-    finally { setPdfLoading(false); }
+    } catch (e: any) {
+      alert('Erro ao gerar PDF: ' + e.message);
+    } finally {
+      setPdfLoading(false);
+    }
   };
 
   const handleSolicitarDocumentos = async () => {
     setDocLoading(true);
-    try { await api.post(`/matriculas/inscricao/${aluno.id}/enviar-link-documentos`); setFormData(p => ({ ...p, doc_token: 'enviado' })); }
-    catch (e: any) { alert('Erro: ' + (e.response?.data?.message || e.message)); }
-    finally { setDocLoading(false); }
+    try {
+      await api.post(`/matriculas/inscricao/${aluno.id}/enviar-link-documentos`);
+      setFormData(p => ({ ...p, doc_token: 'enviado' }));
+    } catch (e: any) {
+      alert('Erro: ' + (e.response?.data?.message || e.message));
+    } finally {
+      setDocLoading(false);
+    }
   };
 
   const handleEfetivarMatricula = async () => {
     if (!cursosSelecionados.length) return;
     setLoading(true);
-    try { const res = await api.post(`/matriculas/${aluno.id}/finalizar`, { turma_ids: cursosSelecionados }); setMatriculaNumero(res.data?.numero_matricula ?? null); setFormData(p => ({ ...p, status_matricula: 'Matriculado' })); onSuccess?.(); }
-    catch (e: any) { alert('Falha na efetivação: ' + (e.response?.data?.message || e.message)); }
-    finally { setLoading(false); }
+    try {
+      const res = await api.post(`/matriculas/${aluno.id}/finalizar`, { turma_ids: cursosSelecionados });
+      setMatriculaNumero(res.data?.numero_matricula ?? null);
+      setFormData(p => ({ ...p, status_matricula: 'Matriculado' }));
+      onSuccess?.();
+    } catch (e: any) {
+      alert('Falha na efetivação: ' + (e.response?.data?.message || e.message));
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSaveEdit = async () => {
@@ -281,30 +360,43 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
       const alunoUuid = formData?.aluno?.id;
       if (alunoUuid && complementoCarregado) {
         const { auto_declaracao: _ad, orientacao_sexual: _os, ...campos } = complemento;
-        const filtrado = Object.fromEntries(Object.entries(campos).filter(([, v]) => v !== '' && v !== null && v !== undefined));
+        const filtrado = Object.fromEntries(
+          Object.entries(campos).filter(([, v]) => v !== '' && v !== null && v !== undefined)
+        );
         const reqs: Promise<any>[] = [api.patch(`/alunos/${alunoUuid}/complemento`, filtrado)];
-        if (formData.auto_declaracao) reqs.push(api.patch(`/alunos/${alunoUuid}/auto-declaracao`, { auto_declaracao: formData.auto_declaracao }));
-        if (complemento.orientacao_sexual) reqs.push(api.patch(`/alunos/${alunoUuid}/complemento`, { orientacao_sexual: complemento.orientacao_sexual }));
+        if (formData.auto_declaracao)
+          reqs.push(api.patch(`/alunos/${alunoUuid}/auto-declaracao`, { auto_declaracao: formData.auto_declaracao }));
+        if (complemento.orientacao_sexual)
+          reqs.push(api.patch(`/alunos/${alunoUuid}/complemento`, { orientacao_sexual: complemento.orientacao_sexual }));
         const results = await Promise.allSettled(reqs);
         const falhou = results.find(r => r.status === 'rejected') as PromiseRejectedResult | undefined;
-        if (falhou) alert('Dados principais salvos, mas dados complementares falharam.\n' + ((falhou.reason as any)?.response?.data?.message || ''));
+        if (falhou)
+          alert('Dados principais salvos, mas dados complementares falharam.\n' + ((falhou.reason as any)?.response?.data?.message || ''));
       }
-      // Atualiza o snapshot salvo com os dados editados
       loadedDataRef.current = { ...formData };
       setIsEditing(false);
       const resMov = await api.get(`/matriculas/inscricao/${aluno.id}/movimentacoes`);
       setMovimentacoes(resMov.data);
       onSuccess?.();
-    } catch (e: any) { alert('Erro ao salvar: ' + (e.response?.data?.message || e.message)); }
-    finally { setLoading(false); }
+    } catch (e: any) {
+      alert('Erro ao salvar: ' + (e.response?.data?.message || e.message));
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleAddAnotacao = async () => {
     if (!novaAnotacaoTexto.trim()) return;
     setLoading(true);
-    try { const res = await api.post(`/matriculas/inscricao/${aluno.id}/anotacoes`, { texto_anotacao: novaAnotacaoTexto }); setAnotacoes(p => [res.data, ...p]); setNovaAnotacaoTexto(''); }
-    catch (e: any) { alert('Erro ao anotar: ' + e.message); }
-    finally { setLoading(false); }
+    try {
+      const res = await api.post(`/matriculas/inscricao/${aluno.id}/anotacoes`, { texto_anotacao: novaAnotacaoTexto });
+      setAnotacoes(p => [res.data, ...p]);
+      setNovaAnotacaoTexto('');
+    } catch (e: any) {
+      alert('Erro ao anotar: ' + e.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleFieldChange = useCallback((field: string, value: any) => {
@@ -330,51 +422,70 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
     try {
       const res = await fetch(`https://viacep.com.br/ws/${limpo}/json/`);
       const data = await res.json();
-      if (!data.erro) setFormData(p => ({ ...p, logradouro: data.logradouro || p.logradouro, bairro: data.bairro || p.bairro, cidade: data.localidade || p.cidade, estado_uf: data.uf || p.estado_uf }));
+      if (!data.erro)
+        setFormData(p => ({
+          ...p,
+          logradouro: data.logradouro || p.logradouro,
+          bairro: data.bairro || p.bairro,
+          cidade: data.localidade || p.cidade,
+          estado_uf: data.uf || p.estado_uf,
+        }));
     } catch {}
     finally { setBuscandoCep(false); }
   }, []);
 
-  const fmtDate = (v?: string | null) => { if (!v) return '—'; if (/^\d{2}\/\d{2}\/\d{4}$/.test(v)) return v; const s = /^\d{4}-\d{2}-\d{2}$/.test(v) ? v + 'T12:00:00' : v; const d = new Date(s); return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('pt-BR'); };
-  const fmtDateTime = (v?: string | null) => { if (!v) return '—'; const d = new Date(v); return isNaN(d.getTime()) ? '—' : d.toLocaleString('pt-BR'); };
+  const fmtDate = (v?: string | null) => {
+    if (!v) return '—';
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(v)) return v;
+    const s = /^\d{4}-\d{2}-\d{2}$/.test(v) ? v + 'T12:00:00' : v;
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('pt-BR');
+  };
+  const fmtDateTime = (v?: string | null) => {
+    if (!v) return '—';
+    const d = new Date(v);
+    return isNaN(d.getTime()) ? '—' : d.toLocaleString('pt-BR');
+  };
 
-  const alunoId = formData.aluno?.id ?? null;
+  // ── Tabs ─────────────────────────────────────────────────────────
   type TabDef = { id: TabId; label: string; icon: any; badge?: number; error?: boolean };
   const tabs: TabDef[] = [
-    { id: 'cadastro',      label: 'Cadastro',     icon: User,          error: erroMaioridade },
-    { id: 'anotacoes',     label: 'Anotações',    icon: MessageSquare, badge: anotacoes.length || undefined },
-    { id: 'movimentacoes', label: 'Histórico',    icon: History },
-    { id: 'documentos',    label: 'Documentos',   icon: Paperclip },
-    ...(fichaData ? [{ id: 'presenca' as TabId,  label: 'Presença', icon: ClipboardCheck }] : []),
+    { id: 'cadastro',      label: 'Cadastro',    icon: User,          error: erroMaioridade },
+    { id: 'anotacoes',     label: 'Anotações',   icon: MessageSquare, badge: anotacoes.length || undefined },
+    { id: 'movimentacoes', label: 'Histórico',   icon: History },
+    { id: 'documentos',    label: 'Documentos',  icon: Paperclip },
+    ...(fichaData ? [{ id: 'presenca' as TabId, label: 'Presença', icon: ClipboardCheck }] : []),
     ...(alunoId ? [
-      { id: 'turmas_aluno' as TabId, label: 'Turmas', icon: GraduationCap },
+      { id: 'turmas_aluno' as TabId,    label: 'Turmas',      icon: GraduationCap },
       { id: 'complemento_aluno' as TabId, label: 'Complemento', icon: UserCheck },
     ] : []),
   ];
 
-  const statusInfo = STATUS_MAP[formData.status_matricula] ?? { label: formData.status_matricula, bg: 'bg-gray-100', text: 'text-gray-600', border: 'border-gray-300', dot: 'bg-gray-400' };
+  const statusInfo = STATUS_MAP[formData.status_matricula] ?? {
+    label: formData.status_matricula, bg: 'bg-gray-100',
+    text: 'text-gray-600', border: 'border-gray-300', dot: 'bg-gray-400',
+  };
   const headerGradient = STATUS_HEADER_GRADIENT[formData.status_matricula] ?? 'from-purple-50 to-violet-50/40';
-
-  // Iniciais do avatar
   const initials = (formData.nome_completo || '?').split(' ').filter(Boolean).slice(0, 2).map(n => n[0]).join('').toUpperCase();
 
+  // ── Render ───────────────────────────────────────────────────────
   return (
     <div className="fixed inset-0 z-[200] flex" onMouseDown={e => e.stopPropagation()}>
+      {/* Overlay */}
+      <div className="flex-1 bg-black/50 backdrop-blur-sm" onMouseDown={onClose} />
+
+      {/* Drawer — desliza da direita */}
       <div
-        className={`flex-1 bg-black/50 backdrop-blur-sm transition-opacity duration-300 ${drawerVisible ? 'opacity-100' : 'opacity-0'}`}
-        onMouseDown={handleClose}
-      />
-      <div
-        className={`w-full max-w-3xl bg-white flex flex-col h-full shadow-2xl transition-transform duration-300 ease-out ${drawerVisible ? 'translate-x-0' : 'translate-x-full'}`}
+        className={`w-full max-w-3xl bg-white flex flex-col h-full shadow-2xl transition-transform duration-300 ease-out ${visible ? 'translate-x-0' : 'translate-x-full'}`}
         onMouseDown={e => e.stopPropagation()}
       >
 
-        {/* ── CABEÇALHO ─────────────────────────────────────────── */}
+        {/* ── CABEÇALHO ───────────────────────────────────────────── */}
         <div className="shrink-0">
-          {/* Banner de status com gradiente */}
           <div className={`bg-gradient-to-r ${headerGradient} border-b border-gray-200`}>
             <div className="px-5 pt-4 pb-3 flex items-start gap-4">
-              {/* Avatar */}
+
+              {/* Avatar 64px */}
               <div className="relative shrink-0">
                 <div className={`w-16 h-16 rounded-2xl overflow-hidden border-2 border-white shadow-md ${!fotoUrl ? 'bg-gradient-to-br from-purple-500 to-violet-600' : ''}`}>
                   {fotoUrl
@@ -383,7 +494,6 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
                         <span className="text-2xl font-bold text-white">{initials}</span>
                       </div>}
                 </div>
-                {/* Dot de status */}
                 <span className={`absolute -bottom-1 -right-1 w-4 h-4 ${statusInfo.dot} border-2 border-white rounded-full shadow-sm`} />
               </div>
 
@@ -396,26 +506,25 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
                       <p className="text-xs text-purple-600 font-mono font-semibold mt-0.5">{formData.aluno.numero_matricula}</p>
                     )}
                   </div>
+                  {/* Ações do header */}
                   <div className="flex items-center gap-1.5 shrink-0">
                     <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border ${statusInfo.bg} ${statusInfo.text} ${statusInfo.border}`}>
                       <span className={`w-1.5 h-1.5 rounded-full ${statusInfo.dot}`} />
                       {statusInfo.label}
                     </span>
                     {onVerNoAcademico && (
-                      <button onClick={onVerNoAcademico}
-                        title="Abrir ficha no Acadêmico"
+                      <button onClick={onVerNoAcademico} title="Abrir ficha no Acadêmico"
                         className="flex items-center gap-1 px-2 py-1 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-[10px] font-black uppercase tracking-wide transition-colors shadow-sm">
                         <GraduationCap size={11} /> Acadêmico
                       </button>
                     )}
                     {onVerInscricao && (
-                      <button onClick={onVerInscricao}
-                        title="Abrir inscrição original em Matrículas"
+                      <button onClick={onVerInscricao} title="Abrir inscrição original em Matrículas"
                         className="flex items-center gap-1 px-2 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black uppercase tracking-wide transition-colors shadow-sm">
                         <ClipboardCheck size={11} /> Inscrição
                       </button>
                     )}
-                    <button onClick={handleClose} className="p-1.5 rounded-lg hover:bg-white/70 text-gray-400 hover:text-gray-700 transition-colors">
+                    <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/70 text-gray-400 hover:text-gray-700 transition-colors">
                       <X size={16} />
                     </button>
                   </div>
@@ -446,7 +555,7 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
                   )}
                 </div>
 
-                {/* Turmas ativas */}
+                {/* Turmas ativas como pills */}
                 {turmasAtivas.length > 0 && (
                   <div className="flex items-center gap-1.5 mt-2 flex-wrap">
                     {turmasAtivas.map((t: any) => (
@@ -507,7 +616,9 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
                   <tab.icon size={13} className={active ? 'text-purple-600' : ''} />
                   {tab.label}
                   {tab.badge != null && tab.badge > 0 && (
-                    <span className={`ml-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full ${active ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-600'}`}>{tab.badge}</span>
+                    <span className={`ml-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full ${active ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-600'}`}>
+                      {tab.badge}
+                    </span>
                   )}
                   {tab.error && <AlertTriangle size={11} className="text-red-500 ml-0.5" />}
                 </button>
@@ -516,7 +627,7 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
           </div>
         </div>
 
-        {/* ── CONTEÚDO ──────────────────────────────────────────── */}
+        {/* ── CONTEÚDO ────────────────────────────────────────────── */}
         <div className="flex-1 overflow-y-auto bg-slate-50">
           {loading && (
             <div className="flex flex-col items-center justify-center py-24 gap-3">
@@ -525,10 +636,9 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
             </div>
           )}
 
-          {/* ─── CADASTRO ─────────────────────────────────────── */}
+          {/* CADASTRO */}
           {!loading && abaAtiva === 'cadastro' && (
             <div className="p-4 space-y-3">
-
               <ColorSection title="Dados Pessoais" icon={<User size={14} />} color="purple">
                 <Grid cols={3}>
                   <div className="col-span-3">
@@ -622,7 +732,6 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
                 </Grid>
               </ColorSection>
 
-              {/* Dados Complementares — apenas cursos especiais */}
               {mostrarComplemento && (
                 <ColorSection title="Dados Complementares — Pré-ENCCEJA / Pré-Vestibular" icon={<CreditCard size={14} />} color="emerald">
                   <Grid cols={3}>
@@ -696,7 +805,7 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
             </div>
           )}
 
-          {/* ─── ANOTAÇÕES ────────────────────────────────────── */}
+          {/* ANOTAÇÕES */}
           {!loading && abaAtiva === 'anotacoes' && (
             <div className="p-4 space-y-3">
               <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
@@ -736,13 +845,12 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
             </div>
           )}
 
-          {/* ─── HISTÓRICO ────────────────────────────────────── */}
+          {/* HISTÓRICO */}
           {!loading && abaAtiva === 'movimentacoes' && (
             <div className="p-4">
               {movimentacoes.length === 0
                 ? <EmptyState icon={<History size={22} />} text="Nenhuma movimentação registrada." />
                 : <div className="relative pl-6">
-                    {/* Linha vertical da timeline */}
                     <div className="absolute left-2.5 top-4 bottom-4 w-0.5 bg-gray-200 rounded-full" />
                     <div className="space-y-3">
                       {movimentacoes.map(mov => {
@@ -776,7 +884,7 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
             </div>
           )}
 
-          {/* ─── DOCUMENTOS ───────────────────────────────────── */}
+          {/* DOCUMENTOS */}
           {!loading && abaAtiva === 'documentos' && (
             <div className="p-4 space-y-3">
               {!loadingDocs && (
@@ -877,8 +985,11 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
                                 className="flex items-center gap-1 px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs text-gray-600 hover:bg-gray-100 transition-colors">
                                 <ExternalLink size={11} /> Abrir
                               </a>
-                              <button onClick={async () => { if (!confirm(`Remover "${nome}"?`)) return; try { await api.delete(`/matriculas/documentos/${doc.id}`); recarregarDocumentos(); } catch { alert('Erro ao remover.'); } }}
-                                className="flex items-center px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs text-red-500 hover:bg-red-50 hover:border-red-200 transition-colors">
+                              <button onClick={async () => {
+                                if (!confirm(`Remover "${nome}"?`)) return;
+                                try { await api.delete(`/matriculas/documentos/${doc.id}`); recarregarDocumentos(); }
+                                catch { alert('Erro ao remover.'); }
+                              }} className="flex items-center px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs text-red-500 hover:bg-red-50 hover:border-red-200 transition-colors">
                                 <Trash2 size={11} />
                               </button>
                             </div>
@@ -926,71 +1037,14 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
             </div>
           )}
 
-          {/* ─── PRESENÇA ─────────────────────────────────────── */}
-          {/* ─── TURMAS DO ALUNO ──────────────────────────────── */}
-          {!loading && abaAtiva === 'turmas_aluno' && alunoId && (
-            <div className="p-4 space-y-3">
-              {turmasDoAluno.length === 0
-                ? <EmptyState icon={<GraduationCap size={22} />} text="Nenhuma turma vinculada." />
-                : (
-                  <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-                    <div className="divide-y divide-gray-100">
-                      {turmasDoAluno.map((t: any) => (
-                        <div key={t.id ?? t.turma_id} className="flex items-center gap-3 px-4 py-3">
-                          <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: t.turma_cor || '#7c3aed' }} />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold text-gray-900 truncate">{t.turma_nome}</p>
-                            {t.curso_nome && <p className="text-xs text-gray-400">{t.curso_nome}</p>}
-                          </div>
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                            t.status === 'ativo'
-                              ? 'bg-green-50 text-green-700 border-green-200'
-                              : 'bg-gray-100 text-gray-500 border-gray-200'
-                          }`}>{t.status === 'ativo' ? 'Ativo' : 'Inativo'}</span>
-                          {t.data_entrada && (
-                            <span className="text-[10px] text-gray-400">{fmtDate(t.data_entrada)}</span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-            </div>
-          )}
-
-          {/* ─── COMPLEMENTO DO ALUNO ─────────────────────────── */}
-          {!loading && abaAtiva === 'complemento_aluno' && alunoId && (
-            <div className="p-4 space-y-3">
-              <ColorSection title="Dados Complementares" icon={<UserCheck size={14} />} color="indigo">
-                <Grid cols={3}>
-                  <CF label="RG" field="rg" comp={complemento} editing={false} onChange={() => {}} />
-                  <CF label="Órgão Expedidor" field="orgao_expedidor" comp={complemento} editing={false} onChange={() => {}} />
-                  <CF label="UF Expedição" field="uf_expedicao" comp={complemento} editing={false} onChange={() => {}} />
-                  <CF label="Gênero" field="genero" comp={complemento} editing={false} onChange={() => {}} />
-                  <CF label="Orientação Sexual" field="orientacao_sexual" comp={complemento} editing={false} onChange={() => {}} />
-                  <CF label="Nome da Mãe" field="nome_mae" comp={complemento} editing={false} onChange={() => {}} />
-                </Grid>
-              </ColorSection>
-              <ColorSection title="Dados Bancários" icon={<CreditCard size={14} />} color="emerald">
-                <Grid cols={3}>
-                  <CF label="Banco" field="banco" comp={complemento} editing={false} onChange={() => {}} />
-                  <CF label="Agência" field="agencia" comp={complemento} editing={false} onChange={() => {}} />
-                  <CF label="Dígito Agência" field="agencia_digito" comp={complemento} editing={false} onChange={() => {}} />
-                  <CF label="Conta Corrente" field="conta_corrente" comp={complemento} editing={false} onChange={() => {}} />
-                  <CF label="Dígito Conta" field="conta_digito" comp={complemento} editing={false} onChange={() => {}} />
-                  <CF label="Tipo de Conta" field="tipo_conta" comp={complemento} editing={false} onChange={() => {}} />
-                </Grid>
-              </ColorSection>
-            </div>
-          )}
-
+          {/* PRESENÇA */}
           {!loading && abaAtiva === 'presenca' && fichaData && (
             <div className="p-4 space-y-3">
               <div className="grid grid-cols-3 gap-3">
                 {[
-                  { label: 'Presenças', val: totalPresencas, bg: 'bg-green-500', light: 'bg-green-50', border: 'border-green-200', num: 'text-green-700', lbl: 'text-green-600' },
-                  { label: 'Faltas', val: totalFaltas, bg: 'bg-red-500', light: 'bg-red-50', border: 'border-red-200', num: 'text-red-700', lbl: 'text-red-500' },
-                  { label: 'Frequência', val: totalPresencas + totalFaltas > 0 ? `${Math.round((totalPresencas / (totalPresencas + totalFaltas)) * 100)}%` : '—', bg: 'bg-purple-500', light: 'bg-purple-50', border: 'border-purple-200', num: 'text-purple-700', lbl: 'text-purple-600' },
+                  { label: 'Presenças', val: totalPresencas, light: 'bg-green-50', border: 'border-green-200', num: 'text-green-700', lbl: 'text-green-600' },
+                  { label: 'Faltas', val: totalFaltas, light: 'bg-red-50', border: 'border-red-200', num: 'text-red-700', lbl: 'text-red-500' },
+                  { label: 'Frequência', val: totalPresencas + totalFaltas > 0 ? `${Math.round((totalPresencas / (totalPresencas + totalFaltas)) * 100)}%` : '—', light: 'bg-purple-50', border: 'border-purple-200', num: 'text-purple-700', lbl: 'text-purple-600' },
                 ].map(k => (
                   <div key={k.label} className={`${k.light} border ${k.border} rounded-xl p-4 text-center shadow-sm`}>
                     <p className={`text-[11px] font-semibold mb-1 ${k.lbl}`}>{k.label}</p>
@@ -1042,9 +1096,60 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
               )}
             </div>
           )}
+
+          {/* TURMAS DO ALUNO */}
+          {!loading && abaAtiva === 'turmas_aluno' && alunoId && (
+            <div className="p-4 space-y-3">
+              {turmasDoAluno.length === 0
+                ? <EmptyState icon={<GraduationCap size={22} />} text="Nenhuma turma vinculada." />
+                : <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                    <div className="divide-y divide-gray-100">
+                      {turmasDoAluno.map((t: any) => (
+                        <div key={t.id ?? t.turma_id} className="flex items-center gap-3 px-4 py-3">
+                          <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: t.turma_cor || '#7c3aed' }} />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-gray-900 truncate">{t.turma_nome}</p>
+                            {t.curso_nome && <p className="text-xs text-gray-400">{t.curso_nome}</p>}
+                          </div>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                            t.status === 'ativo' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-100 text-gray-500 border-gray-200'
+                          }`}>{t.status === 'ativo' ? 'Ativo' : 'Inativo'}</span>
+                          {t.data_entrada && <span className="text-[10px] text-gray-400">{fmtDate(t.data_entrada)}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>}
+            </div>
+          )}
+
+          {/* COMPLEMENTO DO ALUNO */}
+          {!loading && abaAtiva === 'complemento_aluno' && alunoId && (
+            <div className="p-4 space-y-3">
+              <ColorSection title="Dados Complementares" icon={<UserCheck size={14} />} color="indigo">
+                <Grid cols={3}>
+                  <CF label="RG" field="rg" comp={complemento} editing={false} onChange={() => {}} />
+                  <CF label="Órgão Expedidor" field="orgao_expedidor" comp={complemento} editing={false} onChange={() => {}} />
+                  <CF label="UF Expedição" field="uf_expedicao" comp={complemento} editing={false} onChange={() => {}} />
+                  <CF label="Gênero" field="genero" comp={complemento} editing={false} onChange={() => {}} />
+                  <CF label="Orientação Sexual" field="orientacao_sexual" comp={complemento} editing={false} onChange={() => {}} />
+                  <CF label="Nome da Mãe" field="nome_mae" comp={complemento} editing={false} onChange={() => {}} />
+                </Grid>
+              </ColorSection>
+              <ColorSection title="Dados Bancários" icon={<CreditCard size={14} />} color="emerald">
+                <Grid cols={3}>
+                  <CF label="Banco" field="banco" comp={complemento} editing={false} onChange={() => {}} />
+                  <CF label="Agência" field="agencia" comp={complemento} editing={false} onChange={() => {}} />
+                  <CF label="Dígito Agência" field="agencia_digito" comp={complemento} editing={false} onChange={() => {}} />
+                  <CF label="Conta Corrente" field="conta_corrente" comp={complemento} editing={false} onChange={() => {}} />
+                  <CF label="Dígito Conta" field="conta_digito" comp={complemento} editing={false} onChange={() => {}} />
+                  <CF label="Tipo de Conta" field="tipo_conta" comp={complemento} editing={false} onChange={() => {}} />
+                </Grid>
+              </ColorSection>
+            </div>
+          )}
         </div>
 
-        {/* ── RODAPÉ ────────────────────────────────────────────── */}
+        {/* ── RODAPÉ ──────────────────────────────────────────────── */}
         <div className="shrink-0 border-t border-gray-200 bg-white px-4 py-3 flex items-center gap-2 flex-wrap">
           {['Em Validação', 'Aguardando Documentos'].includes(formData.status_matricula) && (
             <button onClick={handleSolicitarDocumentos} disabled={docLoading}
@@ -1131,11 +1236,11 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
   );
 }
 
-// ── Constantes de estilo ───────────────────────────────────────
+// ── Constantes de estilo ─────────────────────────────────────────
 
 const INPUT_CLS = 'h-8 px-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 w-full bg-white';
 
-// ── Mapa de cores por seção ────────────────────────────────────
+// ── Mapa de cores por seção ──────────────────────────────────────
 
 const COLOR_MAP = {
   purple:  { header: 'bg-purple-50',  border: 'border-purple-200',  icon: 'text-purple-600',  bar: 'bg-purple-500',  title: 'text-purple-800' },
@@ -1150,7 +1255,7 @@ const COLOR_MAP = {
 
 type ColorKey = keyof typeof COLOR_MAP;
 
-// ── Componentes de layout ──────────────────────────────────────
+// ── Componentes de layout ────────────────────────────────────────
 
 function ColorSection({ title, icon, color, children }: { title: string; icon: React.ReactNode; color: ColorKey; children: React.ReactNode }) {
   const c = COLOR_MAP[color];
@@ -1200,7 +1305,7 @@ function EmptyState({ icon, text }: { icon: React.ReactNode; text: string }) {
   );
 }
 
-// ── Componentes de campo ───────────────────────────────────────
+// ── Componentes de campo ─────────────────────────────────────────
 
 function EF({ label, field, value, editing, type = 'text', onChange, options, fullWidth }: {
   label: string; field: string; value: any; editing: boolean;

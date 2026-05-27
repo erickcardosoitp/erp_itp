@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import Cookies from 'js-cookie';
 import {
-  LayoutDashboard, UserPlus, ClipboardList,
+  LayoutDashboard, UserPlus,
   LogOut, Settings, PanelLeftClose, PanelLeftOpen,
   GraduationCap, DollarSign, Package, Loader2, BarChart2, X, Users2, MessageSquare, FolderOpen, Target
 } from 'lucide-react';
@@ -22,7 +22,6 @@ interface SidebarProps {
 const PATH_TO_MODULE: Record<string, string> = {
   '/dashboard': 'dashboard',
   '/cadastro': 'cadastro_basico',
-  '/matriculas': 'matriculas',
   '/academico': 'academico',
   '/financeiro': 'financeiro',
   '/estoque': 'estoque',
@@ -49,7 +48,6 @@ export default function Sidebar({ isCollapsed, setIsCollapsed, mobileOpen, setMo
     { name: 'Estoque', path: '/estoque', icon: Package },
     { name: 'Financeiro', path: '/financeiro', icon: DollarSign },
     { name: 'Gente', path: '/gente', icon: Users2 },
-    { name: 'Matrículas', path: '/matriculas', icon: ClipboardList },
     { name: 'Projetos', path: '/projetos', icon: FolderOpen },
     { name: 'Relatórios', path: '/relatorios', icon: BarChart2 },
   ];
