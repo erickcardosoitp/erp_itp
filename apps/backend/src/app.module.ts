@@ -82,11 +82,10 @@ import { CaptacaoModule } from './captacao/captacao.module';
         if (!dbUrl) {
           throw new Error('A variável de ambiente DATABASE_URL não foi definida.');
         }
-        // Adiciona connect_timeout=50 (TCP timeout em segundos) se não estiver presente
-        // Necessário para Neon serverless: limita o cold start a 50s < maxDuration 60s
+        // connect_timeout=15 — cada tentativa espera até 15s pelo Neon acordar
         const dbUrlWithTimeout = dbUrl.includes('connect_timeout')
           ? dbUrl
-          : (dbUrl.includes('?') ? `${dbUrl}&connect_timeout=50` : `${dbUrl}?connect_timeout=50`);
+          : (dbUrl.includes('?') ? `${dbUrl}&connect_timeout=15` : `${dbUrl}?connect_timeout=15`);
         return {
           type: 'postgres',
           url: dbUrlWithTimeout,
@@ -96,7 +95,10 @@ import { CaptacaoModule } from './captacao/captacao.module';
           ssl: (dbUrl.includes('localhost') || dbUrl.includes('127.0.0.1'))
             ? false
             : { rejectUnauthorized: false },
-          retryAttempts: 0,
+          // Neon serverless pode demorar até 30s para acordar —
+          // 3 tentativas x 15s timeout + 5s delay = até 50s cobertura dentro do maxDuration:60s
+          retryAttempts: 3,
+          retryDelay: 3000,
         };
       },
     }),

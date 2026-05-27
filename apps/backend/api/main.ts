@@ -62,11 +62,14 @@ export const setupApp = async (app: NestExpressApplication) => {
 };
 
 // Tempo máximo para NestFactory.create() antes de responder 503 e deixar o Neon acordar
-const BOOTSTRAP_TIMEOUT_MS = 25000;
+const BOOTSTRAP_TIMEOUT_MS = 55000; // maior que connect_timeout=50 do Neon
 
 async function bootstrap() {
   const t0 = Date.now();
-  console.log('[BOOTSTRAP] NestFactory.create iniciando...');
+  // Diagnóstico de variáveis de ambiente críticas
+  const hasDb  = !!process.env.DATABASE_URL;
+  const hasJwt = !!process.env.JWT_SECRET;
+  console.log(`[BOOTSTRAP] NestFactory.create iniciando... DB=${hasDb} JWT=${hasJwt} NODE_ENV=${process.env.NODE_ENV}`);
 
   let timeoutHandle: NodeJS.Timeout | null = null;
   const createPromise = NestFactory.create<NestExpressApplication>(AppModule, {
