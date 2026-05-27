@@ -95,9 +95,10 @@ import { CaptacaoModule } from './captacao/captacao.module';
           ssl: (dbUrl.includes('localhost') || dbUrl.includes('127.0.0.1'))
             ? false
             : { rejectUnauthorized: false },
-          // Neon serverless pode demorar até 30s para acordar —
-          // 3 tentativas x 15s timeout + 5s delay = até 50s cobertura dentro do maxDuration:60s
-          retryAttempts: 3,
+          // Neon recusa conexões durante wake-up (~10s). Com retryDelay=3s,
+          // a tentativa 4 (t≈9s) já encontra o banco acordado.
+          // 10 tentativas = 30s de cobertura, bem dentro do maxDuration:60s
+          retryAttempts: 10,
           retryDelay: 3000,
         };
       },
