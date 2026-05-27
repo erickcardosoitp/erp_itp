@@ -12,7 +12,6 @@ import {
 } from 'recharts';
 import api from '@/services/api';
 import { useAuth } from '@/context/auth-context';
-import { usePermissions } from '@/context/auth-context';
 import { Turma, Aluno, PresencaSessao } from './_types';
 
 // ─── Local interfaces ─────────────────────────────────────────────────────────
@@ -782,8 +781,7 @@ function PorAlunoSubTab({ turmas }: { turmas: Turma[] }) {
 
 export default function PresencaTab({ turmas, podeEditar }: { turmas: Turma[]; podeEditar: boolean }) {
   const { user } = useAuth();
-  const { canAccess } = usePermissions(user);
-  const podeIncluir = podeEditar || canAccess('academico', 'incluir');
+  const podeIncluir = podeEditar || ['admin', 'prt', 'vp', 'drt'].includes(user?.role ?? '');
   const podeEditarSessao = ['admin', 'prt'].includes(user?.role ?? '') || podeEditar;
   const [subTab, setSubTab] = useState<'historico' | 'diario' | 'relatorios' | 'por-aluno'>('historico');
 
