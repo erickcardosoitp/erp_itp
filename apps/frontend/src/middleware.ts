@@ -127,9 +127,10 @@ export function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     /*
-     * Matcher focado em rotas de páginas. 
-     * Exclui explicitamente arquivos internos do Next.js e estáticos.
+     * Matcher focado em rotas de páginas.
+     * Exclui: rotas de API internas (api/), proxy do backend (backend-api/),
+     * uploads, arquivos estáticos do Next.js e assets.
      */
-    '/((?!api|_next/static|_next/image|assets|favicon.ico|sw.js).*)',
+    '/((?!api|backend-api|uploads|_next/static|_next/image|assets|favicon.ico|sw.js).*)',
   ],
 };
