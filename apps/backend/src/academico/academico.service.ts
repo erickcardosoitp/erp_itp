@@ -1729,7 +1729,7 @@ export class AcademicoService {
   private async gerarProtocolo(): Promise<string> {
     const agora = new Date();
     const yyyymm = `${agora.getFullYear()}${String(agora.getMonth() + 1).padStart(2, '0')}`;
-    const prefix = `ITP-${yyyymm}-`;
+    const prefix = `CHM-${yyyymm}-`;
     const [{ max }] = await this.dataSource.query(
       `SELECT MAX(CAST(SUBSTRING(protocolo FROM LENGTH($1) + 1) AS INTEGER)) as max
        FROM chamados_academicos
@@ -1809,13 +1809,26 @@ export class AcademicoService {
       prioridade: 'normal',
       criado_por_nome: dados.nome,
       aluno_nome: dados.nome_aluno || null,
-    });
+      origem: 'site',
+    } as any);
 
-    // Notifica por e-mail DRT + VP + ADMIN (Presidente)
+    // Notificação interna do sistema para todos os gestores
+    await this.notificacoes.criar({
+      tipo: 'novo_chamado',
+      titulo: `Chamado do site: ${dados.assunto}`,
+      mensagem: `${dados.nome} enviou um chamado pelo site institucional. Protocolo: ${chamado.protocolo}`,
+      referencia_id: chamado.id,
+      referencia_tipo: 'chamado',
+      cargo_minimo: 5,
+    }).catch(() => {});
+
+    // Notifica por e-mail DRT + VP + ADMIN (Presidente) + contato@
     const admins: { email: string; nome: string }[] = await this.dataSource.query(
       `SELECT email, nome FROM usuarios WHERE role IN ('drt', 'vp', 'admin') AND email IS NOT NULL AND email <> ''`,
     );
-    this.logger.log(`📨 [chamado público ${chamado.protocolo}] notificando ${admins.length} gestor(es): ${admins.map(a => a.email).join(', ') || '(nenhum)'}`);
+    const CONTATO_EMAIL = 'contato@institutotiapretinha.org';
+    const destinatariosLog = [CONTATO_EMAIL, ...admins.map(a => a.email)].join(', ') || '(nenhum)';
+    this.logger.log(`📨 [chamado público ${chamado.protocolo}] notificando: ${destinatariosLog}`);
 
     const esc = (s: string) => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     const htmlAdmin = `
@@ -1851,14 +1864,22 @@ export class AcademicoService {
       </div>`;
 
     const envios: Promise<any>[] = [];
+    // Confirmação ao solicitante
     envios.push(
       this.emailService.enviarGenerico(dados.email, `[ITP] Chamado recebido — Protocolo ${chamado.protocolo}`, htmlSolicitante)
         .then(() => this.logger.log(`✅ Confirmação enviada ao solicitante ${dados.email}`))
         .catch(err => this.logger.error(`❌ Falha ao enviar confirmação ao solicitante ${dados.email}: ${err?.message ?? err}`)),
     );
+    // contato@ sempre notificado
+    envios.push(
+      this.emailService.enviarGenerico(CONTATO_EMAIL, `[ITP] Novo chamado do site: ${dados.assunto} (${chamado.protocolo})`, htmlAdmin)
+        .then(() => this.logger.log(`✅ Notificação enviada ao contato@`))
+        .catch(err => this.logger.error(`❌ Falha ao enviar ao contato@: ${err?.message ?? err}`)),
+    );
+    // Gestores internos
     admins.forEach(a => {
       envios.push(
-        this.emailService.enviarGenerico(a.email, `[ITP] Novo chamado: ${dados.assunto} (${chamado.protocolo})`, htmlAdmin)
+        this.emailService.enviarGenerico(a.email, `[ITP] Novo chamado do site: ${dados.assunto} (${chamado.protocolo})`, htmlAdmin)
           .then(() => this.logger.log(`✅ Notificação enviada ao gestor ${a.email}`))
           .catch(err => this.logger.error(`❌ Falha ao enviar notificação ao gestor ${a.email}: ${err?.message ?? err}`)),
       );
@@ -1869,7 +1890,7 @@ export class AcademicoService {
   }
 
   async consultarChamadoPublico(q: string) {
-    const isProtocolo = /^ITP-\d{6}-\d+$/i.test(q.trim());
+    const isProtocolo = /^CHM-\d{6}-\d+$/i.test(q.trim());
     let chamados: ChamadoAcademico[];
 
     if (isProtocolo) {

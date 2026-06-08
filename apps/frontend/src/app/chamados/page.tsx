@@ -2,117 +2,30 @@
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
-  Plus, Trash2, Search, X, Edit3,
-  User, Users, Calendar, Shield, CheckSquare, Clock,
-  NotebookPen, FileImage, Star, BookOpen, Lightbulb,
-  AlertTriangle, ChevronDown, ChevronUp, Tag,
+  Plus, Trash2, X, Edit3, User, FileImage,
+  Star, BookOpen, Lightbulb, Tag, NotebookPen,
 } from 'lucide-react';
 import api from '@/services/api';
 import { useAuth } from '@/context/auth-context';
 import { usePermissions } from '@/hooks/use-permissions';
 import { toast } from 'sonner';
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-interface Chamado {
-  id: string; titulo: string; descricao?: string | null; tipo: string;
-  status: string; prioridade: string; aluno_id?: string | null; aluno_nome?: string | null;
-  turma_id?: string | null; turma_nome?: string | null; responsavel_nome?: string | null;
-  criado_por_nome?: string | null; observacoes?: string | null; data_resolucao?: string | null;
-  abertura?: string | null; fechamento?: string | null; _total_acomp?: number;
-  satisfacao?: number | null; fila_nome?: string | null;
-  created_at: string; updated_at: string;
-}
-interface Acompanhamento {
-  id: string; chamado_id: string; conteudo: string; autor_nome?: string | null; created_at: string;
-}
-interface Aluno { id: string; nome_completo: string; turma_nome?: string; turmas?: any[]; }
-interface Turma { id: string; nome: string; }
-interface Responsavel { id: string; nome: string; role: string; }
-interface Fila { id: string; nome: string; sla_horas_resposta: number; sla_horas_resolucao: number; }
-interface Conhecimento {
-  id: string; titulo: string; conteudo: string; categoria?: string;
-  tags?: string[]; autor_nome?: string; visualizacoes: number; created_at: string;
-}
-
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-const COR_STATUS: Record<string, string> = {
-  aberto:       'bg-blue-100 text-blue-700 border-blue-200',
-  em_andamento: 'bg-amber-100 text-amber-700 border-amber-200',
-  resolvido:    'bg-green-100 text-green-700 border-green-200',
-};
-const COR_PRIORIDADE: Record<string, string> = {
-  baixa:   'border-l-slate-300',
-  normal:  'border-l-blue-400',
-  alta:    'border-l-orange-400',
-  urgente: 'border-l-red-500',
-};
-const LABEL_STATUS: Record<string, string> = { aberto: 'Aberto', em_andamento: 'Em andamento', resolvido: 'Resolvido' };
-const LABEL_PRIO: Record<string, string> = { baixa: 'Baixa', normal: 'Normal', alta: 'Alta', urgente: 'Urgente' };
-const TIPOS_CHAMADO = ['Social', 'Acadêmico', 'Saúde', 'Família', 'Financeiro', 'Gente', 'Outro'];
-const STATUS_CHAMADO = ['aberto', 'em_andamento', 'resolvido'];
-const PRIO_CHAMADO = ['baixa', 'normal', 'alta', 'urgente'];
-const EQUIPES = ['Administração', 'Conselho', 'Presidência', 'Apoio'];
-const ROLE_LABEL: Record<string, string> = {
-  admin: 'Admin', prt: 'Presidência', vp: 'VP', drt: 'Diretoria',
-  adjunto: 'Adjunto', prof: 'Professor', monitor: 'Monitor',
-  assist: 'Assistente', cozinha: 'Cozinha', user: 'Usuário',
-};
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function fmtDate(v?: string | null) {
-  if (!v) return '---';
-  if (/^\d{2}\/\d{2}\/\d{4}$/.test(v)) return v;
-  const s = /^\d{4}-\d{2}-\d{2}$/.test(v) ? v + 'T12:00:00' : v;
-  const d = new Date(s);
-  return isNaN(d.getTime()) ? '---' : d.toLocaleDateString('pt-BR');
-}
-
-function fmtDateTime(v?: string | null) {
-  if (!v) return null;
-  const d = new Date(v);
-  return isNaN(d.getTime()) ? null : d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-}
-
-function calcSLA(abertura?: string | null, fechamento?: string | null): string | null {
-  const ini = abertura ? new Date(abertura) : null;
-  if (!ini || isNaN(ini.getTime())) return null;
-  const fim = fechamento ? new Date(fechamento) : new Date();
-  const diffMs = fim.getTime() - ini.getTime();
-  const h = Math.floor(diffMs / 3600000);
-  const m = Math.floor((diffMs % 3600000) / 60000);
-  if (h >= 48) return `${Math.floor(h / 24)}d`;
-  if (h > 0) return `${h}h ${m}m`;
-  return `${m}m`;
-}
-
-const SLA_LIMITES: Record<string, { amarelo: number; vermelho: number }> = {
-  urgente: { amarelo: 2,  vermelho: 4  },
-  alta:    { amarelo: 4,  vermelho: 8  },
-  normal:  { amarelo: 12, vermelho: 24 },
-  baixa:   { amarelo: 36, vermelho: 72 },
-};
-
-function getSLABadge(c: Chamado): { label: string; cls: string } | null {
-  const ini = c.abertura ?? c.created_at;
-  const label = calcSLA(ini, c.fechamento);
-  if (!label) return null;
-  if (c.status === 'resolvido') return { label, cls: 'bg-green-50 text-green-600' };
-  const h = (Date.now() - new Date(ini).getTime()) / 3600000;
-  const limites = SLA_LIMITES[c.prioridade] ?? SLA_LIMITES.normal;
-  if (h >= limites.vermelho) return { label, cls: 'bg-red-50 text-red-600 font-black animate-pulse' };
-  if (h >= limites.amarelo)  return { label, cls: 'bg-amber-50 text-amber-600' };
-  return { label, cls: 'bg-green-50 text-green-600' };
-}
+import { ChamadosHeader } from './components/ChamadosHeader';
+import { ChamadosTable } from './components/ChamadosTable';
+import { ChamadosKanban } from './components/ChamadosKanban';
+import type {
+  Chamado, Acompanhamento, Aluno, Turma, Responsavel, Fila, Conhecimento, Stats,
+} from './components/_shared';
+import {
+  COR_STATUS, LABEL_STATUS, LABEL_PRIO, TIPOS_CHAMADO, STATUS_CHAMADO,
+  PRIO_CHAMADO, EQUIPES, ROLE_LABEL, isSLACritical, isMeuChamado,
+} from './components/_shared';
 
 // ─── Rich Text Editor ─────────────────────────────────────────────────────────
 
 function ToolBtn({ onClick, title, children }: { onClick: () => void; title?: string; children: React.ReactNode }) {
   return (
     <button type="button" onClick={onClick} title={title}
-      className="w-7 h-7 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center transition-colors text-slate-600 dark:text-slate-300 shrink-0">
+      className="w-7 h-7 rounded hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center transition-colors text-slate-600 dark:text-slate-300 shrink-0">
       {children}
     </button>
   );
@@ -129,10 +42,7 @@ function RichTextEditor({ value, onChange }: { value: string; onChange: (html: s
     }
   }, [value]);
 
-  const exec = (cmd: string, val?: string) => {
-    editorRef.current?.focus();
-    document.execCommand(cmd, false, val);
-  };
+  const exec = (cmd: string, val?: string) => { editorRef.current?.focus(); document.execCommand(cmd, false, val); };
 
   const insertImg = (file: File) => {
     const reader = new FileReader();
@@ -143,74 +53,34 @@ function RichTextEditor({ value, onChange }: { value: string; onChange: (html: s
     reader.readAsDataURL(file);
   };
 
-  const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
-    const imgItem = Array.from(e.clipboardData?.items ?? []).find(i => i.type.startsWith('image/'));
-    if (imgItem) {
-      e.preventDefault();
-      const file = imgItem.getAsFile();
-      if (file) insertImg(file);
-    }
-  };
-
   return (
     <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
-      {/* Toolbar */}
       <div className="flex items-center gap-0.5 px-2 py-1.5 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex-wrap">
-        <ToolBtn onClick={() => exec('bold')} title="Negrito (Ctrl+B)">
-          <span className="font-black text-sm leading-none">B</span>
-        </ToolBtn>
-        <ToolBtn onClick={() => exec('italic')} title="Itálico (Ctrl+I)">
-          <span className="italic text-sm leading-none">I</span>
-        </ToolBtn>
-        <ToolBtn onClick={() => exec('underline')} title="Sublinhado (Ctrl+U)">
-          <span className="underline text-sm leading-none">U</span>
-        </ToolBtn>
-        <div className="w-px h-5 bg-slate-200 dark:bg-slate-600 mx-1" />
-        <ToolBtn onClick={() => exec('formatBlock', 'h1')} title="Título grande">
-          <span className="text-[11px] font-black leading-none">T1</span>
-        </ToolBtn>
-        <ToolBtn onClick={() => exec('formatBlock', 'h2')} title="Título médio">
-          <span className="text-[11px] font-bold leading-none">T2</span>
-        </ToolBtn>
-        <ToolBtn onClick={() => exec('formatBlock', 'h3')} title="Título pequeno">
-          <span className="text-[11px] leading-none">T3</span>
-        </ToolBtn>
-        <ToolBtn onClick={() => exec('formatBlock', 'p')} title="Parágrafo normal">
-          <span className="text-[9px] text-slate-400 leading-none">¶</span>
-        </ToolBtn>
-        <div className="w-px h-5 bg-slate-200 dark:bg-slate-600 mx-1" />
-        <ToolBtn onClick={() => exec('insertUnorderedList')} title="Lista com marcadores">
-          <span className="text-sm leading-none">•≡</span>
-        </ToolBtn>
-        <ToolBtn onClick={() => exec('insertOrderedList')} title="Lista numerada">
-          <span className="text-[10px] leading-none">1.</span>
-        </ToolBtn>
-        <div className="w-px h-5 bg-slate-200 dark:bg-slate-600 mx-1" />
-        <label className="w-7 h-7 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center cursor-pointer text-slate-500 transition-colors shrink-0" title="Inserir imagem (ou cole com Ctrl+V)">
+        <ToolBtn onClick={() => exec('bold')} title="Negrito"><span className="font-black text-sm leading-none">B</span></ToolBtn>
+        <ToolBtn onClick={() => exec('italic')} title="Itálico"><span className="italic text-sm leading-none">I</span></ToolBtn>
+        <ToolBtn onClick={() => exec('underline')} title="Sublinhado"><span className="underline text-sm leading-none">U</span></ToolBtn>
+        <div className="w-px h-4 bg-slate-200 dark:bg-slate-600 mx-1" />
+        <ToolBtn onClick={() => exec('insertUnorderedList')} title="Lista"><span className="text-sm leading-none">•≡</span></ToolBtn>
+        <ToolBtn onClick={() => exec('insertOrderedList')} title="Numerada"><span className="text-[10px] leading-none">1.</span></ToolBtn>
+        <div className="w-px h-4 bg-slate-200 dark:bg-slate-600 mx-1" />
+        <label className="w-7 h-7 rounded hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center cursor-pointer text-slate-500 transition-colors shrink-0" title="Inserir imagem">
           <FileImage size={13} />
-          <input type="file" accept="image/*" className="hidden" onChange={e => {
-            const f = e.target.files?.[0];
-            if (f) insertImg(f);
-            e.target.value = '';
-          }} />
+          <input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) insertImg(f); e.target.value = ''; }} />
         </label>
       </div>
-      {/* Editable area */}
       <div
         ref={editorRef}
         contentEditable
         suppressContentEditableWarning
-        onPaste={handlePaste}
+        onPaste={e => {
+          const imgItem = Array.from(e.clipboardData?.items ?? []).find(i => i.type.startsWith('image/'));
+          if (imgItem) { e.preventDefault(); const f = imgItem.getAsFile(); if (f) insertImg(f); }
+        }}
         onInput={() => onChange(editorRef.current?.innerHTML ?? '')}
-        className="min-h-[240px] p-4 text-sm focus:outline-none dark:text-slate-100 dark:bg-slate-900
-          [&_h1]:text-2xl [&_h1]:font-black [&_h1]:mb-2 [&_h1]:mt-1
-          [&_h2]:text-xl [&_h2]:font-black [&_h2]:mb-1 [&_h2]:mt-1
-          [&_h3]:text-base [&_h3]:font-bold [&_h3]:mb-1
+        className="min-h-[200px] p-4 text-sm focus:outline-none dark:text-slate-100 dark:bg-slate-900
           [&_strong]:font-bold [&_em]:italic [&_u]:underline
-          [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:mb-2
-          [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:mb-2
-          [&_li]:mb-0.5 [&_p]:mb-1
-          [&_img]:max-w-full [&_img]:rounded-lg [&_img]:my-2"
+          [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:mb-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:mb-2
+          [&_li]:mb-0.5 [&_p]:mb-1 [&_img]:max-w-full [&_img]:rounded-lg [&_img]:my-2"
       />
     </div>
   );
@@ -218,11 +88,7 @@ function RichTextEditor({ value, onChange }: { value: string; onChange: (html: s
 
 // ─── Acompanhamento Modal ──────────────────────────────────────────────────────
 
-function AcompModal({ chamado, onClose, onAdded }: {
-  chamado: Chamado;
-  onClose: () => void;
-  onAdded: () => void;
-}) {
+function AcompModal({ chamado, onClose, onAdded }: { chamado: Chamado; onClose: () => void; onAdded: () => void }) {
   const [entries, setEntries] = useState<Acompanhamento[]>([]);
   const [loading, setLoading] = useState(true);
   const [novoHtml, setNovoHtml] = useState('');
@@ -262,100 +128,63 @@ function AcompModal({ chamado, onClose, onAdded }: {
   };
 
   return (
-    <div className="fixed inset-0 z-[300] bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4"
-      onClick={onClose}>
-      <div className="bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-3xl shadow-2xl w-full max-w-3xl h-[92vh] sm:max-h-[92vh] flex flex-col"
-        onClick={e => e.stopPropagation()}>
-
-        {/* Header */}
+    <div className="fixed inset-0 z-[300] bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
+      <div className="bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-3xl shadow-2xl w-full max-w-3xl h-[92vh] sm:max-h-[92vh] flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex items-start justify-between px-5 pt-5 pb-3 border-b border-slate-100 dark:border-slate-800 shrink-0">
           <div className="min-w-0 flex-1 pr-3">
             <div className="flex flex-wrap items-center gap-1.5 mb-0.5">
-              <span className={`text-[9px] font-black px-2 py-0.5 rounded-full border ${COR_STATUS[chamado.status] ?? ''}`}>
-                {LABEL_STATUS[chamado.status] ?? chamado.status}
-              </span>
+              <span className={`text-[9px] font-black px-2 py-0.5 rounded-full border ${COR_STATUS[chamado.status] ?? ''}`}>{LABEL_STATUS[chamado.status] ?? chamado.status}</span>
               <span className="text-[9px] font-bold text-slate-400 uppercase">{chamado.tipo}</span>
-              <span className={`text-[9px] font-black ${chamado.prioridade === 'urgente' ? 'text-red-500' : chamado.prioridade === 'alta' ? 'text-orange-500' : 'text-slate-400'}`}>
-                · {LABEL_PRIO[chamado.prioridade]}
-              </span>
+              <span className={`text-[9px] font-black ${chamado.prioridade === 'urgente' ? 'text-red-500' : chamado.prioridade === 'alta' ? 'text-orange-500' : 'text-slate-400'}`}>· {LABEL_PRIO[chamado.prioridade]}</span>
             </div>
             <h3 className="font-black text-sm text-slate-800 dark:text-slate-100">{chamado.titulo}</h3>
-            {chamado.aluno_nome && (
-              <p className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1"><User size={9} />{chamado.aluno_nome}</p>
-            )}
+            {chamado.aluno_nome && <p className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1"><User size={9} />{chamado.aluno_nome}</p>}
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <span className="text-[10px] font-black text-purple-600 bg-purple-50 dark:bg-purple-950 px-2 py-0.5 rounded-full flex items-center gap-1">
-              <NotebookPen size={9} />{entries.length} entrada{entries.length !== 1 ? 's' : ''}
+              <NotebookPen size={9} />{entries.length}
             </span>
             <button onClick={onClose} className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400"><X size={15} /></button>
           </div>
         </div>
-
-        {/* Timeline */}
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
           {loading ? (
             <p className="text-center text-xs text-slate-400 py-8">Carregando...</p>
           ) : entries.length === 0 ? (
             <div className="text-center py-10">
-              <div className="w-12 h-12 bg-purple-50 dark:bg-purple-950 rounded-2xl flex items-center justify-center mx-auto mb-3">
-                <NotebookPen size={20} className="text-purple-400" />
-              </div>
-              <p className="text-sm font-bold text-slate-400">Nenhum acompanhamento ainda.</p>
-              <p className="text-xs text-slate-400 mt-0.5">Adicione o primeiro abaixo.</p>
+              <NotebookPen size={20} className="text-slate-300 mx-auto mb-2" />
+              <p className="text-sm font-bold text-slate-400">Nenhum acompanhamento.</p>
             </div>
           ) : (
             entries.map((e, i) => (
               <div key={e.id} className="flex gap-3">
-                {/* Timeline line */}
                 <div className="flex flex-col items-center shrink-0">
-                  <div className="w-7 h-7 rounded-full bg-purple-100 dark:bg-purple-900 flex items-center justify-center text-[10px] font-black text-purple-600 dark:text-purple-300 shrink-0">
-                    {(e.autor_nome?.[0] ?? '?').toUpperCase()}
-                  </div>
+                  <div className="w-7 h-7 rounded-full bg-purple-100 dark:bg-purple-900 flex items-center justify-center text-[10px] font-black text-purple-600 dark:text-purple-300">{(e.autor_nome?.[0] ?? '?').toUpperCase()}</div>
                   {i < entries.length - 1 && <div className="w-px flex-1 bg-slate-100 dark:bg-slate-800 mt-1" />}
                 </div>
-                {/* Content bubble */}
                 <div className="flex-1 min-w-0 pb-2">
                   <div className="flex items-center justify-between gap-2 mb-1.5">
                     <div>
                       <span className="text-[11px] font-black text-slate-700 dark:text-slate-200">{e.autor_nome || 'Responsável'}</span>
-                      <span className="text-[10px] text-slate-400 ml-2">
-                        {new Date(e.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                      </span>
+                      <span className="text-[10px] text-slate-400 ml-2">{new Date(e.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
                     </div>
-                    <button onClick={() => deletar(e.id)} disabled={deletingId === e.id}
-                      className="p-1 rounded-lg text-slate-300 hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950 transition-colors disabled:opacity-40 shrink-0">
-                      <Trash2 size={11} />
-                    </button>
+                    <button onClick={() => deletar(e.id)} disabled={deletingId === e.id} className="p-1 rounded-lg text-slate-300 hover:text-red-400 hover:bg-red-50 disabled:opacity-40"><Trash2 size={11} /></button>
                   </div>
-                  <div
-                    className="bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl rounded-tl-sm px-4 py-3 text-sm text-slate-700 dark:text-slate-200
-                      [&_h1]:text-xl [&_h1]:font-black [&_h1]:mb-1
-                      [&_h2]:text-lg [&_h2]:font-black [&_h2]:mb-1
-                      [&_h3]:text-base [&_h3]:font-bold [&_h3]:mb-0.5
-                      [&_strong]:font-bold [&_em]:italic [&_u]:underline
-                      [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:mb-1
-                      [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:mb-1
-                      [&_img]:max-w-full [&_img]:rounded-xl [&_img]:my-2 [&_img]:border [&_img]:border-slate-200"
-                    dangerouslySetInnerHTML={{ __html: e.conteudo }}
-                  />
+                  <div className="bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl rounded-tl-sm px-4 py-3 text-sm text-slate-700 dark:text-slate-200
+                    [&_strong]:font-bold [&_em]:italic [&_u]:underline [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_img]:max-w-full [&_img]:rounded-xl [&_img]:my-2"
+                    dangerouslySetInnerHTML={{ __html: e.conteudo }} />
                 </div>
               </div>
             ))
           )}
           <div ref={bottomRef} />
         </div>
-
-        {/* Nova entrada */}
         <div className="border-t border-slate-100 dark:border-slate-800 px-5 pt-3 pb-4 shrink-0 space-y-2">
-          <p className="text-[10px] font-black uppercase text-slate-400 flex items-center gap-1">
-            <Plus size={9} /> Novo acompanhamento
-          </p>
+          <p className="text-[10px] font-black uppercase text-slate-400">Novo acompanhamento</p>
           <RichTextEditor key={`new-${entries.length}`} value="" onChange={setNovoHtml} />
-          <div className="flex items-center justify-between">
-            <p className="text-[9px] text-slate-400">Cole imagens com <kbd className="px-1 bg-slate-100 dark:bg-slate-700 rounded font-mono text-[8px]">Ctrl+V</kbd></p>
+          <div className="flex justify-end">
             <button onClick={publicar} disabled={publishing}
-              className="flex items-center gap-1.5 px-4 py-2 text-xs font-black rounded-xl bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-60 transition-colors">
+              className="flex items-center gap-1.5 px-4 py-2 text-xs font-black rounded-xl bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-60">
               {publishing ? 'Publicando...' : <><Plus size={11} /> Publicar</>}
             </button>
           </div>
@@ -365,27 +194,9 @@ function AcompModal({ chamado, onClose, onAdded }: {
   );
 }
 
-// ─── Modal helper ─────────────────────────────────────────────────────────────
-
-function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
-  return (
-    <div className="fixed inset-0 z-[300] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden max-h-[90vh] flex flex-col">
-        <div className="flex justify-between items-center p-5 border-b shrink-0">
-          <h3 className="font-black text-sm uppercase tracking-tight text-slate-800 dark:text-slate-100">{title}</h3>
-          <button onClick={onClose} className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400"><X size={16}/></button>
-        </div>
-        <div className="p-5 overflow-y-auto">{children}</div>
-      </div>
-    </div>
-  );
-}
-
 // ─── Satisfação Modal ─────────────────────────────────────────────────────────
 
-function SatisfacaoModal({ chamado, onClose, onSaved }: {
-  chamado: Chamado; onClose: () => void; onSaved: () => void;
-}) {
+function SatisfacaoModal({ chamado, onClose, onSaved }: { chamado: Chamado; onClose: () => void; onSaved: () => void }) {
   const [nota, setNota] = useState(0);
   const [saving, setSaving] = useState(false);
   const LABELS = ['', 'Muito insatisfeito', 'Insatisfeito', 'Regular', 'Satisfeito', 'Muito satisfeito'];
@@ -393,11 +204,8 @@ function SatisfacaoModal({ chamado, onClose, onSaved }: {
   const salvar = async () => {
     if (!nota) return;
     setSaving(true);
-    try {
-      await api.patch(`/chamados/${chamado.id}/satisfacao`, { nota });
-      toast.success('Avaliação registrada!');
-      onSaved(); onClose();
-    } catch { toast.error('Erro ao registrar avaliação.'); }
+    try { await api.patch(`/chamados/${chamado.id}/satisfacao`, { nota }); toast.success('Avaliação registrada!'); onSaved(); onClose(); }
+    catch { toast.error('Erro ao registrar.'); }
     setSaving(false);
   };
 
@@ -405,9 +213,7 @@ function SatisfacaoModal({ chamado, onClose, onSaved }: {
     <div className="fixed inset-0 z-[400] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-sm p-6">
         <div className="text-center mb-5">
-          <div className="w-12 h-12 bg-yellow-50 dark:bg-yellow-950 rounded-2xl flex items-center justify-center mx-auto mb-3">
-            <Star size={22} className="text-yellow-500" />
-          </div>
+          <Star size={22} className="text-yellow-500 mx-auto mb-2" />
           <h3 className="font-black text-sm text-slate-800 dark:text-slate-100 uppercase tracking-tight">Avaliar Atendimento</h3>
           <p className="text-xs text-slate-400 mt-1 line-clamp-1">"{chamado.titulo}"</p>
         </div>
@@ -421,11 +227,8 @@ function SatisfacaoModal({ chamado, onClose, onSaved }: {
         </div>
         {nota > 0 && <p className="text-center text-[11px] font-black text-yellow-600 mb-4">{LABELS[nota]}</p>}
         <div className="flex gap-2 mt-4">
-          <button onClick={onClose} className="flex-1 px-3 py-2 text-xs font-black rounded-xl border border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800">
-            Pular
-          </button>
-          <button onClick={salvar} disabled={!nota || saving}
-            className="flex-1 px-3 py-2 text-xs font-black rounded-xl bg-yellow-500 text-white hover:bg-yellow-600 disabled:opacity-50 transition-colors">
+          <button onClick={onClose} className="flex-1 px-3 py-2 text-xs font-black rounded-xl border border-slate-200 dark:border-slate-700 text-slate-500">Pular</button>
+          <button onClick={salvar} disabled={!nota || saving} className="flex-1 px-3 py-2 text-xs font-black rounded-xl bg-yellow-500 text-white hover:bg-yellow-600 disabled:opacity-50">
             {saving ? 'Salvando...' : 'Avaliar'}
           </button>
         </div>
@@ -436,7 +239,7 @@ function SatisfacaoModal({ chamado, onClose, onSaved }: {
 
 // ─── Base de Conhecimento Panel ───────────────────────────────────────────────
 
-function BaseConhecimentoPanel({ onClose, canWrite }: { onClose: () => void; canWrite: boolean; }) {
+function BaseConhecimentoPanel({ onClose, canWrite }: { onClose: () => void; canWrite: boolean }) {
   const { user } = useAuth();
   const [artigos, setArtigos] = useState<Conhecimento[]>([]);
   const [loading, setLoading] = useState(true);
@@ -449,10 +252,7 @@ function BaseConhecimentoPanel({ onClose, canWrite }: { onClose: () => void; can
 
   const carregar = useCallback(async (q?: string) => {
     setLoading(true);
-    try {
-      const r = await api.get('/chamados/conhecimento', q ? { params: { q } } : {});
-      setArtigos(r.data ?? []);
-    } catch {}
+    try { const r = await api.get('/chamados/conhecimento', q ? { params: { q } } : {}); setArtigos(r.data ?? []); } catch {}
     setLoading(false);
   }, []);
 
@@ -467,59 +267,36 @@ function BaseConhecimentoPanel({ onClose, canWrite }: { onClose: () => void; can
     if (!form.titulo.trim() || !form.conteudo.trim()) { toast.error('Título e conteúdo obrigatórios.'); return; }
     setSalvando(true);
     try {
-      if (editando) {
-        await api.patch(`/chamados/conhecimento/${editando.id}`, form);
-        toast.success('Artigo atualizado.');
-      } else {
-        await api.post('/chamados/conhecimento', form);
-        toast.success('Artigo criado.');
-      }
-      setShowForm(false); setEditando(null); setForm({ titulo: '', conteudo: '', categoria: '' });
-      carregar();
-    } catch { toast.error('Erro ao salvar artigo.'); }
+      if (editando) { await api.patch(`/chamados/conhecimento/${editando.id}`, form); toast.success('Artigo atualizado.'); }
+      else { await api.post('/chamados/conhecimento', form); toast.success('Artigo criado.'); }
+      setShowForm(false); setEditando(null); setForm({ titulo: '', conteudo: '', categoria: '' }); carregar();
+    } catch { toast.error('Erro ao salvar.'); }
     setSalvando(false);
-  };
-
-  const deletar = async (id: string) => {
-    if (!confirm('Excluir artigo?')) return;
-    try { await api.delete(`/chamados/conhecimento/${id}`); carregar(); } catch {}
-  };
-
-  const abrirEditar = (a: Conhecimento) => {
-    setEditando(a); setForm({ titulo: a.titulo, conteudo: a.conteudo, categoria: a.categoria ?? '' });
-    setShowForm(true); setArtigoAberto(null);
   };
 
   return (
     <div className="fixed inset-0 z-[200] flex justify-end" onClick={onClose}>
-      <div className="bg-white dark:bg-slate-900 w-full max-w-lg h-full shadow-2xl flex flex-col overflow-hidden"
-        onClick={e => e.stopPropagation()}>
-
-        {/* Header */}
+      <div className="bg-white dark:bg-slate-900 w-full max-w-lg h-full shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
-          <div className="flex items-center gap-2">
-            <BookOpen size={18} className="text-purple-600" />
-            <h3 className="font-black text-sm uppercase tracking-tight text-slate-800 dark:text-slate-100">Base de Conhecimento</h3>
-          </div>
+          <div className="flex items-center gap-2"><BookOpen size={16} className="text-purple-600" /><h3 className="font-black text-sm text-slate-800 dark:text-slate-100">Base de Conhecimento</h3></div>
           <div className="flex items-center gap-2">
             {canWrite && !showForm && (
               <button onClick={() => { setShowForm(true); setEditando(null); setForm({ titulo: '', conteudo: '', categoria: '' }); }}
-                className="flex items-center gap-1 px-2 py-1 text-[10px] font-black rounded-lg bg-purple-600 text-white hover:bg-purple-700">
+                className="flex items-center gap-1 px-2 py-1 text-[10px] font-black rounded bg-purple-600 text-white hover:bg-purple-700">
                 <Plus size={11} /> Novo
               </button>
             )}
-            <button onClick={onClose} className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400"><X size={15} /></button>
+            <button onClick={onClose} className="p-1.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400"><X size={15} /></button>
           </div>
         </div>
-
         {showForm ? (
           <div className="flex-1 overflow-y-auto p-5 space-y-4">
-            <p className="text-[10px] font-black uppercase text-slate-400">{editando ? 'Editar Artigo' : 'Novo Artigo'}</p>
-            <input value={form.titulo} onChange={e => setForm(f => ({ ...f, titulo: e.target.value }))} placeholder="Título do artigo *"
+            <p className="text-[10px] font-black uppercase text-slate-400">{editando ? 'Editar' : 'Novo Artigo'}</p>
+            <input value={form.titulo} onChange={e => setForm(f => ({ ...f, titulo: e.target.value }))} placeholder="Título *"
               className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 dark:bg-slate-800 dark:text-slate-100" />
-            <input value={form.categoria} onChange={e => setForm(f => ({ ...f, categoria: e.target.value }))} placeholder="Categoria (ex: Matrículas, Financeiro)"
+            <input value={form.categoria} onChange={e => setForm(f => ({ ...f, categoria: e.target.value }))} placeholder="Categoria"
               className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 dark:bg-slate-800 dark:text-slate-100" />
-            <textarea value={form.conteudo} onChange={e => setForm(f => ({ ...f, conteudo: e.target.value }))} rows={12} placeholder="Conteúdo / solução *"
+            <textarea value={form.conteudo} onChange={e => setForm(f => ({ ...f, conteudo: e.target.value }))} rows={12} placeholder="Conteúdo *"
               className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 dark:bg-slate-800 dark:text-slate-100 resize-none" />
             <div className="flex gap-2">
               <button onClick={() => { setShowForm(false); setEditando(null); }} className="flex-1 px-3 py-2 text-xs font-black rounded-xl border border-slate-200 dark:border-slate-700 text-slate-500">Cancelar</button>
@@ -528,56 +305,41 @@ function BaseConhecimentoPanel({ onClose, canWrite }: { onClose: () => void; can
           </div>
         ) : artigoAberto ? (
           <div className="flex-1 overflow-y-auto p-5">
-            <button onClick={() => setArtigoAberto(null)} className="text-[10px] font-black text-purple-600 mb-3 flex items-center gap-1">
-              ← Voltar
-            </button>
-            {artigoAberto.categoria && (
-              <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase bg-purple-50 text-purple-600 px-2 py-0.5 rounded-full mb-2">
-                <Tag size={8} /> {artigoAberto.categoria}
-              </span>
-            )}
+            <button onClick={() => setArtigoAberto(null)} className="text-[10px] font-black text-purple-600 mb-3">← Voltar</button>
+            {artigoAberto.categoria && <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase bg-purple-50 text-purple-600 px-2 py-0.5 rounded-full mb-2"><Tag size={8} /> {artigoAberto.categoria}</span>}
             <h2 className="text-base font-black text-slate-800 dark:text-slate-100 mb-3">{artigoAberto.titulo}</h2>
             <pre className="text-sm text-slate-700 dark:text-slate-200 whitespace-pre-wrap bg-slate-50 dark:bg-slate-800 rounded-2xl p-4 font-sans">{artigoAberto.conteudo}</pre>
             <p className="text-[10px] text-slate-400 mt-3">{artigoAberto.autor_nome && `Por ${artigoAberto.autor_nome} · `}{artigoAberto.visualizacoes} visualizações</p>
             {canWrite && (
               <div className="flex gap-2 mt-4">
-                <button onClick={() => abrirEditar(artigoAberto)} className="px-3 py-1.5 text-[10px] font-black rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">Editar</button>
-                <button onClick={() => { deletar(artigoAberto.id); setArtigoAberto(null); }} className="px-3 py-1.5 text-[10px] font-black rounded-lg bg-red-50 text-red-500 hover:bg-red-100">Excluir</button>
+                <button onClick={() => { setEditando(artigoAberto); setForm({ titulo: artigoAberto.titulo, conteudo: artigoAberto.conteudo, categoria: artigoAberto.categoria ?? '' }); setShowForm(true); setArtigoAberto(null); }}
+                  className="px-3 py-1.5 text-[10px] font-black rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">Editar</button>
+                <button onClick={async () => { if (!confirm('Excluir?')) return; try { await api.delete(`/chamados/conhecimento/${artigoAberto.id}`); carregar(); setArtigoAberto(null); } catch {} }}
+                  className="px-3 py-1.5 text-[10px] font-black rounded bg-red-50 text-red-500">Excluir</button>
               </div>
             )}
           </div>
         ) : (
           <>
             <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 shrink-0">
-              <div className="relative">
-                <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input value={busca} onChange={e => { setBusca(e.target.value); buscarDebounced(e.target.value); }}
-                  placeholder="Buscar artigos..."
-                  className="w-full pl-8 pr-3 py-2 text-xs border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-400 dark:bg-slate-800 dark:text-slate-100" />
-              </div>
+              <input value={busca} onChange={e => { setBusca(e.target.value); buscarDebounced(e.target.value); }} placeholder="Buscar artigos..."
+                className="w-full px-3 py-2 text-xs border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-400 dark:bg-slate-800 dark:text-slate-100" />
             </div>
             <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
-              {loading ? (
-                <p className="text-center text-xs text-slate-400 py-8">Carregando...</p>
-              ) : artigos.length === 0 ? (
-                <div className="text-center py-10">
-                  <Lightbulb size={28} className="text-slate-300 mx-auto mb-2" />
-                  <p className="text-xs text-slate-400 font-bold">Nenhum artigo encontrado.</p>
-                  {canWrite && <p className="text-[10px] text-slate-400 mt-1">Clique em "Novo" para criar o primeiro.</p>}
-                </div>
-              ) : artigos.map(a => (
-                <button key={a.id} onClick={() => setArtigoAberto(a)}
-                  className="w-full text-left p-3 bg-slate-50 dark:bg-slate-800 hover:bg-purple-50 dark:hover:bg-purple-950 rounded-2xl border border-slate-100 dark:border-slate-700 hover:border-purple-200 transition-colors">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      {a.categoria && <span className="text-[9px] font-black uppercase text-purple-500 mb-0.5 block">{a.categoria}</span>}
-                      <p className="text-xs font-black text-slate-700 dark:text-slate-200 line-clamp-1">{a.titulo}</p>
-                      <p className="text-[10px] text-slate-400 mt-0.5 line-clamp-2">{a.conteudo.slice(0, 120)}</p>
-                    </div>
-                    <BookOpen size={14} className="text-purple-300 shrink-0 mt-0.5" />
+              {loading ? <p className="text-center text-xs text-slate-400 py-8">Carregando...</p>
+                : artigos.length === 0 ? (
+                  <div className="text-center py-10">
+                    <Lightbulb size={24} className="text-slate-300 mx-auto mb-2" />
+                    <p className="text-xs text-slate-400">Nenhum artigo encontrado.</p>
                   </div>
-                </button>
-              ))}
+                ) : artigos.map(a => (
+                  <button key={a.id} onClick={() => setArtigoAberto(a)}
+                    className="w-full text-left p-3 bg-slate-50 dark:bg-slate-800 hover:bg-purple-50 dark:hover:bg-purple-950 rounded-xl border border-slate-100 dark:border-slate-700 hover:border-purple-200 transition-colors">
+                    {a.categoria && <span className="text-[9px] font-black uppercase text-purple-500 block mb-0.5">{a.categoria}</span>}
+                    <p className="text-xs font-black text-slate-700 dark:text-slate-200 line-clamp-1">{a.titulo}</p>
+                    <p className="text-[10px] text-slate-400 mt-0.5 line-clamp-2">{a.conteudo.slice(0, 120)}</p>
+                  </button>
+                ))}
             </div>
           </>
         )}
@@ -593,28 +355,39 @@ export default function ChamadosPage() {
   const { canWrite } = usePermissions(user);
 
   const [chamados, setChamados] = useState<Chamado[]>([]);
-  const [stats, setStats] = useState<{ abertos: number; em_andamento: number; resolvidos: number; urgentes: number } | null>(null);
+  const [stats, setStats] = useState<Stats | null>(null);
   const [alunos, setAlunos] = useState<Aluno[]>([]);
   const [turmas, setTurmas] = useState<Turma[]>([]);
   const [responsaveis, setResponsaveis] = useState<Responsavel[]>([]);
   const [filas, setFilas] = useState<Fila[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // View & filters
+  const [view, setView] = useState<'table' | 'kanban'>('table');
   const [filtroStatus, setFiltroStatus] = useState('');
+  const [filtroPrioridade, setFiltroPrioridade] = useState('');
   const [filtroTipo, setFiltroTipo] = useState('');
   const [busca, setBusca] = useState('');
+  const [filtroMeus, setFiltroMeus] = useState(false);
+  const [filtroSLA, setFiltroSLA] = useState(false);
+  const [filtroSite, setFiltroSite] = useState(false);
+
+  // Modals
   const [showModal, setShowModal] = useState(false);
   const [editando, setEditando] = useState<Chamado | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [acampChamado, setAcampChamado] = useState<Chamado | null>(null);
   const [satisfacaoChamado, setSatisfacaoChamado] = useState<Chamado | null>(null);
   const [showKB, setShowKB] = useState(false);
+
+  // Form
   const [alunoSearch, setAlunoSearch] = useState('');
   const [todoInstituto, setTodoInstituto] = useState(false);
   const [modoResponsavel, setModoResponsavel] = useState<'usuario' | 'equipe'>('usuario');
   const [form, setForm] = useState({
     titulo: '', descricao: '', tipo: 'Social', prioridade: 'normal', status: 'aberto',
-    aluno_id: '', aluno_nome: '', turma_id: '', turma_nome: '', responsavel_nome: '',
-    observacoes: '', fila_nome: '',
+    aluno_id: '', aluno_nome: '', turma_id: '', turma_nome: '',
+    responsavel_nome: '', observacoes: '', fila_nome: '',
   });
 
   const carregar = useCallback(async () => {
@@ -623,6 +396,7 @@ export default function ChamadosPage() {
       const params: any = {};
       if (filtroStatus) params.status = filtroStatus;
       if (filtroTipo) params.tipo = filtroTipo;
+      if (filtroPrioridade) params.prioridade = filtroPrioridade;
       const [rc, rs] = await Promise.all([
         api.get('/chamados', { params }),
         api.get('/chamados/stats'),
@@ -631,7 +405,7 @@ export default function ChamadosPage() {
       setStats(rs.data);
     } catch { toast.error('Erro ao carregar chamados.'); }
     setLoading(false);
-  }, [filtroStatus, filtroTipo]);
+  }, [filtroStatus, filtroTipo, filtroPrioridade]);
 
   useEffect(() => { carregar(); }, [carregar]);
 
@@ -642,10 +416,8 @@ export default function ChamadosPage() {
       api.get('/chamados/responsaveis').catch(() => ({ data: [] })),
       api.get('/chamados/filas').catch(() => ({ data: [] })),
     ]).then(([ra, rt, rr, rf]) => {
-      setAlunos(ra.data ?? []);
-      setTurmas(rt.data ?? []);
-      setResponsaveis(rr.data ?? []);
-      setFilas(rf.data ?? []);
+      setAlunos(ra.data ?? []); setTurmas(rt.data ?? []);
+      setResponsaveis(rr.data ?? []); setFilas(rf.data ?? []);
     });
   }, []);
 
@@ -656,36 +428,33 @@ export default function ChamadosPage() {
   }, [alunoSearch, alunos]);
 
   const chamadosFiltrados = useMemo(() => {
-    if (!busca.trim()) return chamados;
-    const s = busca.toLowerCase();
-    return chamados.filter(c =>
-      c.titulo.toLowerCase().includes(s) ||
-      (c.aluno_nome ?? '').toLowerCase().includes(s) ||
-      (c.responsavel_nome ?? '').toLowerCase().includes(s)
-    );
-  }, [chamados, busca]);
+    let list = chamados;
+    if (busca.trim()) {
+      const s = busca.toLowerCase();
+      list = list.filter(c =>
+        c.titulo.toLowerCase().includes(s) ||
+        (c.aluno_nome ?? '').toLowerCase().includes(s) ||
+        (c.responsavel_nome ?? '').toLowerCase().includes(s) ||
+        (c.protocolo ?? '').toLowerCase().includes(s)
+      );
+    }
+    if (filtroMeus) list = list.filter(c => isMeuChamado(c, user?.nome || user?.email));
+    if (filtroSLA) list = list.filter(isSLACritical);
+    if (filtroSite) list = list.filter(c => c.origem === 'site');
+    return list;
+  }, [chamados, busca, filtroMeus, filtroSLA, filtroSite, user]);
+
+  const upd = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
 
   function abrirNovo() {
-    setEditando(null);
-    setAlunoSearch('');
-    setTodoInstituto(false);
-    setModoResponsavel('usuario');
+    setEditando(null); setAlunoSearch(''); setTodoInstituto(false); setModoResponsavel('usuario');
     setForm({ titulo: '', descricao: '', tipo: 'Social', prioridade: 'normal', status: 'aberto', aluno_id: '', aluno_nome: '', turma_id: '', turma_nome: '', responsavel_nome: '', observacoes: '', fila_nome: '' });
     setShowModal(true);
   }
 
   function abrirEditar(c: Chamado) {
-    setEditando(c);
-    setAlunoSearch(c.aluno_nome ?? '');
-    setTodoInstituto(c.aluno_nome === 'Todo o Instituto');
-    setModoResponsavel('usuario');
-    setForm({
-      titulo: c.titulo, descricao: c.descricao ?? '', tipo: c.tipo, prioridade: c.prioridade,
-      status: c.status, aluno_id: c.aluno_id ?? '', aluno_nome: c.aluno_nome ?? '',
-      turma_id: c.turma_id ?? '', turma_nome: c.turma_nome ?? '',
-      responsavel_nome: c.responsavel_nome ?? '', observacoes: c.observacoes ?? '',
-      fila_nome: c.fila_nome ?? '',
-    });
+    setEditando(c); setAlunoSearch(c.aluno_nome ?? ''); setTodoInstituto(c.aluno_nome === 'Todo o Instituto'); setModoResponsavel('usuario');
+    setForm({ titulo: c.titulo, descricao: c.descricao ?? '', tipo: c.tipo, prioridade: c.prioridade, status: c.status, aluno_id: c.aluno_id ?? '', aluno_nome: c.aluno_nome ?? '', turma_id: c.turma_id ?? '', turma_nome: c.turma_nome ?? '', responsavel_nome: c.responsavel_nome ?? '', observacoes: c.observacoes ?? '', fila_nome: c.fila_nome ?? '' });
     setShowModal(true);
   }
 
@@ -693,21 +462,12 @@ export default function ChamadosPage() {
     if (!form.titulo.trim()) { toast.error('Título é obrigatório.'); return; }
     setSalvando(true);
     try {
-      const payload = {
-        ...form,
-        aluno_id:  form.aluno_id  || null,
-        turma_id:  form.turma_id  || null,
-        aluno_nome: todoInstituto ? 'Todo o Instituto' : (form.aluno_nome || null),
-        criado_por_nome: editando ? undefined : (user?.nome || user?.email),
-      };
+      const payload = { ...form, aluno_id: form.aluno_id || null, turma_id: form.turma_id || null, aluno_nome: todoInstituto ? 'Todo o Instituto' : (form.aluno_nome || null), criado_por_nome: editando ? undefined : (user?.nome || user?.email) };
       if (editando) await api.patch(`/chamados/${editando.id}`, payload);
       else await api.post('/chamados', payload);
       toast.success(editando ? 'Chamado atualizado.' : 'Chamado criado.');
-      setShowModal(false);
-      carregar();
-    } catch (e: any) {
-      toast.error(e?.response?.data?.message || 'Erro ao salvar chamado.');
-    }
+      setShowModal(false); carregar();
+    } catch (e: any) { toast.error(e?.response?.data?.message || 'Erro ao salvar.'); }
     setSalvando(false);
   }
 
@@ -724,343 +484,201 @@ export default function ChamadosPage() {
     try { await api.delete(`/chamados/${id}`); carregar(); } catch {}
   }
 
-  function onAcompAdded() { carregar(); }
-
-  const upd = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
+  const tableKanbanProps = {
+    chamados: chamadosFiltrados,
+    canWrite,
+    onAtender: (id: string) => mudarStatus(id, 'em_andamento'),
+    onResolver: (c: Chamado) => mudarStatus(c.id, 'resolvido', c),
+    onAcomp: (c: Chamado) => setAcampChamado(c),
+    onEditar: abrirEditar,
+    onDeletar: deletar,
+  };
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-6">
-      <div className="max-w-5xl mx-auto space-y-6">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+      <div className="max-w-6xl mx-auto px-4 md:px-6">
 
-        {/* Header */}
-        <div className="flex items-center justify-between">
+        {/* Title + stats strip */}
+        <div className="flex items-center justify-between pt-6 pb-1 gap-4">
           <div>
-            <h1 className="text-xl font-black text-slate-800 dark:text-slate-100">Chamados</h1>
-            <p className="text-xs text-slate-500 mt-0.5">Registro e acompanhamento de ocorrências</p>
+            <h1 className="text-lg font-black text-slate-800 dark:text-slate-100 tracking-tight">Chamados</h1>
+            <p className="text-[11px] text-slate-400 mt-0.5">Registro e acompanhamento de ocorrências</p>
           </div>
-          <div className="flex items-center gap-2">
-            <button onClick={() => setShowKB(true)}
-              className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-purple-50 dark:hover:bg-purple-950 text-slate-600 dark:text-slate-300 hover:text-purple-600 text-xs font-black px-3 py-2.5 rounded-xl transition-colors border border-slate-200 dark:border-slate-700">
-              <BookOpen size={13} /> Base de Conhecimento
-            </button>
-            <button onClick={abrirNovo}
-              className="flex items-center gap-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-black px-4 py-2.5 rounded-xl transition-colors shadow">
-              <Plus size={13} /> Novo Chamado
-            </button>
-          </div>
-        </div>
-
-        {/* Stats */}
-        {stats && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {[
-              { label: 'Abertos',      val: stats.abertos,       color: 'text-blue-600 bg-blue-50 border-blue-100 dark:bg-blue-950 dark:border-blue-900' },
-              { label: 'Em andamento', val: stats.em_andamento,  color: 'text-amber-600 bg-amber-50 border-amber-100 dark:bg-amber-950 dark:border-amber-900' },
-              { label: 'Resolvidos',   val: stats.resolvidos,    color: 'text-green-600 bg-green-50 border-green-100 dark:bg-green-950 dark:border-green-900' },
-              { label: 'Urgentes',     val: stats.urgentes,      color: 'text-red-600 bg-red-50 border-red-100 dark:bg-red-950 dark:border-red-900' },
-            ].map(s => (
-              <div key={s.label} className={`rounded-2xl border p-4 ${s.color}`}>
-                <p className="text-[10px] font-black uppercase tracking-widest opacity-70">{s.label}</p>
-                <p className="text-3xl font-black mt-1">{s.val}</p>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Filtros */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-4">
-          <div className="flex flex-wrap gap-3 items-center">
-            <div className="relative">
-              <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar chamado ou aluno..."
-                className="pl-8 pr-3 py-2 text-xs border border-slate-200 dark:border-slate-700 rounded-xl w-52 focus:outline-none focus:ring-2 focus:ring-purple-400 dark:bg-slate-800 dark:text-slate-100" />
+          {stats && (
+            <div className="hidden sm:flex items-center gap-6 shrink-0">
+              {[
+                { label: 'Abertos', val: stats.abertos, cls: 'text-blue-600', onClick: () => setFiltroStatus('aberto') },
+                { label: 'Em atend.', val: stats.em_andamento, cls: 'text-amber-600', onClick: () => setFiltroStatus('em_andamento') },
+                { label: 'Resolvidos', val: stats.resolvidos, cls: 'text-emerald-600', onClick: () => setFiltroStatus('resolvido') },
+                { label: 'Urgentes', val: stats.urgentes, cls: 'text-red-600', onClick: () => setFiltroPrioridade(filtroPrioridade === 'urgente' ? '' : 'urgente') },
+              ].map(s => (
+                <button key={s.label} onClick={s.onClick} className="text-center hover:opacity-70 transition-opacity">
+                  <p className={`text-xl font-black leading-none ${s.cls}`}>{s.val}</p>
+                  <p className="text-[9px] text-slate-400 uppercase tracking-wider mt-0.5">{s.label}</p>
+                </button>
+              ))}
             </div>
-            <select value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)}
-              className="text-xs border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 bg-white dark:bg-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-purple-400">
-              <option value="">Todos os status</option>
-              {STATUS_CHAMADO.map(s => <option key={s} value={s}>{LABEL_STATUS[s]}</option>)}
-            </select>
-            <select value={filtroTipo} onChange={e => setFiltroTipo(e.target.value)}
-              className="text-xs border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 bg-white dark:bg-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-purple-400">
-              <option value="">Todos os tipos</option>
-              {TIPOS_CHAMADO.map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
-          </div>
+          )}
         </div>
 
-        {/* Lista */}
-        {loading ? (
-          <div className="text-center py-16 text-slate-400 text-sm">Carregando...</div>
-        ) : chamadosFiltrados.length === 0 ? (
-          <div className="text-center py-16 text-slate-400 text-sm">Nenhum chamado encontrado.</div>
-        ) : (
-          <div className="space-y-3">
-            {chamadosFiltrados.map(c => {
-              const slaBadge = getSLABadge(c);
-              const aberturaFmt = fmtDateTime(c.abertura ?? c.created_at);
-              const fechamentoFmt = c.fechamento ? fmtDateTime(c.fechamento) : null;
-              return (
-                <div key={c.id} className={`bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-4 border-l-4 ${COR_PRIORIDADE[c.prioridade] ?? 'border-l-slate-300'} shadow-sm`}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex flex-wrap items-center gap-2 mb-1">
-                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${COR_STATUS[c.status] ?? ''}`}>
-                          {LABEL_STATUS[c.status] ?? c.status}
-                        </span>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase">{c.tipo}</span>
-                        <span className="text-[10px] font-bold text-slate-400">·</span>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase">{LABEL_PRIO[c.prioridade] ?? c.prioridade}</span>
-                        {slaBadge && (
-                          <span className={`flex items-center gap-0.5 text-[10px] font-black px-1.5 py-0.5 rounded-full ${slaBadge.cls}`}>
-                            <Clock size={9} />{slaBadge.label}
-                          </span>
-                        )}
-                        {c.satisfacao && (
-                          <span className="flex items-center gap-0.5 text-[10px] font-black px-1.5 py-0.5 rounded-full bg-yellow-50 text-yellow-600">
-                            <Star size={9} fill="currentColor" />{c.satisfacao}/5
-                          </span>
-                        )}
-                      </div>
-                      <h4 className="text-sm font-black text-slate-800 dark:text-slate-100">{c.titulo}</h4>
-                      {c.descricao && <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{c.descricao}</p>}
-                      <div className="flex flex-wrap gap-3 mt-2 text-[10px] text-slate-400">
-                        {c.aluno_nome && <span className="flex items-center gap-1"><User size={10} />{c.aluno_nome}</span>}
-                        {c.turma_nome && <span className="flex items-center gap-1"><Users size={10} />{c.turma_nome}</span>}
-                        {c.responsavel_nome && <span className="flex items-center gap-1"><Shield size={10} />{c.responsavel_nome}</span>}
-                        {c.fila_nome && <span className="flex items-center gap-1 text-purple-500"><Tag size={10} />{c.fila_nome}</span>}
-                        {aberturaFmt && <span className="flex items-center gap-1"><Calendar size={10} />Aberto {aberturaFmt}</span>}
-                        {fechamentoFmt && <span className="flex items-center gap-1 text-green-500"><CheckSquare size={10} />Fechado {fechamentoFmt}</span>}
-                        {c.data_resolucao && !fechamentoFmt && <span className="flex items-center gap-1 text-green-500"><CheckSquare size={10} />Resolvido em {fmtDate(c.data_resolucao)}</span>}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
-                      {c.status !== 'em_andamento' && c.status !== 'resolvido' && (
-                        <button onClick={() => mudarStatus(c.id, 'em_andamento')}
-                          className="text-[10px] font-black px-2 py-1 rounded-lg bg-amber-50 text-amber-600 hover:bg-amber-100 border border-amber-200 transition-colors">
-                          Atender
-                        </button>
-                      )}
-                      {c.status !== 'resolvido' && (
-                        <button onClick={() => mudarStatus(c.id, 'resolvido', c)}
-                          className="text-[10px] font-black px-2 py-1 rounded-lg bg-green-50 text-green-600 hover:bg-green-100 border border-green-200 transition-colors">
-                          Resolver
-                        </button>
-                      )}
-                      <button onClick={() => setAcampChamado(c)}
-                        title="Acompanhamentos"
-                        className={`flex items-center gap-1 px-2 py-1.5 rounded-lg border transition-colors text-[10px] font-black ${(c._total_acomp ?? 0) > 0 ? 'bg-purple-50 dark:bg-purple-950 text-purple-600 border-purple-200 dark:border-purple-800 hover:bg-purple-100' : 'bg-slate-50 dark:bg-slate-800 text-slate-400 hover:bg-purple-50 hover:text-purple-600 border-slate-200 dark:border-slate-700'}`}>
-                        <NotebookPen size={11} />
-                        {(c._total_acomp ?? 0) > 0 && <span>{c._total_acomp}</span>}
-                      </button>
-                      {canWrite && (
-                        <button onClick={() => abrirEditar(c)}
-                          className="p-1.5 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-500 hover:bg-purple-50 hover:text-purple-600 border border-slate-200 dark:border-slate-700 transition-colors">
-                          <Edit3 size={12} />
-                        </button>
-                      )}
-                      {canWrite && (
-                        <button onClick={() => deletar(c.id)}
-                          className="p-1.5 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-400 hover:bg-red-50 hover:text-red-500 border border-slate-200 dark:border-slate-700 transition-colors">
-                          <Trash2 size={12} />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  {c.observacoes && (
-                    <div className="mt-3 p-3 bg-slate-50 dark:bg-slate-800 rounded-xl text-xs text-slate-600 dark:text-slate-300 border border-slate-100 dark:border-slate-700">
-                      <span className="font-black text-[10px] uppercase text-slate-400 block mb-1">Observações</span>
-                      {c.observacoes}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
+        {/* Sticky filter header */}
+        <ChamadosHeader
+          stats={stats}
+          busca={busca} onBusca={setBusca}
+          filtroStatus={filtroStatus} onFiltroStatus={setFiltroStatus}
+          filtroPrioridade={filtroPrioridade} onFiltroPrioridade={setFiltroPrioridade}
+          filtroTipo={filtroTipo} onFiltroTipo={setFiltroTipo}
+          filtroMeus={filtroMeus} onFiltroMeus={setFiltroMeus}
+          filtroSLA={filtroSLA} onFiltroSLA={setFiltroSLA}
+          filtroSite={filtroSite} onFiltroSite={setFiltroSite}
+          view={view} onView={setView}
+          onNovo={abrirNovo} onKB={() => setShowKB(true)}
+        />
+
+        {/* Content */}
+        <div className="py-5">
+          {loading ? (
+            <div className="text-center py-16 text-sm text-slate-400">Carregando...</div>
+          ) : view === 'table' ? (
+            <ChamadosTable {...tableKanbanProps} />
+          ) : (
+            <ChamadosKanban {...tableKanbanProps} />
+          )}
+        </div>
       </div>
 
-      {/* Modal */}
+      {/* Create / Edit Modal */}
       {showModal && (
-        <Modal title={editando ? 'Editar Chamado' : 'Novo Chamado'} onClose={() => setShowModal(false)}>
-          <div className="space-y-4">
-            {/* Título */}
-            <div className="space-y-1">
-              <label className="text-[10px] font-black uppercase text-slate-500">Título *</label>
-              <input value={form.titulo} onChange={e => upd('titulo', e.target.value)}
-                className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 dark:bg-slate-800 dark:text-slate-100" />
+        <div className="fixed inset-0 z-[300] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden max-h-[90vh] flex flex-col">
+            <div className="flex justify-between items-center p-5 border-b shrink-0">
+              <h3 className="font-black text-sm uppercase tracking-tight text-slate-800 dark:text-slate-100">{editando ? 'Editar Chamado' : 'Novo Chamado'}</h3>
+              <button onClick={() => setShowModal(false)} className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400"><X size={16} /></button>
             </div>
-
-            {/* Tipo + Prioridade */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="p-5 overflow-y-auto space-y-4">
+              {/* Título */}
               <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-slate-500">Tipo</label>
-                <select value={form.tipo} onChange={e => upd('tipo', e.target.value)}
-                  className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white dark:bg-slate-800 dark:text-slate-100">
-                  {TIPOS_CHAMADO.map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
+                <label className="text-[10px] font-black uppercase text-slate-500">Título *</label>
+                <input value={form.titulo} onChange={e => upd('titulo', e.target.value)}
+                  className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 dark:bg-slate-800 dark:text-slate-100" />
               </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-slate-500">Prioridade</label>
-                <select value={form.prioridade} onChange={e => upd('prioridade', e.target.value)}
-                  className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white dark:bg-slate-800 dark:text-slate-100">
-                  {PRIO_CHAMADO.map(p => <option key={p} value={p}>{LABEL_PRIO[p]}</option>)}
-                </select>
-              </div>
-            </div>
-
-            {/* Status (só edição) */}
-            {editando && (
-              <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-slate-500">Status</label>
-                <select value={form.status} onChange={e => upd('status', e.target.value)}
-                  className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white dark:bg-slate-800 dark:text-slate-100">
-                  {STATUS_CHAMADO.map(s => <option key={s} value={s}>{LABEL_STATUS[s]}</option>)}
-                </select>
-              </div>
-            )}
-
-            {/* Aluno */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="text-[10px] font-black uppercase text-slate-500">Aluno / Destinatário</label>
-                <label className="flex items-center gap-1.5 text-[10px] font-bold text-purple-600 cursor-pointer">
-                  <input type="checkbox" checked={todoInstituto} onChange={e => {
-                    setTodoInstituto(e.target.checked);
-                    if (e.target.checked) { upd('aluno_id', ''); upd('aluno_nome', 'Todo o Instituto'); setAlunoSearch(''); }
-                    else { upd('aluno_nome', ''); }
-                  }} className="accent-purple-600" />
-                  Todo o Instituto
-                </label>
-              </div>
-              {!todoInstituto && (
-                <>
-                  <input value={alunoSearch} onChange={e => setAlunoSearch(e.target.value)} placeholder="Buscar aluno..."
-                    className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 dark:bg-slate-800 dark:text-slate-100" />
-                  {alunoSearch.trim() && (
-                    <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden max-h-40 overflow-y-auto">
-                      {alunosFiltrados.map(a => (
-                        <button key={a.id} onClick={() => {
-                          const turma = turmas.find(t => a.turmas?.some((ta: any) => ta.id === t.id));
-                          upd('aluno_id', a.id); upd('aluno_nome', a.nome_completo);
-                          if (turma) { upd('turma_id', turma.id); upd('turma_nome', turma.nome); }
-                          setAlunoSearch(a.nome_completo);
-                        }}
-                          className="w-full text-left px-3 py-2 text-xs hover:bg-purple-50 dark:hover:bg-purple-950 border-b border-slate-100 dark:border-slate-700 last:border-0 dark:text-slate-200">
-                          <span className="font-bold">{a.nome_completo}</span>
-                          {a.turma_nome && <span className="text-slate-400 ml-2">· {a.turma_nome}</span>}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </>
-              )}
-              {(form.aluno_id || todoInstituto) && (
-                <p className="text-[10px] text-purple-600 font-bold">
-                  {todoInstituto ? '🏫 Todo o Instituto' : `Vinculado: ${form.aluno_nome}`}
-                </p>
-              )}
-            </div>
-
-            {/* Fila */}
-            {filas.length > 0 && (
-              <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-slate-500">Fila de Atendimento</label>
-                <select value={form.fila_nome} onChange={e => upd('fila_nome', e.target.value)}
-                  className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white dark:bg-slate-800 dark:text-slate-100">
-                  <option value="">Sem fila específica</option>
-                  {filas.map(f => (
-                    <option key={f.id} value={f.nome}>
-                      {f.nome} (SLA: {f.sla_horas_resolucao}h)
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {/* Responsável */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="text-[10px] font-black uppercase text-slate-500">Responsável pelo Atendimento</label>
-                <div className="flex gap-1">
-                  {(['usuario', 'equipe'] as const).map(m => (
-                    <button key={m} onClick={() => setModoResponsavel(m)}
-                      className={`text-[9px] font-black px-2 py-0.5 rounded-full transition-colors ${modoResponsavel === m ? 'bg-purple-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>
-                      {m === 'usuario' ? 'Usuário' : 'Equipe'}
-                    </button>
-                  ))}
+              {/* Tipo + Prioridade */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase text-slate-500">Tipo</label>
+                  <select value={form.tipo} onChange={e => upd('tipo', e.target.value)}
+                    className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white dark:bg-slate-800 dark:text-slate-100">
+                    {TIPOS_CHAMADO.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase text-slate-500">Prioridade</label>
+                  <select value={form.prioridade} onChange={e => upd('prioridade', e.target.value)}
+                    className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white dark:bg-slate-800 dark:text-slate-100">
+                    {PRIO_CHAMADO.map(p => <option key={p} value={p}>{LABEL_PRIO[p]}</option>)}
+                  </select>
                 </div>
               </div>
-              {modoResponsavel === 'usuario' ? (
-                <select value={form.responsavel_nome} onChange={e => upd('responsavel_nome', e.target.value)}
-                  className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white dark:bg-slate-800 dark:text-slate-100">
-                  <option value="">Selecione um usuário...</option>
-                  {responsaveis.map(r => (
-                    <option key={r.id} value={r.nome}>{r.nome} — {ROLE_LABEL[r.role] ?? r.role}</option>
-                  ))}
-                </select>
-              ) : (
-                <select value={form.responsavel_nome} onChange={e => upd('responsavel_nome', e.target.value)}
-                  className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white dark:bg-slate-800 dark:text-slate-100">
-                  <option value="">Selecione uma equipe...</option>
-                  {EQUIPES.map(eq => <option key={eq} value={eq}>{eq}</option>)}
-                </select>
+              {/* Status (edit only) */}
+              {editando && (
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase text-slate-500">Status</label>
+                  <select value={form.status} onChange={e => upd('status', e.target.value)}
+                    className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white dark:bg-slate-800 dark:text-slate-100">
+                    {STATUS_CHAMADO.map(s => <option key={s} value={s}>{LABEL_STATUS[s]}</option>)}
+                  </select>
+                </div>
               )}
-            </div>
-
-            {/* Descrição */}
-            <div className="space-y-1">
-              <label className="text-[10px] font-black uppercase text-slate-500">Descrição</label>
-              <textarea value={form.descricao} onChange={e => upd('descricao', e.target.value)} rows={3}
-                className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 dark:bg-slate-800 dark:text-slate-100 resize-none" />
-            </div>
-
-            {/* Observações */}
-            <div className="space-y-1">
-              <label className="text-[10px] font-black uppercase text-slate-500">Observações / Histórico</label>
-              <textarea value={form.observacoes} onChange={e => upd('observacoes', e.target.value)} rows={3}
-                className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 dark:bg-slate-800 dark:text-slate-100 resize-none" />
-            </div>
-
-            <div className="flex gap-2 justify-end pt-2">
-              <button onClick={() => setShowModal(false)}
-                className="px-4 py-2 text-xs font-black rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 dark:text-slate-300">
-                Cancelar
-              </button>
-              <button onClick={salvar} disabled={salvando || !form.titulo.trim()}
-                className="px-4 py-2 text-xs font-black rounded-xl bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-60 transition-colors">
-                {salvando ? 'Salvando...' : editando ? 'Salvar' : 'Criar Chamado'}
-              </button>
+              {/* Aluno */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-black uppercase text-slate-500">Aluno / Destinatário</label>
+                  <label className="flex items-center gap-1.5 text-[10px] font-bold text-purple-600 cursor-pointer">
+                    <input type="checkbox" checked={todoInstituto} onChange={e => { setTodoInstituto(e.target.checked); if (e.target.checked) { upd('aluno_id', ''); upd('aluno_nome', 'Todo o Instituto'); setAlunoSearch(''); } else { upd('aluno_nome', ''); } }} className="accent-purple-600" />
+                    Todo o Instituto
+                  </label>
+                </div>
+                {!todoInstituto && (
+                  <>
+                    <input value={alunoSearch} onChange={e => setAlunoSearch(e.target.value)} placeholder="Buscar aluno..."
+                      className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 dark:bg-slate-800 dark:text-slate-100" />
+                    {alunoSearch.trim() && (
+                      <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden max-h-40 overflow-y-auto">
+                        {alunosFiltrados.map(a => (
+                          <button key={a.id} onClick={() => { const turma = turmas.find(t => a.turmas?.some((ta: any) => ta.id === t.id)); upd('aluno_id', a.id); upd('aluno_nome', a.nome_completo); if (turma) { upd('turma_id', turma.id); upd('turma_nome', turma.nome); } setAlunoSearch(a.nome_completo); }}
+                            className="w-full text-left px-3 py-2 text-xs hover:bg-purple-50 dark:hover:bg-purple-950 border-b border-slate-100 dark:border-slate-700 last:border-0 dark:text-slate-200">
+                            <span className="font-bold">{a.nome_completo}</span>
+                            {a.turma_nome && <span className="text-slate-400 ml-2">· {a.turma_nome}</span>}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+              {/* Fila */}
+              {filas.length > 0 && (
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase text-slate-500">Fila de Atendimento</label>
+                  <select value={form.fila_nome} onChange={e => upd('fila_nome', e.target.value)}
+                    className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white dark:bg-slate-800 dark:text-slate-100">
+                    <option value="">Sem fila específica</option>
+                    {filas.map(f => <option key={f.id} value={f.nome}>{f.nome} (SLA: {f.sla_horas_resolucao}h)</option>)}
+                  </select>
+                </div>
+              )}
+              {/* Responsável */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-black uppercase text-slate-500">Responsável</label>
+                  <div className="flex gap-1">
+                    {(['usuario', 'equipe'] as const).map(m => (
+                      <button key={m} onClick={() => setModoResponsavel(m)}
+                        className={`text-[9px] font-black px-2 py-0.5 rounded-full transition-colors ${modoResponsavel === m ? 'bg-purple-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>
+                        {m === 'usuario' ? 'Usuário' : 'Equipe'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {modoResponsavel === 'usuario' ? (
+                  <select value={form.responsavel_nome} onChange={e => upd('responsavel_nome', e.target.value)}
+                    className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white dark:bg-slate-800 dark:text-slate-100">
+                    <option value="">Selecione...</option>
+                    {responsaveis.map(r => <option key={r.id} value={r.nome}>{r.nome} — {ROLE_LABEL[r.role] ?? r.role}</option>)}
+                  </select>
+                ) : (
+                  <select value={form.responsavel_nome} onChange={e => upd('responsavel_nome', e.target.value)}
+                    className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white dark:bg-slate-800 dark:text-slate-100">
+                    <option value="">Selecione...</option>
+                    {EQUIPES.map(eq => <option key={eq} value={eq}>{eq}</option>)}
+                  </select>
+                )}
+              </div>
+              {/* Descrição + Observações */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase text-slate-500">Descrição</label>
+                <textarea value={form.descricao} onChange={e => upd('descricao', e.target.value)} rows={3}
+                  className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 dark:bg-slate-800 dark:text-slate-100 resize-none" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase text-slate-500">Observações</label>
+                <textarea value={form.observacoes} onChange={e => upd('observacoes', e.target.value)} rows={3}
+                  className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 dark:bg-slate-800 dark:text-slate-100 resize-none" />
+              </div>
+              <div className="flex gap-2 justify-end pt-2">
+                <button onClick={() => setShowModal(false)} className="px-4 py-2 text-xs font-black rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 dark:text-slate-300">Cancelar</button>
+                <button onClick={salvar} disabled={salvando || !form.titulo.trim()} className="px-4 py-2 text-xs font-black rounded-xl bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-60">
+                  {salvando ? 'Salvando...' : editando ? 'Salvar' : 'Criar Chamado'}
+                </button>
+              </div>
             </div>
           </div>
-        </Modal>
+        </div>
       )}
 
-      {/* Acompanhamento */}
-      {acampChamado && (
-        <AcompModal
-          key={acampChamado.id}
-          chamado={acampChamado}
-          onClose={() => setAcampChamado(null)}
-          onAdded={onAcompAdded}
-        />
-      )}
-
-      {/* Satisfação pós-resolução */}
-      {satisfacaoChamado && (
-        <SatisfacaoModal
-          chamado={satisfacaoChamado}
-          onClose={() => setSatisfacaoChamado(null)}
-          onSaved={carregar}
-        />
-      )}
-
-      {/* Base de Conhecimento */}
-      {showKB && (
-        <BaseConhecimentoPanel
-          onClose={() => setShowKB(false)}
-          canWrite={canWrite}
-        />
-      )}
+      {acampChamado && <AcompModal key={acampChamado.id} chamado={acampChamado} onClose={() => setAcampChamado(null)} onAdded={carregar} />}
+      {satisfacaoChamado && <SatisfacaoModal chamado={satisfacaoChamado} onClose={() => setSatisfacaoChamado(null)} onSaved={carregar} />}
+      {showKB && <BaseConhecimentoPanel onClose={() => setShowKB(false)} canWrite={canWrite} />}
     </div>
   );
 }

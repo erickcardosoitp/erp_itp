@@ -308,7 +308,11 @@ export class AppModule implements OnModuleInit {
           ADD COLUMN IF NOT EXISTS satisfacao  INT,
           ADD COLUMN IF NOT EXISTS fila_nome   VARCHAR
       `);
-      this.logger.log('✅ GLPI: chamados_filas, chamados_conhecimento e colunas satisfacao/fila_nome garantidos');
+      await this.dataSource.query(`
+        ALTER TABLE chamados_academicos
+          ADD COLUMN IF NOT EXISTS origem VARCHAR(50)
+      `);
+      this.logger.log('✅ GLPI: chamados_filas, chamados_conhecimento e colunas satisfacao/fila_nome/origem garantidos');
 
       // Migrations idempotentes — executam na inicialização em produção ou dev
       await this.dataSource.query(`ALTER TABLE funcionarios ADD COLUMN IF NOT EXISTS matricula TEXT UNIQUE`);

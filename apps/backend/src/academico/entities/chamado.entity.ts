@@ -61,6 +61,10 @@ export class ChamadoAcademico {
   @Column({ name: 'fechamento', type: 'timestamptz', nullable: true })
   fechamento: Date | null;
 
+  /** 'site' | null — identifica chamados originados do site institucional */
+  @Column({ type: 'varchar', nullable: true })
+  origem: string | null;
+
   @CreateDateColumn({ name: 'created_at' })
   created_at: Date;
 
