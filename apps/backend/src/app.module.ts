@@ -734,21 +734,6 @@ export class AppModule implements OnModuleInit {
         )
       `);
       await this.dataSource.query(`
-        CREATE TABLE IF NOT EXISTS gente_ponto (
-          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-          colaborador_id UUID NOT NULL,
-          tipo TEXT NOT NULL,
-          data_hora TIMESTAMPTZ NOT NULL DEFAULT now(),
-          latitude NUMERIC(10,7),
-          longitude NUMERIC(10,7),
-          distancia_metros NUMERIC,
-          dentro_area BOOLEAN,
-          observacao TEXT,
-          registrado_por TEXT DEFAULT 'system',
-          created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-        )
-      `);
-      await this.dataSource.query(`
         CREATE TABLE IF NOT EXISTS gente_recibos (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           colaborador_id UUID NOT NULL,
@@ -856,7 +841,6 @@ export class AppModule implements OnModuleInit {
         ALTER TABLE IF EXISTS gente_colaboradores
           ADD COLUMN IF NOT EXISTS jornada_flexivel BOOLEAN NOT NULL DEFAULT false
       `);
-      await this.dataSource.query(`ALTER TABLE gente_ponto ADD COLUMN IF NOT EXISTS assinatura TEXT`);
       await this.dataSource.query(`ALTER TABLE gente_colaboradores ADD COLUMN IF NOT EXISTS horas_dia_flex INT`);
       await this.dataSource.query(`ALTER TABLE gente_colaboradores ADD COLUMN IF NOT EXISTS horario_flexivel_semana JSONB`);
       await this.dataSource.query(`

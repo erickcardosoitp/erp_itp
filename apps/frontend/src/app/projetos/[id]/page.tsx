@@ -120,6 +120,7 @@ export default function ProjetoDashboard() {
   const [modoExterno,    setModoExterno]    = useState(false);
   const [formInscricao,  setFormInscricao]  = useState<Partial<Inscricao> & { email_responsavel?: string }>({});
   const [salvando,       setSalvando]       = useState(false);
+  const [buscandoCEP,    setBuscandoCEP]    = useState(false);
 
   // ITP: busca de aluno
   const [buscaAluno,      setBuscaAluno]      = useState('');
@@ -227,6 +228,26 @@ export default function ProjetoDashboard() {
     setReinscrFound(null);
     toast.success('Dados da inscrição anterior preenchidos');
   };
+
+  // ── CEP ───────────────────────────────────────────────────────────────────
+
+  async function buscarCEP(cep: string) {
+    const raw = cep.replace(/\D/g, '');
+    if (raw.length !== 8) return;
+    setBuscandoCEP(true);
+    try {
+      const r = await fetch(`https://viacep.com.br/ws/${raw}/json/`);
+      const d = await r.json();
+      if (!d.erro) {
+        setFormInscricao(prev => ({
+          ...prev,
+          logradouro: d.logradouro || prev.logradouro,
+          complemento: d.complemento || prev.complemento,
+        }));
+      }
+    } catch {}
+    setBuscandoCEP(false);
+  }
 
   // ── Inscrição ITP ─────────────────────────────────────────────────────────
 
@@ -935,8 +956,9 @@ export default function ProjetoDashboard() {
                 <div className="grid grid-cols-3 gap-3">
                   <InputField label="CEP">
                     <input value={formInscricao.cep ?? ''}
-                      onChange={e => setFormInscricao(p => ({ ...p, cep: e.target.value }))}
+                      onChange={e => { setFormInscricao(p => ({ ...p, cep: e.target.value })); buscarCEP(e.target.value); }}
                       placeholder="00000-000" className={inputCls}/>
+                    {buscandoCEP && <p className="text-xs text-slate-400 mt-1">Buscando CEP...</p>}
                   </InputField>
                   <div className="col-span-2">
                     <InputField label="Logradouro">

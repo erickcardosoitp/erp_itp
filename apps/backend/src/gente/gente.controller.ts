@@ -189,64 +189,6 @@ export class GenteController {
   @ModuloPerm('gente', 'excluir')
   deletarRecibo(@Param('id') id: string) { return this.svc.deletarRecibo(id); }
 
-  // ── Ponto (DESCONTINUADO — dados históricos preservados, UI removida) ──────
-
-  @Get('ponto')
-  @ModuloPerm('gente', 'visualizar')
-  listarPonto(@Query('colaborador_id') c?: string, @Query('data_inicio') i?: string, @Query('data_fim') f?: string) {
-    return this.svc.listarPonto(c, i, f);
-  }
-
-  @Post('ponto')
-  @ModuloPerm('gente', 'incluir')
-  registrarPonto(@Body() dto: any, @Request() req: any) { return this.svc.registrarPonto(dto, req.user?.nome ?? 'gestor'); }
-
-  @Get('ponto/alertas')
-  @ModuloPerm('gente', 'visualizar')
-  alertasAusencia() { return this.svc.alertasAusencia(); }
-
-  @Get('ponto/relatorio')
-  @ModuloPerm('gente', 'visualizar')
-  relatorioPonto(@Query('data_inicio') data_inicio: string, @Query('data_fim') data_fim: string) {
-    const inicio = data_inicio || new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0];
-    const fim = data_fim || new Date().toISOString().split('T')[0];
-    return this.svc.relatorioPonto(inicio, fim);
-  }
-
-  @Get('ponto/controle')
-  @ModuloPerm('gente', 'visualizar')
-  controlePresencaMes(@Query('mes') mes?: string) {
-    return this.svc.controlePresencaMes(mes || new Date().toISOString().slice(0, 7));
-  }
-
-  @Delete('ponto/:id')
-  @ModuloPerm('gente', 'excluir')
-  deletarPonto(@Param('id') id: string) { return this.svc.deletarPonto(id); }
-
-  @Public()
-  @Get('ponto/externo/verificar')
-  verificarExterno(@Query('token') token: string, @Query('identificador') identificador: string) {
-    return this.svc.verificarColaboradorExterno(token, identificador);
-  }
-
-  @Public()
-  @Post('ponto/externo')
-  pontoExterno(@Body() body: any) {
-    return this.svc.registrarPontoExterno(body.token, body.identificador, body.tipo, body.latitude, body.longitude, body.observacao, body.assinatura);
-  }
-
-  @Public()
-  @Get('ponto/externo/historico')
-  historicoExterno(@Query('token') token: string, @Query('colaborador_id') colaborador_id: string) {
-    return this.svc.historicoExterno(colaborador_id, 60);
-  }
-
-  @Public()
-  @Get('ponto/externo/banco-horas')
-  bancoHorasExterno(@Query('colaborador_id') colaborador_id: string, @Query('mes') mes?: string) {
-    return this.svc.bancoHoras(colaborador_id, mes);
-  }
-
   // ── Folgas ────────────────────────────────────────────────────────────────
 
   @Get('folgas')
@@ -409,12 +351,6 @@ export class GenteController {
   @Delete('feriados/:id')
   @ModuloPerm('gente', 'excluir')
   deletarFeriado(@Param('id') id: string) { return this.svc.deletarFeriado(id); }
-
-  // ── Debug alertas (temporário) ────────────────────────────────────────────
-
-  @Get('debug/alertas')
-  @Public()
-  debugAlertas() { return this.svc.debugAlertas(); }
 
   // ── Pagamentos de Passagem ────────────────────────────────────────────────
 

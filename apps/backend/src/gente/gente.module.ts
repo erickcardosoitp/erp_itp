@@ -4,7 +4,6 @@ import { GenteController } from './gente.controller';
 import { GenteService } from './gente.service';
 import { MovimentacaoFinanceira } from '../financeiro/entities/movimentacao-financeira.entity';
 import { GenteColaborador } from './entities/gente-colaborador.entity';
-import { GentePonto } from './entities/gente-ponto.entity';
 import { GenteRecibo } from './entities/gente-recibo.entity';
 import { GenteVale } from './entities/gente-vale.entity';
 import { GenteAdvertencia } from './entities/gente-advertencia.entity';
@@ -22,7 +21,7 @@ import { GentePagamentoPassagem } from './entities/gente-pagamento-passagem.enti
 @Module({
   imports: [
     TypeOrmModule.forFeature([
-      GenteColaborador, GentePonto, GenteRecibo, GenteVale,
+      GenteColaborador, GenteRecibo, GenteVale,
       GenteAdvertencia, GenteSuspensao, GenteFalta,
       GenteCodigoAjuda, GenteColaboradorCodigo, GenteColaboradorLocal,
       GenteFolgaSolicitacao, GenteTrabalhoExterno,
