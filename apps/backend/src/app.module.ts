@@ -312,11 +312,6 @@ export class AppModule implements OnModuleInit {
         ALTER TABLE chamados_academicos
           ADD COLUMN IF NOT EXISTS origem VARCHAR(50)
       `);
-      await this.dataSource.query(`
-        UPDATE chamados_academicos
-        SET origem = 'site'
-        WHERE tipo = 'Suporte' AND origem IS NULL
-      `);
       this.logger.log('✅ GLPI: chamados_filas, chamados_conhecimento e colunas satisfacao/fila_nome/origem garantidos');
 
       // Migrations idempotentes — executam na inicialização em produção ou dev
