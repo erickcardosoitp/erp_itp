@@ -58,6 +58,10 @@ export class ChamadosController {
   @ModuloPerm('chamados', 'visualizar')
   listar(@Query() q: any) { return this.svc.listarChamados(q); }
 
+  @Get(':id')
+  @ModuloPerm('chamados', 'visualizar')
+  buscarPorId(@Param('id') id: string) { return this.svc.buscarChamadoPorId(id); }
+
   @Post()
   @ModuloPerm('chamados', 'incluir')
   criar(@Body() dto: any, @Req() req: any) {

@@ -1763,6 +1763,12 @@ export class AcademicoService {
     return salvo;
   }
 
+  async buscarChamadoPorId(id: string) {
+    const c = await this.chamadoRepo.findOneBy({ id });
+    if (!c) throw new NotFoundException('Chamado não encontrado');
+    return c;
+  }
+
   async editarChamado(id: string, dto: Partial<ChamadoAcademico>) {
     const chamado = await this.chamadoRepo.findOneBy({ id });
     if (!chamado) throw new NotFoundException('Chamado não encontrado');

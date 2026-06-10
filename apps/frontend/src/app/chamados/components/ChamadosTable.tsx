@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
-import { NotebookPen, Edit3, Trash2, ChevronUp, ChevronDown, User, Tag, Globe, Users } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { ChevronUp, ChevronDown, User, Tag, Globe, Users } from 'lucide-react';
 import {
   Chamado, COR_STATUS, PRIO_STRIP_BG, PRIO_TEXT, LABEL_STATUS, LABEL_PRIO,
   getSLAState, getSLATextClass, fmtRelative,
@@ -78,6 +79,7 @@ function OrigemBadge({ origem }: { origem?: string | null }) {
 }
 
 export function ChamadosTable({ chamados, canWrite, onAtender, onResolver, onAcomp, onEditar, onDeletar }: Props) {
+  const router = useRouter();
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'abertura', dir: 'desc' });
 
   const toggleSort = (key: SortKey) =>
@@ -103,7 +105,7 @@ export function ChamadosTable({ chamados, canWrite, onAtender, onResolver, onAco
 
   return (
     <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800 overflow-x-auto">
-      <table className="w-full text-xs min-w-[1240px]">
+      <table className="w-full text-xs min-w-[1100px]">
         <thead className="bg-slate-50/70 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800">
           <tr>
             <th className="w-1 p-0" />
@@ -131,14 +133,14 @@ export function ChamadosTable({ chamados, canWrite, onAtender, onResolver, onAco
             <th className="px-3 py-2 text-left">
               <SortBtn active={sort.key === 'updated_at'} dir={sort.dir} onClick={() => toggleSort('updated_at')}>Últ. atualização</SortBtn>
             </th>
-            <th className="px-2 py-2 w-8" />
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-50 dark:divide-slate-800/60">
           {sorted.map(c => {
             const sla = getSLAState(c);
             return (
-              <tr key={c.id} className="group hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+              <tr key={c.id} onClick={() => router.push(`/chamados/${c.id}`)}
+                className="group hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors cursor-pointer">
                 {/* Priority strip */}
                 <td className="p-0 w-1">
                   <div className={`w-1 h-[52px] ${PRIO_STRIP_BG[c.prioridade] ?? 'bg-slate-200'}`} />
@@ -218,40 +220,6 @@ export function ChamadosTable({ chamados, canWrite, onAtender, onResolver, onAco
                   <DataCell iso={c.updated_at} />
                 </td>
 
-                {/* Actions */}
-                <td className="px-2 py-2.5">
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    {c.status !== 'resolvido' && c.status !== 'em_andamento' && (
-                      <button onClick={() => onAtender(c.id)}
-                        className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-amber-50 text-amber-600 hover:bg-amber-100 border border-amber-200 whitespace-nowrap">
-                        Atender
-                      </button>
-                    )}
-                    {c.status !== 'resolvido' && (
-                      <button onClick={() => onResolver(c)}
-                        className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border border-emerald-200 whitespace-nowrap">
-                        Resolver
-                      </button>
-                    )}
-                    <button
-                      onClick={() => onAcomp(c)}
-                      title={`${c._total_acomp ?? 0} acompanhamentos`}
-                      className={`p-1 rounded transition-colors ${(c._total_acomp ?? 0) > 0 ? 'text-purple-500 bg-purple-50' : 'text-slate-400 hover:text-purple-500 hover:bg-purple-50'}`}
-                    >
-                      <NotebookPen size={11} />
-                    </button>
-                    {canWrite && (
-                      <>
-                        <button onClick={() => onEditar(c)} className="p-1 rounded text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
-                          <Edit3 size={11} />
-                        </button>
-                        <button onClick={() => onDeletar(c.id)} className="p-1 rounded text-slate-300 hover:text-red-400">
-                          <Trash2 size={11} />
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </td>
               </tr>
             );
           })}
