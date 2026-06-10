@@ -6,6 +6,7 @@ import { JwtService } from '@nestjs/jwt';
 import { EmailService } from '../email.service';
 import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
+import { SupabaseService } from '../modules/supabase/supabase.service';
 
 @Injectable()
 export class AuthService {
@@ -16,6 +17,7 @@ export class AuthService {
     private readonly usuarioRepository: Repository<Usuario>,
     private readonly jwtService: JwtService,
     private readonly emailService: EmailService,
+    private readonly supabase: SupabaseService,
   ) {}
 
   /**
@@ -163,7 +165,8 @@ export class AuthService {
     }
 
     const { password, ...usuarioSemSenha } = usuario;
-    return usuarioSemSenha;
+    const fotoResolvida = await this.supabase.resolveUrl(usuarioSemSenha.fotoUrl);
+    return { ...usuarioSemSenha, fotoUrl: fotoResolvida };
   }
 
   /**
@@ -172,7 +175,7 @@ export class AuthService {
   async updateProfile(userId: string, data: { nome?: string; fotoUrl?: string }) {
     const usuario = await this.usuarioRepository.findOne({
       where: { id: userId },
-      relations: ['grupo'], 
+      relations: ['grupo'],
     });
 
     if (!usuario) {
@@ -180,14 +183,27 @@ export class AuthService {
     }
 
     if (data.nome) usuario.nome = data.nome;
-    if (data.fotoUrl) usuario.fotoUrl = data.fotoUrl;
+    if (data.fotoUrl) {
+      if (data.fotoUrl.startsWith('data:image/')) {
+        const match = data.fotoUrl.match(/^data:([^;]+);base64,(.+)$/s);
+        if (match) {
+          const mime = match[1];
+          const buffer = Buffer.from(match[2], 'base64');
+          const ext = mime.includes('png') ? 'png' : 'jpg';
+          usuario.fotoUrl = await this.supabase.upload(buffer, `usuarios/${userId}.${ext}`, mime);
+        }
+      } else {
+        usuario.fotoUrl = data.fotoUrl;
+      }
+    }
 
     await this.usuarioRepository.save(usuario);
     
     this.logger.log(`Perfil atualizado: ${usuario.matricula}`);
 
     const { password, ...usuarioSemSenha } = usuario;
-    return usuarioSemSenha;
+    const fotoResolvida = await this.supabase.resolveUrl(usuarioSemSenha.fotoUrl);
+    return { ...usuarioSemSenha, fotoUrl: fotoResolvida };
   }
 
   /**

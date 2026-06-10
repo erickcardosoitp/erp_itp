@@ -23,18 +23,20 @@ export class SupabaseService {
     }
 
     let processedBuffer = buffer;
+    let actualMimetype = mimetype;
     if (mimetype.startsWith('image/')) {
       processedBuffer = await sharp(buffer)
         .rotate()
         .resize({ width: 1920, withoutEnlargement: true })
         .jpeg({ quality: 85 })
         .toBuffer();
+      actualMimetype = 'image/jpeg';
     }
 
     const { error } = await this.client.storage
       .from(this.bucket)
       .upload(path, processedBuffer, {
-        contentType: 'image/jpeg',
+        contentType: actualMimetype,
         upsert: true,
       });
 
@@ -44,6 +46,19 @@ export class SupabaseService {
     }
 
     return path;
+  }
+
+  /** Resolve storage path or passthrough if already a full URL / data URL */
+  async resolveUrl(urlOrPath: string | null | undefined, expiresIn = 3600): Promise<string | null> {
+    if (!urlOrPath) return null;
+    if (urlOrPath.startsWith('data:') || urlOrPath.startsWith('http://') || urlOrPath.startsWith('https://')) {
+      return urlOrPath;
+    }
+    try {
+      return await this.getSignedUrl(urlOrPath, expiresIn);
+    } catch {
+      return null;
+    }
   }
 
   async getSignedUrl(path: string, expiresIn = 3600): Promise<string> {

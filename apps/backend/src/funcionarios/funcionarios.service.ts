@@ -5,6 +5,7 @@ import { Funcionario } from '../academico/entities/funcionario.entity';
 import { Usuario } from '../usuarios/usuario.entity';
 import { EmailService } from '../email.service';
 import { NotificacoesService } from '../notificacoes/notificacoes.service';
+import { SupabaseService } from '../modules/supabase/supabase.service';
 
 @Injectable()
 export class FuncionariosService {
@@ -16,10 +17,23 @@ export class FuncionariosService {
     public readonly emailService: EmailService,
     private readonly notificacoesService: NotificacoesService,
     private readonly dataSource: DataSource,
+    private readonly supabase: SupabaseService,
   ) {}
 
-  listar() {
-    return this.funcionarioRepo.find({ order: { nome: 'ASC' } });
+  async listar() {
+    const rows = await this.funcionarioRepo.find({ order: { nome: 'ASC' } });
+    return Promise.all(rows.map(async f => ({ ...f, foto: await this.supabase.resolveUrl(f.foto) })));
+  }
+
+  async uploadFoto(id: string, base64DataUrl: string): Promise<Funcionario> {
+    const match = base64DataUrl.match(/^data:([^;]+);base64,(.+)$/s);
+    if (!match) throw new BadRequestException('Formato inválido');
+    const mime = match[1];
+    const buffer = Buffer.from(match[2], 'base64');
+    const ext = mime.includes('png') ? 'png' : 'jpg';
+    const path = `funcionarios/${id}.${ext}`;
+    const storagePath = await this.supabase.upload(buffer, path, mime);
+    return this.editar(id, { foto: storagePath } as any);
   }
 
   async criar(dto: Partial<Funcionario>): Promise<Funcionario> {

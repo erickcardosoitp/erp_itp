@@ -14,6 +14,7 @@ import { Aluno } from '../alunos/aluno.entity';
 import { NotificacoesService } from '../notificacoes/notificacoes.service';
 import { EmailService } from '../email.service';
 import { InjectDataSource } from '@nestjs/typeorm';
+import { SupabaseService } from '../modules/supabase/supabase.service';
 
 @Injectable()
 export class AcademicoService {
@@ -33,6 +34,7 @@ export class AcademicoService {
     private readonly notificacoes: NotificacoesService,
     private readonly emailService: EmailService,
     @InjectDataSource()                   private readonly dataSource: DataSource,
+    private readonly supabase: SupabaseService,
   ) {}
 
   // ── UTILITÁRIOS ───────────────────────────────────────────────────────────
@@ -430,7 +432,7 @@ export class AcademicoService {
          ORDER BY created_at DESC LIMIT 1`,
         [inscricao_id, id],
       );
-      foto_url = fotoRow?.url_arquivo ?? null;
+      foto_url = await this.supabase.resolveUrl(fotoRow?.url_arquivo);
     } catch { /* sem foto */ }
 
     // Fallback: preenche campos vazios do aluno com dados da inscrição original
@@ -594,7 +596,7 @@ export class AcademicoService {
 
   async listarAlunosDaTurma(turmaId: string) {
     this.logger.log(`Listando alunos da turma id=${turmaId}`);
-    return this.dataSource.query(
+    const rows = await this.dataSource.query(
       `SELECT ta.id::text AS vinculo_id, ta.status AS vinculo_status, ta.created_at AS vinculado_em,
               a.id::text AS id, a.nome_completo, a.cpf, a.celular, a.email,
               a.data_nascimento, a.ativo, a.numero_matricula,
@@ -609,6 +611,9 @@ export class AcademicoService {
        WHERE ta.turma_id::text = $1 AND ta.status = 'ativo' AND a.ativo = true
        ORDER BY a.nome_completo ASC`,
       [turmaId],
+    );
+    return Promise.all(
+      rows.map(async (r: any) => ({ ...r, foto_url: await this.supabase.resolveUrl(r.foto_url) }))
     );
   }
 

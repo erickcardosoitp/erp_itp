@@ -14,6 +14,7 @@ import { Curso } from '../academico/entities/curso.entity';
 import { Turma } from '../academico/entities/turma.entity';
 import { AcademicoService } from '../academico/academico.service';
 import { NotificacoesService } from '../notificacoes/notificacoes.service';
+import { SupabaseService } from '../modules/supabase/supabase.service';
 
 
 /** Calcula a idade em anos completos a partir de uma data de nascimento (string ISO ou Date). */
@@ -73,6 +74,7 @@ export class MatriculasService {
     private readonly turmaAlunoRepository: Repository<TurmaAluno>,
     private readonly academicoService: AcademicoService,
     private readonly notificacoes: NotificacoesService,
+    private readonly supabase: SupabaseService,
   ) {}
 
   /**
@@ -515,7 +517,8 @@ export class MatriculasService {
       where: { inscricao_id: id, tipo: TipoDocumento.FOTO_ALUNO },
       order: { createdAt: 'DESC' },
     });
-    return fotoDoc ? { ...inscricao, foto_url: fotoDoc.url_arquivo } : inscricao;
+    const fotoUrl = fotoDoc ? await this.supabase.resolveUrl(fotoDoc.url_arquivo) : null;
+    return fotoUrl ? { ...inscricao, foto_url: fotoUrl } : inscricao;
   }
 
   /**
@@ -1095,8 +1098,10 @@ export class MatriculasService {
       }
     }
 
-    // Armazena como data URL base64 (compatível com ambiente serverless)
-    const urlArquivo = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
+    // Upload para Supabase Storage
+    const ext = file.mimetype === 'application/pdf' ? 'pdf' : file.mimetype.includes('png') ? 'png' : 'jpg';
+    const storagePath = `inscricoes/${inscricao.id}/${tipo}.${ext}`;
+    const urlArquivo = await this.supabase.upload(file.buffer, storagePath, file.mimetype);
 
     const doc = this.documentoRepository.create({
       inscricao_id: inscricao.id,
@@ -1140,8 +1145,14 @@ export class MatriculasService {
     const tiposEnviados = documentos.map(d => d.tipo);
     const tiposObrigatorios = getTiposObrigatorios(maior18);
     const obrigatoriosPendentes = tiposObrigatorios.filter(t => !tiposEnviados.includes(t));
+    const documentosResolvidos = await Promise.all(
+      documentos.map(async d => ({
+        ...d,
+        url_arquivo: await this.supabase.resolveUrl(d.url_arquivo),
+      })),
+    );
     return {
-      documentos,
+      documentos: documentosResolvidos,
       tipos_enviados: tiposEnviados,
       obrigatorios_pendentes: obrigatoriosPendentes,
       completo: obrigatoriosPendentes.length === 0,
@@ -1181,7 +1192,9 @@ export class MatriculasService {
       if (qtdExtra >= 5) throw new BadRequestException('Limite de 5 documentos extras atingido.');
     }
 
-    const urlArquivo = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
+    const ext2 = file.mimetype === 'application/pdf' ? 'pdf' : file.mimetype.includes('png') ? 'png' : 'jpg';
+    const storagePath2 = `inscricoes/${inscricaoId}/${tipo}.${ext2}`;
+    const urlArquivo = await this.supabase.upload(file.buffer, storagePath2, file.mimetype);
 
     const doc = this.documentoRepository.create({
       inscricao_id: inscricaoId,

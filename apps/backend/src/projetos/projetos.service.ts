@@ -59,8 +59,12 @@ export class ProjetosService {
 
   // ── Equipes ───────────────────────────────────────────────────────────────
 
-  findEquipes(projeto_id: string) {
-    return this.equipesRepo.find({ where: { projeto_id }, order: { nome: 'ASC' } });
+  async findEquipes(projeto_id: string) {
+    const rows = await this.equipesRepo.find({ where: { projeto_id }, order: { nome: 'ASC' } });
+    return Promise.all(rows.map(async e => ({
+      ...e,
+      imagem_template: await this.supabase.resolveUrl(e.imagem_template),
+    })));
   }
 
   async createEquipe(projeto_id: string, dto: CreateEquipeDto) {

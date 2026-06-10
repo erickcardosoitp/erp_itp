@@ -46,7 +46,7 @@ export class FuncionariosController {
   async uploadFoto(@Param('id') id: string, @Body() body: { foto: string }) {
     if (!body?.foto) throw new BadRequestException('Nenhuma foto enviada.');
     if (!body.foto.startsWith('data:image/')) throw new BadRequestException('Formato inválido. Envie uma imagem em base64.');
-    return this.svc.editar(id, { foto: body.foto } as any);
+    return this.svc.uploadFoto(id, body.foto);
   }
 
   // ── WEBHOOK: Google Forms → Cadastro de Funcionário (rota pública) ────────
