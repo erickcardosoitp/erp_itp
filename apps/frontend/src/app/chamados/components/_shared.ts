@@ -18,7 +18,6 @@ export interface Chamado {
   fechamento?: string | null;
   _total_acomp?: number;
   satisfacao?: number | null;
-  fila_nome?: string | null;
   origem?: string | null;
   created_at: string;
   updated_at: string;
@@ -35,7 +34,6 @@ export interface Acompanhamento {
 export interface Aluno { id: string; nome_completo: string; turma_nome?: string; turmas?: any[]; }
 export interface Turma { id: string; nome: string; }
 export interface Responsavel { id: string; nome: string; role: string; }
-export interface Fila { id: string; nome: string; sla_horas_resposta: number; sla_horas_resolucao: number; }
 export interface Conhecimento {
   id: string; titulo: string; conteudo: string; categoria?: string;
   tags?: string[]; autor_nome?: string; visualizacoes: number; created_at: string;
@@ -87,7 +85,6 @@ export const LABEL_PRIO: Record<string, string> = {
 export const TIPOS_CHAMADO = ['Social', 'Acadêmico', 'Saúde', 'Família', 'Financeiro', 'Gente', 'Suporte', 'TI', 'Outro'];
 export const STATUS_CHAMADO = ['aberto', 'em_andamento', 'resolvido'] as const;
 export const PRIO_CHAMADO = ['baixa', 'normal', 'alta', 'urgente'] as const;
-export const EQUIPES = ['Administração', 'Conselho', 'Presidência', 'Apoio'];
 
 export const ROLE_LABEL: Record<string, string> = {
   admin: 'Admin', prt: 'Presidência', vp: 'VP', drt: 'Diretoria',

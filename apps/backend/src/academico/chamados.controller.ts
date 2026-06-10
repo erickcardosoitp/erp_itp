@@ -20,10 +20,6 @@ export class ChamadosController {
   @ModuloPerm('chamados', 'visualizar')
   stats() { return this.svc.statsChamados(); }
 
-  @Get('filas')
-  @ModuloPerm('chamados', 'visualizar')
-  filas() { return this.svc.listarFilas(); }
-
   // ── Base de Conhecimento ──────────────────────────────────────────────────
 
   @Get('conhecimento')

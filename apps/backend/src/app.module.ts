@@ -314,6 +314,13 @@ export class AppModule implements OnModuleInit {
       `);
       this.logger.log('✅ GLPI: chamados_filas, chamados_conhecimento e colunas satisfacao/fila_nome/origem garantidos');
 
+      // Corrige chamado específico que foi marcado indevidamente como origem=site
+      await this.dataSource.query(`
+        UPDATE chamados_academicos
+        SET origem = NULL
+        WHERE id = 'a2acb211-19b0-4287-ab36-f0156343be9a' AND origem = 'site'
+      `);
+
       // Migrations idempotentes — executam na inicialização em produção ou dev
       await this.dataSource.query(`ALTER TABLE funcionarios ADD COLUMN IF NOT EXISTS matricula TEXT UNIQUE`);
       await this.dataSource.query(`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS matricula TEXT UNIQUE`);

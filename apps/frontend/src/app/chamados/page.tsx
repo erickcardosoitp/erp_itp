@@ -13,7 +13,7 @@ import { ChamadosHeader } from './components/ChamadosHeader';
 import { ChamadosTable } from './components/ChamadosTable';
 import { ChamadosKanban } from './components/ChamadosKanban';
 import type {
-  Chamado, Acompanhamento, Aluno, Turma, Responsavel, Fila, Conhecimento, Stats,
+  Chamado, Acompanhamento, Aluno, Turma, Responsavel, Conhecimento, Stats,
 } from './components/_shared';
 import {
   COR_STATUS, LABEL_STATUS, LABEL_PRIO, TIPOS_CHAMADO, STATUS_CHAMADO,
@@ -359,7 +359,6 @@ export default function ChamadosPage() {
   const [alunos, setAlunos] = useState<Aluno[]>([]);
   const [turmas, setTurmas] = useState<Turma[]>([]);
   const [responsaveis, setResponsaveis] = useState<Responsavel[]>([]);
-  const [filas, setFilas] = useState<Fila[]>([]);
   const [loading, setLoading] = useState(true);
 
   // View & filters
@@ -387,7 +386,7 @@ export default function ChamadosPage() {
   const [form, setForm] = useState({
     titulo: '', descricao: '', tipo: 'Social', prioridade: 'normal', status: 'aberto',
     aluno_id: '', aluno_nome: '', turma_id: '', turma_nome: '',
-    responsavel_nome: '', observacoes: '', fila_nome: '',
+    responsavel_nome: '', observacoes: '',
   });
 
   const carregar = useCallback(async () => {
@@ -414,10 +413,9 @@ export default function ChamadosPage() {
       api.get('/academico/alunos').catch(() => ({ data: [] })),
       api.get('/academico/turmas').catch(() => ({ data: [] })),
       api.get('/chamados/responsaveis').catch(() => ({ data: [] })),
-      api.get('/chamados/filas').catch(() => ({ data: [] })),
-    ]).then(([ra, rt, rr, rf]) => {
+    ]).then(([ra, rt, rr]) => {
       setAlunos(ra.data ?? []); setTurmas(rt.data ?? []);
-      setResponsaveis(rr.data ?? []); setFilas(rf.data ?? []);
+      setResponsaveis(rr.data ?? []);
     });
   }, []);
 
@@ -448,13 +446,13 @@ export default function ChamadosPage() {
 
   function abrirNovo() {
     setEditando(null); setAlunoSearch(''); setTodoInstituto(false); setModoResponsavel('usuario');
-    setForm({ titulo: '', descricao: '', tipo: 'Social', prioridade: 'normal', status: 'aberto', aluno_id: '', aluno_nome: '', turma_id: '', turma_nome: '', responsavel_nome: '', observacoes: '', fila_nome: '' });
+    setForm({ titulo: '', descricao: '', tipo: 'Social', prioridade: 'normal', status: 'aberto', aluno_id: '', aluno_nome: '', turma_id: '', turma_nome: '', responsavel_nome: '', observacoes: '' });
     setShowModal(true);
   }
 
   function abrirEditar(c: Chamado) {
     setEditando(c); setAlunoSearch(c.aluno_nome ?? ''); setTodoInstituto(c.aluno_nome === 'Todo o Instituto'); setModoResponsavel('usuario');
-    setForm({ titulo: c.titulo, descricao: c.descricao ?? '', tipo: c.tipo, prioridade: c.prioridade, status: c.status, aluno_id: c.aluno_id ?? '', aluno_nome: c.aluno_nome ?? '', turma_id: c.turma_id ?? '', turma_nome: c.turma_nome ?? '', responsavel_nome: c.responsavel_nome ?? '', observacoes: c.observacoes ?? '', fila_nome: c.fila_nome ?? '' });
+    setForm({ titulo: c.titulo, descricao: c.descricao ?? '', tipo: c.tipo, prioridade: c.prioridade, status: c.status, aluno_id: c.aluno_id ?? '', aluno_nome: c.aluno_nome ?? '', turma_id: c.turma_id ?? '', turma_nome: c.turma_nome ?? '', responsavel_nome: c.responsavel_nome ?? '', observacoes: c.observacoes ?? '' });
     setShowModal(true);
   }
 
@@ -616,17 +614,6 @@ export default function ChamadosPage() {
                   </>
                 )}
               </div>
-              {/* Fila */}
-              {filas.length > 0 && (
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black uppercase text-slate-500">Fila de Atendimento</label>
-                  <select value={form.fila_nome} onChange={e => upd('fila_nome', e.target.value)}
-                    className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white dark:bg-slate-800 dark:text-slate-100">
-                    <option value="">Sem fila específica</option>
-                    {filas.map(f => <option key={f.id} value={f.nome}>{f.nome} (SLA: {f.sla_horas_resolucao}h)</option>)}
-                  </select>
-                </div>
-              )}
               {/* Responsável */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">

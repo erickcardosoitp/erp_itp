@@ -2035,11 +2035,6 @@ export class AcademicoService {
 
 
 
-  async listarFilas() {
-    return this.dataSource.query(
-      `SELECT * FROM chamados_filas WHERE ativo = true ORDER BY nome ASC`,
-    );
-  }
 
   async listarConhecimento(q?: string) {
     const base = `SELECT * FROM chamados_conhecimento WHERE ativo = true`;

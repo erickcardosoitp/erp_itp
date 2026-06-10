@@ -10,10 +10,10 @@ import api from '@/services/api';
 import { useAuth } from '@/context/auth-context';
 import { usePermissions } from '@/hooks/use-permissions';
 import { toast } from 'sonner';
-import type { Chamado, Acompanhamento, Fila, Responsavel } from '../components/_shared';
+import type { Chamado, Acompanhamento, Responsavel } from '../components/_shared';
 import {
   COR_STATUS, PRIO_BORDER, PRIO_TEXT, PRIO_STRIP_BG, LABEL_STATUS, LABEL_PRIO,
-  TIPOS_CHAMADO, PRIO_CHAMADO, STATUS_CHAMADO, EQUIPES, ROLE_LABEL,
+  TIPOS_CHAMADO, PRIO_CHAMADO, STATUS_CHAMADO, ROLE_LABEL,
   getSLAState, getSLATextClass, fmtRelative,
 } from '../components/_shared';
 
@@ -92,7 +92,6 @@ export default function ChamadoDetailPage() {
   const [chamado, setChamado] = useState<Chamado | null>(null);
   const [acomps, setAcomps] = useState<Acompanhamento[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filas, setFilas] = useState<Fila[]>([]);
   const [responsaveis, setResponsaveis] = useState<Responsavel[]>([]);
 
   const [editando, setEditando] = useState(false);
@@ -120,10 +119,8 @@ export default function ChamadoDetailPage() {
   useEffect(() => { carregar(); }, [carregar]);
 
   useEffect(() => {
-    Promise.all([
-      api.get('/chamados/filas').catch(() => ({ data: [] })),
-      api.get('/chamados/responsaveis').catch(() => ({ data: [] })),
-    ]).then(([rf, rr]) => { setFilas(rf.data ?? []); setResponsaveis(rr.data ?? []); });
+    api.get('/chamados/responsaveis').catch(() => ({ data: [] }))
+      .then(rr => setResponsaveis((rr as any).data ?? []));
   }, []);
 
   const salvar = async () => {
@@ -241,22 +238,12 @@ export default function ChamadoDetailPage() {
                         </select>
                       </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block">Status</label>
-                        <select value={form.status ?? ''} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}
-                          className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white dark:bg-slate-800 dark:text-slate-100">
-                          {STATUS_CHAMADO.map(s => <option key={s} value={s}>{LABEL_STATUS[s]}</option>)}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block">Fila</label>
-                        <select value={form.fila_nome ?? ''} onChange={e => setForm(f => ({ ...f, fila_nome: e.target.value }))}
-                          className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white dark:bg-slate-800 dark:text-slate-100">
-                          <option value="">Sem fila</option>
-                          {filas.map(f => <option key={f.id} value={f.nome}>{f.nome}</option>)}
-                        </select>
-                      </div>
+                    <div>
+                      <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block">Status</label>
+                      <select value={form.status ?? ''} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}
+                        className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white dark:bg-slate-800 dark:text-slate-100">
+                        {STATUS_CHAMADO.map(s => <option key={s} value={s}>{LABEL_STATUS[s]}</option>)}
+                      </select>
                     </div>
                     <div>
                       <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block">Responsável</label>
@@ -264,7 +251,6 @@ export default function ChamadoDetailPage() {
                         className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white dark:bg-slate-800 dark:text-slate-100">
                         <option value="">Sem responsável</option>
                         {responsaveis.map(r => <option key={r.id} value={r.nome}>{r.nome} — {ROLE_LABEL[r.role] ?? r.role}</option>)}
-                        {EQUIPES.map(eq => <option key={eq} value={eq}>{eq}</option>)}
                       </select>
                     </div>
                     <div>
@@ -419,7 +405,6 @@ export default function ChamadoDetailPage() {
               {([
                 { label: 'Tipo', value: chamado.tipo },
                 { label: 'Prioridade', value: LABEL_PRIO[chamado.prioridade] },
-                { label: 'Fila', value: chamado.fila_nome || null },
                 { label: 'Responsável', value: chamado.responsavel_nome || null },
                 { label: 'Aluno', value: chamado.aluno_nome || null },
                 chamado.turma_nome ? { label: 'Turma', value: chamado.turma_nome } : null,

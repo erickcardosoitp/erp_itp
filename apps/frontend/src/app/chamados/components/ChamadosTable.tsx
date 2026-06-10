@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronUp, ChevronDown, User, Tag, Globe, Users } from 'lucide-react';
+import { ChevronUp, ChevronDown, User, Globe, Users } from 'lucide-react';
 import {
   Chamado, COR_STATUS, PRIO_STRIP_BG, PRIO_TEXT, LABEL_STATUS, LABEL_PRIO,
   getSLAState, getSLATextClass, fmtRelative,
@@ -122,7 +122,6 @@ export function ChamadosTable({ chamados, canWrite, onAtender, onResolver, onAco
             <th className="px-3 py-2 text-left">
               <SortBtn active={sort.key === 'prioridade'} dir={sort.dir} onClick={() => toggleSort('prioridade')}>Prioridade</SortBtn>
             </th>
-            <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400 whitespace-nowrap">Fila</th>
             <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400 whitespace-nowrap">SLA</th>
             <th className="px-3 py-2 text-left">
               <SortBtn active={sort.key === 'status'} dir={sort.dir} onClick={() => toggleSort('status')}>Status</SortBtn>
@@ -185,14 +184,6 @@ export function ChamadosTable({ chamados, canWrite, onAtender, onResolver, onAco
                   <span className={`font-semibold ${PRIO_TEXT[c.prioridade] ?? 'text-slate-400'}`}>
                     {LABEL_PRIO[c.prioridade]}
                   </span>
-                </td>
-
-                {/* Fila */}
-                <td className="px-3 py-2.5 whitespace-nowrap">
-                  {c.fila_nome
-                    ? <span className="flex items-center gap-1 text-[10px] text-purple-500"><Tag size={9} />{c.fila_nome}</span>
-                    : <span className="text-slate-300 dark:text-slate-600">—</span>
-                  }
                 </td>
 
                 {/* SLA */}
