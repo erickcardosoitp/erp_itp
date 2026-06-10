@@ -427,7 +427,7 @@ export default function ChamadoDetailPage() {
                 { label: 'Origem', value: chamado.origem === 'site' ? 'Site institucional' : 'Interno (ERP)' },
                 { label: 'Abertura', value: new Date(dataAbertura).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) },
                 { label: 'Atualização', value: new Date(chamado.updated_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) },
-              ] as ({ label: string; value: string | null } | null)[]).filter(Boolean).map(({ label, value }) => (
+              ] as ({ label: string; value: string | null } | null)[]).filter((x): x is { label: string; value: string | null } => x !== null).map(({ label, value }) => (
                 <div key={label} className="flex items-start justify-between gap-3">
                   <span className="text-[10px] text-slate-400 shrink-0">{label}</span>
                   <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 text-right">{value ?? '—'}</span>
