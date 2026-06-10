@@ -11,6 +11,18 @@ import { CreateInscricaoDto } from './dto/create-inscricao.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '../auth/constants/roles.enum';
 
+const UPLOAD_OPTIONS = {
+  storage: memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req: any, file: any, cb: any) => {
+    if (['image/jpeg', 'image/png', 'image/heic', 'image/heif'].includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new BadRequestException('Use JPEG, PNG ou HEIC.'), false);
+    }
+  },
+};
+
 @Roles(Role.ASSIST)
 @Controller('projetos')
 export class ProjetosController {
@@ -33,10 +45,21 @@ export class ProjetosController {
   @Delete(':id')
   remove(@Param('id') id: string) { return this.svc.remove(id); }
 
-  // ── Checkout (público com role mínimo) ───────────────────────────────────
+  // ── Checkout (estático — deve vir antes de rotas com :id) ────────────────
 
   @Get('checkout/:inscricao_id')
   checkout(@Param('inscricao_id') id: string) { return this.svc.checkout(id); }
+
+  // ── Busca de reinscrição (estático — antes de :id/inscricoes) ────────────
+
+  @Get('inscricoes/buscar')
+  buscarInscricaoAnterior(
+    @Query('nome') nome: string,
+    @Query('nascimento') nascimento: string,
+  ) {
+    if (!nome || !nascimento) throw new BadRequestException('nome e nascimento são obrigatórios');
+    return this.svc.buscarInscricaoAnterior(nome, nascimento);
+  }
 
   // ── Equipes ───────────────────────────────────────────────────────────────
 
@@ -78,7 +101,7 @@ export class ProjetosController {
   findInscricoes(@Param('id') id: string) { return this.svc.findInscricoes(id); }
 
   @Post(':id/inscricoes')
-  createInscricao(@Param('id') id: string, @Body() dto: CreateInscricaoDto) {
+  createInscricao(@Param('id') id: string, @Body() dto: any) {
     return this.svc.createInscricao(id, dto);
   }
 
@@ -90,6 +113,40 @@ export class ProjetosController {
   @Delete(':id/inscricoes/:iId')
   removeInscricao(@Param('id') id: string, @Param('iId') iId: string) {
     return this.svc.removeInscricao(id, iId);
+  }
+
+  // ── Documentos de inscrição ───────────────────────────────────────────────
+
+  @Get(':id/inscricoes/:iId/documentos')
+  findDocumentos(@Param('id') id: string, @Param('iId') iId: string) {
+    return this.svc.findDocumentos(id, iId);
+  }
+
+  @Post(':id/inscricoes/:iId/documentos')
+  @UseInterceptors(FileInterceptor('arquivo', UPLOAD_OPTIONS))
+  uploadDocumento(
+    @Param('id') id: string,
+    @Param('iId') iId: string,
+    @Body('tipo') tipo: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!file) throw new BadRequestException('Nenhum arquivo enviado.');
+    if (!tipo) throw new BadRequestException('Campo tipo é obrigatório.');
+    return this.svc.uploadDocumento(id, iId, tipo, file);
+  }
+
+  @Delete(':id/inscricoes/:iId/documentos/:docId')
+  removeDocumento(
+    @Param('id') id: string,
+    @Param('iId') iId: string,
+    @Param('docId') docId: string,
+  ) {
+    return this.svc.removeDocumento(id, iId, docId);
+  }
+
+  @Post(':id/inscricoes/:iId/documentos/declaracao-fisica')
+  marcarDeclaracaoFisica(@Param('id') id: string, @Param('iId') iId: string) {
+    return this.svc.marcarDeclaracaoFisica(id, iId);
   }
 
   // ── Presença ──────────────────────────────────────────────────────────────

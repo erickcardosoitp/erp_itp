@@ -75,6 +75,9 @@ export class ProjetoInscricao {
   @Column({ type: 'varchar', default: StatusInscricaoProjeto.INSCRITO })
   status: string;
 
+  @Column({ name: 'email_responsavel', type: 'varchar', nullable: true })
+  email_responsavel: string | null;
+
   @Column({ name: 'convertido_em_aluno', type: 'boolean', default: false })
   convertido_em_aluno: boolean;
 

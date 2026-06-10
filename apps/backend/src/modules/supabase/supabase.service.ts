@@ -1,0 +1,70 @@
+import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import sharp from 'sharp';
+
+@Injectable()
+export class SupabaseService {
+  private readonly logger = new Logger(SupabaseService.name);
+  private readonly client: SupabaseClient;
+  private readonly bucket: string;
+
+  constructor(private readonly config: ConfigService) {
+    const url = config.get<string>('SUPABASE_URL') ?? '';
+    const key = config.get<string>('SUPABASE_SERVICE_KEY') ?? '';
+    this.bucket = config.get<string>('SUPABASE_BUCKET') ?? 'arquivos';
+    this.client = createClient(url, key);
+  }
+
+  async upload(buffer: Buffer, path: string, mimetype: string): Promise<string> {
+    const MAX_BYTES = 5 * 1024 * 1024;
+    if (buffer.length > MAX_BYTES) {
+      throw new Error('Arquivo excede o limite de 5 MB');
+    }
+
+    let processedBuffer = buffer;
+    if (mimetype.startsWith('image/')) {
+      processedBuffer = await sharp(buffer)
+        .rotate()
+        .resize({ width: 1920, withoutEnlargement: true })
+        .jpeg({ quality: 85 })
+        .toBuffer();
+    }
+
+    const { error } = await this.client.storage
+      .from(this.bucket)
+      .upload(path, processedBuffer, {
+        contentType: 'image/jpeg',
+        upsert: true,
+      });
+
+    if (error) {
+      this.logger.error(`Supabase upload error: ${error.message}`);
+      throw new Error(`Falha no upload: ${error.message}`);
+    }
+
+    return path;
+  }
+
+  async getSignedUrl(path: string, expiresIn = 3600): Promise<string> {
+    const { data, error } = await this.client.storage
+      .from(this.bucket)
+      .createSignedUrl(path, expiresIn);
+
+    if (error || !data?.signedUrl) {
+      throw new Error(`Falha ao gerar URL assinada: ${error?.message}`);
+    }
+
+    return data.signedUrl;
+  }
+
+  async delete(path: string): Promise<void> {
+    const { error } = await this.client.storage
+      .from(this.bucket)
+      .remove([path]);
+
+    if (error) {
+      this.logger.warn(`Supabase delete warning: ${error.message}`);
+    }
+  }
+}

@@ -48,6 +48,7 @@ import { AlunosModule } from './alunos/alunos.module';
 import { PublicoModule } from './publico/publico.module';
 import { ProjetosModule } from './projetos/projetos.module';
 import { CaptacaoModule } from './captacao/captacao.module';
+import { SupabaseModule } from './modules/supabase/supabase.module';
 
 @Module({
   imports: [
@@ -125,6 +126,7 @@ import { CaptacaoModule } from './captacao/captacao.module';
     PublicoModule,
     ProjetosModule,
     CaptacaoModule,
+    SupabaseModule,
   ],
   controllers: [
     AppController,
@@ -1330,6 +1332,23 @@ export class AppModule implements OnModuleInit {
           created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
           UNIQUE (inscricao_id, data)
         )
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE projeto_inscricoes
+          ADD COLUMN IF NOT EXISTS email_responsavel VARCHAR
+      `);
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS projeto_inscricao_documentos (
+          id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          inscricao_id  UUID NOT NULL REFERENCES projeto_inscricoes(id) ON DELETE CASCADE,
+          tipo          VARCHAR NOT NULL,
+          url_arquivo   TEXT NOT NULL,
+          created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `);
+      await this.dataSource.query(`
+        CREATE INDEX IF NOT EXISTS idx_proj_insc_docs_inscricao
+          ON projeto_inscricao_documentos(inscricao_id)
       `);
       this.logger.log('✅ Tabelas módulo Projetos criadas (IF NOT EXISTS)');
 

@@ -791,6 +791,101 @@ export class EmailService implements OnModuleInit {
     if (this.isEthereal) this.logger.warn(`👁️  Preview: ${nodemailer.getTestMessageUrl(info)}`);
   }
 
+  // ─────────────────────────────────────────────────────────────────────
+  //  PROJETOS — Confirmação de inscrição
+  // ─────────────────────────────────────────────────────────────────────
+
+  async enviarConfirmacaoInscricao(dados: {
+    email: string;
+    nome_crianca: string;
+    nome_responsavel: string;
+    nome_projeto: string;
+    data_inicio: string;
+    data_fim: string;
+    equipe?: string | null;
+    docs_pendentes: string[];
+  }): Promise<void> {
+    const { email, nome_crianca, nome_responsavel, nome_projeto, data_inicio, data_fim, equipe, docs_pendentes } = dados;
+
+    if (!this.transporter) {
+      this.logger.warn(`📧 [CONF-INSCRICAO] ${nome_crianca} → ${email}`);
+      return;
+    }
+
+    const nomeResp = this.escapeHtml(nome_responsavel.split(' ')[0] || nome_responsavel);
+    const nomeCrianca = this.escapeHtml(nome_crianca);
+    const nomeProjeto = this.escapeHtml(nome_projeto);
+    const nomeEquipe = equipe ? this.escapeHtml(equipe) : null;
+
+    const LABELS: Record<string, string> = {
+      foto_aluno: 'Foto do aluno',
+      identidade_aluno: 'Identidade do aluno',
+      identidade_responsavel: 'Identidade do responsável',
+      comprovante_residencia: 'Comprovante de residência',
+      certidao_nascimento: 'Certidão de nascimento',
+      declaracao_escolar: 'Declaração escolar',
+    };
+
+    const pendentesHtml = docs_pendentes.length > 0
+      ? `<table width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0">
+          <tr><td style="background:#fef9e7;border:1px solid #f59e0b;border-radius:8px;padding:16px">
+            <p style="margin:0 0 8px;color:#92400e;font-size:13px;font-weight:700">Documentos pendentes:</p>
+            <ul style="margin:0;padding-left:20px;color:#92400e;font-size:13px;line-height:2">
+              ${docs_pendentes.map(t => `<li>${LABELS[t] ?? t}</li>`).join('')}
+              ${docs_pendentes.includes('declaracao_escolar') ? '<li style="font-style:italic">Declaração escolar — entregar presencialmente</li>' : ''}
+            </ul>
+          </td></tr>
+        </table>`
+      : '<p style="color:#15803d;font-size:14px;font-weight:600">Documentação completa!</p>';
+
+    const html = `
+<!DOCTYPE html><html lang="pt-br"><head><meta charset="UTF-8"/></head>
+<body style="margin:0;padding:0;background:#f4f6f9;font-family:Arial,sans-serif">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f9;padding:40px 20px">
+<tr><td align="center">
+  <table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,.08)">
+    <tr><td style="background:#1e3a5f;padding:32px 40px;text-align:center">
+      <h1 style="margin:0;color:#fff;font-size:22px;font-weight:700">Instituto Tia Pretinha</h1>
+      <p style="margin:6px 0 0;color:#a8c4e0;font-size:14px">CNPJ nº 11.759.851/0001-39</p>
+    </td></tr>
+    <tr><td style="padding:40px">
+      <p style="margin:0 0 16px;color:#374151;font-size:16px">Olá, <strong>${nomeResp}</strong>!</p>
+      <p style="margin:0 0 24px;color:#6b7280;font-size:15px;line-height:1.6">
+        A inscrição de <strong>${nomeCrianca}</strong> no projeto <strong>${nomeProjeto}</strong> foi confirmada com sucesso! 🎉
+      </p>
+      <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:16px">
+        <tr><td style="background:#f0fdf4;border:2px solid #86efac;border-radius:12px;padding:20px">
+          <p style="margin:0 0 8px;color:#15803d;font-size:13px;font-weight:700">Detalhes da inscrição</p>
+          <p style="margin:0;color:#166534;font-size:14px;line-height:2">
+            Participante: <strong>${nomeCrianca}</strong><br/>
+            Projeto: <strong>${nomeProjeto}</strong><br/>
+            Período: <strong>${data_inicio} a ${data_fim}</strong><br/>
+            ${nomeEquipe ? `Equipe: <strong>${nomeEquipe}</strong>` : ''}
+          </p>
+        </td></tr>
+      </table>
+      ${pendentesHtml}
+      <p style="margin:16px 0 0;color:#9ca3af;font-size:12px">Dúvidas? Entre em contato com o Instituto Tia Pretinha.</p>
+    </td></tr>
+    <tr><td style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:24px 40px;text-align:center">
+      <p style="margin:0;color:#9ca3af;font-size:12px">Este e-mail foi enviado automaticamente pelo sistema do Instituto Tia Pretinha.</p>
+    </td></tr>
+  </table>
+</td></tr></table>
+</body></html>`.trim();
+
+    // deepcode ignore XSS: user-supplied values are HTML-escaped via escapeHtml() before template interpolation
+    const info = await this.transporter.sendMail({
+      from: `"Instituto Tia Pretinha" <${this.config.get<string>('SMTP_FROM_ADDRESS') || this.config.get<string>('SMTP_USER')}>`,
+      to: email,
+      subject: `✅ Inscrição confirmada — ${nomeProjeto}`,
+      html,
+    });
+
+    this.logger.log(`📧 Confirmação de inscrição enviada para ${email} (${nomeCrianca})`);
+    if (this.isEthereal) this.logger.warn(`👁️  Preview: ${nodemailer.getTestMessageUrl(info)}`);
+  }
+
   /**
    * Método genérico: envia um e-mail com assunto e HTML arbitrários.
    * Usado para envio de relatórios e outros usos internos.
