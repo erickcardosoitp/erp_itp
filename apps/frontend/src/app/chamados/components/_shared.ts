@@ -84,7 +84,7 @@ export const LABEL_PRIO: Record<string, string> = {
   baixa: 'Baixa', normal: 'Normal', alta: 'Alta', urgente: 'Urgente',
 };
 
-export const TIPOS_CHAMADO = ['Social', 'Acadêmico', 'Saúde', 'Família', 'Financeiro', 'Gente', 'Suporte', 'Outro'];
+export const TIPOS_CHAMADO = ['Social', 'Acadêmico', 'Saúde', 'Família', 'Financeiro', 'Gente', 'Suporte', 'TI', 'Outro'];
 export const STATUS_CHAMADO = ['aberto', 'em_andamento', 'resolvido'] as const;
 export const PRIO_CHAMADO = ['baixa', 'normal', 'alta', 'urgente'] as const;
 export const EQUIPES = ['Administração', 'Conselho', 'Presidência', 'Apoio'];

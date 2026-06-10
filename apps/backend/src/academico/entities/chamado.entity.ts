@@ -11,7 +11,7 @@ export class ChamadoAcademico {
   @Column({ type: 'text', nullable: true })
   descricao: string;
 
-  /** 'Social' | 'Acadêmico' | 'Saúde' | 'Família' | 'Financeiro' | 'Outro' */
+  /** 'Social' | 'Acadêmico' | 'Saúde' | 'Família' | 'Financeiro' | 'Gente' | 'Suporte' | 'TI' | 'Outro' */
   @Column({ default: 'Social' })
   tipo: string;
 
