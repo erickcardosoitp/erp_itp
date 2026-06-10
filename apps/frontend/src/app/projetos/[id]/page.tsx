@@ -714,7 +714,7 @@ export default function ProjetoDashboard() {
       {/* ── Modal Inscrição ──────────────────────────────────────────────────── */}
       {modalInscricao && (
         <div className="fixed inset-0 z-[300] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className={`bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-h-[90vh] overflow-y-auto transition-all
+          <div className={`bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl shadow-2xl w-full max-h-[92vh] overflow-y-auto transition-all
             ${modoExterno && passoExterno === 2 ? 'max-w-2xl' : 'max-w-lg'}`}>
 
             {/* Header */}
@@ -874,7 +874,7 @@ export default function ProjetoDashboard() {
 
             {/* ── EXTERNO PASSO 1: Dados ─────────────────────────────────────── */}
             {modoExterno && passoExterno === 1 && (
-              <div className="p-6 space-y-4">
+              <div className="p-4 sm:p-6 space-y-4">
                 {/* Tipo toggle */}
                 <div className="flex gap-2">
                   <button type="button"
@@ -919,7 +919,7 @@ export default function ProjetoDashboard() {
                     autoFocus className={inputCls}/>
                 </InputField>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <InputField label="Nascimento">
                     <input type="date" value={formInscricao.data_nascimento ?? ''}
                       onChange={e => {
@@ -938,7 +938,7 @@ export default function ProjetoDashboard() {
                   </InputField>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <InputField label="Telefone">
                     <input value={formInscricao.telefone_responsavel ?? ''}
                       onChange={e => setFormInscricao(p => ({ ...p, telefone_responsavel: e.target.value }))}
@@ -953,14 +953,14 @@ export default function ProjetoDashboard() {
                   </InputField>
                 </div>
 
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <InputField label="CEP">
                     <input value={formInscricao.cep ?? ''}
                       onChange={e => { setFormInscricao(p => ({ ...p, cep: e.target.value })); buscarCEP(e.target.value); }}
                       placeholder="00000-000" className={inputCls}/>
                     {buscandoCEP && <p className="text-xs text-slate-400 mt-1">Buscando CEP...</p>}
                   </InputField>
-                  <div className="col-span-2">
+                  <div className="sm:col-span-2">
                     <InputField label="Logradouro">
                       <input value={formInscricao.logradouro ?? ''}
                         onChange={e => setFormInscricao(p => ({ ...p, logradouro: e.target.value }))}
@@ -969,7 +969,7 @@ export default function ProjetoDashboard() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <InputField label="Número">
                     <input value={formInscricao.numero ?? ''}
                       onChange={e => setFormInscricao(p => ({ ...p, numero: e.target.value }))}
@@ -1014,10 +1014,10 @@ export default function ProjetoDashboard() {
 
                 <div className="flex justify-end gap-3 pt-2">
                   <button type="button" onClick={resetModal}
-                    className="px-4 py-2 rounded-xl text-xs font-black uppercase text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800">Cancelar</button>
+                    className="px-4 py-3 rounded-xl text-xs font-black uppercase text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800">Cancelar</button>
                   <button type="button" onClick={salvarPasso1}
                     disabled={salvando || !formInscricao.nome_completo}
-                    className="flex items-center gap-1.5 px-5 py-2 rounded-xl text-xs font-black uppercase bg-purple-600 hover:bg-purple-700 text-white disabled:opacity-50">
+                    className="flex items-center gap-1.5 px-5 py-3 rounded-xl text-xs font-black uppercase bg-purple-600 hover:bg-purple-700 text-white disabled:opacity-50">
                     {salvando ? 'Salvando...' : <><span>Avançar</span><ChevronRight size={13}/></>}
                   </button>
                 </div>
@@ -1026,7 +1026,7 @@ export default function ProjetoDashboard() {
 
             {/* ── EXTERNO PASSO 2: Documentos ───────────────────────────────── */}
             {modoExterno && passoExterno === 2 && inscricaoCriada && (
-              <div className="p-6 space-y-4">
+              <div className="p-4 sm:p-6 space-y-4">
                 <div className="flex items-center justify-between">
                   <p className="text-xs text-slate-600 dark:text-slate-400">
                     Fotografe os documentos de <strong className="text-slate-800 dark:text-slate-100">{inscricaoCriada.nome_completo}</strong>
@@ -1066,19 +1066,19 @@ export default function ProjetoDashboard() {
 
                         {/* Actions */}
                         {!isBusy && (
-                          <div className="flex gap-1.5 flex-wrap justify-center">
+                          <div className="flex gap-2 flex-wrap justify-center">
                             <button onClick={() => setCameraDocWizard(tipo)}
-                              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-[10px] font-black hover:bg-purple-200 transition-colors">
-                              <Camera size={11}/> {isDone ? 'Refazer' : 'Foto'}
+                              className="flex items-center gap-1 px-3 py-2 rounded-lg bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-xs font-black hover:bg-purple-200 transition-colors">
+                              <Camera size={14}/> {isDone ? 'Refazer' : 'Foto'}
                             </button>
                             <button onClick={() => { fileInputWizardTipo.current = tipo; fileInputWizardRef.current?.click(); }}
-                              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-[10px] font-black hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">
-                              <Upload size={11}/>
+                              className="flex items-center gap-1 px-3 py-2 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-black hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">
+                              <Upload size={14}/>
                             </button>
                             {tipo === 'declaracao_escolar' && !isDone && (
                               <button onClick={marcarDeclaracaoFisica}
-                                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-[10px] font-black hover:bg-blue-200 transition-colors">
-                                <FileCheck size={11}/> Físico
+                                className="flex items-center gap-1 px-3 py-2 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-black hover:bg-blue-200 transition-colors">
+                                <FileCheck size={14}/> Físico
                               </button>
                             )}
                           </div>
@@ -1110,7 +1110,7 @@ export default function ProjetoDashboard() {
 
             {/* ── EXTERNO PASSO 3: Confirmação ──────────────────────────────── */}
             {modoExterno && passoExterno === 3 && inscricaoCriada && (
-              <div className="p-6 space-y-5 text-center">
+              <div className="p-4 sm:p-6 space-y-5 text-center">
                 <div className="w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mx-auto">
                   <CheckCircle2 size={32} className="text-green-600"/>
                 </div>
