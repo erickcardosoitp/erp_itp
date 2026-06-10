@@ -179,7 +179,7 @@ export default function ChamadoDetailPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
-      <div className="max-w-4xl mx-auto px-4 md:px-6 py-6">
+      <div className="max-w-7xl mx-auto px-4 md:px-8 py-6">
 
         {/* ── Breadcrumb / back ── */}
         <button onClick={() => router.push('/chamados')}
@@ -187,7 +187,7 @@ export default function ChamadoDetailPage() {
           <ArrowLeft size={13} />Voltar para Chamados
         </button>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-5">
 
           {/* ── Coluna principal ── */}
           <div className="lg:col-span-2 space-y-5">
@@ -286,7 +286,7 @@ export default function ChamadoDetailPage() {
                   </div>
                 ) : (
                   <>
-                    <h1 className="text-xl font-black text-slate-800 dark:text-slate-100 mb-1">{chamado.titulo}</h1>
+                    <h1 className="text-xl font-black text-slate-800 dark:text-slate-100 mb-1 break-words">{chamado.titulo}</h1>
                     <p className="text-sm text-slate-400">{chamado.tipo}</p>
 
                     {chamado.descricao && (
@@ -416,21 +416,21 @@ export default function ChamadoDetailPage() {
             <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-4 space-y-3">
               <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Detalhes</p>
 
-              {[
+              {([
                 { label: 'Tipo', value: chamado.tipo },
                 { label: 'Prioridade', value: LABEL_PRIO[chamado.prioridade] },
-                { label: 'Fila', value: chamado.fila_nome || '—' },
-                { label: 'Responsável', value: chamado.responsavel_nome || '—' },
-                { label: 'Aluno', value: chamado.aluno_nome || '—' },
-                { label: 'Turma', value: chamado.turma_nome || '—' },
-                { label: 'Aberto por', value: chamado.criado_por_nome || '—' },
+                { label: 'Fila', value: chamado.fila_nome || null },
+                { label: 'Responsável', value: chamado.responsavel_nome || null },
+                { label: 'Aluno', value: chamado.aluno_nome || null },
+                chamado.turma_nome ? { label: 'Turma', value: chamado.turma_nome } : null,
+                { label: 'Aberto por', value: chamado.criado_por_nome || null },
                 { label: 'Origem', value: chamado.origem === 'site' ? 'Site institucional' : 'Interno (ERP)' },
                 { label: 'Abertura', value: new Date(dataAbertura).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) },
                 { label: 'Atualização', value: new Date(chamado.updated_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) },
-              ].map(({ label, value }) => (
+              ] as ({ label: string; value: string | null } | null)[]).filter(Boolean).map(({ label, value }) => (
                 <div key={label} className="flex items-start justify-between gap-3">
                   <span className="text-[10px] text-slate-400 shrink-0">{label}</span>
-                  <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 text-right">{value}</span>
+                  <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 text-right">{value ?? '—'}</span>
                 </div>
               ))}
 
