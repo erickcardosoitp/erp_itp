@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { NotebookPen, Edit3, Trash2, ChevronUp, ChevronDown, User, Tag, Globe, Users, Monitor } from 'lucide-react';
+import { NotebookPen, Edit3, Trash2, ChevronUp, ChevronDown, User, Tag, Globe, Users } from 'lucide-react';
 import {
   Chamado, COR_STATUS, PRIO_STRIP_BG, PRIO_TEXT, LABEL_STATUS, LABEL_PRIO,
   getSLAState, getSLATextClass, fmtRelative,
@@ -62,23 +62,17 @@ function DataCell({ iso }: { iso?: string | null }) {
   );
 }
 
-const ORIGEM_LABEL: Record<string, { label: string; cls: string; icon: React.ReactNode }> = {
-  site:   { label: 'Site',   cls: 'text-sky-500 bg-sky-50 border-sky-200',     icon: <Globe size={8} /> },
-  erp:    { label: 'ERP',    cls: 'text-slate-500 bg-slate-50 border-slate-200', icon: <Monitor size={8} /> },
-};
-
 function OrigemBadge({ origem }: { origem?: string | null }) {
-  const cfg = origem ? ORIGEM_LABEL[origem] : null;
-  if (!cfg) {
+  if (origem === 'site') {
     return (
-      <span className="inline-flex items-center gap-0.5 text-[9px] font-semibold px-1.5 py-0.5 rounded border text-slate-400 bg-slate-50 border-slate-200 dark:bg-slate-800 dark:border-slate-700">
-        <Monitor size={8} />ERP
+      <span className="inline-flex items-center gap-0.5 text-[9px] font-semibold px-1.5 py-0.5 rounded border text-sky-600 bg-sky-50 border-sky-200">
+        <Globe size={8} />Site
       </span>
     );
   }
   return (
-    <span className={`inline-flex items-center gap-0.5 text-[9px] font-semibold px-1.5 py-0.5 rounded border ${cfg.cls}`}>
-      {cfg.icon}{cfg.label}
+    <span className="inline-flex items-center text-[9px] font-semibold px-1.5 py-0.5 rounded border text-slate-400 bg-slate-50 border-slate-200 dark:bg-slate-800 dark:border-slate-700">
+      Interno
     </span>
   );
 }
