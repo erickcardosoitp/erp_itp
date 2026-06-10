@@ -207,7 +207,7 @@ Grid de cards de upload em tela cheia:
 - Uploads acontecem **em paralelo** assim que cada foto é confirmada
 - Cada card mostra estado: aguardando / enviando / enviado ✓ / erro
 - Botão **"Concluir inscrição"** ativa apenas quando os 5 obrigatórios estão `enviado ✓`
-- Ao concluir: email de confirmação disparado automaticamente
+- Ao concluir: email de confirmação disparado automaticamente + botão "Enviar pelo WhatsApp"
 
 ### 4.3 Componente `DocumentCamera`
 
@@ -227,14 +227,45 @@ Câmera integrada com guia de enquadramento — sem biblioteca pesada.
 
 **Fallback:** botão "Escolher arquivo" para quem preferir galeria/scan externo.
 
-### 4.4 Inscrição Aluno ITP
+### 4.3.1 Tela de Confirmação Pós-Inscrição
+
+Após concluir a inscrição, exibe:
+- Nome do inscrito e equipe
+- Resumo dos documentos (OK / PENDENTE)
+- Dois botões de confirmação para o responsável:
+  - **"Enviar confirmação por email"** — dispara o email automaticamente
+  - **"Enviar pelo WhatsApp"** — abre `https://wa.me/55{telefone}?text={mensagem}` em nova aba
+
+**Mensagem WhatsApp pré-preenchida:**
+```
+Olá {nome_responsavel}! ✅ {nome_criança} está inscrito(a) no projeto {nome_projeto}.
+Equipe: {equipe}
+Documentos: {OK | Pendente: declaração escolar}
+Dúvidas: {telefone_instituto}
+```
+
+O atendente clica no botão, o WhatsApp abre com a mensagem pronta, e confirma o envio.
+
+### 4.4 Reinscrição Automática
+
+Ao digitar nome ou data de nascimento no formulário de inscrição externa, o sistema busca inscrições anteriores do mesmo inscrito (match por `nome_completo` + `data_nascimento`).
+
+Se encontrar:
+- Exibe aviso: "**{nome}** já participou de {projeto anterior}. Deseja pré-preencher os dados?"
+- Se confirmado: preenche todos os campos do passo 1 automaticamente
+- Documentos do projeto anterior ficam disponíveis para reaproveitamento — cada card mostra "Usar foto anterior" ou "Fotografar novamente"
+- Reduz tempo de inscrição de ~5 min para ~1 min para famílias que retornam
+
+Backend: novo endpoint `GET /projetos/inscricoes/buscar?nome=&nascimento=` — busca em `projeto_inscricoes` por nome + data de nascimento, retorna inscrição mais recente com documentos.
+
+### 4.5 Inscrição Aluno ITP
 
 - Mantém busca por nome/CPF
 - Após selecionar aluno: exibe inline o status dos 5 docs obrigatórios na ficha
 - Se PENDENTE: aviso amarelo "Documentação incompleta — orientar entrega no módulo Matrículas"
 - Sem upload — docs ITP gerenciados em Matrículas
 
-### 4.5 `DrawerDocumentos`
+### 4.6 `DrawerDocumentos`
 
 Abre ao clicar em qualquer inscrito na tabela.
 
@@ -243,6 +274,7 @@ Abre ao clicar em qualquer inscrito na tabela.
   - Botão "Substituir" por doc
   - Botão "Remover"
   - Cards de tipos faltantes com botão "Fotografar"
+  - Declaração escolar pendente: botão **"Marcar como recebida"** — registra o doc sem upload de arquivo (salva `tipo: 'declaracao_escolar', url_arquivo: 'fisico'` na tabela)
 - **Aluno ITP:** lista os 5 tipos com status ✓ / ✗ e link "Ver ficha no módulo Matrículas"
 
 ---
@@ -271,11 +303,13 @@ Abre ao clicar em qualquer inscrito na tabela.
 2. `SupabaseService` — `src/modules/supabase/`
 3. Migration: `projeto_inscricao_documentos` + coluna `email_responsavel`
 4. Endpoints de documentos no backend + processamento com `sharp`
-5. `doc_status` em `findInscricoes`
-6. Email de confirmação (`enviarConfirmacaoInscricao`)
-7. Frontend: tabela de inscritos com badge OK/PENDENTE
-8. Frontend: componente `DocumentCamera`
-9. Frontend: tela de inscrição externa — passo 1 (dados)
-10. Frontend: tela de inscrição externa — passo 2 (documentos com uploads paralelos)
-11. Frontend: inscrição aluno ITP com status de docs inline
-12. Frontend: `DrawerDocumentos`
+5. Endpoint `GET /projetos/inscricoes/buscar` (reinscrição automática)
+6. `doc_status` em `findInscricoes`
+7. Email de confirmação (`enviarConfirmacaoInscricao`)
+8. Frontend: tabela de inscritos com badge OK/PENDENTE
+9. Frontend: componente `DocumentCamera`
+10. Frontend: tela de inscrição externa — passo 1 (dados + busca de reinscrição)
+11. Frontend: tela de inscrição externa — passo 2 (documentos com uploads paralelos)
+12. Frontend: tela de confirmação pós-inscrição (email + WhatsApp)
+13. Frontend: inscrição aluno ITP com status de docs inline
+14. Frontend: `DrawerDocumentos` com "Marcar declaração como recebida"
