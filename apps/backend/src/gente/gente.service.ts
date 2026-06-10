@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, UnauthorizedException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
+import { SupabaseService } from '../modules/supabase/supabase.service';
 import { GenteColaborador } from './entities/gente-colaborador.entity';
 import { GentePonto } from './entities/gente-ponto.entity';
 import { GenteRecibo } from './entities/gente-recibo.entity';
@@ -54,6 +55,7 @@ export class GenteService {
     @InjectRepository(GentePagamentoPassagem) private pagamentoPassagemRepo: Repository<GentePagamentoPassagem>,
     @InjectRepository(MovimentacaoFinanceira) private movimentacaoRepo: Repository<MovimentacaoFinanceira>,
     private dataSource: DataSource,
+    private supabase: SupabaseService,
   ) {}
 
   async onModuleInit() {
@@ -152,6 +154,7 @@ export class GenteService {
               matricula, ativo, foto FROM funcionarios WHERE id = $1`,
       [col.funcionario_id],
     );
+    if (func?.foto) func.foto = await this.supabase.resolveUrl(func.foto);
     return { ...col, funcionario: func ?? null };
   }
 
@@ -179,6 +182,9 @@ export class GenteService {
               matricula, ativo, foto FROM funcionarios WHERE id = ANY($1::uuid[])`,
       [ids],
     );
+    await Promise.all(funcionarios.map(async f => {
+      if (f.foto) f.foto = await this.supabase.resolveUrl(f.foto);
+    }));
     const funcMap: Record<string, any> = {};
     funcionarios.forEach(f => (funcMap[f.id] = f));
     return colaboradores.map(c => ({ ...c, funcionario: funcMap[c.funcionario_id] ?? null }));
@@ -297,10 +303,16 @@ export class GenteService {
     return this.buscarColaborador(id);
   }
 
-  async uploadFotoColaborador(colaboradorId: string, foto: string) {
+  async uploadFotoColaborador(colaboradorId: string, fotoDataUrl: string) {
     const col = await this.colaboradorRepo.findOne({ where: { id: colaboradorId } });
     if (!col) throw new NotFoundException('Colaborador não encontrado.');
-    await this.dataSource.query(`UPDATE funcionarios SET foto = $1 WHERE id = $2`, [foto, col.funcionario_id]);
+    const match = fotoDataUrl.match(/^data:([^;]+);base64,(.+)$/s);
+    if (!match) throw new BadRequestException('Formato inválido');
+    const mime = match[1];
+    const buffer = Buffer.from(match[2], 'base64');
+    const ext = mime.includes('png') ? 'png' : 'jpg';
+    const storagePath = await this.supabase.upload(buffer, `funcionarios/${col.funcionario_id}.${ext}`, mime);
+    await this.dataSource.query(`UPDATE funcionarios SET foto = $1 WHERE id = $2`, [storagePath, col.funcionario_id]);
     return this.buscarColaborador(colaboradorId);
   }
 

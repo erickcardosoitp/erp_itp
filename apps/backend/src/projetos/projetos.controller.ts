@@ -10,6 +10,7 @@ import { CreateEquipeDto } from './dto/create-equipe.dto';
 import { CreateInscricaoDto } from './dto/create-inscricao.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '../auth/constants/roles.enum';
+import { SupabaseService } from '../modules/supabase/supabase.service';
 
 const UPLOAD_OPTIONS = {
   storage: memoryStorage(),
@@ -26,7 +27,7 @@ const UPLOAD_OPTIONS = {
 @Roles(Role.ASSIST)
 @Controller('projetos')
 export class ProjetosController {
-  constructor(private readonly svc: ProjetosService) {}
+  constructor(private readonly svc: ProjetosService, private readonly supabase: SupabaseService) {}
 
   // ── Projetos ──────────────────────────────────────────────────────────────
 
@@ -91,8 +92,8 @@ export class ProjetosController {
     if (!file) throw new BadRequestException('Nenhum arquivo enviado.');
     if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype))
       throw new BadRequestException('Use JPEG, PNG ou WebP.');
-    const dataUrl = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
-    return this.svc.updateEquipe(id, eqId, { imagem_template: dataUrl } as any);
+    const storagePath = await this.supabase.upload(file.buffer, `projeto_equipes/${eqId}.${file.mimetype.includes('png') ? 'png' : 'jpg'}`, file.mimetype);
+    return this.svc.updateEquipe(id, eqId, { imagem_template: storagePath } as any);
   }
 
   // ── Inscrições ────────────────────────────────────────────────────────────

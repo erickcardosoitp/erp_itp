@@ -1045,6 +1045,10 @@ export class MatriculasService {
     const tiposEnviados = documentos.map(d => d.tipo);
     const obrigatoriosPendentes = tiposObrigatorios.filter(t => !tiposEnviados.includes(t));
 
+    const documentosResolvidos = await Promise.all(
+      documentos.map(async d => ({ ...d, url_arquivo: (await this.supabase.resolveUrl(d.url_arquivo)) ?? d.url_arquivo })),
+    );
+
     return {
       inscricao: {
         id: inscricao.id,
@@ -1052,7 +1056,7 @@ export class MatriculasService {
         status_matricula: inscricao.status_matricula,
         maior_18_anos: maior18,
       },
-      documentos,
+      documentos: documentosResolvidos,
       tipos_enviados: tiposEnviados,
       obrigatorios_pendentes: obrigatoriosPendentes,
       completo: obrigatoriosPendentes.length === 0,
