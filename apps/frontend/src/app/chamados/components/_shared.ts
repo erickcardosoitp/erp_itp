@@ -19,6 +19,7 @@ export interface Chamado {
   _total_acomp?: number;
   satisfacao?: number | null;
   origem?: string | null;
+  fila_nome?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -82,6 +83,7 @@ export const LABEL_PRIO: Record<string, string> = {
   baixa: 'Baixa', normal: 'Normal', alta: 'Alta', urgente: 'Urgente',
 };
 
+export const EQUIPES: string[] = ['Social', 'Pedagógico', 'Saúde', 'Administrativo', 'TI'];
 export const TIPOS_CHAMADO = ['Social', 'Acadêmico', 'Saúde', 'Família', 'Financeiro', 'Gente', 'Suporte', 'TI', 'Outro'];
 export const STATUS_CHAMADO = ['aberto', 'em_andamento', 'resolvido'] as const;
 export const PRIO_CHAMADO = ['baixa', 'normal', 'alta', 'urgente'] as const;
