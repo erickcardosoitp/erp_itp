@@ -103,7 +103,7 @@ export function ChamadosTable({ chamados, canWrite, onAtender, onResolver, onAco
 
   return (
     <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800 overflow-x-auto">
-      <table className="w-full text-xs min-w-[1000px]">
+      <table className="w-full text-xs min-w-[1240px]">
         <thead className="bg-slate-50/70 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800">
           <tr>
             <th className="w-1 p-0" />
