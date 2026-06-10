@@ -190,7 +190,7 @@ export default function ChamadoDetailPage() {
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-5">
 
           {/* ── Coluna principal ── */}
-          <div className="lg:col-span-2 space-y-5">
+          <div className="min-w-0 space-y-5">
 
             {/* Card principal */}
             <div className={`bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 overflow-hidden`}>
@@ -368,7 +368,7 @@ export default function ChamadoDetailPage() {
           </div>
 
           {/* ── Sidebar direita ── */}
-          <div className="space-y-4">
+          <div className="space-y-4 lg:sticky lg:top-6 lg:self-start">
 
             {/* SLA */}
             <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-4">
@@ -400,7 +400,7 @@ export default function ChamadoDetailPage() {
 
               {canWrite && (
                 <>
-                  <button onClick={() => { setForm({ ...chamado }); setEditando(true); }}
+                  <button onClick={() => { setForm({ ...chamado }); setEditando(true); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
                     className="w-full flex items-center justify-center gap-2 py-2 text-xs font-black rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                     <Edit3 size={13} />Editar Chamado
                   </button>
