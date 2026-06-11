@@ -103,7 +103,7 @@ export default function ClientShell({ children }: { children: React.ReactNode })
         )}
 
         <main
-          className={`flex-1 flex flex-col transition-all duration-300 w-full ${
+          className={`flex-1 flex flex-col transition-all duration-300 w-full min-w-0 overflow-x-hidden ${
             !isPublicPage
               ? isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'
               : ''
