@@ -122,13 +122,13 @@ export default function AcademicoPage() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-[#131b2e] p-4 md:p-6 lg:p-8 font-sans antialiased text-slate-900 dark:text-slate-100">
       <div className="max-w-[1600px] mx-auto space-y-6">
-        <header className="flex flex-col md:flex-row justify-between items-center bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm gap-4">
-          <div className="flex items-center gap-4">
+        <header className="flex flex-col md:flex-row justify-between md:items-center bg-white dark:bg-slate-900 p-4 md:p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm gap-3">
+          <div className="flex items-center gap-3 shrink-0">
             <div className="bg-purple-600 p-3 rounded-2xl shadow-lg">
               <GraduationCap className="text-white" size={26} />
             </div>
             <div>
-              <h1 className="text-2xl font-black uppercase tracking-tighter italic text-slate-900 dark:text-white">
+              <h1 className="text-xl md:text-2xl font-black uppercase tracking-tighter italic text-slate-900 dark:text-white">
                 Acadêmico<span className="text-purple-400">.ITP</span>
               </h1>
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">
@@ -136,16 +136,16 @@ export default function AcademicoPage() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 min-w-0 w-full md:w-auto">
             <button
               onClick={() => loadBase(true)}
               disabled={refreshing}
               title="Atualizar dados"
-              className="p-2 rounded-xl bg-slate-100 dark:bg-slate-700 hover:bg-purple-100 dark:hover:bg-purple-900/30 text-slate-500 dark:text-slate-300 hover:text-purple-600 transition-all disabled:opacity-60"
+              className="shrink-0 p-2 rounded-xl bg-slate-100 dark:bg-slate-700 hover:bg-purple-100 dark:hover:bg-purple-900/30 text-slate-500 dark:text-slate-300 hover:text-purple-600 transition-all disabled:opacity-60"
             >
               <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
             </button>
-            <nav className="flex bg-slate-100 dark:bg-slate-800 p-1.5 rounded-2xl gap-1 overflow-x-auto">
+            <nav className="flex bg-slate-100 dark:bg-slate-800 p-1.5 rounded-2xl gap-1 overflow-x-auto min-w-0 flex-1">
               {TABS.map(t => <TabBtn key={t.id} id={t.id} active={activeTab} set={setActiveTab} label={t.label} Icon={t.Icon} />)}
             </nav>
           </div>

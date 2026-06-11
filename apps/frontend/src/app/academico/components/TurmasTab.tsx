@@ -307,7 +307,8 @@ export default function TurmasTab({ cursos, professores, alunos }: { cursos: Cur
         {turmas.length === 0 ? (
           <div className="py-16 text-center text-sm text-slate-400">Nenhuma turma cadastrada.</div>
         ) : (
-          <table className="w-full text-[11px]">
+          <div className="overflow-x-auto">
+          <table className="w-full text-[11px] min-w-[600px]">
             <thead className="bg-slate-50 border-b border-slate-100">
               <tr className="text-[9px] font-black uppercase text-slate-400">
                 <th className="text-left px-4 py-3">Turma</th>
@@ -353,6 +354,7 @@ export default function TurmasTab({ cursos, professores, alunos }: { cursos: Cur
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
 
@@ -652,7 +654,8 @@ export default function TurmasTab({ cursos, professores, alunos }: { cursos: Cur
                     className="text-xs font-black text-indigo-600 underline">Adicionar primeiro aluno</button>
                 </div>
               ) : (
-                <table className="w-full text-[11px]">
+                <div className="overflow-x-auto">
+                <table className="w-full text-[11px] min-w-[560px]">
                   <thead className="bg-slate-50 border-b border-slate-100 sticky top-0">
                     <tr className="text-[9px] font-black uppercase text-slate-400">
                       <th className="text-left px-5 py-3">Aluno</th>
@@ -694,6 +697,7 @@ export default function TurmasTab({ cursos, professores, alunos }: { cursos: Cur
                     ))}
                   </tbody>
                 </table>
+                </div>
               )}
             </div>
           </div>
