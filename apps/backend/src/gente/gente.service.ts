@@ -980,7 +980,7 @@ export class GenteService {
     const vale = await this.valeRepo.save(this.valeRepo.create(dto)) as unknown as import('./entities/gente-vale.entity').GenteVale;
 
     // Gerar movimentação de saída no financeiro
-    if (dto.forma_pagamento && dto.valor) {
+    if (dto.valor) {
       try {
         const col = await this.colaboradorRepo.findOneBy({ id: dto.colaborador_id });
         let nomeColaborador = 'Colaborador';
@@ -996,12 +996,12 @@ export class GenteService {
         const mov = await this.movimentacaoRepo.save(this.movimentacaoRepo.create({
           nome: `${tipoLabel[dto.tipo] ?? 'Vale'} — ${nomeColaborador}`,
           tipo_movimentacao: 'Saída',
-          plano_contas: 'Funcionários 2026',
-          categoria: 'Pessoal',
-          forma_pagamento: dto.forma_pagamento,
+          plano_contas: 'Funcionarios 2026',
+          categoria: tipoLabel[dto.tipo] ?? 'Vale',
+          forma_pagamento: dto.forma_pagamento ?? 'PIX',
           valor: Number(dto.valor),
           data: dto.data ?? new Date().toISOString().split('T')[0],
-          status: 'Concluído',
+          status: 'Pago',
           descricao: dto.descricao ? `Vale: ${dto.descricao}` : `Vale liberado para ${nomeColaborador}`,
           usuario_nome: dto.criado_por_nome ?? null,
         }));
