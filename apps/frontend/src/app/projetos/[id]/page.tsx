@@ -324,7 +324,7 @@ export default function ProjetoDashboard() {
     e.target.value = '';
   };
 
-  const obrigatoriosConcluidos = OBRIGATORIOS.every(t => uploadStatus[t] === 'done');
+  const obrigatoriosConcluidos = OBRIGATORIOS.every(t => uploadStatus[t as keyof typeof uploadStatus] === 'done');
 
   const concluirPasso2 = async () => {
     await load();
