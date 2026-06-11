@@ -13,9 +13,7 @@ export const TIPOS_DOCUMENTO_PROJETO = [
   'declaracao_escolar',
 ] as const;
 
-export const TIPOS_OBRIGATORIOS_PROJETO = TIPOS_DOCUMENTO_PROJETO.filter(
-  t => t !== 'declaracao_escolar',
-);
+export const TIPOS_OBRIGATORIOS_PROJETO: readonly string[] = [];
 
 export type TipoDocumentoProjeto = typeof TIPOS_DOCUMENTO_PROJETO[number];
 

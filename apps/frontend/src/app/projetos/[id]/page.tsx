@@ -20,7 +20,7 @@ const TIPOS_DOCS = [
   'comprovante_residencia', 'certidao_nascimento', 'declaracao_escolar',
 ] as const;
 
-const OBRIGATORIOS = TIPOS_DOCS.filter(t => t !== 'declaracao_escolar');
+const OBRIGATORIOS: string[] = [];
 
 type TipoDoc = typeof TIPOS_DOCS[number];
 

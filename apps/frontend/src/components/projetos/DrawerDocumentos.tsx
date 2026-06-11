@@ -20,7 +20,7 @@ export const LABELS_DOCS: Record<string, string> = {
   declaracao_escolar:      'Declaração Escolar',
 };
 
-const OBRIGATORIOS = TIPOS_DOCS.filter(t => t !== 'declaracao_escolar');
+const OBRIGATORIOS: string[] = [];
 
 interface DocRecord {
   id: string;
