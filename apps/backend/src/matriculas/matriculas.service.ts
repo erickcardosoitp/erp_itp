@@ -580,7 +580,7 @@ export class MatriculasService {
     const camposParaSync = camposAlterados.filter(c => CAMPOS_ALUNO.includes(c));
     if (camposParaSync.length > 0) {
       const [alunoRow] = await this.dataSource.query(
-        `SELECT id FROM alunos WHERE inscricao_id = $1 UNION SELECT aluno_id::text FROM inscricoes WHERE id = $1 AND aluno_id IS NOT NULL LIMIT 1`,
+        `SELECT id::text FROM alunos WHERE inscricao_id = $1 UNION SELECT aluno_id::text FROM inscricoes WHERE id = $1 AND aluno_id IS NOT NULL LIMIT 1`,
         [id],
       );
       if (alunoRow?.id) {
