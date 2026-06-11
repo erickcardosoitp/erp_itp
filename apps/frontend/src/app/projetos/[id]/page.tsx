@@ -1032,7 +1032,7 @@ export default function ProjetoDashboard() {
                     Fotografe os documentos de <strong className="text-slate-800 dark:text-slate-100">{inscricaoCriada.nome_completo}</strong>
                   </p>
                   <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${obrigatoriosConcluidos ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-600'}`}>
-                    {OBRIGATORIOS.filter(t => uploadStatus[t] === 'done').length}/{OBRIGATORIOS.length} obrigatórios
+                    {OBRIGATORIOS.filter(t => uploadStatus[t as keyof typeof uploadStatus] === 'done').length}/{OBRIGATORIOS.length} obrigatórios
                   </span>
                 </div>
 
