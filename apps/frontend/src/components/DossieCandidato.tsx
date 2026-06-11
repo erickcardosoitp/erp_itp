@@ -7,9 +7,10 @@ import {
   Download, ExternalLink, Trash2, ClipboardCheck,
   FileText, Phone, Mail, MapPin, Calendar, Hash,
   BookOpen, CreditCard, Building2, Heart, Users, Sparkles,
-  GraduationCap, Home, UserCheck,
+  GraduationCap, Home, UserCheck, Camera,
 } from 'lucide-react';
 import api from '@/services/api';
+import DocumentCamera from '@/components/projetos/DocumentCamera';
 
 const API_ORIGIN = (process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:3001/api')
   .replace(/\/api$/, '').replace(/\/backend-api$/, '');
@@ -119,6 +120,7 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
   const [uploadingDoc, setUploadingDoc] = useState(false);
   const [uploadTipo, setUploadTipo] = useState('identidade');
   const [uploadNomeExtra, setUploadNomeExtra] = useState('');
+  const [cameraDocTipo, setCameraDocTipo] = useState<string | null>(null);
   const [complemento, setComplemento] = useState<Record<string, string>>({
     rg: '', orgao_expedidor: '', uf_expedicao: '', genero: '', orientacao_sexual: '',
     banco: '', agencia: '', agencia_digito: '', conta_corrente: '', conta_digito: '', tipo_conta: '', nome_mae: '',
@@ -812,6 +814,25 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
               )}
 
               {/* Upload */}
+              {cameraDocTipo && (
+                <DocumentCamera
+                  tipo={cameraDocTipo}
+                  onCapture={async (blob) => {
+                    setCameraDocTipo(null);
+                    setUploadingDoc(true);
+                    try {
+                      const fd = new FormData();
+                      fd.append('arquivo', blob, `${cameraDocTipo}.jpg`);
+                      fd.append('tipo', cameraDocTipo);
+                      if (cameraDocTipo === 'extra' && uploadNomeExtra.trim()) fd.append('nome_extra', uploadNomeExtra.trim());
+                      await api.post(`/matriculas/inscricao/${formData.id}/documentos/upload`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+                      setUploadNomeExtra(''); recarregarDocumentos();
+                    } catch (err: any) { alert(err?.response?.data?.message || 'Erro ao enviar documento.'); }
+                    finally { setUploadingDoc(false); }
+                  }}
+                  onClose={() => setCameraDocTipo(null)}
+                />
+              )}
               <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3 shadow-sm">
                 <p className="text-xs font-semibold text-gray-700">Adicionar documento</p>
                 <div className="flex gap-2 flex-wrap">
@@ -823,25 +844,38 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
                     <input type="text" placeholder="Nome do documento" value={uploadNomeExtra} onChange={e => setUploadNomeExtra(e.target.value)} className={`${INPUT_CLS} flex-1 min-w-[140px]`} />
                   )}
                 </div>
-                <label className={`flex flex-col items-center justify-center gap-1 w-full py-3 border rounded-xl cursor-pointer transition-colors text-xs font-medium text-center ${
-                  uploadingDoc ? 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed'
-                    : 'border-dashed border-purple-300 hover:border-purple-500 hover:bg-purple-50/40 text-gray-500 hover:text-purple-700'
-                }`}>
-                  {uploadingDoc
-                    ? <><Loader2 size={13} className="animate-spin" /> Enviando...</>
-                    : <><Paperclip size={13} /><span>Selecionar arquivo</span><span className="text-[10px] opacity-70">JPG, PNG, PDF · máx 8 MB</span></>}
-                  <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" disabled={uploadingDoc} className="hidden"
-                    onChange={async e => {
-                      const file = e.target.files?.[0]; if (!file) return; setUploadingDoc(true);
-                      try {
-                        const fd = new FormData(); fd.append('arquivo', file); fd.append('tipo', uploadTipo);
-                        if (uploadTipo === 'extra' && uploadNomeExtra.trim()) fd.append('nome_extra', uploadNomeExtra.trim());
-                        await api.post(`/matriculas/inscricao/${formData.id}/documentos/upload`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
-                        e.target.value = ''; setUploadNomeExtra(''); recarregarDocumentos();
-                      } catch (err: any) { alert(err?.response?.data?.message || 'Erro ao enviar documento.'); }
-                      finally { setUploadingDoc(false); }
-                    }} />
-                </label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={uploadingDoc}
+                    onClick={() => setCameraDocTipo(uploadTipo)}
+                    className={`flex items-center justify-center gap-2 flex-1 py-3 border rounded-xl text-xs font-medium transition-colors ${
+                      uploadingDoc ? 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed'
+                        : 'border-purple-300 hover:border-purple-500 bg-purple-50/40 hover:bg-purple-50 text-purple-700'
+                    }`}>
+                    <Camera size={13} /> Tirar foto
+                  </button>
+                  <label className={`flex items-center justify-center gap-2 flex-1 py-3 border rounded-xl cursor-pointer transition-colors text-xs font-medium text-center ${
+                    uploadingDoc ? 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed'
+                      : 'border-dashed border-gray-300 hover:border-purple-400 hover:bg-purple-50/20 text-gray-500 hover:text-purple-700'
+                  }`}>
+                    {uploadingDoc
+                      ? <><Loader2 size={13} className="animate-spin" /> Enviando...</>
+                      : <><Paperclip size={13} /><span>Selecionar arquivo</span></>}
+                    <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" disabled={uploadingDoc} className="hidden"
+                      onChange={async e => {
+                        const file = e.target.files?.[0]; if (!file) return; setUploadingDoc(true);
+                        try {
+                          const fd = new FormData(); fd.append('arquivo', file); fd.append('tipo', uploadTipo);
+                          if (uploadTipo === 'extra' && uploadNomeExtra.trim()) fd.append('nome_extra', uploadNomeExtra.trim());
+                          await api.post(`/matriculas/inscricao/${formData.id}/documentos/upload`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+                          e.target.value = ''; setUploadNomeExtra(''); recarregarDocumentos();
+                        } catch (err: any) { alert(err?.response?.data?.message || 'Erro ao enviar documento.'); }
+                        finally { setUploadingDoc(false); }
+                      }} />
+                  </label>
+                </div>
+                <p className="text-[10px] text-gray-400 text-center">JPG, PNG, PDF · máx 8 MB</p>
               </div>
 
               {(formData.url_documentos_zip || formData.url_termo_lgpd) && (

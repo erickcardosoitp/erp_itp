@@ -151,7 +151,7 @@ export default function FinanceiroPage() {
   const [recorrencias, setRecorrencias] = useState<LookupItem[]>([]);
 
   const [isMounted, setIsMounted] = useState(false);
-  const [activeTab, setActiveTab] = useState<'movimentacoes' | 'boletos' | 'doacoes'>('movimentacoes');
+  const [activeTab, setActiveTab] = useState<'movimentacoes' | 'boletos' | 'doacoes' | 'dre'>('movimentacoes');
   const { canDelete, canAccess } = usePermissions(user);
 
   const loadLookups = useCallback(async () => {
@@ -224,8 +224,14 @@ export default function FinanceiroPage() {
   if (!isMounted) return <div className="min-h-screen bg-[#F8FAFC] dark:bg-[#131b2e]" />;
 
   // KPIs
-  const totalEntradas = lista.filter(m => m.tipo_movimentacao === 'Entrada').reduce((s, m) => s + Number(m.valor ?? 0), 0);
-  const totalSaidas = lista.filter(m => m.tipo_movimentacao === 'Saída').reduce((s, m) => s + Number(m.valor ?? 0), 0);
+  const STATUS_PAGO = ['Pago', 'Confirmado', 'Concluído'];
+  const totalEntradas = lista.filter(m =>
+    (m.tipo_movimentacao === 'Entrada' || (m.tipo_movimentacao === 'Receita' && m.forma_pagamento !== 'Desconto em Folha')) &&
+    STATUS_PAGO.includes(m.status ?? '')
+  ).reduce((s, m) => s + Number(m.valor ?? 0), 0);
+  const totalSaidas = lista.filter(m =>
+    m.tipo_movimentacao === 'Saída' && STATUS_PAGO.includes(m.status ?? '')
+  ).reduce((s, m) => s + Number(m.valor ?? 0), 0);
   const saldo = totalEntradas - totalSaidas;
 
   const handleMarcarPago = async (id: string) => {
@@ -279,7 +285,7 @@ export default function FinanceiroPage() {
           </div>
           <div className="flex gap-3 flex-wrap">
             <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl gap-1">
-              {([['movimentacoes', 'Movimentações', DollarSign], ['boletos', 'Boletos a Receber', FileBarChart2], ['doacoes', 'Doações', Heart]] as const).map(([id, label, Icon]) => (
+              {([['movimentacoes', 'Movimentações', DollarSign], ['boletos', 'Boletos a Receber', FileBarChart2], ['doacoes', 'Doações', Heart], ['dre', 'DRE', TrendingUp]] as const).map(([id, label, Icon]) => (
                 <button
                   key={id}
                   onClick={() => setActiveTab(id)}
@@ -306,6 +312,8 @@ export default function FinanceiroPage() {
         {activeTab === 'boletos' && <BoletosTab podeEscrever={podeEscrever} podeEditar={podeEditar} podeExcluir={podeExcluir} />}
 
         {activeTab === 'doacoes' && <DoacoesTab podeExcluir={podeExcluir} />}
+
+        {activeTab === 'dre' && <DreTab lista={lista} filtroMes={filtroMes} />}
 
         {activeTab === 'movimentacoes' && <>
         {/* KPIs */}
@@ -1159,6 +1167,132 @@ function statusCorDoacao(s?: string) {
   if (s === 'Pendente') return 'bg-amber-50 text-amber-600 border-amber-100 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800';
   if (s === 'Cancelado') return 'bg-red-50 text-red-500 border-red-100 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800';
   return 'bg-slate-50 text-slate-500 border-slate-100 dark:bg-slate-700 dark:text-slate-400 dark:border-slate-600';
+}
+
+// ─── DRE Tab ──────────────────────────────────────────────────────────────────
+
+const GRUPOS_DRE: Record<string, string> = {
+  'Doações 2026': 'Receitas',
+  'Uniformes 2026': 'Receitas',
+  'Funcionarios 2026': 'Despesas de Pessoal',
+  'Cozinha 2026': 'Despesas Operacionais',
+  'Materiais 2026': 'Despesas Operacionais',
+  'Celia 2026': 'Despesas Operacionais',
+  'Adiantamentos a Funcionários': 'Adiantamentos',
+  'Boletos a Receber': 'Contas a Receber',
+};
+
+function DreTab({ lista, filtroMes }: { lista: Movimentacao[]; filtroMes: string }) {
+  const [mesDre, setMesDre] = React.useState(filtroMes || '');
+
+  const STATUS_REAL = ['Pago', 'Confirmado', 'Concluído'];
+
+  const itens = lista.filter(m => {
+    if (mesDre && m.data && !m.data.startsWith(mesDre)) return false;
+    if (m.tipo_movimentacao === 'Receita' && m.forma_pagamento === 'Desconto em Folha') return false;
+    return true;
+  });
+
+  const receitas = itens.filter(m =>
+    (m.tipo_movimentacao === 'Entrada' || m.tipo_movimentacao === 'Receita') &&
+    STATUS_REAL.includes(m.status ?? '')
+  );
+  const despesas = itens.filter(m =>
+    m.tipo_movimentacao === 'Saída' &&
+    m.plano_contas !== 'Adiantamentos a Funcionários'
+  );
+  const adiantamentos = itens.filter(m =>
+    m.tipo_movimentacao === 'Saída' &&
+    m.plano_contas === 'Adiantamentos a Funcionários' &&
+    STATUS_REAL.includes(m.status ?? '')
+  );
+
+  const totalReceitas = receitas.reduce((s, m) => s + Number(m.valor ?? 0), 0);
+  const totalDespesas = despesas.filter(m => STATUS_REAL.includes(m.status ?? '')).reduce((s, m) => s + Number(m.valor ?? 0), 0);
+  const despPendentes = despesas.filter(m => m.status === 'Pendente').reduce((s, m) => s + Number(m.valor ?? 0), 0);
+  const resultado = totalReceitas - totalDespesas;
+
+  const groupBy = (arr: Movimentacao[]) =>
+    arr.reduce<Record<string, number>>((acc, m) => {
+      const k = m.plano_contas ?? 'Outros';
+      acc[k] = (acc[k] ?? 0) + Number(m.valor ?? 0);
+      return acc;
+    }, {});
+
+  const receitasPorPlano = groupBy(receitas);
+  const despesasPorPlano = groupBy(despesas.filter(m => STATUS_REAL.includes(m.status ?? '')));
+
+  return (
+    <div className="space-y-6 mt-2">
+      <div className="flex items-center gap-3 flex-wrap">
+        <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Competência</span>
+        <input type="month" value={mesDre} onChange={e => setMesDre(e.target.value)}
+          className="border border-slate-200 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-semibold" />
+        {mesDre && <button onClick={() => setMesDre('')} className="text-xs text-slate-400 hover:text-slate-600 underline">Limpar</button>}
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-2xl p-5">
+          <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest mb-1">Total Receitas</p>
+          <p className="text-2xl font-black text-emerald-700 dark:text-emerald-400">{moeda(totalReceitas)}</p>
+        </div>
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl p-5">
+          <p className="text-[9px] font-black text-red-500 uppercase tracking-widest mb-1">Total Despesas</p>
+          <p className="text-2xl font-black text-red-600 dark:text-red-400">{moeda(totalDespesas)}</p>
+          {despPendentes > 0 && (
+            <p className="text-[10px] text-orange-500 font-semibold mt-1">+ {moeda(despPendentes)} a pagar</p>
+          )}
+        </div>
+        <div className={`${resultado >= 0 ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800' : 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800'} border rounded-2xl p-5`}>
+          <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Resultado</p>
+          <p className={`text-2xl font-black ${resultado >= 0 ? 'text-blue-700 dark:text-blue-300' : 'text-orange-600 dark:text-orange-400'}`}>
+            {resultado >= 0 ? '+' : ''}{moeda(resultado)}
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 p-5 shadow-sm">
+          <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-4">Receitas por Plano</p>
+          <div className="space-y-2">
+            {Object.entries(receitasPorPlano).sort((a, b) => b[1] - a[1]).map(([plano, valor]) => (
+              <div key={plano} className="flex justify-between items-center py-1.5 border-b border-slate-50 dark:border-slate-700 last:border-0">
+                <span className="text-xs text-slate-600 dark:text-slate-300 font-medium">{plano}</span>
+                <span className="text-xs font-black text-emerald-600">{moeda(valor)}</span>
+              </div>
+            ))}
+            {Object.keys(receitasPorPlano).length === 0 && (
+              <p className="text-xs text-slate-400 italic">Nenhuma receita no período</p>
+            )}
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 p-5 shadow-sm">
+          <p className="text-[10px] font-black text-red-500 uppercase tracking-widest mb-4">Despesas por Plano</p>
+          <div className="space-y-2">
+            {Object.entries(despesasPorPlano).sort((a, b) => b[1] - a[1]).map(([plano, valor]) => (
+              <div key={plano} className="flex justify-between items-center py-1.5 border-b border-slate-50 dark:border-slate-700 last:border-0">
+                <span className="text-xs text-slate-600 dark:text-slate-300 font-medium">{plano}</span>
+                <span className="text-xs font-black text-red-500">{moeda(valor)}</span>
+              </div>
+            ))}
+            {Object.keys(despesasPorPlano).length === 0 && (
+              <p className="text-xs text-slate-400 italic">Nenhuma despesa no período</p>
+            )}
+          </div>
+          {adiantamentos.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-700">
+              <p className="text-[9px] font-black text-amber-500 uppercase tracking-widest mb-2">Adiantamentos Concedidos</p>
+              <div className="flex justify-between">
+                <span className="text-xs text-slate-500">Não impactam DRE</span>
+                <span className="text-xs font-bold text-amber-600">{moeda(adiantamentos.reduce((s, m) => s + Number(m.valor ?? 0), 0))}</span>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function DoacoesTab({ podeExcluir }: { podeExcluir: boolean }) {

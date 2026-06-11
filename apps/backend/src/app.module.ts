@@ -1379,6 +1379,33 @@ export class AppModule implements OnModuleInit {
       await this.dataSource.query(`ALTER TABLE captacao_opportunities ADD COLUMN IF NOT EXISTS gemini_raw JSONB`);
       this.logger.log('✅ Tabelas módulo Captação criadas (IF NOT EXISTS)');
 
+      // ── Plano de Contas: grupo + novos planos ──────────────────────────────
+      await this.dataSource.query(`ALTER TABLE planos_contas ADD COLUMN IF NOT EXISTS grupo VARCHAR(50)`);
+      await this.dataSource.query(`ALTER TABLE gente_recibos ADD COLUMN IF NOT EXISTS movimentacao_id UUID REFERENCES movimentacoes_financeiras(id) ON DELETE SET NULL`);
+      // Insere planos padrão com grupos (ON CONFLICT UPDATE grupo se já existir)
+      await this.dataSource.query(`
+        INSERT INTO planos_contas (nome, descricao, grupo, ativo) VALUES
+          ('Adiantamentos a Funcionários', 'Adiantamentos e vales a recuperar via folha', 'Ativo', true),
+          ('Contas a Receber',             'Boletos e valores a receber',                  'Ativo', true),
+          ('Caixa',                        'Dinheiro em caixa físico',                     'Ativo', true),
+          ('Banco',                        'Conta bancária Cora Digital',                  'Ativo', true),
+          ('Salários a Pagar',             'Folha de pagamento pendente',                  'Passivo', true),
+          ('Doações 2026',                 'Receitas de doações',                          'Receitas', true),
+          ('Uniformes 2026',               'Receitas e custos de uniformes',               'Receitas', true),
+          ('Funcionarios 2026',            'Despesas com pessoal',                         'Despesas', true),
+          ('Cozinha 2026',                 'Despesas com insumos de cozinha',              'Despesas', true),
+          ('Materiais 2026',               'Despesas com materiais e insumos',             'Despesas', true),
+          ('Celia 2026',                   'Movimentações custeadas por Célia',            'Despesas', true),
+          ('Boletos a Receber',            'Parcelas de boletos emitidos',                 'Ativo', true)
+        ON CONFLICT (nome) DO UPDATE SET grupo = EXCLUDED.grupo WHERE planos_contas.grupo IS NULL
+      `);
+      // Corrigir inconsistência de acento em registros existentes
+      await this.dataSource.query(`
+        UPDATE movimentacoes_financeiras SET plano_contas = 'Funcionarios 2026'
+        WHERE plano_contas = 'Funcionários 2026'
+      `);
+      this.logger.log('✅ Plano de contas: grupos e novos planos atualizados');
+
     } catch (err: any) {
       this.logger.error(`❌ Erro nas migrations automáticas: ${err.message}`);
     }

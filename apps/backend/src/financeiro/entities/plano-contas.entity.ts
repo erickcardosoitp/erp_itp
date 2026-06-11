@@ -11,6 +11,9 @@ export class PlanoContas {
   @Column({ nullable: true, type: 'text' })
   descricao: string;
 
+  @Column({ nullable: true, type: 'varchar', length: 50 })
+  grupo: string;
+
   @Column({ type: 'boolean', default: true })
   ativo: boolean;
 

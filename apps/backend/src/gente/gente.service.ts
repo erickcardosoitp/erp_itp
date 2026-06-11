@@ -633,27 +633,9 @@ export class GenteService {
       const totalDescontos = descontos.reduce((s, d) => s + d.valor, 0);
       const liquido = totalProventos - totalDescontos;
 
-      // Marca vales como descontados e gera Entrada financeira de recuperação
+      // Marca vales como descontados (sem criar Receita — adiantamento já é Saída, o desconto é a compensação)
       for (const v of valesDoMes) {
         await this.valeRepo.update(v.id, { descontado: true });
-        try {
-          const tipoLabel: Record<string, string> = {
-            alimentacao: 'Alimentação', transporte: 'Transporte', adiantamento: 'Adiantamento', outro: 'Vale',
-          };
-          const movEntrada = await this.movimentacaoRepo.save(this.movimentacaoRepo.create({
-            nome: `Recuperação ${tipoLabel[v.tipo] ?? 'Vale'} — ${func.nome}`,
-            tipo_movimentacao: 'Receita',
-            plano_contas: 'Funcionários 2026',
-            categoria: 'Pessoal',
-            forma_pagamento: 'Desconto em Folha',
-            valor: Number(v.valor),
-            data: mes_referencia + '-01',
-            status: 'Concluído',
-            descricao: `Desconto folha ${mes_referencia} — ${func.nome}`,
-            usuario_nome: criado_por_nome ?? null,
-          }));
-          await this.valeRepo.update(v.id, { movimentacao_entrada_id: movEntrada.id });
-        } catch { /* não bloqueia o cálculo */ }
       }
 
       // Gera recibo
@@ -661,7 +643,7 @@ export class GenteService {
         where: { colaborador_id: col.id, mes_referencia },
       });
 
-      const reciboData = {
+      const reciboData: any = {
         colaborador_id: col.id,
         mes_referencia,
         valor: liquido,
@@ -679,6 +661,33 @@ export class GenteService {
       } else {
         recibo = await this.reciboRepo.save(this.reciboRepo.create(reciboData));
       }
+
+      // Cria (ou atualiza) Saída de salário líquido no financeiro
+      try {
+        const [ano, mes] = mes_referencia.split('-');
+        const mesesAbr = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
+        const competencia = `${mesesAbr[parseInt(mes, 10) - 1]}/${ano}`;
+        const movId = reciboExistente?.movimentacao_id;
+        if (movId) {
+          await this.movimentacaoRepo.update(movId, { valor: liquido });
+        } else {
+          const mov = await this.movimentacaoRepo.save(this.movimentacaoRepo.create({
+            nome: `Salário — ${func.nome}`,
+            tipo_movimentacao: 'Saída',
+            plano_contas: 'Funcionarios 2026',
+            categoria: 'Salário',
+            forma_pagamento: 'PIX',
+            valor: liquido,
+            data: mes_referencia + '-01',
+            status: 'Pendente',
+            competencia,
+            descricao: `Salário líquido ${mes_referencia} — ${func.nome}`,
+            usuario_nome: criado_por_nome ?? null,
+          }));
+          await this.reciboRepo.update(recibo.id, { movimentacao_id: mov.id });
+          recibo.movimentacao_id = mov.id;
+        }
+      } catch { /* não bloqueia a folha */ }
 
       resultados.push({
         colaborador_id: col.id,
@@ -858,30 +867,13 @@ export class GenteService {
     const r = await this._computarFolhaColaborador(col, mes_referencia);
     if (!r) throw new NotFoundException('Funcionário não encontrado.');
 
+    // Marca vales como descontados (sem criar Receita)
     for (const v of r.valesDoMes) {
       await this.valeRepo.update(v.id, { descontado: true });
-      try {
-        const tipoLabel: Record<string, string> = {
-          alimentacao: 'Alimentação', transporte: 'Transporte', adiantamento: 'Adiantamento', outro: 'Vale',
-        };
-        const movEntrada = await this.movimentacaoRepo.save(this.movimentacaoRepo.create({
-          nome: `Recuperação ${tipoLabel[v.tipo] ?? 'Vale'} — ${r.func.nome}`,
-          tipo_movimentacao: 'Receita',
-          plano_contas: 'Funcionários 2026',
-          categoria: 'Pessoal',
-          forma_pagamento: 'Desconto em Folha',
-          valor: Number(v.valor),
-          data: mes_referencia + '-01',
-          status: 'Concluído',
-          descricao: `Desconto folha ${mes_referencia} — ${r.func.nome}`,
-          usuario_nome: criado_por_nome ?? null,
-        }));
-        await this.valeRepo.update(v.id, { movimentacao_entrada_id: movEntrada.id });
-      } catch { /* não bloqueia o cálculo */ }
     }
 
     const reciboExistente = await this.reciboRepo.findOne({ where: { colaborador_id, mes_referencia } });
-    const reciboData = {
+    const reciboData: any = {
       colaborador_id,
       mes_referencia,
       valor: r.liquido,
@@ -899,6 +891,33 @@ export class GenteService {
     } else {
       recibo = await this.reciboRepo.save(this.reciboRepo.create(reciboData));
     }
+
+    // Cria (ou atualiza) Saída de salário líquido no financeiro
+    try {
+      const [ano, mes] = mes_referencia.split('-');
+      const mesesAbr = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
+      const competencia = `${mesesAbr[parseInt(mes, 10) - 1]}/${ano}`;
+      const movId = reciboExistente?.movimentacao_id;
+      if (movId) {
+        await this.movimentacaoRepo.update(movId, { valor: r.liquido });
+      } else {
+        const mov = await this.movimentacaoRepo.save(this.movimentacaoRepo.create({
+          nome: `Salário — ${r.func.nome}`,
+          tipo_movimentacao: 'Saída',
+          plano_contas: 'Funcionarios 2026',
+          categoria: 'Salário',
+          forma_pagamento: 'PIX',
+          valor: r.liquido,
+          data: mes_referencia + '-01',
+          status: 'Pendente',
+          competencia,
+          descricao: `Salário líquido ${mes_referencia} — ${r.func.nome}`,
+          usuario_nome: criado_por_nome ?? null,
+        }));
+        await this.reciboRepo.update(recibo.id, { movimentacao_id: mov.id });
+        recibo.movimentacao_id = mov.id;
+      }
+    } catch { /* não bloqueia a folha */ }
 
     return {
       funcionario_nome: r.func.nome,
@@ -965,7 +984,15 @@ export class GenteService {
   }
 
   async criarRecibo(dto: any) { return this.reciboRepo.save(this.reciboRepo.create(dto)); }
-  async editarRecibo(id: string, dto: any) { await this.reciboRepo.update(id, dto); return this.reciboRepo.findOneBy({ id }); }
+  async editarRecibo(id: string, dto: any) {
+    const recibo = await this.reciboRepo.findOneBy({ id });
+    if (recibo?.movimentacao_id && dto.status === 'pago') {
+      const dataPagamento = dto.data_pagamento ?? new Date().toISOString().split('T')[0];
+      await this.movimentacaoRepo.update(recibo.movimentacao_id, { status: 'Pago', data: dataPagamento });
+    }
+    await this.reciboRepo.update(id, dto);
+    return this.reciboRepo.findOneBy({ id });
+  }
   async deletarRecibo(id: string) { await this.reciboRepo.delete(id); return { ok: true }; }
 
   // ── Vales ─────────────────────────────────────────────────────────────────
@@ -993,10 +1020,11 @@ export class GenteService {
         const tipoLabel: Record<string, string> = {
           alimentacao: 'Alimentação', transporte: 'Transporte', adiantamento: 'Adiantamento', outro: 'Vale',
         };
+        const isAdiantamento = dto.tipo === 'adiantamento';
         const mov = await this.movimentacaoRepo.save(this.movimentacaoRepo.create({
           nome: `${tipoLabel[dto.tipo] ?? 'Vale'} — ${nomeColaborador}`,
           tipo_movimentacao: 'Saída',
-          plano_contas: 'Funcionarios 2026',
+          plano_contas: isAdiantamento ? 'Adiantamentos a Funcionários' : 'Funcionarios 2026',
           categoria: tipoLabel[dto.tipo] ?? 'Vale',
           forma_pagamento: dto.forma_pagamento ?? 'PIX',
           valor: Number(dto.valor),

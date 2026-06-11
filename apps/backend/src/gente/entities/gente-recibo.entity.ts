@@ -29,6 +29,9 @@ export class GenteRecibo {
   @Column({ type: 'text', nullable: true })
   observacao: string;
 
+  @Column({ type: 'uuid', nullable: true })
+  movimentacao_id: string;
+
   @Column({ type: 'text', nullable: true })
   criado_por_id: string;
 
