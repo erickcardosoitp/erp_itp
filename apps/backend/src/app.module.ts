@@ -159,6 +159,24 @@ export class AppModule implements OnModuleInit {
 
   private async runMigrations() {
     try {
+      // ── Versão do schema — pula migrations se já rodaram neste banco ──────
+      const SCHEMA_VERSION = 12; // incrementar aqui ao adicionar novas migrations
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS _schema_version (
+          id      INT PRIMARY KEY DEFAULT 1,
+          version INT NOT NULL DEFAULT 0,
+          ran_at  TIMESTAMPTZ DEFAULT now(),
+          CONSTRAINT single_row CHECK (id = 1)
+        )
+      `);
+      await this.dataSource.query(`INSERT INTO _schema_version (id, version) VALUES (1, 0) ON CONFLICT DO NOTHING`);
+      const [{ version: currentVersion }] = await this.dataSource.query(`SELECT version FROM _schema_version WHERE id = 1`);
+      if (Number(currentVersion) >= SCHEMA_VERSION) {
+        this.logger.log(`✅ Schema v${SCHEMA_VERSION} já aplicado — migrations ignoradas`);
+        return;
+      }
+      this.logger.log(`⚙️  Aplicando migrations schema v${currentVersion} → v${SCHEMA_VERSION}...`);
+
       // ── Tabelas críticas criadas PRIMEIRO (antes de qualquer outro await) ──
       // Garante que existam mesmo se a request chegar durante a inicialização
 
@@ -1405,6 +1423,10 @@ export class AppModule implements OnModuleInit {
         WHERE plano_contas = 'Funcionários 2026'
       `);
       this.logger.log('✅ Plano de contas: grupos e novos planos atualizados');
+
+      // ── Marca schema como atualizado — próximos cold starts pulam tudo ────
+      await this.dataSource.query(`UPDATE _schema_version SET version = $1, ran_at = now() WHERE id = 1`, [SCHEMA_VERSION]);
+      this.logger.log(`✅ Schema v${SCHEMA_VERSION} aplicado e registrado`);
 
     } catch (err: any) {
       this.logger.error(`❌ Erro nas migrations automáticas: ${err.message}`);
