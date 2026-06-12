@@ -145,7 +145,7 @@ export default function AcademicoPage() {
             >
               <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
             </button>
-            <nav className="flex bg-slate-100 dark:bg-slate-800 p-1.5 rounded-2xl gap-1 overflow-x-auto min-w-0 flex-1">
+            <nav className="flex bg-slate-100 dark:bg-slate-800 p-1.5 rounded-2xl gap-1 overflow-x-auto min-w-0 flex-1 md:flex-none">
               {TABS.map(t => <TabBtn key={t.id} id={t.id} active={activeTab} set={setActiveTab} label={t.label} Icon={t.Icon} />)}
             </nav>
           </div>
