@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft, Plus, Users, ClipboardCheck, Printer, X, Edit3, Trash2,
   AlertTriangle, Search, Camera, Upload, CheckCircle2, AlertCircle,
-  Mail, MessageSquare, ChevronRight, RefreshCw, FileCheck,
+  Mail, MessageSquare, ChevronRight, RefreshCw, FileCheck, Download,
 } from 'lucide-react';
 import api from '@/services/api';
 import { toast } from 'sonner';
@@ -58,6 +58,38 @@ type Tab       = 'inscritos' | 'equipes' | 'presenca';
 type UpStatus  = 'idle' | 'uploading' | 'done' | 'error';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+
+function exportarInscritosExcel(inscritos: any[], equipes: any[], nomeProjeto: string) {
+  import('xlsx').then(mod => {
+    const XLSX = (mod.default ?? mod) as typeof import('xlsx');
+    const dados = inscritos.map(ins => {
+      const eq = equipes.find((e: any) => e.id === ins.equipe_id);
+      const pendentes: string[] = ins.docs_pendentes ?? [];
+      return {
+        'Nome':              ins.nome_completo,
+        'Tipo':              ins.tipo === 'regular' ? 'Aluno ITP' : 'Externo',
+        'Idade':             ins.data_nascimento ? `${calcIdade(ins.data_nascimento)} anos` : '—',
+        'Responsável':       ins.nome_responsavel || '—',
+        'Telefone':          ins.telefone_responsavel || '—',
+        'Cuidados Especiais': ins.cuidado_especial && ins.cuidado_especial !== 'Não' ? ins.cuidado_especial : '—',
+        'Data Inscrição':    ins.created_at ? new Date(ins.created_at).toLocaleDateString('pt-BR') : '—',
+        'Equipe':            eq?.nome || '—',
+        'Docs Status':       ins.doc_status === 'ok' ? 'OK' : 'Pendente',
+        'Docs Pendentes':    pendentes.length > 0
+          ? pendentes.map((t: string) => LABELS_DOCS[t] ?? t).join(', ')
+          : '—',
+      };
+    });
+    const ws = XLSX.utils.json_to_sheet(dados);
+    ws['!cols'] = [
+      { wch: 30 }, { wch: 12 }, { wch: 8 }, { wch: 28 }, { wch: 16 },
+      { wch: 30 }, { wch: 14 }, { wch: 16 }, { wch: 10 }, { wch: 40 },
+    ];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Inscritos');
+    XLSX.writeFile(wb, `${nomeProjeto}_inscritos_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  });
+}
 
 function fmtDate(v?: string) {
   if (!v) return '—';
@@ -502,6 +534,12 @@ export default function ProjetoDashboard() {
                   {equipes.map(eq => <option key={eq.id} value={eq.id}>{eq.nome}</option>)}
                 </select>
               )}
+              <button
+                onClick={() => exportarInscritosExcel(inscritosFiltrados, equipes, projeto?.nome ?? 'projeto')}
+                className="flex items-center gap-1.5 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 px-3 py-2 rounded-xl font-black text-xs uppercase transition-colors"
+                title="Exportar Excel">
+                <Download size={13}/> Excel
+              </button>
               <button
                 onClick={() => { setFormInscricao({}); setBuscaAluno(''); setResultadosAluno([]); setAlunoSelecionado(null); setModoExterno(false); setEquipeAutoSugerida(null); setPassoExterno(1); setInscricaoCriada(null); setUploadStatus({} as any); setReinscrFound(null); setModalInscricao(true); }}
                 className="flex items-center gap-1.5 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-xl font-black text-xs uppercase transition-colors">
