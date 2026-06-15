@@ -6,6 +6,15 @@ import api from '@/services/api';
 import { toast } from 'sonner';
 import DocumentCamera from './DocumentCamera';
 
+function DocThumb({ signedUrl, fisico, hasDoc, obrig }: { signedUrl?: string | null; fisico: boolean; hasDoc: boolean; obrig: boolean }) {
+  const [err, setErr] = useState(false);
+  useEffect(() => { setErr(false); }, [signedUrl]);
+  if (signedUrl && !err) return <img src={signedUrl} alt="" className="w-full h-full object-cover" onError={() => setErr(true)} />;
+  if (fisico) return <FileCheck size={20} className="text-green-600" />;
+  if (hasDoc) return <CheckCircle2 size={20} className="text-green-500" />;
+  return <AlertCircle size={20} className={obrig ? 'text-orange-400' : 'text-slate-300'} />;
+}
+
 export const TIPOS_DOCS = [
   'foto_aluno', 'identidade_aluno', 'identidade_responsavel',
   'comprovante_residencia', 'certidao_nascimento', 'declaracao_escolar',
@@ -181,14 +190,7 @@ export default function DrawerDocumentos({ projetoId, inscricao, onClose, onRefr
 
                     {/* Thumbnail / icon */}
                     <div className="w-12 h-12 rounded-lg overflow-hidden shrink-0 bg-slate-100 dark:bg-slate-700 flex items-center justify-center">
-                      {doc?.signed_url
-                        ? <img src={doc.signed_url} alt={tipo} className="w-full h-full object-cover" />
-                        : fisico
-                          ? <FileCheck size={20} className="text-green-600" />
-                          : doc
-                            ? <CheckCircle2 size={20} className="text-green-500" />
-                            : <AlertCircle size={20} className={obrig ? 'text-orange-400' : 'text-slate-300'} />
-                      }
+                      <DocThumb signedUrl={doc?.signed_url} fisico={fisico} hasDoc={!!doc} obrig={obrig} />
                     </div>
 
                     {/* Info */}
