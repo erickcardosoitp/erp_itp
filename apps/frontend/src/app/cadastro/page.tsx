@@ -5,7 +5,7 @@ import {
   Users, Briefcase, ShieldCheck, GraduationCap, UserCheck,
   Package, Heart, Landmark, MapPin, Phone, User, Activity,
   Plus, Trash2, Edit3, Search, X, AlertCircle, Eye, EyeOff, Settings2, UserPlus, RefreshCw,
-  ArrowLeftRight, BookOpen, Tag, UserCog, CreditCard, Repeat, BarChart2, Copy, Check, ChevronDown, ChevronUp, Star, StopCircle, AlertTriangle,
+  ArrowLeftRight, BookOpen, Tag, UserCog, CreditCard, Repeat, BarChart2, Copy, Check, ChevronDown, ChevronUp, Star, StopCircle, AlertTriangle, List,
 } from 'lucide-react';
 import api from '@/services/api';
 import { useAuth } from '@/context/auth-context';
@@ -14,7 +14,8 @@ import { usePermissions } from '@/hooks/use-permissions';
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
 type TabId = 'usuarios' | 'grupos' | 'cursos' | 'alunos' | 'insumos' | 'doadores' | 'contas' | 'pesquisas'
-  | 'fin_tipos_mov' | 'fin_planos' | 'fin_categorias' | 'fin_tipos_pessoa' | 'fin_formas_pag' | 'fin_recorrencias';
+  | 'fin_tipos_mov' | 'fin_planos' | 'fin_categorias' | 'fin_tipos_pessoa' | 'fin_formas_pag' | 'fin_recorrencias'
+  | 'lista_chamados_tipos' | 'lista_projetos_cat';
 
 interface Professor {
   id: string;
@@ -81,7 +82,7 @@ interface Funcionario {
   matricula?: string;
   foto?: string;
 }
-interface UsuarioAdmin { id: string; nome: string; email: string; role: string; matricula?: string; grupo?: { id: string; nome: string }; }
+interface UsuarioAdmin { id: string; nome: string; email: string; role: string; matricula?: string; grupo?: { id: string; nome: string }; ativo?: boolean; }
 interface Grupo { id: string; nome: string; grupo_permissoes?: any; usuarios?: { id: string; nome: string }[]; }
 interface Curso { id: string; codigo?: string; nome: string; sigla: string; status: string; periodo?: string; descricao?: string; }
 interface Aluno { id: string; numero_matricula: string; nome_completo: string; cpf?: string; celular?: string; data_nascimento?: string; cursos_matriculados?: string; cidade?: string; ativo?: boolean; }
@@ -146,6 +147,7 @@ export default function CadastroBasicoPage() {
     alunos: 0, insumos: 0, doadores: 0, contas: 0, pesquisas: 0,
     fin_tipos_mov: 0, fin_planos: 0, fin_categorias: 0,
     fin_tipos_pessoa: 0, fin_formas_pag: 0, fin_recorrencias: 0,
+    lista_chamados_tipos: 0, lista_projetos_cat: 0,
   });
   const [refreshKey, setRefreshKey] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
@@ -195,6 +197,7 @@ export default function CadastroBasicoPage() {
       fin_tipos_mov: m('fin_tipos_mov'), fin_planos: m('fin_planos'),
       fin_categorias: m('fin_categorias'), fin_tipos_pessoa: m('fin_tipos_pessoa'),
       fin_formas_pag: m('fin_formas_pag'), fin_recorrencias: m('fin_recorrencias'),
+      lista_chamados_tipos: m('lista_chamados_tipos'), lista_projetos_cat: m('lista_projetos_cat'),
     } as Record<TabId, (n: number) => void>;
   }, []);
 
@@ -218,6 +221,11 @@ export default function CadastroBasicoPage() {
     { id: 'fin_tipos_pessoa', label: 'Tipo Pessoa',    icon: UserCog,        cor: 'teal' },
     { id: 'fin_formas_pag',   label: 'Forma Pagam.',   icon: CreditCard,     cor: 'teal' },
     { id: 'fin_recorrencias', label: 'Recorrências',   icon: Repeat,         cor: 'teal' },
+  ];
+
+  const TABS_LISTAS: typeof TABS = [
+    { id: 'lista_chamados_tipos', label: 'Tipos Chamado', icon: List, cor: 'violet' },
+    { id: 'lista_projetos_cat',   label: 'Cat. Projetos', icon: List, cor: 'violet' },
   ];
 
   return (
@@ -260,7 +268,7 @@ export default function CadastroBasicoPage() {
         </div>
 
         {/* FINANCEIRO — sub-tabs de cadastro */}
-        <div className="mb-8">
+        <div className="mb-4">
           <div className="flex items-center gap-2 mb-3">
             <div className="h-px flex-1 bg-teal-200 dark:bg-teal-800" />
             <span className="text-[9px] font-black uppercase tracking-widest text-teal-600 dark:text-teal-400 px-3 py-1 bg-teal-50 dark:bg-teal-900/30 border border-teal-200 dark:border-teal-800 rounded-full">
@@ -270,6 +278,22 @@ export default function CadastroBasicoPage() {
           </div>
           <div className="flex gap-3 overflow-x-auto pb-2 snap-x">
             {TABS_FINANCEIRO.map(t => (
+              <TabKpi key={t.id} tab={t} active={activeTab} set={setActiveTab} count={counts[t.id]} />
+            ))}
+          </div>
+        </div>
+
+        {/* LISTAS DE OPÇÕES — configuráveis por módulo */}
+        <div className="mb-8">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="h-px flex-1 bg-violet-200 dark:bg-violet-800" />
+            <span className="text-[9px] font-black uppercase tracking-widest text-violet-600 dark:text-violet-400 px-3 py-1 bg-violet-50 dark:bg-violet-900/30 border border-violet-200 dark:border-violet-800 rounded-full">
+              Listas de Opções
+            </span>
+            <div className="h-px flex-1 bg-violet-200 dark:bg-violet-800" />
+          </div>
+          <div className="flex gap-3 overflow-x-auto pb-2 snap-x">
+            {TABS_LISTAS.map(t => (
               <TabKpi key={t.id} tab={t} active={activeTab} set={setActiveTab} count={counts[t.id]} />
             ))}
           </div>
@@ -290,6 +314,8 @@ export default function CadastroBasicoPage() {
         {activeTab === 'fin_tipos_pessoa' && <FinLookupTab key={`${refreshKey}-ftp`} onCount={countSetters.fin_tipos_pessoa} endpoint="/financeiro/tipos-pessoa"        titulo="Tipo de Pessoa"        cor="teal" />}
         {activeTab === 'fin_formas_pag'   && <FinLookupTab key={`${refreshKey}-ffp`} onCount={countSetters.fin_formas_pag}   endpoint="/financeiro/formas-pagamento"    titulo="Forma de Pagamento"    cor="teal" />}
         {activeTab === 'fin_recorrencias' && <FinLookupTab key={`${refreshKey}-frc`} onCount={countSetters.fin_recorrencias} endpoint="/financeiro/recorrencias"        titulo="Recorrência"           cor="teal" />}
+        {activeTab === 'lista_chamados_tipos' && <ConfigListaTab key={`${refreshKey}-lct`} chave="chamados_tipos" titulo="Tipos de Chamado" descricao="Categorias disponíveis ao criar um chamado no módulo Chamados." onCount={countSetters.lista_chamados_tipos} />}
+        {activeTab === 'lista_projetos_cat'   && <ConfigListaTab key={`${refreshKey}-lpc`} chave="projetos_categorias" titulo="Categorias de Projetos" descricao="Categorias disponíveis ao criar um projeto." onCount={countSetters.lista_projetos_cat} />}
 
       </div>
     </div>
@@ -795,23 +821,39 @@ function UsuariosTab({ onCount }: { onCount: (n: number) => void }) {
     setSalvando(false);
   };
 
-  const handleDeletar = async (id: string) => {
-    if (!confirm('Confirmar exclusão do usuário?')) return;
-    try { await api.delete(`/admin/usuarios/${id}`); load(); }
-    catch (e: any) { alert(e.response?.data?.message || 'Erro ao excluir.'); }
+  const handleToggleAtivo = async (u: UsuarioAdmin) => {
+    const acao = u.ativo === false ? 'ativar' : 'desativar';
+    if (!confirm(`${acao.charAt(0).toUpperCase() + acao.slice(1)} o usuário "${u.nome}"?`)) return;
+    try {
+      await api.patch(`/admin/usuarios/${u.id}`, { ativo: u.ativo === false });
+      load();
+    } catch (e: any) { alert(e.response?.data?.message || `Erro ao ${acao}.`); }
   };
 
   const roleLabel = (r: string) => ROLES.find(x => x.value === r)?.label ?? r;
-  const filtrados = lista.filter(u =>
-    (u.nome ?? '').toLowerCase().includes(busca.toLowerCase()) ||
-    (u.email ?? '').toLowerCase().includes(busca.toLowerCase()),
-  );
+  const [filtroAtivo, setFiltroAtivo] = React.useState('todos');
+  const filtrados = lista.filter(u => {
+    if (filtroAtivo === 'ativo' && u.ativo === false) return false;
+    if (filtroAtivo === 'inativo' && u.ativo !== false) return false;
+    return (u.nome ?? '').toLowerCase().includes(busca.toLowerCase()) ||
+      (u.email ?? '').toLowerCase().includes(busca.toLowerCase());
+  });
 
   return (
     <div className="space-y-4">
       {erro && <Banner tipo="erro" msg={erro} onClose={() => setErro('')} />}
 
-      <BarraAcao busca={busca} setBusca={setBusca} placeholder="Buscar por nome ou e-mail..." btnLabel="Novo Usuário" btnCor="blue" onClick={abrirCriar} />
+      <div className="flex flex-wrap gap-2 items-center">
+        <div className="flex-1 min-w-[200px]">
+          <BarraAcao busca={busca} setBusca={setBusca} placeholder="Buscar por nome ou e-mail..." btnLabel="Novo Usuário" btnCor="blue" onClick={abrirCriar} />
+        </div>
+        <select value={filtroAtivo} onChange={e => setFiltroAtivo(e.target.value)}
+          className="border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 focus:outline-none">
+          <option value="todos">Todos</option>
+          <option value="ativo">Ativos</option>
+          <option value="inativo">Inativos</option>
+        </select>
+      </div>
 
       <Tabela loading={loading} vazio={filtrados.length === 0} msgVazio="Nenhum usuário encontrado.">
         <thead className="bg-slate-50 dark:bg-slate-700/50 border-b border-slate-100 dark:border-slate-600">
@@ -821,35 +863,51 @@ function UsuariosTab({ onCount }: { onCount: (n: number) => void }) {
             <th className="text-left px-6 py-4">Matrícula</th>
             <th className="text-center px-6 py-4">Cargo</th>
             <th className="text-center px-6 py-4">Grupo</th>
+            <th className="text-center px-6 py-4">Status</th>
             <th className="text-right px-6 py-4">Ações</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-50 dark:divide-slate-700">
-          {filtrados.map(u => (
-            <tr key={u.id} className="hover:bg-blue-50/30 dark:hover:bg-blue-900/20 transition-colors">
-              <td className="px-6 py-4">
-                <div className="flex items-center gap-3">
-                  <Avatar nome={u.nome ?? '?'} cor="blue" />
-                  <span className="font-bold text-slate-800 dark:text-slate-100 text-sm">{u.nome || '–'}</span>
-                </div>
-              </td>
-              <td className="px-6 py-4 text-xs text-slate-500">{u.email}</td>
-              <td className="px-6 py-4">
-                {u.matricula
-                  ? <span className="font-mono text-[10px] bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-100 dark:border-purple-700 px-2 py-0.5 rounded-md">{u.matricula}</span>
-                  : <span className="text-slate-300 dark:text-slate-600 text-xs">–</span>}
-              </td>
-              <td className="px-6 py-4 text-center">
-                <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase border ${u.role === 'admin' ? 'bg-purple-50 text-purple-600 border-purple-100' : 'bg-slate-50 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border-slate-100 dark:border-slate-600'}`}>
-                  {roleLabel(u.role)}
-                </span>
-              </td>
-              <td className="px-6 py-4 text-center text-[10px] font-bold text-slate-400 uppercase">{u.grupo?.nome || '–'}</td>
-              <td className="px-6 py-4 text-right">
-                <AcoesBotoes onEdit={() => abrirEditar(u)} onDelete={() => handleDeletar(u.id)} />
-              </td>
-            </tr>
-          ))}
+          {filtrados.map(u => {
+            const inativo = u.ativo === false;
+            return (
+              <tr key={u.id} className={`transition-colors ${inativo ? 'opacity-50 bg-slate-50/50 dark:bg-slate-800/30' : 'hover:bg-blue-50/30 dark:hover:bg-blue-900/20'}`}>
+                <td className="px-6 py-4">
+                  <div className="flex items-center gap-3">
+                    <Avatar nome={u.nome ?? '?'} cor={inativo ? 'slate' : 'blue'} />
+                    <span className={`font-bold text-sm ${inativo ? 'text-slate-400 line-through' : 'text-slate-800 dark:text-slate-100'}`}>{u.nome || '–'}</span>
+                  </div>
+                </td>
+                <td className="px-6 py-4 text-xs text-slate-500">{u.email}</td>
+                <td className="px-6 py-4">
+                  {u.matricula
+                    ? <span className="font-mono text-[10px] bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-100 dark:border-purple-700 px-2 py-0.5 rounded-md">{u.matricula}</span>
+                    : <span className="text-slate-300 dark:text-slate-600 text-xs">–</span>}
+                </td>
+                <td className="px-6 py-4 text-center">
+                  <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase border ${u.role === 'admin' ? 'bg-purple-50 text-purple-600 border-purple-100' : 'bg-slate-50 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border-slate-100 dark:border-slate-600'}`}>
+                    {roleLabel(u.role)}
+                  </span>
+                </td>
+                <td className="px-6 py-4 text-center text-[10px] font-bold text-slate-400 uppercase">{u.grupo?.nome || '–'}</td>
+                <td className="px-6 py-4 text-center">
+                  <button
+                    onClick={() => handleToggleAtivo(u)}
+                    title={inativo ? 'Ativar usuário' : 'Desativar usuário'}
+                    className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase border transition-all ${inativo
+                      ? 'bg-slate-100 dark:bg-slate-700 text-slate-500 border-slate-200 dark:border-slate-600 hover:bg-green-50 hover:text-green-600 hover:border-green-200'
+                      : 'bg-green-50 text-green-600 border-green-100 hover:bg-red-50 hover:text-red-600 hover:border-red-100'
+                    }`}
+                  >
+                    {inativo ? 'Inativo' : 'Ativo'}
+                  </button>
+                </td>
+                <td className="px-6 py-4 text-right">
+                  <AcoesBotoes onEdit={() => abrirEditar(u)} onDelete={() => handleToggleAtivo(u)} />
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </Tabela>
 
@@ -2469,6 +2527,96 @@ function PesquisasTab({ onCount }: { onCount: (n: number) => void }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Tab: Listas de Opções Configuráveis ─────────────────────────────────────
+
+function ConfigListaTab({ chave, titulo, descricao, onCount }: {
+  chave: string; titulo: string; descricao: string; onCount: (n: number) => void;
+}) {
+  const [itens, setItens] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [salvando, setSalvando] = useState(false);
+  const [novoItem, setNovoItem] = useState('');
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await api.get(`/admin/config-listas/${chave}`);
+      const lista = r.data?.itens ?? [];
+      setItens(lista); onCount(lista.length);
+    } catch {}
+    setLoading(false);
+  }, [chave, onCount]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const salvar = async (novaLista: string[]) => {
+    setSalvando(true);
+    try {
+      await api.put(`/admin/config-listas/${chave}`, { itens: novaLista });
+      setItens(novaLista); onCount(novaLista.length);
+    } catch { alert('Erro ao salvar lista.'); }
+    setSalvando(false);
+  };
+
+  const adicionar = () => {
+    const v = novoItem.trim();
+    if (!v || itens.includes(v)) return;
+    salvar([...itens, v]);
+    setNovoItem('');
+  };
+
+  const remover = (item: string) => salvar(itens.filter(i => i !== item));
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-violet-50 dark:bg-violet-900/20 border border-violet-100 dark:border-violet-800/30 rounded-2xl p-4">
+        <p className="text-sm font-semibold text-violet-700 dark:text-violet-300">{titulo}</p>
+        <p className="text-[10px] text-violet-500 dark:text-violet-400 mt-0.5">{descricao}</p>
+      </div>
+
+      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 p-4 space-y-3">
+        <div className="flex gap-2">
+          <input
+            value={novoItem}
+            onChange={e => setNovoItem(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && adicionar()}
+            placeholder="Nova opção..."
+            className="flex-1 border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+          />
+          <button
+            onClick={adicionar}
+            disabled={salvando || !novoItem.trim()}
+            className="bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white px-4 py-2 rounded-xl font-black text-[10px] uppercase flex items-center gap-1.5 transition-colors"
+          >
+            <Plus size={13} strokeWidth={3} /> Adicionar
+          </button>
+        </div>
+
+        {loading ? (
+          <p className="text-sm text-slate-400 text-center py-4">Carregando...</p>
+        ) : itens.length === 0 ? (
+          <p className="text-sm text-slate-400 text-center py-4">Nenhuma opção cadastrada.</p>
+        ) : (
+          <ul className="divide-y divide-slate-50 dark:divide-slate-700">
+            {itens.map((item, i) => (
+              <li key={i} className="flex items-center justify-between py-2.5 px-1">
+                <span className="text-sm text-slate-700 dark:text-slate-200">{item}</span>
+                <button
+                  onClick={() => remover(item)}
+                  className="p-1.5 text-slate-300 hover:text-red-500 transition-colors rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20"
+                >
+                  <Trash2 size={13} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      {salvando && <p className="text-[10px] text-violet-500 text-center">Salvando...</p>}
     </div>
   );
 }

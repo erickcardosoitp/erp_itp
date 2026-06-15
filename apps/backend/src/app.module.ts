@@ -160,7 +160,7 @@ export class AppModule implements OnModuleInit {
   private async runMigrations() {
     try {
       // ── Versão do schema — pula migrations se já rodaram neste banco ──────
-      const SCHEMA_VERSION = 12; // incrementar aqui ao adicionar novas migrations
+      const SCHEMA_VERSION = 13; // incrementar aqui ao adicionar novas migrations
       await this.dataSource.query(`
         CREATE TABLE IF NOT EXISTS _schema_version (
           id      INT PRIMARY KEY DEFAULT 1,
@@ -1423,6 +1423,28 @@ export class AppModule implements OnModuleInit {
         WHERE plano_contas = 'Funcionários 2026'
       `);
       this.logger.log('✅ Plano de contas: grupos e novos planos atualizados');
+
+      // ── Coluna ativo em usuarios ──────────────────────────────────────────
+      await this.dataSource.query(`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS ativo BOOLEAN NOT NULL DEFAULT TRUE`);
+      this.logger.log('✅ usuarios.ativo adicionado');
+
+      // ── Tabela config_listas (listas de opções configuráveis) ─────────────
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS config_listas (
+          chave VARCHAR(100) PRIMARY KEY,
+          itens JSONB NOT NULL DEFAULT '[]',
+          updated_at TIMESTAMPTZ DEFAULT now()
+        )
+      `);
+      await this.dataSource.query(`
+        INSERT INTO config_listas (chave, itens) VALUES
+          ('chamados_tipos', '["Social","Acadêmico","Saúde","Família","Financeiro","Gente","Suporte","TI","Outro"]'),
+          ('chamados_prioridades', '["baixa","normal","alta","urgente"]'),
+          ('projetos_categorias', '["Colônia de Férias","Esporte","Cultura","Reforço Escolar","Outros"]'),
+          ('documentos_tipos_chamado', '[]')
+        ON CONFLICT (chave) DO NOTHING
+      `);
+      this.logger.log('✅ config_listas criada e populada com padrões');
 
       // ── Marca schema como atualizado — próximos cold starts pulam tudo ────
       await this.dataSource.query(`UPDATE _schema_version SET version = $1, ran_at = now() WHERE id = 1`, [SCHEMA_VERSION]);

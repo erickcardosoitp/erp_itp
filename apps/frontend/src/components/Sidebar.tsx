@@ -94,14 +94,14 @@ export default function Sidebar({ isCollapsed, setIsCollapsed, mobileOpen, setMo
   return (
     <aside
       className={`fixed left-0 top-0 h-screen text-white flex flex-col shadow-2xl transition-all duration-300 z-50
-        w-72 ${isCollapsed ? 'lg:w-20' : 'lg:w-64'}
+        w-64 ${isCollapsed ? 'lg:w-16' : 'lg:w-52'}
         ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0
       `}
       style={{ backgroundColor: '#1a0b2e' }}
     >
       
       {/* Header com Logo e Toggle */}
-      <div className="p-4 lg:p-6 flex items-center justify-between border-b border-purple-900/50">
+      <div className="p-3 lg:p-4 flex items-center justify-between border-b border-purple-900/50">
         {/* X close – só no mobile */}
         <button
           onClick={() => setMobileOpen(false)}
@@ -137,10 +137,10 @@ export default function Sidebar({ isCollapsed, setIsCollapsed, mobileOpen, setMo
               href={item.path} 
               title={isCollapsed ? item.name : ''}
               onClick={() => setMobileOpen(false)}
-              className={`flex items-center gap-4 px-4 py-3 rounded-xl font-bold transition-all duration-200 group
+              className={`flex items-center gap-3 px-3 py-2 rounded-xl font-bold transition-all duration-200 group
                 ${isActive ? 'bg-yellow-400 text-purple-950 shadow-lg' : 'hover:bg-purple-900/40 text-purple-200'}`}
             >
-              <Icon size={22} className={`shrink-0 ${isActive ? '' : 'group-hover:scale-110 transition-transform'}`} />
+              <Icon size={18} className={`shrink-0 ${isActive ? '' : 'group-hover:scale-110 transition-transform'}`} />
               {(!isCollapsed || mobileOpen) && (
                 <span className="uppercase text-[10px] font-black tracking-widest whitespace-nowrap">
                   {item.name}
@@ -153,26 +153,26 @@ export default function Sidebar({ isCollapsed, setIsCollapsed, mobileOpen, setMo
 
       {/* Rodapé: Configurações e Logout */}
       <div className="px-3 py-4 border-t border-purple-900/50 space-y-1">
-        <Link 
-          href="/config" 
+        <Link
+          href="/config"
           title={isCollapsed ? "Configurações" : ""}
           onClick={() => setMobileOpen(false)}
-          className={`flex items-center gap-4 px-4 py-3 rounded-xl font-bold transition-all
+          className={`flex items-center gap-3 px-3 py-2 rounded-xl font-bold transition-all
             ${pathname === '/config' ? 'bg-yellow-400 text-purple-950' : 'text-purple-300 hover:bg-purple-900/40'}`}
         >
-          <Settings size={22} />
+          <Settings size={18} />
           {(!isCollapsed || mobileOpen) && <span className="uppercase text-[10px] font-black tracking-widest">Configurações</span>}
         </Link>
-        
-        <button 
+
+        <button
           onClick={handleLogout}
           disabled={isLoggingOut}
-          className="flex items-center gap-4 px-4 py-3 w-full rounded-xl font-bold text-red-400 hover:bg-red-500/10 transition-all group disabled:opacity-50"
+          className="flex items-center gap-3 px-3 py-2 w-full rounded-xl font-bold text-red-400 hover:bg-red-500/10 transition-all group disabled:opacity-50"
         >
           {isLoggingOut ? (
-            <Loader2 size={22} className="animate-spin" />
+            <Loader2 size={18} className="animate-spin" />
           ) : (
-            <LogOut size={22} className="group-hover:translate-x-1 transition-transform" />
+            <LogOut size={18} className="group-hover:translate-x-1 transition-transform" />
           )}
           {(!isCollapsed || mobileOpen) && (
             <span className="uppercase text-[10px] font-black tracking-widest text-left">

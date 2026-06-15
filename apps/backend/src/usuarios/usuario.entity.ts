@@ -57,6 +57,9 @@ export class Usuario {
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 
+  @Column({ type: 'boolean', default: true })
+  ativo: boolean;
+
   /** Token de reset de senha (UUID, expira em 1h) */
   @Column({ name: 'reset_token', nullable: true, select: false })
   resetToken: string;

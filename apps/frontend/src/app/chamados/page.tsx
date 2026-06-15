@@ -487,6 +487,7 @@ export default function ChamadosPage() {
     canWrite,
     onAtender: (id: string) => mudarStatus(id, 'em_andamento'),
     onResolver: (c: Chamado) => mudarStatus(c.id, 'resolvido', c),
+    onReabrir: (id: string) => mudarStatus(id, 'aberto'),
     onAcomp: (c: Chamado) => setAcampChamado(c),
     onEditar: abrirEditar,
     onDeletar: deletar,

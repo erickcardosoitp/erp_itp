@@ -15,6 +15,7 @@ export class UsersService {
     return this.usuarioRepo.find({
       relations: ['grupo'],
       order: { nome: 'ASC' },
+      withDeleted: false,
     });
   }
 
@@ -59,12 +60,13 @@ export class UsersService {
     return semSenha;
   }
 
-  async atualizar(id: string, dados: Partial<{ nome: string; role: string; grupo_id: string | null; nova_senha: string; matricula: string }>) {
+  async atualizar(id: string, dados: Partial<{ nome: string; role: string; grupo_id: string | null; nova_senha: string; matricula: string; ativo: boolean }>) {
     const usuario = await this.usuarioRepo.findOne({ where: { id }, relations: ['grupo'] });
     if (!usuario) throw new NotFoundException('Usuário não encontrado.');
     if (dados.nome !== undefined) usuario.nome = dados.nome;
     if (dados.role !== undefined) usuario.role = dados.role;
     if (dados.matricula !== undefined) (usuario as any).matricula = dados.matricula || null;
+    if (dados.ativo !== undefined) (usuario as any).ativo = dados.ativo;
     if ('grupo_id' in dados) {
       (usuario as any).grupo = dados.grupo_id ? { id: dados.grupo_id } : null;
     }

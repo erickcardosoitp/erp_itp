@@ -20,7 +20,7 @@ const TIPOS_DOCS = [
   'comprovante_residencia', 'certidao_nascimento', 'declaracao_escolar',
 ] as const;
 
-const OBRIGATORIOS: string[] = [];
+const OBRIGATORIOS: string[] = ['declaracao_escolar'];
 
 type TipoDoc = typeof TIPOS_DOCS[number];
 
@@ -510,9 +510,9 @@ export default function ProjetoDashboard() {
             </div>
 
             {/* Table */}
-            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800">
+              <div className="overflow-x-auto rounded-2xl">
+                <table className="w-full text-sm min-w-[680px]">
                   <thead>
                     <tr className="border-b border-slate-100 dark:border-slate-800">
                       {['Nome', 'Idade', 'Responsável', 'Cuidados', 'Inscrição', 'Equipe', 'Docs'].map(h => (

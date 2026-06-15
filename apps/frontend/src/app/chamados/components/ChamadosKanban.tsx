@@ -13,6 +13,7 @@ interface Props {
   canWrite: boolean;
   onAtender: (id: string) => void;
   onResolver: (c: Chamado) => void;
+  onReabrir: (id: string) => void;
   onAcomp: (c: Chamado) => void;
   onEditar: (c: Chamado) => void;
   onDeletar: (id: string) => void;
@@ -33,11 +34,12 @@ function SLABar({ chamado }: { chamado: Chamado }) {
   );
 }
 
-function KanbanCard({ c, canWrite, onAtender, onResolver, onAcomp, onEditar }: {
+function KanbanCard({ c, canWrite, onAtender, onResolver, onReabrir, onAcomp, onEditar }: {
   c: Chamado;
   canWrite: boolean;
   onAtender: (id: string) => void;
   onResolver: (c: Chamado) => void;
+  onReabrir: (id: string) => void;
   onAcomp: (c: Chamado) => void;
   onEditar: (c: Chamado) => void;
   onDeletar: (id: string) => void;
@@ -117,7 +119,7 @@ function KanbanCard({ c, canWrite, onAtender, onResolver, onAcomp, onEditar }: {
           </div>
           {/* Ações — stopPropagation para não abrir o detalhe */}
           <div className="flex items-center gap-0.5" onClick={e => e.stopPropagation()}>
-            {c.status !== 'resolvido' && c.status !== 'em_andamento' && (
+            {c.status === 'aberto' && (
               <button
                 onClick={() => onAtender(c.id)}
                 className="px-1.5 py-0.5 text-[9px] font-semibold rounded bg-amber-50 text-amber-600 hover:bg-amber-100 border border-amber-100 dark:bg-amber-950 dark:border-amber-900 dark:text-amber-400 whitespace-nowrap"
@@ -131,6 +133,14 @@ function KanbanCard({ c, canWrite, onAtender, onResolver, onAcomp, onEditar }: {
                 className="px-1.5 py-0.5 text-[9px] font-semibold rounded bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border border-emerald-100 dark:bg-emerald-950 dark:border-emerald-900 dark:text-emerald-400 whitespace-nowrap"
               >
                 Resolver
+              </button>
+            )}
+            {(c.status === 'em_andamento' || c.status === 'resolvido') && (
+              <button
+                onClick={() => onReabrir(c.id)}
+                className="px-1.5 py-0.5 text-[9px] font-semibold rounded bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-100 dark:bg-blue-950 dark:border-blue-900 dark:text-blue-400 whitespace-nowrap"
+              >
+                Reabrir
               </button>
             )}
             <button
@@ -165,7 +175,7 @@ function KanbanCard({ c, canWrite, onAtender, onResolver, onAcomp, onEditar }: {
   );
 }
 
-export function ChamadosKanban({ chamados, canWrite, onAtender, onResolver, onAcomp, onEditar, onDeletar }: Props) {
+export function ChamadosKanban({ chamados, canWrite, onAtender, onResolver, onReabrir, onAcomp, onEditar, onDeletar }: Props) {
   if (chamados.length === 0) {
     return <div className="text-center py-16 text-sm text-slate-400">Nenhum chamado encontrado.</div>;
   }
@@ -197,6 +207,7 @@ export function ChamadosKanban({ chamados, canWrite, onAtender, onResolver, onAc
                     canWrite={canWrite}
                     onAtender={onAtender}
                     onResolver={onResolver}
+                    onReabrir={onReabrir}
                     onAcomp={onAcomp}
                     onEditar={onEditar}
                     onDeletar={onDeletar}

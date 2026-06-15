@@ -350,6 +350,21 @@ export function ColaboradoresTab({ reload, colaboradores, carregarColaboradores 
     toast.success('Desativado.'); carregarColaboradores();
   };
 
+  const toggleAtivo = async (c: any) => {
+    const acao = c.ativo === false ? 'ativar' : 'desativar';
+    if (!confirm(`${acao.charAt(0).toUpperCase() + acao.slice(1)} colaborador "${c.funcionario?.nome}"?`)) return;
+    try {
+      await fetch(`${API}/gente/colaboradores/${c.id}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ativo: c.ativo === false }),
+      });
+      toast.success(c.ativo === false ? 'Colaborador ativado.' : 'Colaborador desativado.');
+      carregarColaboradores();
+    } catch { toast.error(`Erro ao ${acao} colaborador.`); }
+  };
+
   const DIAS_OPT = [
     { k: 'seg', l: 'Seg' }, { k: 'ter', l: 'Ter' }, { k: 'qua', l: 'Qua' },
     { k: 'qui', l: 'Qui' }, { k: 'sex', l: 'Sex' }, { k: 'sab', l: 'Sáb' }, { k: 'dom', l: 'Dom' },
@@ -694,6 +709,16 @@ export function ColaboradoresTab({ reload, colaboradores, carregarColaboradores 
                       carregarLocais(c.id);
                       setModal('editar');
                     }} className="p-1.5 text-slate-400 hover:text-purple-600 transition" title="Editar Colaborador"><Edit2 size={14} /></button>
+                    <button
+                      onClick={() => toggleAtivo(c)}
+                      title={c.ativo === false ? 'Ativar colaborador' : 'Desativar colaborador'}
+                      className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase border transition-all ${c.ativo === false
+                        ? 'bg-slate-100 dark:bg-slate-700 text-slate-400 border-slate-200 hover:bg-green-50 hover:text-green-600 hover:border-green-200'
+                        : 'bg-green-50 text-green-600 border-green-100 dark:bg-green-900/20 dark:border-green-800 dark:text-green-400 hover:bg-red-50 hover:text-red-600 hover:border-red-100'
+                      }`}
+                    >
+                      {c.ativo === false ? 'Inativo' : 'Ativo'}
+                    </button>
                     <button onClick={() => setDetalhe(detalhe === c.id ? null : c.id)} className="p-1.5 text-slate-400 hover:text-blue-500 transition">
                       {detalhe === c.id ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                     </button>
