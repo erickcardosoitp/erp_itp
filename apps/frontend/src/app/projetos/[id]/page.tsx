@@ -20,7 +20,7 @@ const TIPOS_DOCS = [
   'comprovante_residencia', 'certidao_nascimento', 'declaracao_escolar',
 ] as const;
 
-const OBRIGATORIOS: string[] = ['declaracao_escolar'];
+const OBRIGATORIOS: string[] = ['identidade_aluno', 'declaracao_escolar'];
 
 type TipoDoc = typeof TIPOS_DOCS[number];
 

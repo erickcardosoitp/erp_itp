@@ -12,7 +12,16 @@ import { CreateInscricaoDto } from './dto/create-inscricao.dto';
 import { SupabaseService } from '../modules/supabase/supabase.service';
 import { EmailService } from '../email.service';
 
-const TIPOS_OBRIGATORIOS = [...TIPOS_OBRIGATORIOS_PROJETO];
+// Tipos obrigatórios no sistema de projetos (externos)
+const TIPOS_OBRIGATORIOS_EXT = ['identidade_aluno', 'declaracao_escolar'];
+
+// Mapeamento: tipo no sistema de matrículas → tipo no sistema de projetos
+const ITP_TIPO_MAP: Record<string, string> = {
+  identidade:              'identidade_aluno',
+  declaracao_escolaridade: 'declaracao_escolar',
+};
+// Tipos equivalentes no sistema de matrículas (para a query SQL)
+const TIPOS_OBRIGATORIOS_ITP = Object.keys(ITP_TIPO_MAP);
 
 @Injectable()
 export class ProjetosService {
@@ -108,7 +117,7 @@ export class ProjetosService {
           FROM documentos_inscricao di
           JOIN inscricoes insc ON insc.id = di.inscricao_id
           WHERE insc.aluno_id::text = pi.aluno_id::text
-            AND di.tipo = ANY($2)
+            AND di.tipo = ANY($3)
         ) as docs_itp_tipos
       FROM projeto_inscricoes pi
       LEFT JOIN projeto_equipes pe ON pe.id = pi.equipe_id
@@ -123,7 +132,7 @@ export class ProjetosService {
       ) foto ON true
       WHERE pi.projeto_id = $1
       ORDER BY pi.created_at ASC
-    `, [projeto_id, TIPOS_OBRIGATORIOS]);
+    `, [projeto_id, TIPOS_OBRIGATORIOS_EXT, TIPOS_OBRIGATORIOS_ITP]);
 
     return rows.map((r: any) => {
       const logradouro = r.logradouro || r.aluno_logradouro;
@@ -131,10 +140,11 @@ export class ProjetosService {
       const bairro     = r.aluno_bairro;
       const cidade     = r.aluno_cidade;
 
+      // Para alunos ITP: mapeia tipos de matrículas → tipos de projetos antes de comparar
       const tiposExistentes: string[] = r.aluno_id
-        ? (r.docs_itp_tipos || [])
+        ? (r.docs_itp_tipos || []).map((t: string) => ITP_TIPO_MAP[t] ?? t)
         : (r.docs_ext_tipos || []);
-      const docsPendentes = TIPOS_OBRIGATORIOS.filter(t => !tiposExistentes.includes(t));
+      const docsPendentes = TIPOS_OBRIGATORIOS_EXT.filter(t => !tiposExistentes.includes(t));
 
       return {
         ...r,
@@ -199,7 +209,7 @@ export class ProjetosService {
         data_inicio: projeto?.data_inicio ?? '',
         data_fim: projeto?.data_fim ?? '',
         equipe: null,
-        docs_pendentes: TIPOS_OBRIGATORIOS,
+        docs_pendentes: TIPOS_OBRIGATORIOS_EXT,
       }).catch(e => this.logger.warn(`Email confirmação falhou: ${e.message}`));
     }
 

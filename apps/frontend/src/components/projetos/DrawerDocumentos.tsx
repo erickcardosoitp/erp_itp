@@ -44,7 +44,7 @@ export const LABELS_DOCS: Record<string, string> = {
   declaracao_escolar:      'Declaração Escolar',
 };
 
-const OBRIGATORIOS: string[] = ['declaracao_escolar'];
+const OBRIGATORIOS: string[] = ['identidade_aluno', 'declaracao_escolar'];
 
 interface DocRecord {
   id: string;
