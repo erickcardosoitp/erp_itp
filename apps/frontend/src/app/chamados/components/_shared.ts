@@ -152,5 +152,5 @@ export function isSLACritical(c: Chamado): boolean {
 
 export function isMeuChamado(c: Chamado, userName?: string | null): boolean {
   if (!userName) return false;
-  return c.responsavel_nome === userName || c.criado_por_nome === userName;
+  return c.responsavel_nome === userName;
 }
