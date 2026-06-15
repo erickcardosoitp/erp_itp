@@ -1,17 +1,32 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Upload, Trash2, Camera, CheckCircle2, AlertCircle, FileCheck } from 'lucide-react';
+import { X, Upload, Trash2, Camera, CheckCircle2, AlertCircle, FileCheck, FileText } from 'lucide-react';
 import api from '@/services/api';
 import { toast } from 'sonner';
 import DocumentCamera from './DocumentCamera';
 
-function DocThumb({ signedUrl, fisico, hasDoc, obrig }: { signedUrl?: string | null; fisico: boolean; hasDoc: boolean; obrig: boolean }) {
+function DocThumb({ signedUrl, fisico, hasDoc, obrig, mimetype }: {
+  signedUrl?: string | null; fisico: boolean; hasDoc: boolean; obrig: boolean; mimetype?: string | null;
+}) {
   const [err, setErr] = useState(false);
   useEffect(() => { setErr(false); }, [signedUrl]);
+
+  const isPdf = mimetype === 'application/pdf' || signedUrl?.toLowerCase().includes('.pdf');
+
+  if (signedUrl && isPdf) {
+    return (
+      <a href={signedUrl} target="_blank" rel="noopener noreferrer"
+        className="flex flex-col items-center justify-center w-full h-full gap-0.5 text-blue-600 hover:text-blue-700"
+        onClick={e => e.stopPropagation()}>
+        <FileText size={18} />
+        <span className="text-[8px] font-black uppercase">PDF</span>
+      </a>
+    );
+  }
   if (signedUrl && !err) return <img src={signedUrl} alt="" className="w-full h-full object-cover" onError={() => setErr(true)} />;
   if (fisico) return <FileCheck size={20} className="text-green-600" />;
-  if (hasDoc) return <CheckCircle2 size={20} className="text-green-500" />;
+  if (hasDoc || err) return <CheckCircle2 size={20} className="text-green-500" />;
   return <AlertCircle size={20} className={obrig ? 'text-orange-400' : 'text-slate-300'} />;
 }
 
@@ -36,6 +51,7 @@ interface DocRecord {
   tipo: string;
   url_arquivo: string;
   signed_url?: string | null;
+  mimetype?: string | null;
   source?: 'matriculas' | 'projetos';
 }
 
@@ -190,7 +206,7 @@ export default function DrawerDocumentos({ projetoId, inscricao, onClose, onRefr
 
                     {/* Thumbnail / icon */}
                     <div className="w-12 h-12 rounded-lg overflow-hidden shrink-0 bg-slate-100 dark:bg-slate-700 flex items-center justify-center">
-                      <DocThumb signedUrl={doc?.signed_url} fisico={fisico} hasDoc={!!doc} obrig={obrig} />
+                      <DocThumb signedUrl={doc?.signed_url} fisico={fisico} hasDoc={!!doc} obrig={obrig} mimetype={doc?.mimetype} />
                     </div>
 
                     {/* Info */}

@@ -302,8 +302,8 @@ export class ProjetosService {
         declaracao_escolaridade: 'declaracao_escolar',
       };
 
-      const rows: Array<{ id: number; tipo: string; url_arquivo: string }> = await this.dataSource.query(`
-        SELECT di.id, di.tipo, di.url_arquivo
+      const rows: Array<{ id: number; tipo: string; url_arquivo: string; mimetype: string | null }> = await this.dataSource.query(`
+        SELECT di.id, di.tipo, di.url_arquivo, di.mimetype
         FROM documentos_inscricao di
         JOIN inscricoes insc ON insc.id = di.inscricao_id
         WHERE insc.aluno_id::text = $1::text
@@ -335,6 +335,7 @@ export class ProjetosService {
           inscricao_id,
           url_arquivo: row.url_arquivo,
           signed_url,
+          mimetype: row.mimetype,
           source: 'matriculas',
         });
       }
