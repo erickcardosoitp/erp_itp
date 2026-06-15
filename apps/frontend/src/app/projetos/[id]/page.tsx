@@ -512,7 +512,7 @@ export default function ProjetoDashboard() {
             {/* Table */}
             <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800">
               <div className="overflow-x-auto rounded-2xl">
-                <table className="w-full text-sm min-w-[680px]">
+                <table className="w-full text-sm min-w-[920px]">
                   <thead>
                     <tr className="border-b border-slate-100 dark:border-slate-800">
                       {['Nome', 'Idade', 'Responsável', 'Cuidados', 'Inscrição', 'Equipe', 'Docs'].map(h => (

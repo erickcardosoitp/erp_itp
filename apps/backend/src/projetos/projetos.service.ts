@@ -281,7 +281,7 @@ export class ProjetosService {
 
     const docs = await this.documentosRepo.find({ where: { inscricao_id } });
 
-    return Promise.all(
+    const result: any[] = await Promise.all(
       docs.map(async doc => {
         let signed_url: string | null = null;
         if (doc.url_arquivo !== 'fisico') {
@@ -290,6 +290,51 @@ export class ProjetosService {
         return { ...doc, signed_url };
       }),
     );
+
+    // Para alunos ITP: também carregar documentos do sistema de matrículas
+    if (inscricao.aluno_id) {
+      const TYPE_MAP: Record<string, string> = {
+        identidade:              'identidade_aluno',
+        identidade_responsavel:  'identidade_responsavel',
+        comprovante_residencia:  'comprovante_residencia',
+        certidao_nascimento:     'certidao_nascimento',
+        foto_aluno:              'foto_aluno',
+        declaracao_escolaridade: 'declaracao_escolar',
+      };
+
+      const rows: Array<{ id: number; tipo: string; url_arquivo: string }> = await this.dataSource.query(`
+        SELECT di.id, di.tipo, di.url_arquivo
+        FROM documentos_inscricao di
+        JOIN inscricoes insc ON insc.id = di.inscricao_id
+        WHERE insc.aluno_id::text = $1::text
+        ORDER BY di.id DESC
+      `, [inscricao.aluno_id]);
+
+      for (const row of rows) {
+        const mappedTipo = TYPE_MAP[row.tipo];
+        if (!mappedTipo) continue;
+        // Não sobrescrever doc de projetos já presente
+        if (result.some(d => d.tipo === mappedTipo)) continue;
+
+        let signed_url: string | null = null;
+        if (row.url_arquivo?.startsWith('data:')) {
+          signed_url = row.url_arquivo;
+        } else if (row.url_arquivo && row.url_arquivo !== 'fisico') {
+          signed_url = await this.supabase.getSignedUrl(row.url_arquivo, 3600).catch(() => null);
+        }
+
+        result.push({
+          id: String(row.id),
+          tipo: mappedTipo,
+          inscricao_id,
+          url_arquivo: row.url_arquivo,
+          signed_url,
+          source: 'matriculas',
+        });
+      }
+    }
+
+    return result;
   }
 
   async removeDocumento(projeto_id: string, inscricao_id: string, docId: string) {

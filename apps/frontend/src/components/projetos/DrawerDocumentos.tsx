@@ -20,13 +20,14 @@ export const LABELS_DOCS: Record<string, string> = {
   declaracao_escolar:      'Declaração Escolar',
 };
 
-const OBRIGATORIOS: string[] = [];
+const OBRIGATORIOS: string[] = ['declaracao_escolar'];
 
 interface DocRecord {
   id: string;
   tipo: string;
   url_arquivo: string;
   signed_url?: string | null;
+  source?: 'matriculas' | 'projetos';
 }
 
 interface Inscricao {
@@ -198,7 +199,7 @@ export default function DrawerDocumentos({ projetoId, inscricao, onClose, onRefr
                         : doc        ? 'text-green-600'
                         : obrig      ? 'text-orange-500'
                         :              'text-slate-400'}`}>
-                        {fisico ? 'Recebida fisicamente' : doc ? 'Enviado' : obrig ? 'Pendente' : 'Opcional'}
+                        {fisico ? 'Recebida fisicamente' : doc?.source === 'matriculas' ? 'Via Matrículas' : doc ? 'Enviado' : obrig ? 'Pendente' : 'Opcional'}
                       </p>
                     </div>
 
