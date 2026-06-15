@@ -511,16 +511,16 @@ export default function ProjetoDashboard() {
 
             {/* Table */}
             <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800">
-              <div className="overflow-x-auto rounded-2xl">
-                <table className="w-full text-sm min-w-[920px]">
+              <div className="rounded-2xl">
+                <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-slate-100 dark:border-slate-800">
-                      {['Nome', 'Idade', 'Responsável', 'Cuidados', 'Inscrição', 'Equipe', 'Docs'].map(h => (
-                        <th key={h} className="text-left px-4 py-2.5 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap">
+                      {['Nome', 'Idade', 'Responsável', 'Cuidados', 'Insc.', 'Equipe', 'Docs'].map(h => (
+                        <th key={h} className="text-left px-2 py-2.5 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap">
                           {h}
                         </th>
                       ))}
-                      <th className="w-8"/>
+                      <th className="w-6"/>
                     </tr>
                   </thead>
                   <tbody>
@@ -533,44 +533,44 @@ export default function ProjetoDashboard() {
                           onClick={() => setDrawerInscricao(ins)}
                           className="border-b border-slate-50 dark:border-slate-800/50 last:border-0 hover:bg-purple-50/40 dark:hover:bg-purple-900/10 cursor-pointer transition-colors">
                           {/* Nome */}
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-2.5">
-                              <div className="w-7 h-7 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center text-[11px] font-black text-purple-600 shrink-0">
+                          <td className="px-2 py-2.5">
+                            <div className="flex items-center gap-2">
+                              <div className="w-6 h-6 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center text-[10px] font-black text-purple-600 shrink-0">
                                 {ins.nome_completo[0]}
                               </div>
-                              <div>
-                                <p className="font-bold text-slate-800 dark:text-slate-100 whitespace-nowrap">{ins.nome_completo}</p>
-                                <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full ${ins.tipo === 'regular' ? 'bg-purple-100 text-purple-600' : 'bg-slate-100 dark:bg-slate-700 text-slate-500'}`}>
+                              <div className="min-w-0">
+                                <p className="font-bold text-slate-800 dark:text-slate-100 text-xs leading-tight">{ins.nome_completo}</p>
+                                <span className={`text-[8px] font-black px-1 py-0.5 rounded-full ${ins.tipo === 'regular' ? 'bg-purple-100 text-purple-600' : 'bg-slate-100 dark:bg-slate-700 text-slate-500'}`}>
                                   {ins.tipo}
                                 </span>
                               </div>
                             </div>
                           </td>
                           {/* Idade */}
-                          <td className="px-4 py-3 text-xs text-slate-500 whitespace-nowrap">
-                            {idade !== null ? `${idade} anos` : '—'}
+                          <td className="px-2 py-2.5 text-xs text-slate-500 whitespace-nowrap">
+                            {idade !== null ? `${idade}a` : '—'}
                           </td>
                           {/* Responsável */}
-                          <td className="px-4 py-3">
-                            <p className="text-xs text-slate-700 dark:text-slate-300 whitespace-nowrap">{ins.nome_responsavel || '—'}</p>
+                          <td className="px-2 py-2.5 max-w-[160px]">
+                            <p className="text-xs text-slate-700 dark:text-slate-300 leading-tight">{ins.nome_responsavel || '—'}</p>
                             {ins.telefone_responsavel && (
-                              <p className="text-[10px] text-slate-400">{fmtTelefone(ins.telefone_responsavel)}</p>
+                              <p className="text-[10px] text-slate-400 whitespace-nowrap">{fmtTelefone(ins.telefone_responsavel)}</p>
                             )}
                           </td>
                           {/* Cuidados */}
-                          <td className="px-4 py-3">
+                          <td className="px-2 py-2.5 max-w-[140px]">
                             {temCuidado ? (
-                              <span className="flex items-center gap-1 text-[10px] font-black text-red-600 dark:text-red-400 whitespace-nowrap">
-                                <AlertTriangle size={10}/> {ins.cuidado_especial}
+                              <span className="flex items-start gap-1 text-[10px] font-black text-red-600 dark:text-red-400 leading-tight">
+                                <AlertTriangle size={10} className="shrink-0 mt-0.5"/> {ins.cuidado_especial}
                               </span>
                             ) : <span className="text-xs text-slate-300">—</span>}
                           </td>
                           {/* Data inscrição */}
-                          <td className="px-4 py-3 text-xs text-slate-500 whitespace-nowrap">
+                          <td className="px-2 py-2.5 text-xs text-slate-500 whitespace-nowrap">
                             {fmtDateShort(ins.created_at)}
                           </td>
                           {/* Equipe */}
-                          <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                          <td className="px-2 py-2.5" onClick={e => e.stopPropagation()}>
                             <select value={ins.equipe_id ?? ''}
                               onChange={async e => {
                                 await api.patch(`/projetos/${id}/inscricoes/${ins.id}`, { equipe_id: e.target.value || null });
@@ -583,7 +583,7 @@ export default function ProjetoDashboard() {
                             </select>
                           </td>
                           {/* Docs */}
-                          <td className="px-4 py-3">
+                          <td className="px-2 py-2.5">
                             <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase
                               ${ins.doc_status === 'ok'
                                 ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
@@ -591,11 +591,11 @@ export default function ProjetoDashboard() {
                               }`}
                               title={ins.doc_status !== 'ok' ? `Pendentes: ${ins.docs_pendentes?.map(t => LABELS_DOCS[t]).join(', ')}` : undefined}>
                               {ins.doc_status === 'ok' ? <CheckCircle2 size={9}/> : <AlertCircle size={9}/>}
-                              {ins.doc_status === 'ok' ? 'OK' : 'Pendente'}
+                              {ins.doc_status === 'ok' ? 'OK' : 'Pend.'}
                             </span>
                           </td>
                           {/* Delete */}
-                          <td className="px-2 py-3" onClick={e => e.stopPropagation()}>
+                          <td className="px-1 py-2.5" onClick={e => e.stopPropagation()}>
                             <button
                               onClick={async () => {
                                 if (!confirm(`Remover "${ins.nome_completo}" do projeto?`)) return;

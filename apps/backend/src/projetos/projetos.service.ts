@@ -317,10 +317,16 @@ export class ProjetosService {
         if (result.some(d => d.tipo === mappedTipo)) continue;
 
         let signed_url: string | null = null;
-        if (row.url_arquivo?.startsWith('data:')) {
-          signed_url = row.url_arquivo;
-        } else if (row.url_arquivo && row.url_arquivo !== 'fisico') {
-          signed_url = await this.supabase.getSignedUrl(row.url_arquivo, 3600).catch(() => null);
+        const url = row.url_arquivo;
+        if (url?.startsWith('data:')) {
+          // base64 — usar direto
+          signed_url = url;
+        } else if (url?.startsWith('/uploads/') || url?.startsWith('uploads/')) {
+          // arquivo local do backend — retornar o path, frontend proxia via /uploads/*
+          signed_url = url.startsWith('/') ? url : `/${url}`;
+        } else if (url && url !== 'fisico') {
+          // path no Supabase Storage
+          signed_url = await this.supabase.getSignedUrl(url, 3600).catch(() => null);
         }
 
         result.push({
