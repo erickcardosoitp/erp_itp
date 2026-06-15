@@ -60,6 +60,11 @@ function KanbanCard({ c, canWrite, onAtender, onResolver, onAcomp, onEditar, onD
                 <User size={8} />{c.aluno_nome}
               </p>
             )}
+            {c.responsavel_nome && (
+              <p className="text-[9px] text-indigo-400 flex items-center gap-0.5 mt-0.5 font-medium">
+                <User size={8} />→ {c.responsavel_nome}
+              </p>
+            )}
           </div>
           <span className={`text-[9px] font-semibold shrink-0 ${PRIO_TEXT[c.prioridade] ?? 'text-slate-400'}`}>
             {LABEL_PRIO[c.prioridade]}
