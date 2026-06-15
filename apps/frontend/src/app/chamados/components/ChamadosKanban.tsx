@@ -1,9 +1,10 @@
 'use client';
 
 import React from 'react';
-import { NotebookPen, Edit3, Trash2, User, Tag, Star, Globe } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { NotebookPen, Edit3, User, Tag, Star, Globe, Users, Building2 } from 'lucide-react';
 import {
-  Chamado, PRIO_BORDER, PRIO_TEXT, LABEL_PRIO,
+  Chamado, PRIO_BORDER, PRIO_TEXT, PRIO_DOT, LABEL_PRIO, COR_STATUS, LABEL_STATUS,
   getSLAState, getSLATextClass, fmtRelative,
 } from './_shared';
 
@@ -18,9 +19,9 @@ interface Props {
 }
 
 const COLUMNS = [
-  { key: 'aberto',       label: 'Aberto' },
-  { key: 'em_andamento', label: 'Em andamento' },
-  { key: 'resolvido',    label: 'Resolvido' },
+  { key: 'aberto',       label: 'Aberto',       color: 'text-blue-600 bg-blue-50 border-blue-200' },
+  { key: 'em_andamento', label: 'Em andamento',  color: 'text-amber-600 bg-amber-50 border-amber-200' },
+  { key: 'resolvido',    label: 'Resolvido',     color: 'text-emerald-600 bg-emerald-50 border-emerald-200' },
 ] as const;
 
 function SLABar({ chamado }: { chamado: Chamado }) {
@@ -32,7 +33,7 @@ function SLABar({ chamado }: { chamado: Chamado }) {
   );
 }
 
-function KanbanCard({ c, canWrite, onAtender, onResolver, onAcomp, onEditar, onDeletar }: {
+function KanbanCard({ c, canWrite, onAtender, onResolver, onAcomp, onEditar }: {
   c: Chamado;
   canWrite: boolean;
   onAtender: (id: string) => void;
@@ -41,55 +42,81 @@ function KanbanCard({ c, canWrite, onAtender, onResolver, onAcomp, onEditar, onD
   onEditar: (c: Chamado) => void;
   onDeletar: (id: string) => void;
 }) {
+  const router = useRouter();
   const sla = getSLAState(c);
 
   return (
-    <div className={`bg-white dark:bg-slate-900 rounded-lg border border-slate-100 dark:border-slate-800 border-l-[3px] ${PRIO_BORDER[c.prioridade] ?? 'border-l-slate-200'} overflow-hidden group`}>
-      <div className="p-3">
-        {/* Title + priority */}
-        <div className="flex items-start justify-between gap-2 mb-2">
-          <div className="min-w-0 flex-1">
-            <div className="flex items-start gap-1">
-              {c.origem === 'site' && (
-                <span title="Vindo do site"><Globe size={9} className="text-sky-500 shrink-0 mt-[3px]" /></span>
-              )}
-              <p className="text-[11px] font-semibold text-slate-800 dark:text-slate-100 line-clamp-2 leading-snug">{c.titulo}</p>
-            </div>
-            {c.aluno_nome && (
-              <p className="text-[9px] text-slate-400 flex items-center gap-0.5 mt-1">
-                <User size={8} />{c.aluno_nome}
-              </p>
+    <div
+      onClick={() => router.push(`/chamados/${c.id}`)}
+      className={`bg-white dark:bg-slate-900 rounded-lg border border-slate-100 dark:border-slate-800 border-l-[3px] ${PRIO_BORDER[c.prioridade] ?? 'border-l-slate-200'} overflow-hidden group cursor-pointer hover:shadow-md hover:border-slate-200 dark:hover:border-slate-700 transition-all`}
+    >
+      <div className="p-3 space-y-2">
+
+        {/* Row 1: Tipo + Origem + Prioridade */}
+        <div className="flex items-center justify-between gap-1">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="text-[9px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide truncate">{c.tipo}</span>
+            {c.origem === 'site' && (
+              <span className="inline-flex items-center gap-0.5 text-[9px] font-semibold px-1 py-0.5 rounded border text-sky-600 bg-sky-50 border-sky-200 shrink-0">
+                <Globe size={7} />Site
+              </span>
             )}
-            {c.responsavel_nome && (
-              <p className="text-[9px] text-indigo-400 flex items-center gap-0.5 mt-0.5 font-medium">
-                <User size={8} />→ {c.responsavel_nome}
-              </p>
+            {c.fila_nome && (
+              <span className="inline-flex items-center gap-0.5 text-[9px] text-purple-500 shrink-0">
+                <Tag size={7} /><span className="truncate max-w-[60px]">{c.fila_nome}</span>
+              </span>
             )}
           </div>
-          <span className={`text-[9px] font-semibold shrink-0 ${PRIO_TEXT[c.prioridade] ?? 'text-slate-400'}`}>
-            {LABEL_PRIO[c.prioridade]}
-          </span>
+          <div className="flex items-center gap-1 shrink-0">
+            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${PRIO_DOT[c.prioridade] ?? 'bg-slate-300'}`} />
+            <span className={`text-[9px] font-bold ${PRIO_TEXT[c.prioridade] ?? 'text-slate-400'}`}>
+              {LABEL_PRIO[c.prioridade]}
+            </span>
+          </div>
         </div>
 
-        {/* Meta */}
-        <div className="flex items-center gap-2 flex-wrap mb-2">
-          <span className="text-[9px] text-slate-400">{c.tipo}</span>
-          {c.fila_nome && (
-            <span className="flex items-center gap-0.5 text-[9px] text-purple-400"><Tag size={7} />{c.fila_nome}</span>
-          )}
-          {c.satisfacao && (
-            <span className="flex items-center gap-0.5 text-[9px] text-yellow-500"><Star size={8} fill="currentColor" />{c.satisfacao}</span>
-          )}
-        </div>
+        {/* Row 2: Título */}
+        <p className="text-[11px] font-semibold text-slate-800 dark:text-slate-100 line-clamp-2 leading-snug">
+          {c.titulo}
+        </p>
 
-        {/* SLA time + actions */}
-        <div className="flex items-center justify-between gap-1">
+        {/* Row 3: Aluno + Turma */}
+        {(c.aluno_nome || c.turma_nome) && (
+          <p className="text-[9px] text-slate-400 flex items-center gap-0.5 truncate">
+            <User size={8} className="shrink-0" />
+            <span className="truncate">{c.aluno_nome ?? '—'}</span>
+            {c.turma_nome && <span className="text-slate-300 dark:text-slate-600 shrink-0 ml-0.5">· {c.turma_nome}</span>}
+          </p>
+        )}
+
+        {/* Row 4: Responsável */}
+        {c.responsavel_nome && (
+          <p className="text-[9px] text-indigo-500 dark:text-indigo-400 flex items-center gap-0.5 truncate font-medium">
+            <Building2 size={8} className="shrink-0" />{c.responsavel_nome}
+          </p>
+        )}
+
+        {/* Row 5: Criado por (secundário) */}
+        {c.criado_por_nome && (
+          <p className="text-[9px] text-slate-300 dark:text-slate-600 flex items-center gap-0.5 truncate">
+            <Users size={7} className="shrink-0" />por {c.criado_por_nome}
+          </p>
+        )}
+
+        {/* Row 6: SLA + Satisfação + Ações */}
+        <div className="flex items-center justify-between gap-1 pt-0.5">
           <div className="flex items-center gap-1.5">
             <span className={`text-[9px] font-semibold ${getSLATextClass(sla.colorClass)}`}>{sla.label}</span>
             <span className="text-[9px] text-slate-300">·</span>
             <span className="text-[9px] text-slate-400">{fmtRelative(c.abertura ?? c.created_at)}</span>
+            {c.satisfacao && (
+              <span className="flex items-center gap-0.5 text-[9px] text-yellow-500 font-semibold ml-1">
+                <Star size={8} fill="currentColor" />{c.satisfacao}
+              </span>
+            )}
           </div>
-          <div className="flex items-center gap-0.5">
+          {/* Ações — stopPropagation para não abrir o detalhe */}
+          <div className="flex items-center gap-0.5" onClick={e => e.stopPropagation()}>
             {c.status !== 'resolvido' && c.status !== 'em_andamento' && (
               <button
                 onClick={() => onAtender(c.id)}
@@ -111,6 +138,9 @@ function KanbanCard({ c, canWrite, onAtender, onResolver, onAcomp, onEditar, onD
               className={`p-1 rounded transition-colors ${(c._total_acomp ?? 0) > 0 ? 'text-purple-400' : 'text-slate-300 dark:text-slate-600 hover:text-purple-400'}`}
             >
               <NotebookPen size={10} />
+              {(c._total_acomp ?? 0) > 0 && (
+                <span className="sr-only">{c._total_acomp} acompanhamentos</span>
+              )}
             </button>
             {canWrite && (
               <button
@@ -125,10 +155,11 @@ function KanbanCard({ c, canWrite, onAtender, onResolver, onAcomp, onEditar, onD
 
         {/* Protocol */}
         {c.protocolo && (
-          <p className="font-mono text-[8px] text-slate-300 dark:text-slate-600 mt-1">{c.protocolo}</p>
+          <p className="font-mono text-[8px] text-slate-300 dark:text-slate-600">{c.protocolo}</p>
         )}
       </div>
-      {/* SLA bar at bottom */}
+
+      {/* SLA bar */}
       <SLABar chamado={c} />
     </div>
   );
@@ -146,7 +177,7 @@ export function ChamadosKanban({ chamados, canWrite, onAtender, onResolver, onAc
         return (
           <div key={col.key} className="bg-slate-50/50 dark:bg-slate-800/20 rounded-xl p-3 min-h-[200px]">
             <div className="flex items-center justify-between mb-3 px-0.5">
-              <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">
+              <span className={`text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full border ${col.color}`}>
                 {col.label}
               </span>
               {items.length > 0 && (

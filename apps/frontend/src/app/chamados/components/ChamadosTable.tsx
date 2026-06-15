@@ -2,9 +2,9 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronUp, ChevronDown, User, Globe, Users } from 'lucide-react';
+import { ChevronUp, ChevronDown, User, Globe, Users, Tag, Star, Building2 } from 'lucide-react';
 import {
-  Chamado, COR_STATUS, PRIO_STRIP_BG, PRIO_TEXT, LABEL_STATUS, LABEL_PRIO,
+  Chamado, COR_STATUS, PRIO_STRIP_BG, PRIO_DOT, PRIO_TEXT, LABEL_STATUS, LABEL_PRIO,
   getSLAState, getSLATextClass, fmtRelative,
 } from './_shared';
 
@@ -55,26 +55,8 @@ function DataCell({ iso }: { iso?: string | null }) {
       <p className="text-[11px] font-semibold text-slate-700 dark:text-slate-200">
         {dt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })}
       </p>
-      <p className="text-[10px] text-slate-400">
-        {dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-      </p>
-      <p className="text-[9px] text-slate-300 dark:text-slate-600 mt-0.5">{fmtRelative(iso)}</p>
+      <p className="text-[9px] text-slate-400">{fmtRelative(iso)}</p>
     </div>
-  );
-}
-
-function OrigemBadge({ origem }: { origem?: string | null }) {
-  if (origem === 'site') {
-    return (
-      <span className="inline-flex items-center gap-0.5 text-[9px] font-semibold px-1.5 py-0.5 rounded border text-sky-600 bg-sky-50 border-sky-200">
-        <Globe size={8} />Site
-      </span>
-    );
-  }
-  return (
-    <span className="inline-flex items-center text-[9px] font-semibold px-1.5 py-0.5 rounded border text-slate-400 bg-slate-50 border-slate-200 dark:bg-slate-800 dark:border-slate-700">
-      Interno
-    </span>
   );
 }
 
@@ -105,14 +87,13 @@ export function ChamadosTable({ chamados, canWrite, onAtender, onResolver, onAco
 
   return (
     <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800 overflow-x-auto">
-      <table className="w-full text-xs min-w-[1100px]">
+      <table className="w-full text-xs min-w-[1000px]">
         <thead className="bg-slate-50/70 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800">
           <tr>
             <th className="w-1 p-0" />
             <th className="px-3 py-2 text-left">
-              <SortBtn active={sort.key === 'abertura'} dir={sort.dir} onClick={() => toggleSort('abertura')}>Data Abertura</SortBtn>
+              <SortBtn active={sort.key === 'abertura'} dir={sort.dir} onClick={() => toggleSort('abertura')}>Abertura</SortBtn>
             </th>
-            <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400 whitespace-nowrap">Origem</th>
             <th className="px-3 py-2 text-left">
               <SortBtn active={sort.key === 'titulo'} dir={sort.dir} onClick={() => toggleSort('titulo')}>Chamado</SortBtn>
             </th>
@@ -130,7 +111,7 @@ export function ChamadosTable({ chamados, canWrite, onAtender, onResolver, onAco
               <SortBtn active={sort.key === 'responsavel_nome'} dir={sort.dir} onClick={() => toggleSort('responsavel_nome')}>Responsável</SortBtn>
             </th>
             <th className="px-3 py-2 text-left">
-              <SortBtn active={sort.key === 'updated_at'} dir={sort.dir} onClick={() => toggleSort('updated_at')}>Últ. atualização</SortBtn>
+              <SortBtn active={sort.key === 'updated_at'} dir={sort.dir} onClick={() => toggleSort('updated_at')}>Atualização</SortBtn>
             </th>
           </tr>
         </thead>
@@ -138,40 +119,51 @@ export function ChamadosTable({ chamados, canWrite, onAtender, onResolver, onAco
           {sorted.map(c => {
             const sla = getSLAState(c);
             return (
-              <tr key={c.id} onClick={() => router.push(`/chamados/${c.id}`)}
-                className="group hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors cursor-pointer">
+              <tr
+                key={c.id}
+                onClick={() => router.push(`/chamados/${c.id}`)}
+                className="group hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors cursor-pointer"
+              >
                 {/* Priority strip */}
                 <td className="p-0 w-1">
-                  <div className={`w-1 h-[52px] ${PRIO_STRIP_BG[c.prioridade] ?? 'bg-slate-200'}`} />
+                  <div className={`w-1 h-full min-h-[52px] ${PRIO_STRIP_BG[c.prioridade] ?? 'bg-slate-200'}`} />
                 </td>
 
-                {/* Data Abertura */}
+                {/* Abertura */}
                 <td className="px-3 py-2.5 whitespace-nowrap">
                   <DataCell iso={c.abertura ?? c.created_at} />
                 </td>
 
-                {/* Origem */}
-                <td className="px-3 py-2.5 whitespace-nowrap">
-                  <OrigemBadge origem={c.origem} />
-                </td>
-
-                {/* Chamado */}
-                <td className="px-3 py-2.5 max-w-[200px]">
-                  <div className="min-w-0">
-                    <p className="font-semibold text-slate-800 dark:text-slate-100 truncate leading-snug" title={c.descricao ?? undefined}>{c.titulo}</p>
-                    {c.aluno_nome && (
-                      <p className="text-[10px] text-slate-400 flex items-center gap-0.5 mt-0.5 truncate">
-                        <User size={8} className="shrink-0" />{c.aluno_nome}
+                {/* Chamado — título + aluno + turma + fila + criado por + protocolo + origem */}
+                <td className="px-3 py-2.5 max-w-[240px]">
+                  <div className="min-w-0 space-y-0.5">
+                    <div className="flex items-start gap-1">
+                      {c.origem === 'site' && (
+                        <span className="inline-flex items-center gap-0.5 text-[8px] font-semibold px-1 py-0.5 rounded border text-sky-600 bg-sky-50 border-sky-200 shrink-0 mt-0.5">
+                          <Globe size={7} />Site
+                        </span>
+                      )}
+                      <p className="font-semibold text-slate-800 dark:text-slate-100 truncate leading-snug" title={c.titulo}>{c.titulo}</p>
+                    </div>
+                    {(c.aluno_nome || c.turma_nome) && (
+                      <p className="text-[10px] text-slate-400 flex items-center gap-0.5 truncate">
+                        <User size={8} className="shrink-0" />
+                        {c.aluno_nome ?? '—'}
                         {c.turma_nome && <span className="text-slate-300 dark:text-slate-600 ml-1">· {c.turma_nome}</span>}
                       </p>
                     )}
+                    {c.fila_nome && (
+                      <p className="text-[9px] text-purple-400 flex items-center gap-0.5 truncate">
+                        <Tag size={7} className="shrink-0" />{c.fila_nome}
+                      </p>
+                    )}
                     {c.criado_por_nome && (
-                      <p className="text-[9px] text-slate-300 dark:text-slate-600 flex items-center gap-0.5 mt-0.5 truncate">
+                      <p className="text-[9px] text-slate-300 dark:text-slate-600 flex items-center gap-0.5 truncate">
                         <Users size={7} className="shrink-0" />por {c.criado_por_nome}
                       </p>
                     )}
                     {c.protocolo && (
-                      <p className="font-mono text-[9px] text-slate-300 dark:text-slate-600 mt-0.5">{c.protocolo}</p>
+                      <p className="font-mono text-[9px] text-slate-300 dark:text-slate-600">{c.protocolo}</p>
                     )}
                   </div>
                 </td>
@@ -179,11 +171,14 @@ export function ChamadosTable({ chamados, canWrite, onAtender, onResolver, onAco
                 {/* Tipo */}
                 <td className="px-3 py-2.5 text-slate-500 dark:text-slate-400 whitespace-nowrap">{c.tipo}</td>
 
-                {/* Prioridade */}
+                {/* Prioridade — dot + label (igual ao Kanban) */}
                 <td className="px-3 py-2.5 whitespace-nowrap">
-                  <span className={`font-semibold ${PRIO_TEXT[c.prioridade] ?? 'text-slate-400'}`}>
-                    {LABEL_PRIO[c.prioridade]}
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${PRIO_STRIP_BG[c.prioridade] ?? 'bg-slate-200'}`} />
+                    <span className={`font-semibold ${PRIO_TEXT[c.prioridade] ?? 'text-slate-400'}`}>
+                      {LABEL_PRIO[c.prioridade]}
+                    </span>
+                  </div>
                 </td>
 
                 {/* SLA */}
@@ -194,23 +189,37 @@ export function ChamadosTable({ chamados, canWrite, onAtender, onResolver, onAco
                   </div>
                 </td>
 
-                {/* Status */}
+                {/* Status + Satisfação */}
                 <td className="px-3 py-2.5 whitespace-nowrap">
-                  <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${COR_STATUS[c.status] ?? ''}`}>
-                    {LABEL_STATUS[c.status] ?? c.status}
-                  </span>
+                  <div className="space-y-1">
+                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${COR_STATUS[c.status] ?? ''}`}>
+                      {LABEL_STATUS[c.status] ?? c.status}
+                    </span>
+                    {c.satisfacao && (
+                      <div className="flex items-center gap-0.5 text-[9px] text-yellow-500 font-semibold">
+                        <Star size={8} fill="currentColor" />{c.satisfacao}
+                      </div>
+                    )}
+                  </div>
                 </td>
 
                 {/* Responsável */}
-                <td className="px-3 py-2.5 text-slate-500 dark:text-slate-400 whitespace-nowrap max-w-[120px] truncate">
-                  {c.responsavel_nome ?? <span className="text-slate-300 dark:text-slate-600">—</span>}
+                <td className="px-3 py-2.5 whitespace-nowrap max-w-[130px]">
+                  {c.responsavel_nome
+                    ? (
+                      <div className="flex items-center gap-1 text-indigo-500 dark:text-indigo-400 truncate">
+                        <Building2 size={9} className="shrink-0" />
+                        <span className="text-[11px] font-medium truncate">{c.responsavel_nome}</span>
+                      </div>
+                    )
+                    : <span className="text-slate-300 dark:text-slate-600">—</span>
+                  }
                 </td>
 
-                {/* Última atualização */}
+                {/* Atualização */}
                 <td className="px-3 py-2.5 whitespace-nowrap">
                   <DataCell iso={c.updated_at} />
                 </td>
-
               </tr>
             );
           })}
