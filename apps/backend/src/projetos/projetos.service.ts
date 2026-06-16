@@ -101,7 +101,7 @@ export class ProjetosService {
     const rows = await this.dataSource.query(`
       SELECT pi.*,
         COALESCE(pi.nome_responsavel, a.nome_responsavel, insc_orig.nome_responsavel)                          AS nome_responsavel,
-        COALESCE(pi.telefone_responsavel, a.telefone_alternativo, a.celular, insc_orig.telefone_alternativo)   AS telefone_responsavel,
+        COALESCE(pi.telefone_responsavel, a.telefone_alternativo, a.celular, insc_orig.celular, insc_orig.telefone_alternativo) AS telefone_responsavel,
         row_to_json(pe) as equipe,
         a.logradouro  as aluno_logradouro,
         a.numero      as aluno_numero,
