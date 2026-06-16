@@ -546,8 +546,10 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
                   <EF label="Sexo" field="sexo" value={formData.sexo} editing={isEditing} type="select"
                     options={['Masculino', 'Feminino', 'Outro', 'Não informado']} onChange={handleFieldChange} />
                   <EF label="Email" field="email" value={formData.email} editing={isEditing} onChange={handleFieldChange} />
-                  <EF label="Celular" field="celular" value={formData.celular} editing={isEditing} onChange={handleFieldChange} />
-                  <EF label="Telefone Alternativo" field="telefone_alternativo" value={formData.telefone_alternativo} editing={isEditing} onChange={handleFieldChange} />
+                  {formData.maior_18_anos && <>
+                    <EF label="Celular" field="celular" value={formData.celular} editing={isEditing} onChange={handleFieldChange} />
+                    <EF label="Telefone Alternativo" field="telefone_alternativo" value={formData.telefone_alternativo} editing={isEditing} onChange={handleFieldChange} />
+                  </>}
                   <div className="col-span-3">
                     <EF label="Cursos de Interesse" field="cursos_desejados" value={formData.cursos_desejados} editing={isEditing} onChange={handleFieldChange} />
                   </div>
@@ -616,13 +618,14 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
                   <div className="col-span-3">
                     <EF label="Maior de 18 anos" field="maior_18_anos" value={formData.maior_18_anos} editing={isEditing} type="checkbox" onChange={handleFieldChange} />
                   </div>
-                  <div className="col-span-3">
-                    <EF label="Nome da Mãe / Responsável" field="nome_responsavel" value={formData.nome_responsavel} editing={isEditing} onChange={handleFieldChange} />
-                  </div>
                   {!formData.maior_18_anos && (<>
+                    <div className="col-span-3">
+                      <EF label="Nome da Mãe / Responsável" field="nome_responsavel" value={formData.nome_responsavel} editing={isEditing} onChange={handleFieldChange} />
+                    </div>
                     <EF label="Grau de Parentesco" field="grau_parentesco" value={formData.grau_parentesco} editing={isEditing} onChange={handleFieldChange} />
                     <EF label="CPF do Responsável" field="cpf_responsavel" value={formData.cpf_responsavel} editing={isEditing} onChange={handleFieldChange} />
                     <EF label="Email do Responsável" field="email_responsavel" value={formData.email_responsavel} editing={isEditing} onChange={handleFieldChange} />
+                    <EF label="Telefone do Responsável" field="telefone_alternativo" value={formData.telefone_alternativo} editing={isEditing} onChange={handleFieldChange} />
                   </>)}
                 </Grid>
               </ColorSection>
