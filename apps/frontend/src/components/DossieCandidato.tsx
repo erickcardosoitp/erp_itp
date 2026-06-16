@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   X, User, Edit3, CheckCircle, Save,
   MessageSquare, AlertTriangle, Send, Loader2,
-  History, Paperclip, ShieldCheck, ChevronRight,
+  History, Paperclip, ShieldCheck, ChevronRight, ChevronDown,
   Download, ExternalLink, Trash2, ClipboardCheck,
   FileText, Phone, Mail, MapPin, Calendar, Hash,
   BookOpen, CreditCard, Building2, Heart, Users, Sparkles,
@@ -350,7 +350,7 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
     ...(fichaData ? [{ id: 'presenca' as TabId,  label: 'Presença', icon: ClipboardCheck }] : []),
     ...(alunoId ? [
       { id: 'turmas_aluno' as TabId, label: 'Turmas', icon: GraduationCap },
-      { id: 'complemento_aluno' as TabId, label: 'Complemento', icon: UserCheck },
+      ...(mostrarComplemento ? [{ id: 'complemento_aluno' as TabId, label: 'Complemento', icon: UserCheck }] : []),
     ] : []),
   ];
 
@@ -791,6 +791,11 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
                       {obrigatoriosPendentes.length > 0 && (
                         <p className="text-xs text-gray-500 mt-0.5">Pendentes: {obrigatoriosPendentes.map(t => DOC_LABELS[t] ?? t).join(', ')}</p>
                       )}
+                      {(() => {
+                        const enviados = Object.keys(DOC_LABELS).filter(t => !obrigatoriosPendentes.includes(t));
+                        if (!enviados.length) return null;
+                        return <p className="text-xs text-green-700 mt-0.5">Enviados: <strong>{enviados.map(t => DOC_LABELS[t] ?? t).join(', ')}</strong></p>;
+                      })()}
                     </div>
                     <span className={`text-xs font-semibold px-3 py-1 rounded-full border shrink-0 ${docsCompleto ? 'bg-green-100 text-green-700 border-green-200' : 'bg-amber-100 text-amber-700 border-amber-200'}`}>
                       {docsCompleto ? '✓ Completo' : 'Pendente'}
@@ -838,10 +843,13 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
               <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3 shadow-sm">
                 <p className="text-xs font-semibold text-gray-700">Adicionar documento</p>
                 <div className="flex gap-2 flex-wrap">
-                  <select value={uploadTipo} onChange={e => setUploadTipo(e.target.value)} className="w-full h-8 px-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white">
-                    {Object.entries(DOC_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                    <option value="extra">Outro</option>
-                  </select>
+                  <div className="relative w-full">
+                    <select value={uploadTipo} onChange={e => setUploadTipo(e.target.value)} className="w-full h-9 pl-2.5 pr-8 border border-gray-200 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white appearance-none">
+                      {Object.entries(DOC_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                      <option value="extra">Outro</option>
+                    </select>
+                    <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400" />
+                  </div>
                   {uploadTipo === 'extra' && (
                     <input type="text" placeholder="Nome do documento" value={uploadNomeExtra} onChange={e => setUploadNomeExtra(e.target.value)} className={`${INPUT_CLS} flex-1 min-w-[140px]`} />
                   )}
@@ -904,15 +912,15 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
                                 <FileText size={14} className="text-purple-500" />
                               </div>
                               <div className="min-w-0">
-                                <p className="text-sm text-gray-800 font-medium truncate">{nome}</p>
+                                <a href={safeUrl(fileUrl)} target="_blank" rel="noopener noreferrer"
+                                  className="text-sm text-purple-700 font-medium truncate hover:underline flex items-center gap-1 max-w-full">
+                                  <span className="truncate">{nome}</span>
+                                  <ExternalLink size={10} className="shrink-0 text-purple-400" />
+                                </a>
                                 <p className="text-[11px] text-gray-400">{fmtDate(doc.createdAt)} · {size}</p>
                               </div>
                             </div>
                             <div className="flex gap-1 shrink-0">
-                              <a href={safeUrl(fileUrl)} target="_blank" rel="noopener noreferrer"
-                                className="flex items-center gap-1 px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs text-gray-600 hover:bg-gray-100 transition-colors">
-                                <ExternalLink size={11} /> Abrir
-                              </a>
                               <button onClick={async () => { if (!confirm(`Remover "${nome}"?`)) return; try { await api.delete(`/matriculas/documentos/${doc.id}`); recarregarDocumentos(); } catch { alert('Erro ao remover.'); } }}
                                 className="flex items-center px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs text-red-500 hover:bg-red-50 hover:border-red-200 transition-colors">
                                 <Trash2 size={11} />
@@ -995,7 +1003,7 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
           )}
 
           {/* ─── COMPLEMENTO DO ALUNO ─────────────────────────── */}
-          {!loading && abaAtiva === 'complemento_aluno' && alunoId && (
+          {!loading && abaAtiva === 'complemento_aluno' && alunoId && mostrarComplemento && (
             <div className="p-4 space-y-3">
               <ColorSection title="Dados Complementares" icon={<UserCheck size={14} />} color="indigo">
                 <Grid cols={3}>
