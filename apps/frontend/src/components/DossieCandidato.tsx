@@ -431,7 +431,7 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
                       <Hash size={10} className="shrink-0 text-gray-400" /> {formData.cpf}
                     </span>
                   )}
-                  {formData.celular && (
+                  {formData.celular && formData.maior_18_anos && (
                     <a href={`https://wa.me/55${formData.celular.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer"
                       className="flex items-center gap-1 text-xs text-green-600 hover:text-green-700 bg-white/70 rounded px-1.5 py-0.5 transition-colors">
                       <Phone size={10} className="shrink-0" /> {formData.celular}
@@ -635,7 +635,7 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
                     <EF label="Grau de Parentesco" field="grau_parentesco" value={formData.grau_parentesco} editing={isEditing} onChange={handleFieldChange} />
                     <EF label="CPF do Responsável" field="cpf_responsavel" value={formData.cpf_responsavel} editing={isEditing} onChange={handleFieldChange} />
                     <EF label="Email do Responsável" field="email_responsavel" value={formData.email_responsavel} editing={isEditing} onChange={handleFieldChange} />
-                    <EF label="Telefone do Responsável" field="telefone_alternativo" value={formData.telefone_alternativo} editing={isEditing} onChange={handleFieldChange} />
+                    <EF label="Telefone do Responsável" field="celular" value={formData.celular} editing={isEditing} onChange={handleFieldChange} />
                   </>)}
                 </Grid>
               </ColorSection>}
