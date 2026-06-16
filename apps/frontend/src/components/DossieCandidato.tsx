@@ -594,19 +594,21 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
                 </Grid>
               </ColorSection>
 
-              <ColorSection title="Identidade Social" icon={<Sparkles size={14} />} color="fuchsia">
-                <Grid cols={3}>
-                  <SelectField label="Autodeclaração Racial" value={formData.auto_declaracao ?? ''} editing={isEditing}
-                    onChange={v => handleFieldChange('auto_declaracao', v)}
-                    options={[['', 'Prefiro não informar'], ['branco', 'Branco'], ['preto', 'Preto'], ['pardo', 'Pardo'], ['amarelo', 'Amarelo'], ['indigena', 'Indígena']]} />
-                  <SelectField label="Orientação Sexual" value={formData.orientacao_sexual ?? ''} editing={isEditing}
-                    onChange={v => handleFieldChange('orientacao_sexual', v)}
-                    options={[['', 'Prefiro não informar'], ['heterossexual', 'Heterossexual'], ['homossexual', 'Homossexual'], ['bissexual', 'Bissexual'], ['panssexual', 'Pansexual'], ['assexual', 'Assexual'], ['outro', 'Outro']]} />
-                  <SelectField label="Gênero" value={complemento.genero ?? ''} editing={isEditing}
-                    onChange={v => setComplemento(p => ({ ...p, genero: v }))}
-                    options={[['', 'Prefiro não informar'], ['masculino', 'Masculino'], ['feminino', 'Feminino'], ['nao_binario', 'Não-binário']]} />
-                </Grid>
-              </ColorSection>
+              {mostrarComplemento && (
+                <ColorSection title="Identidade Social" icon={<Sparkles size={14} />} color="fuchsia">
+                  <Grid cols={3}>
+                    <SelectField label="Autodeclaração Racial" value={formData.auto_declaracao ?? ''} editing={isEditing}
+                      onChange={v => handleFieldChange('auto_declaracao', v)}
+                      options={[['', 'Prefiro não informar'], ['branco', 'Branco'], ['preto', 'Preto'], ['pardo', 'Pardo'], ['amarelo', 'Amarelo'], ['indigena', 'Indígena']]} />
+                    <SelectField label="Orientação Sexual" value={formData.orientacao_sexual ?? ''} editing={isEditing}
+                      onChange={v => handleFieldChange('orientacao_sexual', v)}
+                      options={[['', 'Prefiro não informar'], ['heterossexual', 'Heterossexual'], ['homossexual', 'Homossexual'], ['bissexual', 'Bissexual'], ['panssexual', 'Pansexual'], ['assexual', 'Assexual'], ['outro', 'Outro']]} />
+                    <SelectField label="Gênero" value={complemento.genero ?? ''} editing={isEditing}
+                      onChange={v => setComplemento(p => ({ ...p, genero: v }))}
+                      options={[['', 'Prefiro não informar'], ['masculino', 'Masculino'], ['feminino', 'Feminino'], ['nao_binario', 'Não-binário']]} />
+                  </Grid>
+                </ColorSection>
+              )}
 
               <ColorSection title="Responsável / Filiação" icon={<Users size={14} />} color="amber">
                 <Grid cols={3}>

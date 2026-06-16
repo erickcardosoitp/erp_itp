@@ -102,6 +102,10 @@ export class Aluno {
   @Column({ type: 'text', nullable: true })
   cursos_matriculados: string;
 
+  // ── Identidade Social (apenas cursos especiais) ──────────────────
+  @Column({ type: 'varchar', nullable: true })
+  auto_declaracao: string | null;
+
   // ── Termos ───────────────────────────────────────────────────────
   @Column({ type: 'boolean', default: false })
   lgpd_aceito: boolean;

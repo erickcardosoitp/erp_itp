@@ -144,7 +144,7 @@ export class AlunosService {
     await this.alunoRepo
       .createQueryBuilder()
       .update(Aluno)
-      .set({ auto_declaracao: autoDeclaracao } as any)
+      .set({ auto_declaracao: autoDeclaracao })
       .where('id = :id', { id: alunoId })
       .execute();
   }
