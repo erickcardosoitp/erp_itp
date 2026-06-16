@@ -468,9 +468,12 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
                       {formData.idade} anos
                     </span>
                   )}
-                  {formData.origem_inscricao && (
+                  {formData.origem_inscricao && formData.origem_inscricao !== 'Manual' && (
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/80 border border-gray-200 text-gray-600">
-                      via {formData.origem_inscricao}
+                      {formData.origem_inscricao === 'Direto' ? 'Matrícula Direta'
+                        : formData.origem_inscricao.toLowerCase().includes('form') || formData.origem_inscricao.toLowerCase().includes('auto')
+                          ? 'Inscrição Online'
+                          : formData.origem_inscricao}
                     </span>
                   )}
                   {formData.lgpd_aceito && (
@@ -543,6 +546,16 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
                     <FieldLabel>Idade</FieldLabel>
                     <FieldValue>{formData.idade != null ? `${formData.idade} anos` : '—'}</FieldValue>
                   </div>
+                  <div className="flex flex-col gap-0.5">
+                    <FieldLabel>Maior de 18 anos</FieldLabel>
+                    {isEditing
+                      ? <label className="flex items-center gap-2 cursor-pointer mt-1">
+                          <input type="checkbox" checked={!!formData.maior_18_anos} onChange={e => handleFieldChange('maior_18_anos', e.target.checked)} className="w-4 h-4 accent-purple-600 rounded" />
+                          <span className="text-sm text-gray-900 font-medium">{formData.maior_18_anos ? 'Sim' : 'Não'}</span>
+                        </label>
+                      : <FieldValue>{formData.maior_18_anos ? 'Sim' : 'Não'}</FieldValue>
+                    }
+                  </div>
                   <EF label="Sexo" field="sexo" value={formData.sexo} editing={isEditing} type="select"
                     options={['Masculino', 'Feminino', 'Outro', 'Não informado']} onChange={handleFieldChange} />
                   <EF label="Email" field="email" value={formData.email} editing={isEditing} onChange={handleFieldChange} />
@@ -613,12 +626,9 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
                 </ColorSection>
               )}
 
-              <ColorSection title="Responsável / Filiação" icon={<Users size={14} />} color="amber">
+              {!formData.maior_18_anos && <ColorSection title="Responsável / Filiação" icon={<Users size={14} />} color="amber">
                 <Grid cols={3}>
-                  <div className="col-span-3">
-                    <EF label="Maior de 18 anos" field="maior_18_anos" value={formData.maior_18_anos} editing={isEditing} type="checkbox" onChange={handleFieldChange} />
-                  </div>
-                  {!formData.maior_18_anos && (<>
+                  {(<>
                     <div className="col-span-3">
                       <EF label="Nome da Mãe / Responsável" field="nome_responsavel" value={formData.nome_responsavel} editing={isEditing} onChange={handleFieldChange} />
                     </div>
@@ -628,7 +638,7 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
                     <EF label="Telefone do Responsável" field="telefone_alternativo" value={formData.telefone_alternativo} editing={isEditing} onChange={handleFieldChange} />
                   </>)}
                 </Grid>
-              </ColorSection>
+              </ColorSection>}
 
               {/* Dados Complementares — apenas cursos especiais */}
               {mostrarComplemento && (
@@ -1261,10 +1271,13 @@ function EF({ label, field, value, editing, type = 'text', onChange, options, fu
           ? <textarea value={value ?? ''} onChange={e => onChange(field, e.target.value)} rows={3}
               className="px-2.5 py-1.5 border border-gray-200 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 resize-none bg-white" />
           : type === 'select' && options
-            ? <select value={value ?? ''} onChange={e => onChange(field, e.target.value)} className={INPUT_CLS}>
-                <option value="">—</option>
-                {options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-              </select>
+            ? <div className="relative">
+                <select value={value ?? ''} onChange={e => onChange(field, e.target.value)} className={`${INPUT_CLS} appearance-none pr-7`}>
+                  <option value="">—</option>
+                  {options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                </select>
+                <ChevronDown size={13} className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400" />
+              </div>
             : type === 'checkbox'
               ? <label className="flex items-center gap-2 cursor-pointer mt-1">
                   <input type="checkbox" checked={!!value} onChange={e => onChange(field, e.target.checked)} className="w-4 h-4 accent-purple-600 rounded" />
