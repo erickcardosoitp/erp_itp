@@ -100,6 +100,7 @@ export class ProjetosService {
   async findInscricoes(projeto_id: string) {
     const rows = await this.dataSource.query(`
       SELECT pi.*,
+        COALESCE(pi.nome_responsavel, a.nome_responsavel, insc_orig.nome_responsavel) AS nome_responsavel,
         row_to_json(pe) as equipe,
         a.logradouro  as aluno_logradouro,
         a.numero      as aluno_numero,
@@ -122,6 +123,7 @@ export class ProjetosService {
       FROM projeto_inscricoes pi
       LEFT JOIN projeto_equipes pe ON pe.id = pi.equipe_id
       LEFT JOIN alunos a ON a.id = pi.aluno_id
+      LEFT JOIN inscricoes insc_orig ON insc_orig.id = a.inscricao_id
       LEFT JOIN LATERAL (
         SELECT d.url_arquivo
         FROM inscricoes insc
@@ -164,11 +166,14 @@ export class ProjetosService {
 
     if (dto.aluno_id) {
       const aluno = await this.dataSource.query(
-        `SELECT a.nome_completo, a.data_nascimento, a.nome_responsavel, a.telefone_alternativo,
-                a.email_responsavel as aluno_email_responsavel,
-                pi.nome_responsavel  AS insc_nome_responsavel,
-                pi.telefone_responsavel AS insc_telefone_responsavel
+        `SELECT a.nome_completo, a.data_nascimento,
+                COALESCE(a.nome_responsavel, insc.nome_responsavel)        AS nome_responsavel,
+                COALESCE(a.telefone_alternativo, insc.telefone_alternativo) AS telefone_alternativo,
+                COALESCE(a.email_responsavel, insc.email_responsavel)       AS aluno_email_responsavel,
+                pi.nome_responsavel       AS insc_nome_responsavel,
+                pi.telefone_responsavel   AS insc_telefone_responsavel
          FROM alunos a
+         LEFT JOIN inscricoes insc ON insc.id = a.inscricao_id
          LEFT JOIN projeto_inscricoes pi ON pi.aluno_id::text = a.id::text
          WHERE a.id = $1
          ORDER BY pi.id DESC
