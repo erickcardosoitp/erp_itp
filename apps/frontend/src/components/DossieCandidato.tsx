@@ -838,7 +838,7 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
               <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3 shadow-sm">
                 <p className="text-xs font-semibold text-gray-700">Adicionar documento</p>
                 <div className="flex gap-2 flex-wrap">
-                  <select value={uploadTipo} onChange={e => setUploadTipo(e.target.value)} className={`${INPUT_CLS} flex-1 min-w-[180px]`}>
+                  <select value={uploadTipo} onChange={e => setUploadTipo(e.target.value)} className="w-full h-8 px-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white">
                     {Object.entries(DOC_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                     <option value="extra">Outro</option>
                   </select>
