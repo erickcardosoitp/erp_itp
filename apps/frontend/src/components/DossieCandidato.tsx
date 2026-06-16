@@ -114,6 +114,7 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
   const [docLoading, setDocLoading] = useState(false);
   const [uploadedDocs, setUploadedDocs] = useState<DocEnviado[]>([]);
   const [obrigatoriosPendentes, setObrigatoriosPendentes] = useState<string[]>([]);
+  const [tiposEnviados, setTiposEnviados] = useState<string[]>([]);
   const [docsCompleto, setDocsCompleto] = useState(false);
   const [loadingDocs, setLoadingDocs] = useState(false);
   const [matriculaNumero, setMatriculaNumero] = useState<string | null>(null);
@@ -142,8 +143,8 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
     if (!formData.id) return;
     setLoadingDocs(true);
     api.get(`/matriculas/inscricao/${formData.id}/documentos`)
-      .then(res => { setUploadedDocs(res.data?.documentos ?? []); setObrigatoriosPendentes(res.data?.obrigatorios_pendentes ?? []); setDocsCompleto(res.data?.completo ?? false); })
-      .catch(() => { setUploadedDocs([]); setObrigatoriosPendentes([]); setDocsCompleto(false); })
+      .then(res => { setUploadedDocs(res.data?.documentos ?? []); setObrigatoriosPendentes(res.data?.obrigatorios_pendentes ?? []); setTiposEnviados(res.data?.tipos_enviados ?? []); setDocsCompleto(res.data?.completo ?? false); })
+      .catch(() => { setUploadedDocs([]); setObrigatoriosPendentes([]); setTiposEnviados([]); setDocsCompleto(false); })
       .finally(() => setLoadingDocs(false));
   }, [formData.id]);
 
@@ -180,7 +181,7 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
         setCursosCarregados(true);
         if (resAnot.status === 'fulfilled') setAnotacoes(resAnot.value.data);
         if (resMov.status === 'fulfilled') setMovimentacoes(resMov.value.data);
-        if (resDocs.status === 'fulfilled') { setUploadedDocs(resDocs.value.data?.documentos ?? []); setObrigatoriosPendentes(resDocs.value.data?.obrigatorios_pendentes ?? []); setDocsCompleto(resDocs.value.data?.completo ?? false); }
+        if (resDocs.status === 'fulfilled') { setUploadedDocs(resDocs.value.data?.documentos ?? []); setObrigatoriosPendentes(resDocs.value.data?.obrigatorios_pendentes ?? []); setTiposEnviados(resDocs.value.data?.tipos_enviados ?? []); setDocsCompleto(resDocs.value.data?.completo ?? false); }
       } catch (e: any) { console.error('DossieCandidato load:', e.response?.status); }
       finally { setLoading(false); }
     };
@@ -791,24 +792,22 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
                       {obrigatoriosPendentes.length > 0 && (
                         <p className="text-xs text-gray-500 mt-0.5">Pendentes: {obrigatoriosPendentes.map(t => DOC_LABELS[t] ?? t).join(', ')}</p>
                       )}
-                      {(() => {
-                        const enviados = Object.keys(DOC_LABELS).filter(t => !obrigatoriosPendentes.includes(t));
-                        if (!enviados.length) return null;
-                        return <p className="text-xs text-green-700 mt-0.5">Enviados: <strong>{enviados.map(t => DOC_LABELS[t] ?? t).join(', ')}</strong></p>;
-                      })()}
+                      {tiposEnviados.length > 0 && (
+                        <p className="text-xs text-green-700 mt-0.5">Enviados: <strong>{tiposEnviados.map(t => DOC_LABELS[t] ?? t).join(', ')}</strong></p>
+                      )}
                     </div>
                     <span className={`text-xs font-semibold px-3 py-1 rounded-full border shrink-0 ${docsCompleto ? 'bg-green-100 text-green-700 border-green-200' : 'bg-amber-100 text-amber-700 border-amber-200'}`}>
                       {docsCompleto ? '✓ Completo' : 'Pendente'}
                     </span>
                   </div>
                   {(() => {
-                    const total = Object.keys(DOC_LABELS).length;
-                    const done = total - obrigatoriosPendentes.length;
+                    const done = tiposEnviados.length;
+                    const total = done + obrigatoriosPendentes.length;
                     const pct = total > 0 ? Math.round((done / total) * 100) : 0;
                     return (
                       <div className="mt-3">
                         <div className="flex items-center justify-between mb-1">
-                          <span className="text-[11px] text-gray-500">{done} de {total} documentos</span>
+                          <span className="text-[11px] text-gray-500">{done} de {total} obrigatórios</span>
                           <span className="text-[11px] font-bold text-gray-700">{pct}%</span>
                         </div>
                         <div className="h-1.5 bg-white/70 rounded-full overflow-hidden border border-gray-200/60">
