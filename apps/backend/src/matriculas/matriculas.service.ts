@@ -35,6 +35,7 @@ function getTiposObrigatorios(maior18: boolean): TipoDocumento[] {
     TipoDocumento.FOTO_ALUNO,
     TipoDocumento.IDENTIDADE,
     TipoDocumento.COMPROVANTE_RESID,
+    TipoDocumento.DECLARACAO_ESCOLAR,
   ];
   if (!maior18) {
     base.push(TipoDocumento.CERTIDAO_NASCIMENTO);

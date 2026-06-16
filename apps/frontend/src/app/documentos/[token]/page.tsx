@@ -51,6 +51,11 @@ function getDocsObrigatorios(maior18: boolean): { tipo: TipoDocumento; label: st
       label: 'Comprovante de Residência',
       desc: 'Conta de água, luz, gás ou fatura de cartão (últimos 3 meses)',
     },
+    {
+      tipo: 'declaracao_escolaridade',
+      label: 'Declaração de Escolaridade',
+      desc: 'Declaração da escola onde o aluno está matriculado',
+    },
   ];
   if (!maior18) {
     base.push({
@@ -66,12 +71,6 @@ function getDocsObrigatorios(maior18: boolean): { tipo: TipoDocumento; label: st
   }
   return base;
 }
-
-const DOC_OPCIONAL: { tipo: TipoDocumento; label: string; desc: string } = {
-  tipo: 'declaracao_escolaridade',
-  label: 'Declaração de Escolaridade',
-  desc: 'Declaração da escola atual (opcional)',
-};
 
 const DOC_FOTO_ALUNO = {
   tipo: 'foto_aluno' as TipoDocumento,
@@ -674,24 +673,6 @@ export default function DocumentosPage() {
           </div>
         </section>
 
-        {/* Documento Opcional */}
-        <section>
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-1 h-5 bg-blue-500 rounded-full" />
-            <h2 className="text-base font-semibold text-gray-800 dark:text-white">
-              Documento Opcional
-            </h2>
-          </div>
-          <DocCard
-            label={DOC_OPCIONAL.label}
-            desc={DOC_OPCIONAL.desc}
-            tipo={DOC_OPCIONAL.tipo}
-            obrigatorio={false}
-            enviado={docEnviado(DOC_OPCIONAL.tipo)}
-            onUpload={handleUpload}
-            uploading={uploadingTipo === DOC_OPCIONAL.tipo}
-          />
-        </section>
 
         {/* Documentos Extras */}
         <section>
