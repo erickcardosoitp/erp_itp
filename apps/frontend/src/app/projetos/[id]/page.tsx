@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft, Plus, Users, ClipboardCheck, Printer, X, Edit3, Trash2,
   AlertTriangle, Search, Camera, Upload, CheckCircle2, AlertCircle,
-  Mail, MessageSquare, ChevronRight, RefreshCw, FileCheck, Download,
+  Mail, MessageSquare, ChevronRight, ChevronUp, ChevronDown, RefreshCw, FileCheck, Download, Filter,
 } from 'lucide-react';
 import api from '@/services/api';
 import { toast } from 'sonner';
@@ -35,7 +35,7 @@ interface Inscricao {
   id: string; tipo: string; nome_completo: string;
   data_nascimento?: string; nome_responsavel?: string;
   telefone_responsavel?: string; email_responsavel?: string;
-  cep?: string; logradouro?: string; numero?: string;
+  cep?: string; logradouro?: string; numero?: string; bairro?: string;
   complemento?: string; cuidado_especial?: string;
   detalhes_cuidado?: string; status: string;
   equipe_id?: string; equipe?: Equipe; aluno_id?: string;
@@ -140,9 +140,15 @@ export default function ProjetoDashboard() {
   const [tab,           setTab]           = useState<Tab>('inscritos');
   const [dataPresenca,  setDataPresenca]  = useState(hoje);
   const [busca,         setBusca]         = useState('');
-  const [filtroStatus,  setFiltroStatus]  = useState<'todos' | 'ok' | 'pendente'>('todos');
-  const [filtroEquipe,  setFiltroEquipe]  = useState('');
-  const [loading,       setLoading]       = useState(true);
+  const [filtroStatus,   setFiltroStatus]   = useState<'todos' | 'ok' | 'pendente'>('todos');
+  const [filtroEquipe,   setFiltroEquipe]   = useState('');
+  const [filtroResp,     setFiltroResp]     = useState('');
+  const [filtroRua,      setFiltroRua]      = useState('');
+  const [filtroBairro,   setFiltroBairro]   = useState('');
+  const [filtroCondicao, setFiltroCondicao] = useState<'' | 'sim' | 'nao'>('');
+  const [sortCol,        setSortCol]        = useState('nome');
+  const [sortDir,        setSortDir]        = useState<'asc' | 'desc'>('asc');
+  const [loading,        setLoading]        = useState(true);
 
   // Drawer de documentos
   const [drawerInscricao, setDrawerInscricao] = useState<Inscricao | null>(null);
@@ -415,12 +421,40 @@ export default function ProjetoDashboard() {
 
   // ── Filters ───────────────────────────────────────────────────────────────
 
-  const inscritosFiltrados = inscritos.filter(i => {
-    if (busca && !i.nome_completo.toLowerCase().includes(busca.toLowerCase())) return false;
-    if (filtroStatus !== 'todos' && i.doc_status !== filtroStatus) return false;
-    if (filtroEquipe && i.equipe_id !== filtroEquipe) return false;
-    return true;
-  });
+  const handleSort = (col: string) => {
+    if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortCol(col); setSortDir('asc'); }
+  };
+
+  const inscritosFiltrados = (() => {
+    const list = inscritos.filter(i => {
+      if (busca && !i.nome_completo.toLowerCase().includes(busca.toLowerCase())) return false;
+      if (filtroStatus !== 'todos' && i.doc_status !== filtroStatus) return false;
+      if (filtroEquipe && i.equipe_id !== filtroEquipe) return false;
+      if (filtroResp && !(i.nome_responsavel || '').toLowerCase().includes(filtroResp.toLowerCase())) return false;
+      if (filtroRua && !(i.logradouro || '').toLowerCase().includes(filtroRua.toLowerCase())) return false;
+      if (filtroBairro && !(i.bairro || '').toLowerCase().includes(filtroBairro.toLowerCase())) return false;
+      if (filtroCondicao === 'sim' && (!i.cuidado_especial || i.cuidado_especial === 'Não')) return false;
+      if (filtroCondicao === 'nao' && i.cuidado_especial && i.cuidado_especial !== 'Não') return false;
+      return true;
+    });
+    return [...list].sort((a, b) => {
+      let av: string | number = '';
+      let bv: string | number = '';
+      switch (sortCol) {
+        case 'nome':       av = a.nome_completo; bv = b.nome_completo; break;
+        case 'idade':      av = calcIdade(a.data_nascimento) ?? 999; bv = calcIdade(b.data_nascimento) ?? 999; break;
+        case 'responsavel': av = a.nome_responsavel || ''; bv = b.nome_responsavel || ''; break;
+        case 'rua':        av = a.logradouro || ''; bv = b.logradouro || ''; break;
+        case 'bairro':     av = a.bairro || ''; bv = b.bairro || ''; break;
+        case 'condicao':   av = a.cuidado_especial || ''; bv = b.cuidado_especial || ''; break;
+        case 'inscricao':  av = a.created_at || ''; bv = b.created_at || ''; break;
+        case 'docs':       av = a.doc_status || ''; bv = b.doc_status || ''; break;
+      }
+      const cmp = typeof av === 'number' ? av - bv : String(av).localeCompare(String(bv), 'pt-BR');
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+  })();
 
   // ── WhatsApp link ─────────────────────────────────────────────────────────
 
@@ -503,7 +537,7 @@ export default function ProjetoDashboard() {
         </div>
       </div>
 
-      <div className="max-w-5xl mx-auto p-4 md:p-6 space-y-4">
+      <div className="max-w-7xl mx-auto p-4 md:p-6 space-y-4">
 
         {/* ── TAB INSCRITOS ──────────────────────────────────────────────────── */}
         {tab === 'inscritos' && (
@@ -547,15 +581,54 @@ export default function ProjetoDashboard() {
               </button>
             </div>
 
+            {/* Second filter row */}
+            <div className="flex flex-wrap gap-2 items-center">
+              <Filter size={12} className="text-slate-400 shrink-0"/>
+              <input value={filtroResp} onChange={e => setFiltroResp(e.target.value)} placeholder="Responsável..."
+                className="flex-1 min-w-[130px] px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-xl text-xs bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-400"/>
+              <input value={filtroRua} onChange={e => setFiltroRua(e.target.value)} placeholder="Rua..."
+                className="flex-1 min-w-[120px] px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-xl text-xs bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-400"/>
+              <input value={filtroBairro} onChange={e => setFiltroBairro(e.target.value)} placeholder="Bairro..."
+                className="flex-1 min-w-[120px] px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-xl text-xs bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-400"/>
+              <select value={filtroCondicao} onChange={e => setFiltroCondicao(e.target.value as '' | 'sim' | 'nao')}
+                className="px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-xl text-xs bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-purple-400">
+                <option value="">Condição: Todos</option>
+                <option value="sim">Com cuidados especiais</option>
+                <option value="nao">Sem cuidados especiais</option>
+              </select>
+              {(filtroResp || filtroRua || filtroBairro || filtroCondicao) && (
+                <button onClick={() => { setFiltroResp(''); setFiltroRua(''); setFiltroBairro(''); setFiltroCondicao(''); }}
+                  className="px-3 py-1.5 rounded-xl text-xs font-black text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+                  Limpar
+                </button>
+              )}
+            </div>
+
             {/* Table */}
-            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800">
-              <div className="rounded-2xl">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 overflow-x-auto">
+              <div className="rounded-2xl min-w-[900px]">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-slate-100 dark:border-slate-800">
-                      {['Nome', 'Idade', 'Responsável', 'Cuidados', 'Insc.', 'Equipe', 'Docs'].map(h => (
-                        <th key={h} className="text-left px-2 py-2.5 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap">
-                          {h}
+                      {([
+                        { key: 'nome',       label: 'Nome' },
+                        { key: 'idade',      label: 'Idade' },
+                        { key: 'responsavel',label: 'Responsável' },
+                        { key: 'rua',        label: 'Rua / Bairro' },
+                        { key: 'condicao',   label: 'Condição' },
+                        { key: 'inscricao',  label: 'Insc.' },
+                        { key: null,         label: 'Equipe' },
+                        { key: 'docs',       label: 'Docs' },
+                      ] as { key: string | null; label: string }[]).map(({ key, label }) => (
+                        <th key={label}
+                          onClick={key ? () => handleSort(key) : undefined}
+                          className={`text-left px-2 py-2.5 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap select-none ${key ? 'cursor-pointer hover:text-purple-500 transition-colors' : ''}`}>
+                          <span className="inline-flex items-center gap-1">
+                            {label}
+                            {key && sortCol === key && (sortDir === 'asc'
+                              ? <ChevronUp size={10} className="text-purple-500"/>
+                              : <ChevronDown size={10} className="text-purple-500"/>)}
+                          </span>
                         </th>
                       ))}
                       <th className="w-6"/>
@@ -589,11 +662,18 @@ export default function ProjetoDashboard() {
                             {idade !== null ? `${idade}a` : '—'}
                           </td>
                           {/* Responsável */}
-                          <td className="px-2 py-2.5 max-w-[160px]">
-                            <p className="text-xs text-slate-700 dark:text-slate-300 leading-tight">{ins.nome_responsavel || '—'}</p>
+                          <td className="px-2 py-2.5 max-w-[180px]">
+                            <p className="text-xs text-slate-700 dark:text-slate-300 leading-tight truncate">{ins.nome_responsavel || '—'}</p>
                             {ins.telefone_responsavel && (
                               <p className="text-[10px] text-slate-400 whitespace-nowrap">{fmtTelefone(ins.telefone_responsavel)}</p>
                             )}
+                          </td>
+                          {/* Rua / Bairro */}
+                          <td className="px-2 py-2.5 max-w-[180px]">
+                            {ins.logradouro
+                              ? <p className="text-xs text-slate-700 dark:text-slate-300 leading-tight truncate">{ins.logradouro}{ins.numero ? `, ${ins.numero}` : ''}</p>
+                              : <span className="text-xs text-slate-300">—</span>}
+                            {ins.bairro && <p className="text-[10px] text-slate-400 truncate">{ins.bairro}</p>}
                           </td>
                           {/* Cuidados */}
                           <td className="px-2 py-2.5 max-w-[140px]">

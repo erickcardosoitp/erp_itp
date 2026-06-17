@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { Projeto } from './entities/projeto.entity';
@@ -160,6 +160,28 @@ export class ProjetosService {
 
   async createInscricao(projeto_id: string, dto: CreateInscricaoDto & { email_responsavel?: string }) {
     await this.findOne(projeto_id);
+
+    // ── Bloqueia inscrição duplicada ─────────────────────────────────────────
+    if (dto.aluno_id) {
+      const dup = await this.inscricoesRepo.findOne({
+        where: { projeto_id, aluno_id: dto.aluno_id },
+      });
+      if (dup && dup.status !== 'cancelado') {
+        throw new ConflictException('Este aluno já está inscrito neste projeto');
+      }
+    } else if (dto.nome_completo && dto.data_nascimento) {
+      const [dup] = await this.dataSource.query(
+        `SELECT id FROM projeto_inscricoes
+         WHERE projeto_id = $1
+           AND LOWER(nome_completo) = LOWER($2)
+           AND data_nascimento = $3
+           AND status != 'cancelado'
+         LIMIT 1`,
+        [projeto_id, dto.nome_completo, dto.data_nascimento],
+      );
+      if (dup) throw new ConflictException('Já existe uma inscrição para este participante neste projeto');
+    }
+
     const tipo = dto.aluno_id ? 'regular' : 'externo';
 
     let dadosAluno: Partial<CreateInscricaoDto> = {};
