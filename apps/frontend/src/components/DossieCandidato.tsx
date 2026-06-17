@@ -362,7 +362,7 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
   const initials = (formData.nome_completo || '?').split(' ').filter(Boolean).slice(0, 2).map(n => n[0]).join('').toUpperCase();
 
   return (
-    <div className="fixed inset-0 z-[200] flex" onMouseDown={e => e.stopPropagation()}>
+    <div className="fixed inset-0 z-[220] flex" onMouseDown={e => e.stopPropagation()}>
       <div
         className={`flex-1 bg-black/50 backdrop-blur-sm transition-opacity duration-300 ${drawerVisible ? 'opacity-100' : 'opacity-0'}`}
         onMouseDown={handleClose}
