@@ -31,6 +31,7 @@ export default function MatriculasTab({ podeEditar }: Props) {
   const [cursosAcademico, setCursosAcademico] = useState<CursoAcademico[]>([]);
   const [matriculas, setMatriculas] = useState<any[]>([]);
   const [candidatoSelecionado, setCandidatoSelecionado] = useState<any>(null);
+  const [fichaDrawerData, setFichaDrawerData] = useState<any>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -77,6 +78,19 @@ export default function MatriculasTab({ podeEditar }: Props) {
   const [showCadastroDireto, setShowCadastroDireto] = useState(false);
 
   const fetchMatriculas = useCallback(() => setRefreshTick(t => t + 1), []);
+
+  const abrirFicha = useCallback(async (m: any) => {
+    setCandidatoSelecionado(m);
+    setFichaDrawerData(null);
+    setIsModalOpen(true);
+    const alunoId = m.aluno?.id ?? m.aluno_id;
+    if (alunoId) {
+      try {
+        const res = await api.get(`/academico/alunos/${alunoId}/ficha`);
+        setFichaDrawerData(res.data);
+      } catch { /* fica sem fichaData, não bloqueia */ }
+    }
+  }, []);
 
   // Suporte: cursos disponíveis e localidades (mount único)
   useEffect(() => {
@@ -442,7 +456,7 @@ export default function MatriculasTab({ podeEditar }: Props) {
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-2 flex-wrap">
-                          <button onClick={() => { setCandidatoSelecionado(m); setIsModalOpen(true); }}
+                          <button onClick={() => abrirFicha(m)}
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 rounded-xl text-purple-900 font-black text-[10px] uppercase hover:bg-yellow-400 transition-all border border-gray-200 shadow-sm whitespace-nowrap">
                             <UserCheck size={12} /> Ficha
                           </button>
@@ -493,7 +507,8 @@ export default function MatriculasTab({ podeEditar }: Props) {
       {isModalOpen && candidatoSelecionado && (
         <FichaDrawer
           aluno={candidatoSelecionado}
-          onClose={() => setIsModalOpen(false)}
+          fichaData={fichaDrawerData}
+          onClose={() => { setIsModalOpen(false); setFichaDrawerData(null); }}
           onSuccess={fetchMatriculas}
         />
       )}

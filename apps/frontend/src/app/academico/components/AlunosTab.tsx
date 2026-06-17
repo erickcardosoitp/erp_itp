@@ -4,15 +4,14 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Search, X, AlertTriangle, ChevronDown, Smartphone,
-  AlertCircle, UserPlus,
+  AlertCircle,
 } from 'lucide-react';
 import api from '@/services/api';
 import { toast } from 'sonner';
 import DossieCandidato from '@/components/DossieCandidato';
 import { Curso, Turma, Aluno } from './_types';
 import {
-  calcularIdade, fmtDate, CUIDADO_BADGE,
-  Modal, FieldInput,
+  fmtDate, CUIDADO_BADGE,
 } from './_shared';
 
 // ─── KpisTurmas ───────────────────────────────────────────────────────────────
@@ -87,15 +86,6 @@ export default function AlunosTab({ cursos, turmas, podeEditar }: {
   const [duplicados, setDuplicados] = useState<{ por_cpf: any[]; por_nome: any[]; total: number } | null>(null);
   const [showDuplicados, setShowDuplicados] = useState(false);
   const [inativandoDupId, setInativandoDupId] = useState<string | null>(null);
-
-  // ── Cadastro Rápido ───────────────────────────────────────────────────────
-  const [showCadastroRapido, setShowCadastroRapido] = useState(false);
-  const [formRapido, setFormRapido] = useState<{ nome_completo: string; data_nascimento: string; cpf: string; celular: string; nome_responsavel: string }>({ nome_completo: '', data_nascimento: '', cpf: '', celular: '', nome_responsavel: '' });
-  const [salvandoRapido, setSalvandoRapido] = useState(false);
-  const [erroRapido, setErroRapido] = useState<string | null>(null);
-  const [sucessoRapido, setSucessoRapido] = useState<string | null>(null);
-
-  const menorDeIdade = formRapido.data_nascimento ? calcularIdade(formRapido.data_nascimento) < 18 : false;
 
   const turmasDoCurso = turmas.filter(t => {
     if (!filtroCursoNome) return false;
@@ -234,34 +224,6 @@ export default function AlunosTab({ cursos, turmas, podeEditar }: {
       alert(Array.isArray(msg) ? msg.join(', ') : msg);
     } finally {
       setInativandoId(null);
-    }
-  };
-
-  const abrirCadastroRapido = () => {
-    setFormRapido({ nome_completo: '', data_nascimento: '', cpf: '', celular: '', nome_responsavel: '' });
-    setErroRapido(null); setSucessoRapido(null);
-    setShowCadastroRapido(true);
-  };
-
-  const salvarCadastroRapido = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formRapido.nome_completo.trim()) { setErroRapido('Nome é obrigatório.'); return; }
-    setSalvandoRapido(true); setErroRapido(null); setSucessoRapido(null);
-    try {
-      const r = await api.post('/academico/alunos', {
-        nome_completo:    formRapido.nome_completo.trim(),
-        data_nascimento:  formRapido.data_nascimento || undefined,
-        cpf:              formRapido.cpf.trim() || undefined,
-        celular:          formRapido.celular.trim() || undefined,
-        nome_responsavel: menorDeIdade ? formRapido.nome_responsavel.trim() || undefined : undefined,
-      });
-      setSucessoRapido(`Aluno "${r.data?.nome_completo || formRapido.nome_completo}" cadastrado! Matrícula: ${r.data?.numero_matricula || '–'}`);
-      await load();
-    } catch (err: any) {
-      const msg = err?.response?.data?.message || err?.message || 'Erro ao cadastrar.';
-      setErroRapido(Array.isArray(msg) ? msg.join(', ') : msg);
-    } finally {
-      setSalvandoRapido(false);
     }
   };
 
@@ -449,10 +411,6 @@ export default function AlunosTab({ cursos, turmas, podeEditar }: {
           className="text-[10px] font-black uppercase text-red-400 hover:text-red-600 flex items-center gap-1">
           <X size={11}/> Limpar
         </button>
-        <button onClick={abrirCadastroRapido}
-          className="flex items-center gap-1.5 bg-green-600 text-white px-4 py-2 rounded-xl font-black text-[10px] uppercase hover:bg-green-700 ml-auto">
-          <UserPlus size={12}/> Cadastro Rápido
-        </button>
       </div>
 
       {loading ? (
@@ -572,46 +530,6 @@ export default function AlunosTab({ cursos, turmas, podeEditar }: {
         />
       )}
 
-      {showCadastroRapido && (
-        <Modal title="Cadastro Rápido de Aluno" onClose={() => setShowCadastroRapido(false)}>
-          <form onSubmit={salvarCadastroRapido} className="space-y-3">
-            <FieldInput label="Nome Completo *" value={formRapido.nome_completo} onChange={v => setFormRapido(p => ({ ...p, nome_completo: v }))} required />
-            <FieldInput label="Data de Nascimento" type="date" value={formRapido.data_nascimento} onChange={v => setFormRapido(p => ({ ...p, data_nascimento: v }))} />
-            {menorDeIdade && (
-              <FieldInput label="Nome do Responsável" value={formRapido.nome_responsavel} onChange={v => setFormRapido(p => ({ ...p, nome_responsavel: v }))} />
-            )}
-            <div className="grid grid-cols-2 gap-3">
-              <FieldInput label="CPF" value={formRapido.cpf} onChange={v => setFormRapido(p => ({ ...p, cpf: v }))} />
-              <FieldInput label="Telefone" value={formRapido.celular} onChange={v => setFormRapido(p => ({ ...p, celular: v }))} />
-            </div>
-            {erroRapido && (
-              <div className="bg-red-50 border border-red-200 text-red-700 text-[11px] font-bold rounded-xl px-4 py-2.5">⚠ {erroRapido}</div>
-            )}
-            {sucessoRapido && (
-              <div className="bg-green-50 border border-green-200 text-green-700 text-[11px] font-bold rounded-xl px-4 py-2.5">✓ {sucessoRapido}</div>
-            )}
-            <div className="flex gap-2">
-              {!sucessoRapido ? (
-                <button type="submit" disabled={salvandoRapido}
-                  className="flex-1 bg-green-600 text-white py-2.5 rounded-xl font-black text-xs uppercase disabled:opacity-50 hover:bg-green-700">
-                  {salvandoRapido ? 'Cadastrando...' : 'Cadastrar'}
-                </button>
-              ) : (
-                <button type="button" onClick={() => { setShowCadastroRapido(false); }}
-                  className="flex-1 bg-purple-600 text-white py-2.5 rounded-xl font-black text-xs uppercase hover:bg-purple-700">
-                  Fechar
-                </button>
-              )}
-              {sucessoRapido && (
-                <button type="button" onClick={() => { setFormRapido({ nome_completo: '', data_nascimento: '', cpf: '', celular: '', nome_responsavel: '' }); setErroRapido(null); setSucessoRapido(null); }}
-                  className="flex-1 bg-green-600 text-white py-2.5 rounded-xl font-black text-xs uppercase hover:bg-green-700">
-                  + Outro
-                </button>
-              )}
-            </div>
-          </form>
-        </Modal>
-      )}
 
     </div>
   );

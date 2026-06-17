@@ -482,7 +482,7 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
                     </span>
                   )}
                   {formData.escolaridade && (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/80 border border-gray-200 text-gray-600 max-w-[160px] truncate">
+                    <span title={formData.escolaridade} className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/80 border border-gray-200 text-gray-600 max-w-[220px] truncate">
                       {formData.escolaridade}
                     </span>
                   )}
@@ -563,9 +563,11 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
                     <EF label="Celular" field="celular" value={formData.celular} editing={isEditing} onChange={handleFieldChange} />
                     <EF label="Telefone Alternativo" field="telefone_alternativo" value={formData.telefone_alternativo} editing={isEditing} onChange={handleFieldChange} />
                   </>}
-                  <div className="col-span-3">
-                    <EF label="Cursos de Interesse" field="cursos_desejados" value={formData.cursos_desejados} editing={isEditing} onChange={handleFieldChange} />
-                  </div>
+                  {formData.origem_inscricao !== 'Direto' && (
+                    <div className="col-span-3">
+                      <EF label="Cursos de Interesse" field="cursos_desejados" value={formData.cursos_desejados} editing={isEditing} onChange={handleFieldChange} />
+                    </div>
+                  )}
                 </Grid>
               </ColorSection>
 
@@ -632,7 +634,8 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
                     <div className="col-span-3">
                       <EF label="Nome da Mãe / Responsável" field="nome_responsavel" value={formData.nome_responsavel} editing={isEditing} onChange={handleFieldChange} />
                     </div>
-                    <EF label="Grau de Parentesco" field="grau_parentesco" value={formData.grau_parentesco} editing={isEditing} onChange={handleFieldChange} />
+                    <EF label="Grau de Parentesco" field="grau_parentesco" value={formData.grau_parentesco} editing={isEditing} type="select"
+                      options={['Mãe', 'Pai', 'Avó', 'Avô', 'Tia', 'Tio', 'Irmã', 'Irmão', 'Responsável Legal', 'Outro']} onChange={handleFieldChange} />
                     <EF label="CPF do Responsável" field="cpf_responsavel" value={formData.cpf_responsavel} editing={isEditing} onChange={handleFieldChange} />
                     <EF label="Email do Responsável" field="email_responsavel" value={formData.email_responsavel} editing={isEditing} onChange={handleFieldChange} />
                     <EF label="Telefone do Responsável" field="celular" value={formData.celular} editing={isEditing} onChange={handleFieldChange} />
@@ -1274,6 +1277,7 @@ function EF({ label, field, value, editing, type = 'text', onChange, options, fu
             ? <div className="relative">
                 <select value={value ?? ''} onChange={e => onChange(field, e.target.value)} className={`${INPUT_CLS} appearance-none pr-7`}>
                   <option value="">—</option>
+                  {value && !options.includes(value) && <option value={value}>{value}</option>}
                   {options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                 </select>
                 <ChevronDown size={13} className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400" />

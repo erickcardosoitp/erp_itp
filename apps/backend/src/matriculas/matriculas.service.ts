@@ -906,6 +906,7 @@ export class MatriculasService {
         cpf:                  alunoSalvo.cpf       ?? undefined,
         email:                alunoSalvo.email      ?? undefined,
         celular:              alunoSalvo.celular    ?? undefined,
+        idade:                alunoSalvo.idade      ?? undefined,
         data_nascimento:      alunoSalvo.data_nascimento ?? undefined,
         sexo:                 alunoSalvo.sexo       ?? undefined,
         escolaridade:         alunoSalvo.escolaridade ?? undefined,

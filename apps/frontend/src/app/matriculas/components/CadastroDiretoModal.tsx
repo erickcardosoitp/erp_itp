@@ -18,6 +18,33 @@ const OPCOES_CUIDADO_ESPECIAL = [
   'Deficiência Física / Motora', 'Deficiência Intelectual', 'Altas Habilidades / Superdotação', 'Outro',
 ];
 
+const GRAU_PARENTESCO = ['Mãe', 'Pai', 'Avó', 'Avô', 'Tia', 'Tio', 'Irmã', 'Irmão', 'Responsável Legal', 'Outro'];
+
+// ── Mascaramento ────────────────────────────────────────────────────────────
+function fmtCpf(v: string) {
+  const d = v.replace(/\D/g, '').slice(0, 11);
+  if (d.length <= 3) return d;
+  if (d.length <= 6) return `${d.slice(0,3)}.${d.slice(3)}`;
+  if (d.length <= 9) return `${d.slice(0,3)}.${d.slice(3,6)}.${d.slice(6)}`;
+  return `${d.slice(0,3)}.${d.slice(3,6)}.${d.slice(6,9)}-${d.slice(9)}`;
+}
+
+function fmtCep(v: string) {
+  const d = v.replace(/\D/g, '').slice(0, 8);
+  if (d.length <= 5) return d;
+  return `${d.slice(0,5)}-${d.slice(5)}`;
+}
+
+function fmtPhone(v: string) {
+  const d = v.replace(/\D/g, '').slice(0, 11);
+  if (d.length === 0) return '';
+  if (d.length <= 2) return `(${d}`;
+  if (d.length <= 6) return `(${d.slice(0,2)}) ${d.slice(2)}`;
+  if (d.length <= 10) return `(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6)}`;
+  return `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`;
+}
+// ───────────────────────────────────────────────────────────────────────────
+
 const FORM_VAZIO = {
   nome_completo: '', cpf: '', email: '', celular: '',
   data_nascimento: '', sexo: '', escolaridade: '', turno_escolar: '',
@@ -81,22 +108,46 @@ export default function CadastroDiretoModal({ cursosAcademico, onClose, onSucces
     setErro(null);
     try {
       const t = (v: string) => v?.trim() || undefined;
+      const raw = (v: string) => v?.replace(/\D/g, '') || undefined;
       const payload: Record<string, any> = {
-        nome_completo: t(form.nome_completo), cpf: t(form.cpf), email: t(form.email), celular: t(form.celular),
-        data_nascimento: form.data_nascimento || undefined, sexo: form.sexo || undefined,
-        escolaridade: form.escolaridade || undefined, turno_escolar: form.turno_escolar || undefined,
+        nome_completo: t(form.nome_completo),
+        cpf: raw(form.cpf) ? fmtCpf(form.cpf) : undefined,
+        data_nascimento: form.data_nascimento || undefined,
+        sexo: form.sexo || undefined,
+        escolaridade: form.escolaridade || undefined,
+        turno_escolar: form.turno_escolar || undefined,
         cep: t(form.cep), logradouro: t(form.logradouro), numero: t(form.numero), complemento: t(form.complemento),
         bairro: t(form.bairro), cidade: t(form.cidade), estado_uf: t(form.estado_uf),
         maior_18_anos: !menorDeIdade,
-        nome_responsavel:     (menorDeIdade || form.curso_especial) ? t(form.nome_responsavel) : undefined,
-        email_responsavel:    (menorDeIdade || form.curso_especial) ? t(form.email_responsavel) : undefined,
-        grau_parentesco:      (menorDeIdade || form.curso_especial) ? t(form.grau_parentesco) : undefined,
-        cpf_responsavel:      (menorDeIdade || form.curso_especial) ? t(form.cpf_responsavel) : undefined,
-        telefone_alternativo: t(form.telefone_alternativo),
-        possui_alergias: form.possui_alergias || undefined, cuidado_especial: form.cuidado_especial || undefined,
-        detalhes_cuidado: t(form.detalhes_cuidado), uso_medicamento: form.uso_medicamento || undefined,
-        lgpd_aceito: form.lgpd_aceito, autoriza_imagem: form.autoriza_imagem, turma_ids: form.turma_ids,
+        possui_alergias: form.possui_alergias || undefined,
+        cuidado_especial: form.cuidado_especial || undefined,
+        detalhes_cuidado: t(form.detalhes_cuidado),
+        uso_medicamento: form.uso_medicamento || undefined,
+        lgpd_aceito: form.lgpd_aceito, autoriza_imagem: form.autoriza_imagem,
+        turma_ids: form.turma_ids,
       };
+
+      if (menorDeIdade) {
+        // Para menor: celular = telefone do responsável, email é do responsável
+        payload.celular             = t(form.celular) ? form.celular : undefined;
+        payload.email               = t(form.email) || undefined;
+        payload.nome_responsavel    = t(form.nome_responsavel);
+        payload.email_responsavel   = t(form.email_responsavel);
+        payload.grau_parentesco     = t(form.grau_parentesco);
+        payload.cpf_responsavel     = raw(form.cpf_responsavel) ? fmtCpf(form.cpf_responsavel) : undefined;
+        payload.telefone_alternativo = t(form.telefone_alternativo) ? form.telefone_alternativo : undefined;
+      } else {
+        payload.email               = t(form.email);
+        payload.celular             = t(form.celular) ? form.celular : undefined;
+        payload.telefone_alternativo = t(form.telefone_alternativo) ? form.telefone_alternativo : undefined;
+        if (form.curso_especial) {
+          payload.nome_responsavel  = t(form.nome_responsavel);
+          payload.email_responsavel = t(form.email_responsavel);
+          payload.grau_parentesco   = t(form.grau_parentesco);
+          payload.cpf_responsavel   = raw(form.cpf_responsavel) ? fmtCpf(form.cpf_responsavel) : undefined;
+        }
+      }
+
       const r = await api.post('/matriculas/aluno-direto', payload);
       const alunoId = r.data?.id;
       if (alunoId) {
@@ -120,6 +171,8 @@ export default function CadastroDiretoModal({ cursosAcademico, onClose, onSucces
   const todasTurmas = cursosAcademico.flatMap(c => (c.turmas ?? []).map(t => ({ ...t, curso_nome: c.nome, curso_sigla: c.sigla })));
   const inp = 'w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400';
   const sel = inp + ' bg-white';
+  const inpOrg = 'w-full border border-orange-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400';
+  const selOrg = inpOrg + ' bg-white';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -160,6 +213,7 @@ export default function CadastroDiretoModal({ cursosAcademico, onClose, onSucces
           ) : (
             <form onSubmit={handleSubmit} className="space-y-5">
 
+              {/* ── Identificação ─────────────────────────────────────────── */}
               <fieldset className="space-y-3">
                 <legend className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2">Identificação</legend>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -169,7 +223,8 @@ export default function CadastroDiretoModal({ cursosAcademico, onClose, onSucces
                   </div>
                   <div>
                     <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">CPF</label>
-                    <input value={form.cpf} onChange={e => set('cpf', e.target.value)} placeholder="000.000.000-00" className={inp} />
+                    <input value={form.cpf} onChange={e => set('cpf', fmtCpf(e.target.value))}
+                      placeholder="000.000.000-00" maxLength={14} className={inp} />
                   </div>
                   <div>
                     <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Data de Nascimento</label>
@@ -183,7 +238,7 @@ export default function CadastroDiretoModal({ cursosAcademico, onClose, onSucces
                     </select>
                   </div>
                   <div>
-                    <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Escolaridade</label>
+                    <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Nível de Escolaridade</label>
                     <select value={form.escolaridade} onChange={e => set('escolaridade', e.target.value)} className={sel}>
                       <option value="">Selecione...</option>
                       <option>Ensino Fundamental Incompleto</option>
@@ -204,24 +259,38 @@ export default function CadastroDiretoModal({ cursosAcademico, onClose, onSucces
                 </div>
               </fieldset>
 
+              {/* ── Contato ───────────────────────────────────────────────── */}
               <fieldset className="space-y-3">
-                <legend className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2">Contato</legend>
+                <legend className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2">
+                  Contato {menorDeIdade && <span className="text-orange-400 font-normal normal-case">(aluno menor — telefone fica em Responsável)</span>}
+                </legend>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">E-mail</label>
-                    <input type="email" value={form.email} onChange={e => set('email', e.target.value)} className={inp} />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Celular</label>
-                    <input value={form.celular} onChange={e => set('celular', e.target.value)} placeholder="(21) 99999-9999" className={inp} />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Telefone Alternativo</label>
-                    <input value={form.telefone_alternativo} onChange={e => set('telefone_alternativo', e.target.value)} placeholder="(21) 99999-9999" className={inp} />
-                  </div>
+                  {!menorDeIdade && (
+                    <>
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">E-mail</label>
+                        <input type="email" value={form.email} onChange={e => set('email', e.target.value)} className={inp} />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Celular</label>
+                        <input value={form.celular} onChange={e => set('celular', fmtPhone(e.target.value))} placeholder="(21) 99999-9999" maxLength={15} className={inp} />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Telefone Alternativo</label>
+                        <input value={form.telefone_alternativo} onChange={e => set('telefone_alternativo', fmtPhone(e.target.value))} placeholder="(21) 99999-9999" maxLength={15} className={inp} />
+                      </div>
+                    </>
+                  )}
+                  {menorDeIdade && (
+                    <div>
+                      <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">E-mail (opcional)</label>
+                      <input type="email" value={form.email} onChange={e => set('email', e.target.value)} className={inp} />
+                    </div>
+                  )}
                 </div>
               </fieldset>
 
+              {/* ── Endereço ──────────────────────────────────────────────── */}
               <fieldset className="space-y-3">
                 <legend className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2">Endereço</legend>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -230,7 +299,7 @@ export default function CadastroDiretoModal({ cursosAcademico, onClose, onSucces
                       CEP {buscandoCep && <span className="text-green-500 ml-1">buscando...</span>}
                     </label>
                     <input value={form.cep}
-                      onChange={e => { set('cep', e.target.value); if (e.target.value.replace(/\D/g,'').length === 8) buscarCep(e.target.value); }}
+                      onChange={e => { const v = fmtCep(e.target.value); set('cep', v); if (v.replace(/\D/g,'').length === 8) buscarCep(v); }}
                       onBlur={e => buscarCep(e.target.value)}
                       placeholder="00000-000" maxLength={9} className={inp} />
                   </div>
@@ -256,41 +325,57 @@ export default function CadastroDiretoModal({ cursosAcademico, onClose, onSucces
                   </div>
                   <div>
                     <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Estado (UF)</label>
-                    <input value={form.estado_uf} onChange={e => set('estado_uf', e.target.value)} placeholder="RJ" maxLength={2} className={inp + ' uppercase'} />
+                    <input value={form.estado_uf} onChange={e => set('estado_uf', e.target.value.toUpperCase().slice(0,2))} placeholder="RJ" maxLength={2} className={inp + ' uppercase'} />
                   </div>
                 </div>
               </fieldset>
 
+              {/* ── Responsável ────────────────────────────────────────────── */}
               {(menorDeIdade || form.curso_especial) && (
                 <fieldset className="space-y-3 border border-orange-200 rounded-2xl p-4 bg-orange-50">
                   <legend className="text-[9px] font-black uppercase tracking-widest text-orange-500 px-1">
-                    {menorDeIdade ? 'Responsável (menor de idade)' : 'Nome da Mãe / Responsável'}
+                    {menorDeIdade ? 'Responsável (aluno menor de idade)' : 'Nome da Mãe / Responsável'}
                   </legend>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="sm:col-span-2">
                       <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Nome Completo do Responsável</label>
-                      <input value={form.nome_responsavel} onChange={e => set('nome_responsavel', e.target.value)} className="w-full border border-orange-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                      <input value={form.nome_responsavel} onChange={e => set('nome_responsavel', e.target.value)} className={inpOrg} />
                     </div>
                     <div>
                       <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Grau de Parentesco</label>
-                      <select value={form.grau_parentesco} onChange={e => set('grau_parentesco', e.target.value)} className="w-full border border-orange-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white">
+                      <select value={form.grau_parentesco} onChange={e => set('grau_parentesco', e.target.value)} className={selOrg}>
                         <option value="">Selecione...</option>
-                        <option>Mãe</option><option>Pai</option><option>Avó/Avô</option>
-                        <option>Tia/Tio</option><option>Irmã/Irmão</option><option>Responsável Legal</option>
+                        {GRAU_PARENTESCO.map(g => <option key={g}>{g}</option>)}
                       </select>
                     </div>
                     <div>
                       <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">CPF do Responsável</label>
-                      <input value={form.cpf_responsavel} onChange={e => set('cpf_responsavel', e.target.value)} placeholder="000.000.000-00" className="w-full border border-orange-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                      <input value={form.cpf_responsavel} onChange={e => set('cpf_responsavel', fmtCpf(e.target.value))}
+                        placeholder="000.000.000-00" maxLength={14} className={inpOrg} />
                     </div>
                     <div>
                       <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">E-mail do Responsável</label>
-                      <input type="email" value={form.email_responsavel} onChange={e => set('email_responsavel', e.target.value)} className="w-full border border-orange-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                      <input type="email" value={form.email_responsavel} onChange={e => set('email_responsavel', e.target.value)} className={inpOrg} />
                     </div>
+                    {menorDeIdade && (
+                      <>
+                        <div>
+                          <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Telefone do Responsável</label>
+                          <input value={form.celular} onChange={e => set('celular', fmtPhone(e.target.value))}
+                            placeholder="(21) 99999-9999" maxLength={15} className={inpOrg} />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Telefone Alternativo</label>
+                          <input value={form.telefone_alternativo} onChange={e => set('telefone_alternativo', fmtPhone(e.target.value))}
+                            placeholder="(21) 99999-9999" maxLength={15} className={inpOrg} />
+                        </div>
+                      </>
+                    )}
                   </div>
                 </fieldset>
               )}
 
+              {/* ── Saúde e Cuidados ──────────────────────────────────────── */}
               <fieldset className="space-y-3">
                 <legend className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2">Saúde e Cuidados</legend>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -323,6 +408,7 @@ export default function CadastroDiretoModal({ cursosAcademico, onClose, onSucces
                 )}
               </fieldset>
 
+              {/* ── Autodeclaração ─────────────────────────────────────────── */}
               <fieldset className="space-y-2">
                 <legend className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2">Autodeclaração Racial</legend>
                 <select value={form.auto_declaracao} onChange={e => set('auto_declaracao', e.target.value)} className={sel}>
@@ -333,6 +419,7 @@ export default function CadastroDiretoModal({ cursosAcademico, onClose, onSucces
                 </select>
               </fieldset>
 
+              {/* ── Curso Especial ─────────────────────────────────────────── */}
               <div className={`rounded-2xl border-2 transition-colors ${form.curso_especial ? 'border-purple-400 bg-purple-50' : 'border-slate-200 bg-slate-50'}`}>
                 <button type="button" onClick={() => set('curso_especial', !form.curso_especial)} className="w-full flex items-center gap-3 px-4 py-3 text-left">
                   <span className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-colors ${form.curso_especial ? 'bg-purple-600 border-purple-600' : 'border-slate-300 bg-white'}`}>
@@ -400,6 +487,7 @@ export default function CadastroDiretoModal({ cursosAcademico, onClose, onSucces
                 )}
               </div>
 
+              {/* ── Turmas ─────────────────────────────────────────────────── */}
               {todasTurmas.length > 0 && (
                 <fieldset>
                   <legend className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-3">
@@ -428,6 +516,7 @@ export default function CadastroDiretoModal({ cursosAcademico, onClose, onSucces
                 </fieldset>
               )}
 
+              {/* ── Termos ─────────────────────────────────────────────────── */}
               <fieldset className="space-y-2">
                 <legend className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2">Termos</legend>
                 <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl p-3">

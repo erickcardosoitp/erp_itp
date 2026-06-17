@@ -168,9 +168,9 @@ export class ProjetosService {
     if (dto.aluno_id) {
       const aluno = await this.dataSource.query(
         `SELECT a.nome_completo, a.data_nascimento,
-                COALESCE(a.nome_responsavel, insc.nome_responsavel)        AS nome_responsavel,
-                COALESCE(a.telefone_alternativo, insc.telefone_alternativo) AS telefone_alternativo,
-                COALESCE(a.email_responsavel, insc.email_responsavel)       AS aluno_email_responsavel,
+                COALESCE(a.nome_responsavel, insc.nome_responsavel)                                                   AS nome_responsavel,
+                COALESCE(a.telefone_alternativo, a.celular, insc.telefone_alternativo, insc.celular)                  AS telefone_responsavel,
+                COALESCE(a.email_responsavel, insc.email_responsavel)                                                 AS aluno_email_responsavel,
                 pi.nome_responsavel       AS insc_nome_responsavel,
                 pi.telefone_responsavel   AS insc_telefone_responsavel
          FROM alunos a
@@ -187,7 +187,7 @@ export class ProjetosService {
         nome_completo:        a.nome_completo,
         data_nascimento:      a.data_nascimento,
         nome_responsavel:     a.nome_responsavel || a.insc_nome_responsavel || null,
-        telefone_responsavel: a.telefone_alternativo || a.insc_telefone_responsavel || null,
+        telefone_responsavel: a.telefone_responsavel || a.insc_telefone_responsavel || null,
       };
       emailConfirmacao = a.aluno_email_responsavel || null;
       if (!emailConfirmacao) {
