@@ -559,8 +559,8 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
                   </div>
                   <EF label="Sexo" field="sexo" value={formData.sexo} editing={isEditing} type="select"
                     options={['Masculino', 'Feminino', 'Outro', 'Não informado']} onChange={handleFieldChange} />
-                  <EF label="Email" field="email" value={formData.email} editing={isEditing} onChange={handleFieldChange} />
                   {formData.maior_18_anos && <>
+                    <EF label="Email" field="email" value={formData.email} editing={isEditing} onChange={handleFieldChange} />
                     <EF label="Celular" field="celular" value={formData.celular} editing={isEditing} onChange={handleFieldChange} />
                     <EF label="Telefone Alternativo" field="telefone_alternativo" value={formData.telefone_alternativo} editing={isEditing} onChange={handleFieldChange} />
                   </>}
