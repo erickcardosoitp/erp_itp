@@ -437,7 +437,7 @@ export default function MatriculasTab({ podeEditar }: Props) {
                             );
                           })()}
                           <div>
-                            <div className="font-black text-gray-800 uppercase text-xs">{m.nome_completo}</div>
+                            <div className="font-black text-gray-800 uppercase text-xs">{m.aluno?.nome_completo || m.nome_completo}</div>
                             <div className="text-[10px] text-gray-400 font-bold">{m.cpf}</div>
                           </div>
                         </div>

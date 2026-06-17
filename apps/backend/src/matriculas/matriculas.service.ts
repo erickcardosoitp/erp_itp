@@ -149,9 +149,10 @@ export class MatriculasService {
         .leftJoinAndSelect('i.aluno', 'aluno');
 
       if (filtros?.nome?.trim()) {
-        qb.andWhere('LOWER(i.nome_completo) LIKE :nome', {
-          nome: `%${filtros.nome.trim().toLowerCase()}%`,
-        });
+        qb.andWhere(
+          '(LOWER(i.nome_completo) LIKE :nome OR LOWER(aluno.nome_completo) LIKE :nome)',
+          { nome: `%${filtros.nome.trim().toLowerCase()}%` },
+        );
       }
       if (filtros?.cpf?.trim()) {
         const cpfLimpo = filtros.cpf.replace(/\D/g, '');

@@ -560,6 +560,32 @@ export class AcademicoService {
     if (!aluno) throw new NotFoundException('Aluno não encontrado');
     if (dto.cpf) dto.cpf = dto.cpf.replace(/\D/g, '');
     await this.alunoRepo.update(id, dto);
+
+    // Propaga campos pessoais de volta para a inscrição vinculada (sync reverso)
+    const CAMPOS_SYNC = [
+      'nome_completo', 'email', 'celular', 'data_nascimento', 'idade', 'sexo',
+      'escolaridade', 'turno_escolar', 'ultima_freq_escolar',
+      'logradouro', 'numero', 'complemento', 'cidade', 'bairro', 'estado_uf', 'cep',
+      'maior_18_anos', 'nome_responsavel', 'email_responsavel', 'grau_parentesco',
+      'cpf_responsavel', 'telefone_alternativo',
+      'possui_alergias', 'alergias_descricao', 'cuidado_especial', 'detalhes_cuidado',
+      'uso_medicamento', 'medicamentos_descricao', 'lgpd_aceito', 'autoriza_imagem',
+    ] as const;
+    const camposAlterados = Object.keys(dto).filter(k => CAMPOS_SYNC.includes(k as any));
+    if (camposAlterados.length > 0) {
+      const [inscRow] = await this.dataSource.query(
+        `SELECT inscricao_id FROM alunos WHERE id = $1`, [id],
+      );
+      if (inscRow?.inscricao_id) {
+        const sets = camposAlterados.map((c, i) => `"${c}" = $${i + 2}`).join(', ');
+        const vals = camposAlterados.map(c => (dto as any)[c]);
+        await this.dataSource.query(
+          `UPDATE inscricoes SET ${sets} WHERE id = $1`,
+          [inscRow.inscricao_id, ...vals],
+        ).catch((e: any) => this.logger.warn(`Sync inscricao falhou: ${e?.message}`));
+      }
+    }
+
     return this.alunoRepo.findOneByOrFail({ id });
   }
 
