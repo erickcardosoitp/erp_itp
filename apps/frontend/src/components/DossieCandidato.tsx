@@ -1196,6 +1196,7 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
 // ── Constantes de estilo ───────────────────────────────────────
 
 const INPUT_CLS = 'h-8 px-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 w-full bg-white';
+const SELECT_CLS = 'py-1.5 px-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 w-full bg-white';
 
 // ── Mapa de cores por seção ────────────────────────────────────
 
@@ -1278,7 +1279,7 @@ function EF({ label, field, value, editing, type = 'text', onChange, options, fu
               className="px-2.5 py-1.5 border border-gray-200 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 resize-none bg-white" />
           : type === 'select' && options
             ? <div className="relative">
-                <select value={value ?? ''} onChange={e => onChange(field, e.target.value)} className={`${INPUT_CLS} appearance-none pr-7`}>
+                <select value={value ?? ''} onChange={e => onChange(field, e.target.value)} className={`${SELECT_CLS} appearance-none pr-7`}>
                   <option value="">—</option>
                   {value && !options.includes(value) && <option value={value}>{value}</option>}
                   {options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
