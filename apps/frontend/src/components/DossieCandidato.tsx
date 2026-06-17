@@ -166,6 +166,18 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
           const d = resInscricao.value.data;
           // Mescla com aluno prop para garantir que nenhum campo seja perdido
           const merged = { ...aluno, ...d };
+          // Recalcula sempre a partir da data de nascimento para evitar inconsistência no DB
+          if (merged.data_nascimento) {
+            const dob = new Date(merged.data_nascimento + 'T12:00:00');
+            if (!isNaN(dob.getTime())) {
+              const hoje = new Date();
+              let idadeCalc = hoje.getFullYear() - dob.getFullYear();
+              const mm = hoje.getMonth() - dob.getMonth();
+              if (mm < 0 || (mm === 0 && hoje.getDate() < dob.getDate())) idadeCalc--;
+              merged.idade = idadeCalc;
+              merged.maior_18_anos = idadeCalc >= 18;
+            }
+          }
           setFormData(merged);
           loadedDataRef.current = merged; // snapshot para o botão Cancelar
           if (d?.aluno?.id) {
