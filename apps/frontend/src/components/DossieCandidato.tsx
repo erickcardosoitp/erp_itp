@@ -599,6 +599,8 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
                     onChange={handleFieldChange} fullWidth />
                   <EF label="Turno Escolar" field="turno_escolar" value={formData.turno_escolar} editing={isEditing} type="select"
                     options={['Manhã', 'Tarde', 'Noite', 'Integral', 'Não estuda no momento']} onChange={handleFieldChange} />
+                  <EF label="Última Freq. Escolar" field="ultima_freq_escolar" value={formData.ultima_freq_escolar} editing={isEditing}
+                    placeholder="Ex: 85% — da declaração de escolaridade" onChange={handleFieldChange} fullWidth />
                 </Grid>
               </ColorSection>
 

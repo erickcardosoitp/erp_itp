@@ -160,7 +160,7 @@ export class AppModule implements OnModuleInit {
   private async runMigrations() {
     try {
       // ── Versão do schema — pula migrations se já rodaram neste banco ──────
-      const SCHEMA_VERSION = 13; // incrementar aqui ao adicionar novas migrations
+      const SCHEMA_VERSION = 14; // incrementar aqui ao adicionar novas migrations
       await this.dataSource.query(`
         CREATE TABLE IF NOT EXISTS _schema_version (
           id      INT PRIMARY KEY DEFAULT 1,
@@ -1445,6 +1445,17 @@ export class AppModule implements OnModuleInit {
         ON CONFLICT (chave) DO NOTHING
       `);
       this.logger.log('✅ config_listas criada e populada com padrões');
+
+      // ── ultima_freq_escolar em inscricoes e alunos ────────────────────────
+      await this.dataSource.query(`
+        ALTER TABLE IF EXISTS inscricoes
+          ADD COLUMN IF NOT EXISTS ultima_freq_escolar VARCHAR
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE IF EXISTS alunos
+          ADD COLUMN IF NOT EXISTS ultima_freq_escolar VARCHAR
+      `);
+      this.logger.log('✅ ultima_freq_escolar adicionado em inscricoes e alunos');
 
       // ── Marca schema como atualizado — próximos cold starts pulam tudo ────
       await this.dataSource.query(`UPDATE _schema_version SET version = $1, ran_at = now() WHERE id = 1`, [SCHEMA_VERSION]);

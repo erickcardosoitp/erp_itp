@@ -43,6 +43,9 @@ export class Aluno {
   @Column({ type: 'varchar', nullable: true })
   turno_escolar: string;
 
+  @Column({ type: 'varchar', nullable: true })
+  ultima_freq_escolar: string;
+
   // ── Endereço ─────────────────────────────────────────────────────
   @Column({ type: 'varchar', nullable: true })
   logradouro: string;

@@ -572,7 +572,7 @@ export class MatriculasService {
     // Propaga campos pessoais editados para o aluno vinculado (se já matriculado)
     const CAMPOS_ALUNO = [
       'nome_completo', 'email', 'celular', 'data_nascimento', 'idade', 'sexo', 'escolaridade',
-      'turno_escolar', 'logradouro', 'numero', 'complemento', 'cidade', 'bairro', 'estado_uf',
+      'turno_escolar', 'ultima_freq_escolar', 'logradouro', 'numero', 'complemento', 'cidade', 'bairro', 'estado_uf',
       'cep', 'maior_18_anos', 'nome_responsavel', 'email_responsavel', 'grau_parentesco',
       'cpf_responsavel', 'telefone_alternativo', 'possui_alergias', 'alergias_descricao',
       'cuidado_especial', 'detalhes_cuidado', 'uso_medicamento', 'medicamentos_descricao',
@@ -827,6 +827,7 @@ export class MatriculasService {
         sexo: dados.sexo || null,
         escolaridade: dados.escolaridade || null,
         turno_escolar: dados.turno_escolar || null,
+        ultima_freq_escolar: dados.ultima_freq_escolar || null,
         logradouro: dados.logradouro || null,
         numero: dados.numero || null,
         complemento: dados.complemento || null,
@@ -911,6 +912,7 @@ export class MatriculasService {
         sexo:                 alunoSalvo.sexo       ?? undefined,
         escolaridade:         alunoSalvo.escolaridade ?? undefined,
         turno_escolar:        alunoSalvo.turno_escolar ?? undefined,
+        ultima_freq_escolar:  alunoSalvo.ultima_freq_escolar ?? undefined,
         logradouro:           alunoSalvo.logradouro ?? undefined,
         numero:               alunoSalvo.numero     ?? undefined,
         complemento:          alunoSalvo.complemento ?? undefined,

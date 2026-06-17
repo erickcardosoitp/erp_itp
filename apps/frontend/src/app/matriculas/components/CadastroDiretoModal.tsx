@@ -47,7 +47,7 @@ function fmtPhone(v: string) {
 
 const FORM_VAZIO = {
   nome_completo: '', cpf: '', email: '', celular: '',
-  data_nascimento: '', sexo: '', escolaridade: '', turno_escolar: '',
+  data_nascimento: '', sexo: '', escolaridade: '', turno_escolar: '', ultima_freq_escolar: '',
   cep: '', logradouro: '', numero: '', complemento: '',
   bairro: '', cidade: '', estado_uf: '',
   nome_responsavel: '', email_responsavel: '', grau_parentesco: '',
@@ -116,6 +116,7 @@ export default function CadastroDiretoModal({ cursosAcademico, onClose, onSucces
         sexo: form.sexo || undefined,
         escolaridade: form.escolaridade || undefined,
         turno_escolar: form.turno_escolar || undefined,
+        ultima_freq_escolar: t(form.ultima_freq_escolar) || undefined,
         cep: t(form.cep), logradouro: t(form.logradouro), numero: t(form.numero), complemento: t(form.complemento),
         bairro: t(form.bairro), cidade: t(form.cidade), estado_uf: t(form.estado_uf),
         maior_18_anos: !menorDeIdade,
@@ -255,6 +256,11 @@ export default function CadastroDiretoModal({ cursosAcademico, onClose, onSucces
                       <option value="">Selecione...</option>
                       <option>Manhã</option><option>Tarde</option><option>Noite</option><option>Integral</option><option>Não estuda no momento</option>
                     </select>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Última Freq. Escolar</label>
+                    <input value={form.ultima_freq_escolar || ''} onChange={e => set('ultima_freq_escolar', e.target.value)}
+                      placeholder="Ex: 85% — da declaração de escolaridade" className={inp} />
                   </div>
                 </div>
               </fieldset>

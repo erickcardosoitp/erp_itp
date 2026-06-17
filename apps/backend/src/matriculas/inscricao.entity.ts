@@ -47,11 +47,14 @@ export class Inscricao {
   @Column({ name: 'sexo', type: 'varchar', nullable: true }) 
   sexo: string;
 
-  @Column({ name: 'escolaridade', type: 'varchar', nullable: true }) 
+  @Column({ name: 'escolaridade', type: 'varchar', nullable: true })
   escolaridade: string;
 
-  @Column({ name: 'turno_escolar', type: 'varchar', nullable: true }) 
+  @Column({ name: 'turno_escolar', type: 'varchar', nullable: true })
   turno_escolar: string;
+
+  @Column({ name: 'ultima_freq_escolar', type: 'varchar', nullable: true })
+  ultima_freq_escolar: string;
 
   @Column({ name: 'logradouro', type: 'varchar', nullable: true }) 
   logradouro: string;
