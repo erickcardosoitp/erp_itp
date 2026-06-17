@@ -428,14 +428,14 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
                 <div className="flex items-center gap-3 mt-2 flex-wrap">
                   {formData.cpf && (
                     <span className="flex items-center gap-1 text-xs text-gray-500 bg-white/70 rounded px-1.5 py-0.5">
-                      <Hash size={10} className="shrink-0 text-gray-400" /> {formData.cpf}
+                      <Hash size={10} className="shrink-0 text-gray-400" /> {fmtCpf(formData.cpf) ?? formData.cpf}
                     </span>
                   )}
                   {formData.celular && (
                     <a href={`https://wa.me/55${formData.celular.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer"
                       className="flex items-center gap-1 text-xs text-green-600 hover:text-green-700 bg-white/70 rounded px-1.5 py-0.5 transition-colors">
                       <Phone size={10} className="shrink-0" />
-                      {!formData.maior_18_anos ? `Resp: ${formData.celular}` : formData.celular}
+                      {!formData.maior_18_anos ? `Resp: ${fmtPhone(formData.celular) ?? formData.celular}` : (fmtPhone(formData.celular) ?? formData.celular)}
                     </a>
                   )}
                   {formData.email && (
@@ -541,7 +541,7 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
                   <div className="col-span-3">
                     <EF label="Nome Completo" field="nome_completo" value={formData.nome_completo} editing={isEditing} onChange={handleFieldChange} />
                   </div>
-                  <EF label="CPF" field="cpf" value={formData.cpf} editing={isEditing} onChange={handleFieldChange} />
+                  <EF label="CPF" field="cpf" value={formData.cpf} editing={isEditing} onChange={handleFieldChange} fmt={fmtCpf} />
                   <EF label="Data de Nascimento" field="data_nascimento" value={formData.data_nascimento} editing={isEditing} type="date" onChange={handleFieldChange} />
                   <div className="flex flex-col gap-0.5">
                     <FieldLabel>Idade</FieldLabel>
@@ -561,8 +561,8 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
                     options={['Masculino', 'Feminino', 'Outro', 'Não informado']} onChange={handleFieldChange} />
                   {formData.maior_18_anos && <>
                     <EF label="Email" field="email" value={formData.email} editing={isEditing} onChange={handleFieldChange} />
-                    <EF label="Celular" field="celular" value={formData.celular} editing={isEditing} onChange={handleFieldChange} />
-                    <EF label="Telefone Alternativo" field="telefone_alternativo" value={formData.telefone_alternativo} editing={isEditing} onChange={handleFieldChange} />
+                    <EF label="Celular" field="celular" value={formData.celular} editing={isEditing} onChange={handleFieldChange} fmt={fmtPhone} />
+                    <EF label="Telefone Alternativo" field="telefone_alternativo" value={formData.telefone_alternativo} editing={isEditing} onChange={handleFieldChange} fmt={fmtPhone} />
                   </>}
                   {formData.origem_inscricao !== 'Direto' && (
                     <div className="col-span-3">
@@ -581,7 +581,7 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
                           onChange={e => { const v = e.target.value; handleFieldChange('cep', v); if (v.replace(/\D/g, '').length === 8) buscarCep(v); }}
                           onBlur={e => buscarCep(e.target.value)}
                           className={INPUT_CLS} />
-                      : <FieldValue>{formData.cep || '—'}</FieldValue>}
+                      : <FieldValue>{formData.cep ? fmtCep(formData.cep) : '—'}</FieldValue>}
                   </div>
                   <EF label="Logradouro" field="logradouro" value={formData.logradouro} editing={isEditing} onChange={handleFieldChange} />
                   <EF label="Número" field="numero" value={formData.numero} editing={isEditing} onChange={handleFieldChange} />
@@ -639,9 +639,9 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
                     </div>
                     <EF label="Grau de Parentesco" field="grau_parentesco" value={formData.grau_parentesco} editing={isEditing} type="select"
                       options={['Mãe', 'Pai', 'Avó', 'Avô', 'Tia', 'Tio', 'Irmã', 'Irmão', 'Responsável Legal', 'Outro']} onChange={handleFieldChange} />
-                    <EF label="CPF do Responsável" field="cpf_responsavel" value={formData.cpf_responsavel} editing={isEditing} onChange={handleFieldChange} />
+                    <EF label="CPF do Responsável" field="cpf_responsavel" value={formData.cpf_responsavel} editing={isEditing} onChange={handleFieldChange} fmt={fmtCpf} />
                     <EF label="Email do Responsável" field="email_responsavel" value={formData.email_responsavel} editing={isEditing} onChange={handleFieldChange} />
-                    <EF label="Telefone do Responsável" field="celular" value={formData.celular} editing={isEditing} onChange={handleFieldChange} />
+                    <EF label="Telefone do Responsável" field="celular" value={formData.celular} editing={isEditing} onChange={handleFieldChange} fmt={fmtPhone} />
                   </>)}
                 </Grid>
               </ColorSection>}
@@ -1198,6 +1198,27 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
 const INPUT_CLS = 'h-8 px-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 w-full bg-white';
 const SELECT_CLS = 'py-1.5 px-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 w-full bg-white';
 
+// ── Helpers de formatação para visualização ────────────────────
+function fmtCpf(v?: string | null) {
+  if (!v) return v;
+  const d = String(v).replace(/\D/g, '');
+  if (d.length !== 11) return v;
+  return `${d.slice(0,3)}.${d.slice(3,6)}.${d.slice(6,9)}-${d.slice(9)}`;
+}
+function fmtCep(v?: string | null) {
+  if (!v) return v;
+  const d = String(v).replace(/\D/g, '');
+  if (d.length !== 8) return v;
+  return `${d.slice(0,5)}-${d.slice(5)}`;
+}
+function fmtPhone(v?: string | null) {
+  if (!v) return v;
+  const d = String(v).replace(/\D/g, '');
+  if (d.length === 11) return `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`;
+  if (d.length === 10) return `(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6)}`;
+  return v;
+}
+
 // ── Mapa de cores por seção ────────────────────────────────────
 
 const COLOR_MAP = {
@@ -1265,10 +1286,11 @@ function EmptyState({ icon, text }: { icon: React.ReactNode; text: string }) {
 
 // ── Componentes de campo ───────────────────────────────────────
 
-function EF({ label, field, value, editing, type = 'text', onChange, options, fullWidth }: {
+function EF({ label, field, value, editing, type = 'text', onChange, options, fullWidth, fmt }: {
   label: string; field: string; value: any; editing: boolean;
   type?: 'text' | 'number' | 'date' | 'textarea' | 'select' | 'checkbox';
   onChange: (f: string, v: any) => void; options?: string[]; fullWidth?: boolean;
+  fmt?: (v: string) => string | null | undefined;
 }) {
   return (
     <div className={`flex flex-col gap-0.5 ${fullWidth ? 'sm:col-span-2' : ''}`}>
@@ -1299,9 +1321,11 @@ function EF({ label, field, value, editing, type = 'text', onChange, options, fu
           ? <FieldValue>{value ? 'Sim' : 'Não'}</FieldValue>
           : <FieldValue>
               {value
-                ? (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value)
-                    ? new Date(value + 'T12:00:00').toLocaleDateString('pt-BR')
-                    : String(value))
+                ? fmt
+                  ? (fmt(String(value)) ?? String(value))
+                  : (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value)
+                      ? new Date(value + 'T12:00:00').toLocaleDateString('pt-BR')
+                      : String(value))
                 : undefined}
             </FieldValue>
       )}
