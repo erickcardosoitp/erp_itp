@@ -128,7 +128,7 @@ export class EmailService implements OnModuleInit {
         <tr>
           <td style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:24px 40px;text-align:center">
             <p style="margin:0;color:#9ca3af;font-size:12px;line-height:1.6">
-              Este e-mail foi enviado automaticamente pelo sistema do Instituto Tia Pretinha.<br>
+              Instituto Tia Pretinha — CNPJ 11.759.851/0001-39<br>
               Se você não se inscreveu, desconsidere esta mensagem.
             </p>
           </td>
@@ -141,11 +141,15 @@ export class EmailService implements OnModuleInit {
 </html>
     `.trim();
 
+    const replyTo = this.config.get<string>('SMTP_REPLY_TO') || this.config.get<string>('SMTP_FROM_ADDRESS') || this.config.get<string>('SMTP_USER');
+    const text = `Olá, ${primeiroNome}!\n\nPara avançar no processo de matrícula no Instituto Tia Pretinha, leia e assine o Termo de Autorização de Uso de Imagem, Voz e Tratamento de Dados Pessoais (LGPD).\n\nAcesse o link abaixo para assinar:\n${link}\n\nEste link é válido por 72 horas. Se o prazo expirar, solicite um novo link à equipe do Instituto.\n\n---\nInstituto Tia Pretinha — CNPJ 11.759.851/0001-39\nSe você não se inscreveu, desconsidere esta mensagem.`;
     // deepcode ignore XSS: user-supplied values are HTML-escaped via escapeHtml() before template interpolation
     const info = await this.transporter.sendMail({
-      from: `"Instituto Tia Pretinha" <${this.config.get<string>('SMTP_FROM_ADDRESS') || this.config.get<string>('SMTP_USER')}>`  ,
+      from: `"Instituto Tia Pretinha" <${this.config.get<string>('SMTP_FROM_ADDRESS') || this.config.get<string>('SMTP_USER')}>`,
+      replyTo,
       to: email,
-      subject: '📋 Assine seu Termo LGPD – Instituto Tia Pretinha',
+      subject: 'Assine seu Termo LGPD - Instituto Tia Pretinha',
+      text,
       html,
     });
 
@@ -244,7 +248,7 @@ export class EmailService implements OnModuleInit {
         <tr>
           <td style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:24px 40px;text-align:center">
             <p style="margin:0;color:#9ca3af;font-size:12px;line-height:1.6">
-              Este e-mail foi enviado automaticamente pelo sistema do Instituto Tia Pretinha.<br>
+              Instituto Tia Pretinha — CNPJ 11.759.851/0001-39<br>
               Se o candidato não se inscreveu, desconsidere esta mensagem.
             </p>
           </td>
@@ -257,10 +261,14 @@ export class EmailService implements OnModuleInit {
 </html>
     `.trim();
 
+    const replyTo = this.config.get<string>('SMTP_REPLY_TO') || this.config.get<string>('SMTP_FROM_ADDRESS') || this.config.get<string>('SMTP_USER');
+    const text = `Olá, ${primeiroNomeResp}!\n\nO candidato(a) ${nomeAlunoEsc} iniciou o processo de inscrição no Instituto Tia Pretinha. Como responsável legal, precisamos que você leia e assine o Termo de Autorização de Uso de Imagem, Voz e Tratamento de Dados Pessoais (LGPD).\n\nAcesse o link abaixo para assinar:\n${link}\n\nEste link é válido por 72 horas. Se o prazo expirar, solicite um novo link à equipe do Instituto.\n\n---\nInstituto Tia Pretinha — CNPJ 11.759.851/0001-39\nSe o candidato não se inscreveu, desconsidere esta mensagem.`;
     const info = await this.transporter.sendMail({
-      from: `"Instituto Tia Pretinha" <${this.config.get<string>('SMTP_FROM_ADDRESS') || this.config.get<string>('SMTP_USER')}>`  ,
+      from: `"Instituto Tia Pretinha" <${this.config.get<string>('SMTP_FROM_ADDRESS') || this.config.get<string>('SMTP_USER')}>`,
+      replyTo,
       to: emailResponsavel,
-      subject: '📋 Assinatura de Termo LGPD (Responsável) – Instituto Tia Pretinha',
+      subject: 'Assinatura de Termo LGPD (Responsavel) - Instituto Tia Pretinha',
+      text,
       html,
     });
 
@@ -369,7 +377,7 @@ export class EmailService implements OnModuleInit {
         <tr>
           <td style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:24px 40px;text-align:center">
             <p style="margin:0;color:#9ca3af;font-size:12px;line-height:1.6">
-              Este e-mail foi enviado automaticamente pelo sistema do Instituto Tia Pretinha.<br>
+              Instituto Tia Pretinha — CNPJ 11.759.851/0001-39<br>
               Se você não se inscreveu, desconsidere esta mensagem.
             </p>
           </td>
