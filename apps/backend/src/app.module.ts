@@ -170,6 +170,14 @@ export class AppModule implements OnModuleInit {
         )
       `);
       await this.dataSource.query(`INSERT INTO _schema_version (id, version) VALUES (1, 0) ON CONFLICT DO NOTHING`);
+
+      // ── Colunas críticas: sempre garantidas antes do guard de versão ─────────
+      // Necessário para evitar race condition em serverless (instâncias paralelas)
+      await this.dataSource.query(`
+        ALTER TABLE IF EXISTS inscricoes ADD COLUMN IF NOT EXISTS ultima_freq_escolar VARCHAR;
+        ALTER TABLE IF EXISTS alunos     ADD COLUMN IF NOT EXISTS ultima_freq_escolar VARCHAR;
+      `);
+
       const [{ version: currentVersion }] = await this.dataSource.query(`SELECT version FROM _schema_version WHERE id = 1`);
       if (Number(currentVersion) >= SCHEMA_VERSION) {
         this.logger.log(`✅ Schema v${SCHEMA_VERSION} já aplicado — migrations ignoradas`);
