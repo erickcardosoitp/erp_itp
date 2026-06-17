@@ -1262,7 +1262,8 @@ export class AcademicoService {
   }
 
   async detectarDuplicados() {
-    const [porCpf, porNome] = await Promise.all([
+    const [porCpf, porNome, insCpf, insNome, cruzado] = await Promise.all([
+      // alunos duplicados por CPF
       this.dataSource.query(`
         SELECT cpf,
                json_agg(json_build_object('id', id, 'nome', nome_completo, 'matricula', numero_matricula,
@@ -1271,6 +1272,7 @@ export class AcademicoService {
         WHERE cpf IS NOT NULL AND cpf <> ''
         GROUP BY cpf HAVING COUNT(*) > 1
       `),
+      // alunos duplicados por nome+nascimento
       this.dataSource.query(`
         SELECT LOWER(TRIM(nome_completo)) AS nome_chave,
                data_nascimento::text AS data_nascimento,
@@ -1280,12 +1282,63 @@ export class AcademicoService {
         WHERE data_nascimento IS NOT NULL
         GROUP BY LOWER(TRIM(nome_completo)), data_nascimento HAVING COUNT(*) > 1
       `),
+      // inscrições duplicadas por CPF (excluindo canceladas/desistentes)
+      this.dataSource.query(`
+        SELECT cpf,
+               json_agg(json_build_object('id', id::text, 'nome', nome_completo, 'status', status_matricula,
+                 'created_at', "createdAt"::text) ORDER BY "createdAt") AS registros
+        FROM inscricoes
+        WHERE cpf IS NOT NULL AND cpf <> ''
+          AND status_matricula NOT IN ('Desistente','Cancelada')
+        GROUP BY cpf HAVING COUNT(*) > 1
+      `),
+      // inscrições duplicadas por nome+nascimento
+      this.dataSource.query(`
+        SELECT LOWER(TRIM(nome_completo)) AS nome_chave,
+               data_nascimento::text AS data_nascimento,
+               json_agg(json_build_object('id', id::text, 'nome', nome_completo, 'status', status_matricula,
+                 'cpf', cpf, 'created_at', "createdAt"::text) ORDER BY "createdAt") AS registros
+        FROM inscricoes
+        WHERE data_nascimento IS NOT NULL
+          AND status_matricula NOT IN ('Desistente','Cancelada')
+        GROUP BY LOWER(TRIM(nome_completo)), data_nascimento HAVING COUNT(*) > 1
+      `),
+      // cruzado: CPF presente em inscricoes ativas E em alunos sem ligação
+      this.dataSource.query(`
+        SELECT i.cpf,
+               i.nome_completo AS nome_inscricao,
+               i.id::text      AS inscricao_id,
+               i.status_matricula,
+               a.id            AS aluno_id,
+               a.nome_completo AS nome_aluno,
+               a.numero_matricula
+        FROM inscricoes i
+        JOIN alunos a ON REPLACE(REPLACE(i.cpf,'.',''),'-','') = REPLACE(REPLACE(a.cpf,'.',''),'-','')
+        WHERE i.aluno_id IS NULL
+          AND i.status_matricula NOT IN ('Desistente','Cancelada')
+          AND i.cpf IS NOT NULL AND i.cpf <> ''
+          AND a.cpf IS NOT NULL AND a.cpf <> ''
+        ORDER BY i.cpf
+        LIMIT 100
+      `),
     ]);
-    const parse = (r: any) => typeof r.alunos === 'string' ? JSON.parse(r.alunos) : r.alunos;
+    const parse = (r: any, key = 'alunos') => {
+      const v = r[key];
+      return typeof v === 'string' ? JSON.parse(v) : (v ?? []);
+    };
     return {
-      por_cpf:  porCpf.map((r: any)  => ({ tipo: 'cpf',  chave: r.cpf, alunos: parse(r) })),
-      por_nome: porNome.map((r: any) => ({ tipo: 'nome', chave: `${r.nome_chave} / ${r.data_nascimento}`, alunos: parse(r) })),
-      total:    porCpf.length + porNome.length,
+      alunos: {
+        por_cpf:  porCpf.map((r: any)  => ({ tipo: 'cpf',  chave: r.cpf, registros: parse(r) })),
+        por_nome: porNome.map((r: any) => ({ tipo: 'nome', chave: `${r.nome_chave} / ${r.data_nascimento}`, registros: parse(r) })),
+        total: porCpf.length + porNome.length,
+      },
+      inscricoes: {
+        por_cpf:  insCpf.map((r: any)  => ({ tipo: 'cpf',  chave: r.cpf, registros: parse(r, 'registros') })),
+        por_nome: insNome.map((r: any) => ({ tipo: 'nome', chave: `${r.nome_chave} / ${r.data_nascimento}`, registros: parse(r, 'registros') })),
+        total: insCpf.length + insNome.length,
+      },
+      cruzado: cruzado,
+      total: porCpf.length + porNome.length + insCpf.length + insNome.length + cruzado.length,
     };
   }
 

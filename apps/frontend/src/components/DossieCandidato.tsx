@@ -431,10 +431,11 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
                       <Hash size={10} className="shrink-0 text-gray-400" /> {formData.cpf}
                     </span>
                   )}
-                  {formData.celular && formData.maior_18_anos && (
+                  {formData.celular && (
                     <a href={`https://wa.me/55${formData.celular.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer"
                       className="flex items-center gap-1 text-xs text-green-600 hover:text-green-700 bg-white/70 rounded px-1.5 py-0.5 transition-colors">
-                      <Phone size={10} className="shrink-0" /> {formData.celular}
+                      <Phone size={10} className="shrink-0" />
+                      {!formData.maior_18_anos ? `Resp: ${formData.celular}` : formData.celular}
                     </a>
                   )}
                   {formData.email && (

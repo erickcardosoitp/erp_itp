@@ -83,7 +83,7 @@ export default function AlunosTab({ cursos, turmas, podeEditar }: {
   const [fichaLoading, setFichaLoading] = useState(false);
   const [pendentes, setPendentes] = useState<any[]>([]);
   const [showPendentes, setShowPendentes] = useState(true);
-  const [duplicados, setDuplicados] = useState<{ por_cpf: any[]; por_nome: any[]; total: number } | null>(null);
+  const [duplicados, setDuplicados] = useState<{ alunos: { por_cpf: any[]; por_nome: any[]; total: number }; inscricoes: { por_cpf: any[]; por_nome: any[]; total: number }; cruzado: any[]; total: number } | null>(null);
   const [showDuplicados, setShowDuplicados] = useState(false);
   const [inativandoDupId, setInativandoDupId] = useState<string | null>(null);
 
@@ -300,46 +300,99 @@ export default function AlunosTab({ cursos, turmas, podeEditar }: {
             <ChevronDown size={14} className={`text-red-400 transition-transform ${showDuplicados ? 'rotate-180' : ''}`} />
           </button>
           {showDuplicados && (
-            <div className="border-t border-red-200 dark:border-red-800/40 divide-y divide-red-100 dark:divide-red-900/30">
-              {[...duplicados.por_cpf, ...duplicados.por_nome].map((grupo: any, gi: number) => (
-                <div key={gi} className="px-5 py-3">
-                  <p className="text-[10px] font-bold text-red-500 uppercase mb-2">
-                    {grupo.tipo === 'cpf' ? `CPF duplicado: ${grupo.chave}` : `Nome/Data: ${grupo.chave}`}
-                  </p>
-                  <div className="flex flex-col gap-1.5">
-                    {(grupo.alunos as any[]).map((a: any) => (
-                      <div key={a.id} className="flex items-center gap-3 bg-white dark:bg-slate-800 rounded-xl px-3 py-2 border border-red-100 dark:border-red-900/30">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">{a.nome}</p>
-                          <p className="text-[10px] text-slate-400 font-mono">{a.matricula} · {a.ativo ? 'Ativo' : 'Inativo'}</p>
+            <div className="border-t border-red-200 dark:border-red-800/40">
+
+              {/* Seção: Alunos matriculados duplicados */}
+              {duplicados.alunos.total > 0 && (
+                <div className="px-5 py-3">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-red-400 mb-2">Alunos Matriculados</p>
+                  <div className="divide-y divide-red-100 dark:divide-red-900/30">
+                    {[...duplicados.alunos.por_cpf, ...duplicados.alunos.por_nome].map((grupo: any, gi: number) => (
+                      <div key={gi} className="py-2">
+                        <p className="text-[10px] font-bold text-red-500 uppercase mb-1.5">
+                          {grupo.tipo === 'cpf' ? `CPF duplicado: ${grupo.chave}` : `Nome/Data: ${grupo.chave}`}
+                        </p>
+                        <div className="flex flex-col gap-1">
+                          {(grupo.registros as any[]).map((a: any) => (
+                            <div key={a.id} className="flex items-center gap-3 bg-white dark:bg-slate-800 rounded-xl px-3 py-2 border border-red-100 dark:border-red-900/30">
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">{a.nome}</p>
+                                <p className="text-[10px] text-slate-400 font-mono">{a.matricula} · {a.ativo ? 'Ativo' : 'Inativo'}</p>
+                              </div>
+                              <button onClick={() => verFicha(a.id)}
+                                className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 whitespace-nowrap">
+                                Ver ficha
+                              </button>
+                              {podeEditar && a.ativo && (
+                                <button disabled={inativandoDupId === a.id}
+                                  onClick={async () => {
+                                    if (!confirm(`Inativar ${a.nome}?`)) return;
+                                    setInativandoDupId(a.id);
+                                    try {
+                                      await api.delete(`/academico/alunos/${a.id}`);
+                                      toast.success('Aluno inativado.');
+                                      const r = await api.get('/academico/alunos/duplicados');
+                                      setDuplicados(r.data);
+                                    } catch (e: any) {
+                                      toast.error(e?.response?.data?.message || 'Erro ao inativar.');
+                                    } finally { setInativandoDupId(null); }
+                                  }}
+                                  className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-red-100 hover:bg-red-200 dark:bg-red-900/30 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 whitespace-nowrap disabled:opacity-50">
+                                  {inativandoDupId === a.id ? '...' : 'Inativar'}
+                                </button>
+                              )}
+                            </div>
+                          ))}
                         </div>
-                        <button onClick={() => verFicha(a.id)}
-                          className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 whitespace-nowrap">
-                          Ver ficha
-                        </button>
-                        {podeEditar && a.ativo && (
-                          <button disabled={inativandoDupId === a.id}
-                            onClick={async () => {
-                              if (!confirm(`Inativar ${a.nome}?`)) return;
-                              setInativandoDupId(a.id);
-                              try {
-                                await api.delete(`/academico/alunos/${a.id}`);
-                                toast.success('Aluno inativado.');
-                                const r = await api.get('/academico/alunos/duplicados');
-                                setDuplicados(r.data);
-                              } catch (e: any) {
-                                toast.error(e?.response?.data?.message || 'Erro ao inativar.');
-                              } finally { setInativandoDupId(null); }
-                            }}
-                            className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-red-100 hover:bg-red-200 dark:bg-red-900/30 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 whitespace-nowrap disabled:opacity-50">
-                            {inativandoDupId === a.id ? '...' : 'Inativar'}
-                          </button>
-                        )}
                       </div>
                     ))}
                   </div>
                 </div>
-              ))}
+              )}
+
+              {/* Seção: Inscrições duplicadas */}
+              {duplicados.inscricoes.total > 0 && (
+                <div className="px-5 py-3 border-t border-red-200 dark:border-red-800/40">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-orange-400 mb-2">Inscrições (ainda não matriculados)</p>
+                  <div className="flex flex-col gap-1.5">
+                    {[...duplicados.inscricoes.por_cpf, ...duplicados.inscricoes.por_nome].map((grupo: any, gi: number) => (
+                      <div key={gi} className="py-2 border-b border-orange-100 last:border-0">
+                        <p className="text-[10px] font-bold text-orange-500 uppercase mb-1.5">
+                          {grupo.tipo === 'cpf' ? `CPF duplicado: ${grupo.chave}` : `Nome/Data: ${grupo.chave}`}
+                        </p>
+                        <div className="flex flex-col gap-1">
+                          {(grupo.registros as any[]).map((r: any) => (
+                            <div key={r.id} className="flex items-center gap-3 bg-white dark:bg-slate-800 rounded-xl px-3 py-2 border border-orange-100 dark:border-orange-900/30">
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">{r.nome}</p>
+                                <p className="text-[10px] text-slate-400 font-mono">Inscrição #{r.id} · {r.status}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Seção: Cruzado — mesmo CPF em inscricoes e alunos sem link */}
+              {duplicados.cruzado.length > 0 && (
+                <div className="px-5 py-3 border-t border-red-200 dark:border-red-800/40">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-amber-500 mb-2">CPF em Inscrição E em Aluno sem vínculo</p>
+                  <div className="flex flex-col gap-1.5">
+                    {duplicados.cruzado.map((c: any, ci: number) => (
+                      <div key={ci} className="bg-white dark:bg-slate-800 rounded-xl px-3 py-2 border border-amber-200 dark:border-amber-900/30">
+                        <p className="text-[10px] font-bold text-amber-600 mb-1">CPF: {c.cpf}</p>
+                        <p className="text-[10px] text-slate-600">Inscrição #{c.inscricao_id} — {c.nome_inscricao} ({c.status_matricula})</p>
+                        <p className="text-[10px] text-slate-600">Aluno {c.numero_matricula} — {c.nome_aluno}</p>
+                        <p className="text-[10px] text-amber-500 mt-1">Inscrição não está vinculada ao aluno (aluno_id nulo)</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
             </div>
           )}
         </div>
