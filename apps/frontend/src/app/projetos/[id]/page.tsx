@@ -170,9 +170,11 @@ export default function ProjetoDashboard() {
   const [equipeAutoSugerida, setEquipeAutoSugerida] = useState<string | null>(null);
 
   // Externo: wizard
-  const [passoExterno,    setPassoExterno]    = useState<1 | 2 | 3>(1);
-  const [inscricaoCriada, setInscricaoCriada] = useState<Inscricao | null>(null);
-  const [uploadStatus,    setUploadStatus]    = useState<Record<TipoDoc, UpStatus>>({} as any);
+  const [passoExterno,       setPassoExterno]       = useState<1 | 2 | 3>(1);
+  const [inscricaoCriada,    setInscricaoCriada]    = useState<Inscricao | null>(null);
+  const [uploadStatus,       setUploadStatus]       = useState<Record<TipoDoc, UpStatus>>({} as any);
+  // ITP: confirmação pós-inscrição
+  const [inscricaoITPCriada, setInscricaoITPCriada] = useState<Inscricao | null>(null);
   const [cameraDocWizard, setCameraDocWizard] = useState<string | null>(null);
   const fileInputWizardRef  = useRef<HTMLInputElement>(null);
   const fileInputWizardTipo = useRef('');
@@ -312,10 +314,9 @@ export default function ProjetoDashboard() {
     e.preventDefault();
     setSalvando(true);
     try {
-      await api.post(`/projetos/${id}/inscricoes`, formInscricao);
-      resetModal();
+      const r = await api.post(`/projetos/${id}/inscricoes`, formInscricao);
       await load();
-      toast.success('Aluno inscrito com sucesso');
+      setInscricaoITPCriada(r.data);
     } catch (err: any) {
       toast.error(err?.response?.data?.message || 'Erro ao inscrever');
     } finally { setSalvando(false); }
@@ -439,6 +440,7 @@ export default function ProjetoDashboard() {
     setEquipeAutoSugerida(null);
     setPassoExterno(1);
     setInscricaoCriada(null);
+    setInscricaoITPCriada(null);
     setUploadStatus({} as any);
     setCameraDocWizard(null);
     setReinscrFound(null);
@@ -909,8 +911,54 @@ export default function ProjetoDashboard() {
               <button onClick={resetModal} className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400"><X size={16}/></button>
             </div>
 
+            {/* ── ALUNO ITP: Confirmação ────────────────────────────────────── */}
+            {!modoExterno && inscricaoITPCriada && (
+              <div className="p-4 sm:p-6 space-y-5 text-center">
+                <div className="w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mx-auto">
+                  <CheckCircle2 size={32} className="text-green-600"/>
+                </div>
+                <div>
+                  <h4 className="font-black text-lg text-slate-800 dark:text-slate-100">Inscrição Realizada!</h4>
+                  <p className="text-sm text-slate-500 mt-1">
+                    <strong className="text-slate-700 dark:text-slate-300">{inscricaoITPCriada.nome_completo}</strong> está inscrito no projeto.
+                  </p>
+                  {inscricaoITPCriada.email_responsavel && (
+                    <p className="text-[11px] text-slate-400 mt-1">Confirmação enviada para {inscricaoITPCriada.email_responsavel}</p>
+                  )}
+                </div>
+                <div className="flex flex-col gap-2">
+                  {inscricaoITPCriada.telefone_responsavel && (() => {
+                    const phone = inscricaoITPCriada.telefone_responsavel!.replace(/\D/g, '');
+                    const msg = `Olá${inscricaoITPCriada.nome_responsavel ? `, ${inscricaoITPCriada.nome_responsavel}` : ''}! ✅ A inscrição de *${inscricaoITPCriada.nome_completo}* no projeto *${projeto?.nome ?? ''}* foi confirmada! Em caso de dúvidas, entre em contato com o ITP.`;
+                    return (
+                      <a href={`https://wa.me/55${phone}?text=${encodeURIComponent(msg)}`} target="_blank" rel="noopener noreferrer"
+                        className="flex items-center justify-center gap-2 w-full px-4 py-3 rounded-xl bg-green-500 hover:bg-green-600 text-white font-black text-sm transition-colors">
+                        <MessageSquare size={16}/> Enviar WhatsApp
+                      </a>
+                    );
+                  })()}
+                  {inscricaoITPCriada.email_responsavel && (
+                    <div className="flex items-center justify-center gap-2 w-full px-4 py-3 rounded-xl bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 font-bold text-sm">
+                      <Mail size={15}/> E-mail enviado automaticamente
+                    </div>
+                  )}
+                </div>
+                <div className="flex gap-2 pt-2">
+                  <button type="button"
+                    onClick={() => { setInscricaoITPCriada(null); setAlunoSelecionado(null); setFormInscricao({}); setBuscaAluno(''); setResultadosAluno([]); }}
+                    className="flex-1 px-4 py-2.5 rounded-xl text-xs font-black uppercase border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                    + Nova inscrição
+                  </button>
+                  <button type="button" onClick={resetModal}
+                    className="flex-1 px-4 py-2.5 rounded-xl text-xs font-black uppercase bg-slate-800 dark:bg-slate-700 text-white hover:bg-slate-700 dark:hover:bg-slate-600 transition-colors">
+                    Fechar
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* ── ALUNO ITP ─────────────────────────────────────────────────── */}
-            {!modoExterno && (
+            {!modoExterno && !inscricaoITPCriada && (
               <form onSubmit={salvarInscricaoITP} className="p-6 space-y-4">
                 {/* Tipo toggle */}
                 {!alunoSelecionado && (
@@ -1238,8 +1286,8 @@ export default function ProjetoDashboard() {
                   <p className="text-xs text-slate-600 dark:text-slate-400">
                     Fotografe os documentos de <strong className="text-slate-800 dark:text-slate-100">{inscricaoCriada.nome_completo}</strong>
                   </p>
-                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${obrigatoriosConcluidos ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-600'}`}>
-                    {OBRIGATORIOS.filter(t => uploadStatus[t as keyof typeof uploadStatus] === 'done').length}/{OBRIGATORIOS.length} obrigatórios
+                  <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
+                    {OBRIGATORIOS.filter(t => uploadStatus[t as keyof typeof uploadStatus] === 'done').length}/{OBRIGATORIOS.length} enviados
                   </span>
                 </div>
 
@@ -1300,8 +1348,8 @@ export default function ProjetoDashboard() {
                 </div>
 
                 {!obrigatoriosConcluidos && (
-                  <p className="text-[10px] text-orange-600 dark:text-orange-400 text-center">
-                    Foto, RG do aluno, RG do responsável, comprovante e certidão são obrigatórios.
+                  <p className="text-[10px] text-slate-400 dark:text-slate-500 text-center">
+                    Documentos opcionais — podem ser enviados depois pelo dossiê.
                   </p>
                 )}
 
@@ -1311,8 +1359,7 @@ export default function ProjetoDashboard() {
                     ← Voltar
                   </button>
                   <button type="button" onClick={concluirPasso2}
-                    disabled={!obrigatoriosConcluidos}
-                    className="flex items-center gap-1.5 px-5 py-2 rounded-xl text-xs font-black uppercase bg-green-600 hover:bg-green-700 text-white disabled:opacity-50 transition-colors">
+                    className="flex items-center gap-1.5 px-5 py-2 rounded-xl text-xs font-black uppercase bg-green-600 hover:bg-green-700 text-white transition-colors">
                     <CheckCircle2 size={13}/> Concluir
                   </button>
                 </div>
