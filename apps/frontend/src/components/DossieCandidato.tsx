@@ -7,10 +7,31 @@ import {
   Download, ExternalLink, Trash2, ClipboardCheck,
   FileText, Phone, Mail, MapPin, Calendar, Hash,
   BookOpen, CreditCard, Building2, Heart, Users, Sparkles,
-  GraduationCap, Home, UserCheck, Camera,
+  GraduationCap, Home, UserCheck, Camera, Clipboard, ScanLine, Upload,
 } from 'lucide-react';
 import api from '@/services/api';
+import { toast } from 'sonner';
 import DocumentCamera from '@/components/projetos/DocumentCamera';
+
+async function compressImageBlob(blob: Blob): Promise<Blob> {
+  if (!blob.type.startsWith('image/')) return blob;
+  return new Promise(resolve => {
+    const img = new Image();
+    const url = URL.createObjectURL(blob);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const MAX_W = 1920;
+      const scale = Math.min(1, MAX_W / img.width);
+      const canvas = document.createElement('canvas');
+      canvas.width  = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob(b => resolve(b ?? blob), 'image/jpeg', 0.85);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(blob); };
+    img.src = url;
+  });
+}
 
 const API_ORIGIN = (process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:3001/api')
   .replace(/\/api$/, '').replace(/\/backend-api$/, '');
@@ -855,16 +876,19 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
                 <DocumentCamera
                   tipo={cameraDocTipo}
                   onCapture={async (blob) => {
+                    const tipo = cameraDocTipo!;
                     setCameraDocTipo(null);
                     setUploadingDoc(true);
                     try {
+                      const compressed = await compressImageBlob(blob);
                       const fd = new FormData();
-                      fd.append('arquivo', blob, `${cameraDocTipo}.jpg`);
-                      fd.append('tipo', cameraDocTipo);
-                      if (cameraDocTipo === 'extra' && uploadNomeExtra.trim()) fd.append('nome_extra', uploadNomeExtra.trim());
+                      fd.append('arquivo', compressed, `${tipo}.jpg`);
+                      fd.append('tipo', tipo);
+                      if (tipo === 'extra' && uploadNomeExtra.trim()) fd.append('nome_extra', uploadNomeExtra.trim());
                       await api.post(`/matriculas/inscricao/${formData.id}/documentos/upload`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
                       setUploadNomeExtra(''); recarregarDocumentos();
-                    } catch (err: any) { alert(err?.response?.data?.message || 'Erro ao enviar documento.'); }
+                      toast.success('Documento enviado');
+                    } catch (err: any) { toast.error(err?.response?.data?.message || 'Erro ao enviar documento'); }
                     finally { setUploadingDoc(false); }
                   }}
                   onClose={() => setCameraDocTipo(null)}
@@ -884,36 +908,99 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
                     <input type="text" placeholder="Nome do documento" value={uploadNomeExtra} onChange={e => setUploadNomeExtra(e.target.value)} className={`${INPUT_CLS} flex-1 min-w-[140px]`} />
                   )}
                 </div>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    disabled={uploadingDoc}
-                    onClick={() => setCameraDocTipo(uploadTipo)}
-                    className={`flex items-center justify-center gap-2 flex-1 py-3 border rounded-xl text-xs font-medium transition-colors ${
-                      uploadingDoc ? 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed'
-                        : 'border-purple-300 hover:border-purple-500 bg-purple-50/40 hover:bg-purple-50 text-purple-700'
-                    }`}>
-                    <Camera size={13} /> Tirar foto
+                {uploadingDoc && (
+                  <p className="text-[10px] text-slate-400 animate-pulse text-center">Enviando...</p>
+                )}
+                <div className="flex gap-1.5 flex-wrap">
+                  {/* Câmera */}
+                  <button type="button" disabled={uploadingDoc} onClick={() => setCameraDocTipo(uploadTipo)}
+                    className="flex items-center gap-1.5 flex-1 min-w-[80px] justify-center py-2.5 rounded-xl text-xs font-black transition-colors bg-purple-100 dark:bg-purple-900/30 text-purple-600 hover:bg-purple-200 disabled:opacity-40">
+                    <Camera size={13}/> Câmera
                   </button>
-                  <label className={`flex items-center justify-center gap-2 flex-1 py-3 border rounded-xl cursor-pointer transition-colors text-xs font-medium text-center ${
-                    uploadingDoc ? 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed'
-                      : 'border-dashed border-gray-300 hover:border-purple-400 hover:bg-purple-50/20 text-gray-500 hover:text-purple-700'
-                  }`}>
-                    {uploadingDoc
-                      ? <><Loader2 size={13} className="animate-spin" /> Enviando...</>
-                      : <><Paperclip size={13} /><span>Selecionar arquivo</span></>}
+
+                  {/* Upload arquivo */}
+                  <label className={`flex items-center gap-1.5 flex-1 min-w-[80px] justify-center py-2.5 rounded-xl text-xs font-black transition-colors cursor-pointer bg-slate-100 dark:bg-slate-700 text-slate-600 hover:bg-slate-200 dark:hover:bg-slate-600 ${uploadingDoc ? 'opacity-40 pointer-events-none' : ''}`}>
+                    <Upload size={13}/> Arquivo
                     <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" disabled={uploadingDoc} className="hidden"
                       onChange={async e => {
-                        const file = e.target.files?.[0]; if (!file) return; setUploadingDoc(true);
+                        const file = e.target.files?.[0]; if (!file) return;
+                        setUploadingDoc(true);
                         try {
-                          const fd = new FormData(); fd.append('arquivo', file); fd.append('tipo', uploadTipo);
+                          const raw = new Blob([file], { type: file.type });
+                          const blob = await compressImageBlob(raw);
+                          const fd = new FormData();
+                          fd.append('arquivo', blob, file.name);
+                          fd.append('tipo', uploadTipo);
                           if (uploadTipo === 'extra' && uploadNomeExtra.trim()) fd.append('nome_extra', uploadNomeExtra.trim());
                           await api.post(`/matriculas/inscricao/${formData.id}/documentos/upload`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
                           e.target.value = ''; setUploadNomeExtra(''); recarregarDocumentos();
-                        } catch (err: any) { alert(err?.response?.data?.message || 'Erro ao enviar documento.'); }
+                          toast.success('Documento enviado');
+                        } catch (err: any) { toast.error(err?.response?.data?.message || 'Erro ao enviar documento'); }
                         finally { setUploadingDoc(false); }
-                      }} />
+                      }}/>
                   </label>
+
+                  {/* Colar da área de transferência */}
+                  <button type="button" disabled={uploadingDoc}
+                    onClick={async () => {
+                      try {
+                        if (!navigator.clipboard?.read) { toast.error('Navegador não suporta leitura da área de transferência'); return; }
+                        const items = await navigator.clipboard.read();
+                        for (const item of items) {
+                          const imageType = item.types.find(t => t.startsWith('image/'));
+                          if (imageType) {
+                            setUploadingDoc(true);
+                            try {
+                              const raw = await item.getType(imageType);
+                              const blob = await compressImageBlob(raw);
+                              const fd = new FormData();
+                              fd.append('arquivo', blob, `${uploadTipo}.jpg`);
+                              fd.append('tipo', uploadTipo);
+                              if (uploadTipo === 'extra' && uploadNomeExtra.trim()) fd.append('nome_extra', uploadNomeExtra.trim());
+                              await api.post(`/matriculas/inscricao/${formData.id}/documentos/upload`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+                              setUploadNomeExtra(''); recarregarDocumentos();
+                              toast.success('Documento enviado');
+                            } finally { setUploadingDoc(false); }
+                            return;
+                          }
+                        }
+                        toast.error('Nenhuma imagem na área de transferência');
+                      } catch { toast.error('Permissão negada — verifique as permissões do navegador'); }
+                    }}
+                    className="flex items-center gap-1.5 flex-1 min-w-[80px] justify-center py-2.5 rounded-xl text-xs font-black transition-colors bg-amber-100 dark:bg-amber-900/30 text-amber-600 hover:bg-amber-200 disabled:opacity-40">
+                    <Clipboard size={13}/> Colar
+                  </button>
+
+                  {/* Digitalizar */}
+                  <button type="button" disabled={uploadingDoc}
+                    onClick={async () => {
+                      const AGENT = 'http://localhost:7734';
+                      const agentUp = async () => { try { const r = await fetch(`${AGENT}/status`, { signal: AbortSignal.timeout(1500) }); return r.ok; } catch { return false; } };
+                      const launchAgent = () => { const a = document.createElement('a'); a.href = 'itpscan://start'; a.style.display = 'none'; document.body.appendChild(a); a.click(); document.body.removeChild(a); };
+                      const waitForAgent = async (maxMs = 12000): Promise<boolean> => { const t0 = Date.now(); while (Date.now() - t0 < maxMs) { if (await agentUp()) return true; await new Promise(r => setTimeout(r, 1500)); } return false; };
+                      try {
+                        let up = await agentUp();
+                        if (!up) { launchAgent(); toast.loading('Iniciando scanner...', { id: 'scan-init' }); up = await waitForAgent(12000); toast.dismiss('scan-init'); if (!up) { toast.error('Scanner agent não iniciou.'); return; } }
+                        const res = await fetch(`${AGENT}/scan`);
+                        if (!res.ok) { const err = await res.json().catch(() => ({})); if (err.error === 'cancelled') return; throw new Error(err.error || 'Erro ao digitalizar'); }
+                        const { data } = await res.json();
+                        setUploadingDoc(true);
+                        try {
+                          const imgRes = await fetch(data);
+                          const blob = await compressImageBlob(await imgRes.blob());
+                          const fd = new FormData();
+                          fd.append('arquivo', blob, 'digitalizado.jpg');
+                          fd.append('tipo', uploadTipo);
+                          if (uploadTipo === 'extra' && uploadNomeExtra.trim()) fd.append('nome_extra', uploadNomeExtra.trim());
+                          await api.post(`/matriculas/inscricao/${formData.id}/documentos/upload`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+                          setUploadNomeExtra(''); recarregarDocumentos();
+                          toast.success('Documento digitalizado e enviado');
+                        } finally { setUploadingDoc(false); }
+                      } catch (e: any) { toast.error(e.message?.includes('fetch') ? 'Execute instalar_scanner.bat para configurar o scanner.' : (e.message || 'Erro ao digitalizar')); }
+                    }}
+                    className="flex items-center gap-1.5 flex-1 min-w-[80px] justify-center py-2.5 rounded-xl text-xs font-black transition-colors bg-teal-100 dark:bg-teal-900/30 text-teal-600 hover:bg-teal-200 disabled:opacity-40">
+                    <ScanLine size={13}/> Scan
+                  </button>
                 </div>
                 <p className="text-[10px] text-gray-400 text-center">JPG, PNG, PDF · máx 8 MB</p>
               </div>
