@@ -264,7 +264,14 @@ export class ProjetosService {
     await this.inscricoesRepo.delete(id);
   }
 
-  async buscarInscricaoAnterior(nome: string, nascimento: string) {
+  async buscarInscricaoAnterior(nome: string, nascimento: string, excluirProjetoId?: string) {
+    const params: any[] = [`%${nome}%`, nascimento];
+    let excluirClause = '';
+    if (excluirProjetoId) {
+      params.push(excluirProjetoId);
+      excluirClause = `AND pi.projeto_id != $${params.length}`;
+    }
+
     const rows = await this.dataSource.query(`
       SELECT pi.*,
         pe.nome as equipe_nome,
@@ -280,9 +287,11 @@ export class ProjetosService {
       WHERE pi.nome_completo ILIKE $1
         AND pi.data_nascimento = $2
         AND pi.tipo = 'externo'
+        AND pi.status != 'cancelado'
+        ${excluirClause}
       ORDER BY pi.created_at DESC
       LIMIT 1
-    `, [`%${nome}%`, nascimento]);
+    `, params);
 
     return rows[0] ?? null;
   }

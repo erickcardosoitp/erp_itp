@@ -57,9 +57,10 @@ export class ProjetosController {
   buscarInscricaoAnterior(
     @Query('nome') nome: string,
     @Query('nascimento') nascimento: string,
+    @Query('excluir_projeto') excluirProjeto?: string,
   ) {
     if (!nome || !nascimento) throw new BadRequestException('nome e nascimento são obrigatórios');
-    return this.svc.buscarInscricaoAnterior(nome, nascimento);
+    return this.svc.buscarInscricaoAnterior(nome, nascimento, excluirProjeto);
   }
 
   // ── Equipes ───────────────────────────────────────────────────────────────

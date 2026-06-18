@@ -241,13 +241,27 @@ export default function ProjetoDashboard() {
     const nome = formInscricao.nome_completo?.trim();
     const nasc = formInscricao.data_nascimento;
     if (!nome || nome.length < 4 || !nasc) return;
+
+    // Checagem local: já está inscrito neste projeto?
+    const jaInscrito = inscritos.some(i =>
+      i.nome_completo?.toLowerCase() === nome.toLowerCase() &&
+      i.data_nascimento === nasc &&
+      i.status !== 'cancelado',
+    );
+    if (jaInscrito) {
+      toast.error('Este participante já está inscrito neste projeto');
+      return;
+    }
+
     setReinscrLoading(true);
     try {
-      const r = await api.get('/projetos/inscricoes/buscar', { params: { nome, nascimento: nasc } });
+      const r = await api.get('/projetos/inscricoes/buscar', {
+        params: { nome, nascimento: nasc, excluir_projeto: id },
+      });
       if (r.data) setReinscrFound(r.data);
     } catch { /* silently ignore */ }
     finally { setReinscrLoading(false); }
-  }, [formInscricao.nome_completo, formInscricao.data_nascimento]);
+  }, [formInscricao.nome_completo, formInscricao.data_nascimento, inscritos, id]);
 
   const aplicarReinscrição = () => {
     if (!reinscrFound) return;
