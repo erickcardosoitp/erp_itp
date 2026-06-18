@@ -216,6 +216,38 @@ export default async function handler(req: any, res: any) {
     bootstrapping = false;
   }
 
+  // ─── Diagnóstico de resposta grande ───────────────────────────────────────
+  // Rastreia write()/end() para saber EXATAMENTE quantos bytes o Lambda envia
+  {
+    const origWrite = typeof res.write === 'function' ? res.write.bind(res) : null;
+    const origEnd   = typeof res.end   === 'function' ? res.end.bind(res)   : null;
+    let bytesSent = 0;
+    let endCount  = 0;
+
+    const countBytes = (chunk: any): number => {
+      if (!chunk) return 0;
+      if (Buffer.isBuffer(chunk)) return chunk.length;
+      try { return Buffer.byteLength(String(chunk), 'utf8'); } catch { return 0; }
+    };
+
+    if (origWrite) {
+      res.write = function(chunk: any, ...rest: any[]) {
+        bytesSent += countBytes(chunk);
+        return origWrite(chunk, ...rest);
+      };
+    }
+    if (origEnd) {
+      res.end = function(chunk?: any, ...rest: any[]) {
+        bytesSent += countBytes(chunk);
+        endCount++;
+        const label = bytesSent > 500_000 ? '[DIAG-END-LARGE]' : '[DIAG-END]';
+        console.log(`${label} ${req.method} ${req.url} end#${endCount} chunk=${countBytes(chunk)} total=${bytesSent}`);
+        return origEnd(chunk, ...rest);
+      };
+    }
+  }
+  // ──────────────────────────────────────────────────────────────────────────
+
   const server = app.getHttpAdapter().getInstance();
   return server(req, res);
 }
