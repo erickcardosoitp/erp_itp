@@ -309,16 +309,18 @@ export class ProjetosService {
     if (!inscricao) throw new NotFoundException('Inscrição não encontrada');
 
     const path = this.docPath(projeto_id, inscricao_id, tipo, file.mimetype);
-    await this.supabase.upload(file.buffer, path, file.mimetype);
+    // upload retorna o processedBuffer (já comprimido pelo Sharp) — seu length é o tamanho real no storage
+    const uploadedPath = await this.supabase.upload(file.buffer, path, file.mimetype);
+    const tamanho_bytes = file.buffer.length; // tamanho original recebido; compressão já ocorreu no cliente
 
     // Upsert — mesmo tipo substitui
     const existing = await this.documentosRepo.findOne({ where: { inscricao_id, tipo } });
     if (existing) {
-      await this.documentosRepo.update(existing.id, { url_arquivo: path });
-      return { ...existing, url_arquivo: path };
+      await this.documentosRepo.update(existing.id, { url_arquivo: uploadedPath, tamanho_bytes });
+      return { ...existing, url_arquivo: uploadedPath, tamanho_bytes };
     }
 
-    const doc = this.documentosRepo.create({ inscricao_id, tipo, url_arquivo: path });
+    const doc = this.documentosRepo.create({ inscricao_id, tipo, url_arquivo: uploadedPath, tamanho_bytes });
     return this.documentosRepo.save(doc);
   }
 
@@ -332,9 +334,9 @@ export class ProjetosService {
     if (!inscricao) throw new NotFoundException('Inscrição não encontrada');
 
     // Projeto docs — CASE filtra base64 (com/sem prefixo 'data:'), 'fisico' e strings longas (base64 raw)
-    const projDocs: Array<{ id: string; tipo: string; fisico: boolean; storage_path: string | null }> =
+    const projDocs: Array<{ id: string; tipo: string; fisico: boolean; storage_path: string | null; tamanho_bytes: number | null }> =
       await this.dataSource.query(
-        `SELECT id, tipo,
+        `SELECT id, tipo, tamanho_bytes,
            (url_arquivo = 'fisico') AS fisico,
            CASE
              WHEN url_arquivo LIKE 'data:%'  THEN NULL
@@ -364,6 +366,7 @@ export class ProjetosService {
         tipo: doc.tipo,
         fisico: doc.fisico,
         signed_url,
+        tamanho_bytes: doc.tamanho_bytes ?? null,
         source: 'projetos' as const,
       });
     }

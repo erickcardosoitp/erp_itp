@@ -58,7 +58,15 @@ interface DocRecord {
   fisico?: boolean;
   signed_url?: string | null;
   mimetype?: string | null;
+  tamanho_bytes?: number | null;
   source?: 'matriculas' | 'projetos';
+}
+
+function fmtBytes(b: number | null | undefined): string {
+  if (!b) return '';
+  if (b < 1024) return `${b} B`;
+  if (b < 1024 * 1024) return `${(b / 1024).toFixed(0)} KB`;
+  return `${(b / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 interface Inscricao {
@@ -404,9 +412,19 @@ export default function DrawerDocumentos({ projetoId, inscricao, onClose, onRefr
                         : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/40'
                       }`}>
 
-                    <div className="w-12 h-12 rounded-lg overflow-hidden shrink-0 bg-slate-100 dark:bg-slate-700 flex items-center justify-center">
-                      <DocThumb signedUrl={doc?.signed_url} fisico={fisico} hasDoc={!!doc} obrig={obrig} mimetype={doc?.mimetype} />
-                    </div>
+                    {doc?.signed_url && !fisico
+                      ? (
+                        <a href={doc.signed_url} target="_blank" rel="noopener noreferrer"
+                          className="w-12 h-12 rounded-lg overflow-hidden shrink-0 bg-slate-100 dark:bg-slate-700 flex items-center justify-center hover:ring-2 hover:ring-blue-400 transition-all"
+                          title="Clique para abrir">
+                          <DocThumb signedUrl={doc.signed_url} fisico={fisico} hasDoc={!!doc} obrig={obrig} mimetype={doc?.mimetype} />
+                        </a>
+                      ) : (
+                        <div className="w-12 h-12 rounded-lg overflow-hidden shrink-0 bg-slate-100 dark:bg-slate-700 flex items-center justify-center">
+                          <DocThumb signedUrl={doc?.signed_url} fisico={fisico} hasDoc={!!doc} obrig={obrig} mimetype={doc?.mimetype} />
+                        </div>
+                      )
+                    }
 
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">{LABELS_DOCS[tipo]}</p>
@@ -415,7 +433,11 @@ export default function DrawerDocumentos({ projetoId, inscricao, onClose, onRefr
                         : doc        ? 'text-green-600'
                         : obrig      ? 'text-orange-500'
                         :              'text-slate-400'}`}>
-                        {fisico ? 'Recebida fisicamente' : doc?.source === 'matriculas' ? 'Via Matrículas' : doc ? 'Enviado' : obrig ? 'Pendente' : 'Opcional'}
+                        {fisico ? 'Recebida fisicamente'
+                          : doc?.source === 'matriculas' ? 'Via Matrículas'
+                          : doc
+                            ? <>Enviado{doc.tamanho_bytes ? <span className="text-slate-400 font-normal"> · {fmtBytes(doc.tamanho_bytes)}</span> : null}</>
+                            : obrig ? 'Pendente' : 'Opcional'}
                       </p>
                     </div>
 
@@ -492,19 +514,27 @@ export default function DrawerDocumentos({ projetoId, inscricao, onClose, onRefr
                     const isPdf = doc.mimetype === 'application/pdf' || doc.signed_url?.toLowerCase().includes('.pdf');
                     return (
                       <div key={doc.id} className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/40 p-3 flex items-center gap-3 mb-1.5">
-                        <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0 bg-slate-100 dark:bg-slate-700 flex items-center justify-center">
-                          {isPdf
-                            ? <a href={doc.signed_url ?? '#'} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}>
-                                <FileText size={16} className="text-blue-600" />
-                              </a>
-                            : doc.signed_url
-                              ? <img src={doc.signed_url} alt="" className="w-full h-full object-cover" />
-                              : <CheckCircle2 size={16} className="text-green-500" />
-                          }
-                        </div>
+                        {doc.signed_url
+                          ? (
+                            <a href={doc.signed_url} target="_blank" rel="noopener noreferrer"
+                              className="w-10 h-10 rounded-lg overflow-hidden shrink-0 bg-slate-100 dark:bg-slate-700 flex items-center justify-center hover:ring-2 hover:ring-blue-400 transition-all"
+                              title="Clique para abrir">
+                              {isPdf
+                                ? <FileText size={16} className="text-blue-600" />
+                                : <img src={doc.signed_url} alt="" className="w-full h-full object-cover" />
+                              }
+                            </a>
+                          ) : (
+                            <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0 bg-slate-100 dark:bg-slate-700 flex items-center justify-center">
+                              <CheckCircle2 size={16} className="text-green-500" />
+                            </div>
+                          )
+                        }
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate">Extra {i + 1}</p>
-                          <p className="text-[10px] text-green-600 font-bold">Enviado</p>
+                          <p className="text-[10px] text-green-600 font-bold">
+                            Enviado{doc.tamanho_bytes ? <span className="text-slate-400 font-normal"> · {fmtBytes(doc.tamanho_bytes)}</span> : null}
+                          </p>
                         </div>
                         {!busy && (
                           <button

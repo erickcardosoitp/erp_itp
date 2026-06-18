@@ -35,6 +35,9 @@ export class ProjetoInscricaoDocumento {
   @Column({ type: 'text' })
   url_arquivo: string;
 
+  @Column({ type: 'int', nullable: true, name: 'tamanho_bytes' })
+  tamanho_bytes: number | null;
+
   @CreateDateColumn({ name: 'created_at' })
   created_at: Date;
 }
