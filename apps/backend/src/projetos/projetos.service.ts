@@ -266,7 +266,7 @@ export class ProjetosService {
         pe.nome as equipe_nome,
         p.nome as projeto_nome,
         (
-          SELECT json_agg(json_build_object('tipo', pid.tipo, 'url_arquivo', pid.url_arquivo))
+          SELECT json_agg(json_build_object('tipo', pid.tipo))
           FROM projeto_inscricao_documentos pid
           WHERE pid.inscricao_id = pi.id
         ) as documentos

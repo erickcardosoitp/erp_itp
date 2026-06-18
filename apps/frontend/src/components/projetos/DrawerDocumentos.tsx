@@ -157,21 +157,31 @@ export default function DrawerDocumentos({ projetoId, inscricao, onClose, onRefr
 
   const remover = async (docId: string) => {
     if (!inscricao || !confirm('Remover este documento?')) return;
+    setUploading(p => ({ ...p, [`del_${docId}`]: true }));
     try {
       await api.delete(`/projetos/${projetoId}/inscricoes/${inscricao.id}/documentos/${docId}`);
       await carregarDocs();
       onRefresh();
-    } catch { toast.error('Erro ao remover documento'); }
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Erro ao remover documento');
+    } finally {
+      setUploading(p => ({ ...p, [`del_${docId}`]: false }));
+    }
   };
 
   const marcarFisico = async () => {
     if (!inscricao) return;
+    setUploading(p => ({ ...p, fisico: true }));
     try {
       await api.post(`/projetos/${projetoId}/inscricoes/${inscricao.id}/documentos/declaracao-fisica`);
       await carregarDocs();
       onRefresh();
       toast.success('Declaração marcada como recebida');
-    } catch { toast.error('Erro ao marcar declaração'); }
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Erro ao marcar declaração');
+    } finally {
+      setUploading(p => ({ ...p, fisico: false }));
+    }
   };
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -217,10 +227,11 @@ export default function DrawerDocumentos({ projetoId, inscricao, onClose, onRefr
         const r = await api.get('/matriculas/cursos-ativos-academico');
         setCursos(r.data);
       } catch {
-        toast.error('Erro ao carregar cursos');
-      } finally {
+        toast.error('Erro ao carregar cursos disponíveis');
         setCarregandoCursos(false);
+        return;
       }
+      setCarregandoCursos(false);
     }
     setShowTornarAluno(true);
   };
@@ -395,9 +406,11 @@ export default function DrawerDocumentos({ projetoId, inscricao, onClose, onRefr
                               <Clipboard size={13} />
                             </button>
                             {tipo === 'declaracao_escolar' && (
-                              <button onClick={marcarFisico}
-                                className="px-2 py-1 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-600 hover:bg-blue-200 text-[9px] font-black uppercase">
-                                Físico
+                              <button
+                                onClick={marcarFisico}
+                                disabled={!!uploading['fisico']}
+                                className="px-2 py-1 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-600 hover:bg-blue-200 text-[9px] font-black uppercase disabled:opacity-40">
+                                {uploading['fisico'] ? '...' : 'Físico'}
                               </button>
                             )}
                           </>
@@ -408,9 +421,14 @@ export default function DrawerDocumentos({ projetoId, inscricao, onClose, onRefr
                               className="p-2 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">
                               <Camera size={13} />
                             </button>
-                            <button onClick={() => remover(doc.id)}
-                              className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-400 hover:text-red-500 transition-colors">
-                              <Trash2 size={13} />
+                            <button
+                              onClick={() => remover(doc.id)}
+                              disabled={!!uploading[`del_${doc.id}`]}
+                              className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-400 hover:text-red-500 transition-colors disabled:opacity-40">
+                              {uploading[`del_${doc.id}`]
+                                ? <Loader2 size={13} className="animate-spin" />
+                                : <Trash2 size={13} />
+                              }
                             </button>
                           </>
                         )}
@@ -464,9 +482,14 @@ export default function DrawerDocumentos({ projetoId, inscricao, onClose, onRefr
                           <p className="text-[10px] text-green-600 font-bold">Enviado</p>
                         </div>
                         {!busy && (
-                          <button onClick={() => remover(doc.id)}
-                            className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-400 hover:text-red-500 transition-colors">
-                            <Trash2 size={13} />
+                          <button
+                            onClick={() => remover(doc.id)}
+                            disabled={!!uploading[`del_${doc.id}`]}
+                            className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-400 hover:text-red-500 transition-colors disabled:opacity-40">
+                            {uploading[`del_${doc.id}`]
+                              ? <Loader2 size={13} className="animate-spin" />
+                              : <Trash2 size={13} />
+                            }
                           </button>
                         )}
                       </div>
