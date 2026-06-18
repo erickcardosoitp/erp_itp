@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Upload, Trash2, Camera, CheckCircle2, AlertCircle, FileCheck, FileText, UserPlus, PlusCircle, Loader2 } from 'lucide-react';
+import { X, Upload, Trash2, Camera, CheckCircle2, AlertCircle, FileCheck, FileText, UserPlus, PlusCircle, Loader2, Clipboard } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import api from '@/services/api';
 import { toast } from 'sonner';
@@ -177,6 +177,27 @@ export default function DrawerDocumentos({ projetoId, inscricao, onClose, onRefr
     if (!file || !fileInputTipo.current) return;
     await uploadBlob(fileInputTipo.current, new Blob([file], { type: file.type }));
     e.target.value = '';
+  };
+
+  const colarDaArea = async (tipo: string) => {
+    try {
+      if (!navigator.clipboard?.read) {
+        toast.error('Navegador não suporta leitura da área de transferência');
+        return;
+      }
+      const items = await navigator.clipboard.read();
+      for (const item of items) {
+        const imageType = item.types.find(t => t.startsWith('image/'));
+        if (imageType) {
+          const blob = await item.getType(imageType);
+          await uploadBlob(tipo, blob);
+          return;
+        }
+      }
+      toast.error('Nenhuma imagem na área de transferência');
+    } catch {
+      toast.error('Permissão negada — verifique as permissões do navegador');
+    }
   };
 
   const handleExtraFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -363,9 +384,13 @@ export default function DrawerDocumentos({ projetoId, inscricao, onClose, onRefr
                               className="p-2 rounded-lg bg-purple-100 dark:bg-purple-900/30 text-purple-600 hover:bg-purple-200 transition-colors">
                               <Camera size={13} />
                             </button>
-                            <button onClick={() => { fileInputTipo.current = tipo; fileInputRef.current?.click(); }} title="Upload"
+                            <button onClick={() => { fileInputTipo.current = tipo; fileInputRef.current?.click(); }} title="Upload arquivo"
                               className="p-2 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">
                               <Upload size={13} />
+                            </button>
+                            <button onClick={() => colarDaArea(tipo)} title="Colar da área de transferência"
+                              className="p-2 rounded-lg bg-amber-100 dark:bg-amber-900/30 text-amber-600 hover:bg-amber-200 transition-colors">
+                              <Clipboard size={13} />
                             </button>
                             {tipo === 'declaracao_escolar' && (
                               <button onClick={marcarFisico}
@@ -398,11 +423,19 @@ export default function DrawerDocumentos({ projetoId, inscricao, onClose, onRefr
                 <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
                   <div className="flex items-center justify-between mb-2">
                     <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Documentos Extras</p>
-                    <button
-                      onClick={() => extraFileInputRef.current?.click()}
-                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors text-[10px] font-black">
-                      <PlusCircle size={11} /> Adicionar
-                    </button>
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => colarDaArea(`extra_${Date.now()}`)}
+                        title="Colar da área de transferência"
+                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-100 dark:bg-amber-900/30 text-amber-600 hover:bg-amber-200 transition-colors text-[10px] font-black">
+                        <Clipboard size={11} /> Colar
+                      </button>
+                      <button
+                        onClick={() => extraFileInputRef.current?.click()}
+                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors text-[10px] font-black">
+                        <PlusCircle size={11} /> Arquivo
+                      </button>
+                    </div>
                   </div>
 
                   {extraDocs.length === 0 && (
