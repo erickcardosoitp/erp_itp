@@ -162,7 +162,7 @@ export class AppModule implements OnModuleInit {
   private async runMigrations() {
     try {
       // ── Versão do schema — pula migrations se já rodaram neste banco ──────
-      const SCHEMA_VERSION = 17; // incrementar aqui ao adicionar novas migrations
+      const SCHEMA_VERSION = 18; // incrementar aqui ao adicionar novas migrations
       await this.dataSource.query(`
         CREATE TABLE IF NOT EXISTS _schema_version (
           id      INT PRIMARY KEY DEFAULT 1,
@@ -1492,6 +1492,13 @@ export class AppModule implements OnModuleInit {
           ADD COLUMN IF NOT EXISTS nome_arquivo VARCHAR
       `);
       this.logger.log('✅ nome_arquivo adicionado em projeto_inscricao_documentos');
+
+      // v18: email do participante em projeto_inscricoes
+      await this.dataSource.query(`
+        ALTER TABLE projeto_inscricoes
+          ADD COLUMN IF NOT EXISTS email VARCHAR
+      `);
+      this.logger.log('✅ email adicionado em projeto_inscricoes');
 
       // ── Marca schema como atualizado — próximos cold starts pulam tudo ────
       await this.dataSource.query(`UPDATE _schema_version SET version = $1, ran_at = now() WHERE id = 1`, [SCHEMA_VERSION]);

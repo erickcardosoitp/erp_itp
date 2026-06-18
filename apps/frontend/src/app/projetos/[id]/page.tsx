@@ -37,7 +37,7 @@ interface Inscricao {
   telefone_responsavel?: string; email_responsavel?: string;
   cep?: string; logradouro?: string; numero?: string; bairro?: string;
   complemento?: string; cidade?: string; estado_uf?: string;
-  cpf?: string; celular?: string; sexo?: string;
+  cpf?: string; celular?: string; email?: string; sexo?: string;
   cuidado_especial?: string;
   detalhes_cuidado?: string; status: string;
   equipe_id?: string; equipe?: Equipe; aluno_id?: string;
@@ -1224,7 +1224,7 @@ export default function ProjetoDashboard() {
                   </InputField>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <InputField label="CPF">
                     <input value={formInscricao.cpf ?? ''}
                       onChange={e => setFormInscricao(p => ({ ...p, cpf: e.target.value }))}
@@ -1234,6 +1234,11 @@ export default function ProjetoDashboard() {
                     <input value={formInscricao.celular ?? ''}
                       onChange={e => setFormInscricao(p => ({ ...p, celular: e.target.value }))}
                       placeholder="(11) 99999-9999" className={inputCls}/>
+                  </InputField>
+                  <InputField label="E-mail do aluno">
+                    <input type="email" value={formInscricao.email ?? ''}
+                      onChange={e => setFormInscricao(p => ({ ...p, email: e.target.value }))}
+                      placeholder="email@exemplo.com" className={inputCls}/>
                   </InputField>
                 </div>
 

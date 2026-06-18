@@ -82,6 +82,9 @@ export class ProjetoInscricao {
   celular: string | null;
 
   @Column({ type: 'varchar', nullable: true })
+  email: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
   sexo: string | null;
 
   @Column({ name: 'cuidado_especial', type: 'varchar', nullable: true })
