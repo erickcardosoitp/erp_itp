@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Upload, Trash2, Camera, CheckCircle2, AlertCircle, FileCheck, FileText, UserPlus, PlusCircle, Loader2, Clipboard, ScanLine, ChevronDown } from 'lucide-react';
+import { X, Upload, Trash2, Camera, CheckCircle2, AlertCircle, FileCheck, FileText, UserPlus, PlusCircle, Loader2, Clipboard, ScanLine, ChevronDown, Pencil, Check } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import api from '@/services/api';
 import { toast } from 'sonner';
@@ -59,6 +59,7 @@ interface DocRecord {
   signed_url?: string | null;
   mimetype?: string | null;
   tamanho_bytes?: number | null;
+  nome_arquivo?: string | null;
   source?: 'matriculas' | 'projetos';
 }
 
@@ -143,6 +144,8 @@ export default function DrawerDocumentos({ projetoId, inscricao, onClose, onRefr
   const [uploading, setUploading]         = useState<Record<string, boolean>>({});
   const [showDados, setShowDados]         = useState(false);
   const [cameraDoc, setCameraDoc]         = useState<string | null>(null);
+  const [editandoNome, setEditandoNome]   = useState<string | null>(null);
+  const [nomeTemp, setNomeTemp]           = useState('');
   const fileInputRef                      = useRef<HTMLInputElement>(null);
   const fileInputTipo                     = useRef('');
   const extraFileInputRef                 = useRef<HTMLInputElement>(null);
@@ -201,6 +204,17 @@ export default function DrawerDocumentos({ projetoId, inscricao, onClose, onRefr
       toast.error(err?.response?.data?.message || 'Erro ao remover documento');
     } finally {
       setUploading(p => ({ ...p, [`del_${docId}`]: false }));
+    }
+  };
+
+  const salvarNome = async (docId: string) => {
+    if (!inscricao) return;
+    try {
+      await api.patch(`/projetos/${projetoId}/inscricoes/${inscricao.id}/documentos/${docId}/nome`, { nome_arquivo: nomeTemp });
+      setDocs(ds => ds.map(d => d.id === docId ? { ...d, nome_arquivo: nomeTemp.trim() || null } : d));
+      setEditandoNome(null);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Erro ao renomear');
     }
   };
 
@@ -645,12 +659,35 @@ export default function DrawerDocumentos({ projetoId, inscricao, onClose, onRefr
                           )
                         }
                         <div className="flex-1 min-w-0">
-                          <p className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate">Extra {i + 1}</p>
+                          {editandoNome === doc.id ? (
+                            <div className="flex items-center gap-1">
+                              <input
+                                autoFocus
+                                value={nomeTemp}
+                                onChange={e => setNomeTemp(e.target.value)}
+                                onKeyDown={e => { if (e.key === 'Enter') salvarNome(doc.id); if (e.key === 'Escape') setEditandoNome(null); }}
+                                className="flex-1 text-xs border border-blue-400 rounded px-1.5 py-0.5 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 outline-none min-w-0"
+                              />
+                              <button onClick={() => salvarNome(doc.id)} className="p-1 text-green-600 hover:text-green-700"><Check size={13} /></button>
+                              <button onClick={() => setEditandoNome(null)} className="p-1 text-slate-400 hover:text-slate-600"><X size={13} /></button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1 group">
+                              <p className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate">
+                                {doc.nome_arquivo || `Extra ${i + 1}`}
+                              </p>
+                              <button
+                                onClick={() => { setEditandoNome(doc.id); setNomeTemp(doc.nome_arquivo || ''); }}
+                                className="opacity-0 group-hover:opacity-100 p-0.5 text-slate-400 hover:text-blue-500 transition-opacity">
+                                <Pencil size={11} />
+                              </button>
+                            </div>
+                          )}
                           <p className="text-[10px] text-green-600 font-bold">
                             Enviado{doc.tamanho_bytes ? <span className="text-slate-400 font-normal"> · {fmtBytes(doc.tamanho_bytes)}</span> : null}
                           </p>
                         </div>
-                        {!busy && (
+                        {!busy && editandoNome !== doc.id && (
                           <button
                             onClick={() => remover(doc.id)}
                             disabled={!!uploading[`del_${doc.id}`]}

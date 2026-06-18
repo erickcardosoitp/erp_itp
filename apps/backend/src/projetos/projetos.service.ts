@@ -296,6 +296,18 @@ export class ProjetosService {
     return rows[0] ?? null;
   }
 
+  async renomearDocumento(projeto_id: string, inscricao_id: string, doc_id: string, nome_arquivo: string) {
+    const [doc] = await this.dataSource.query(
+      `SELECT pid.id FROM projeto_inscricao_documentos pid
+       JOIN projeto_inscricoes pi ON pi.id = pid.inscricao_id
+       WHERE pid.id = $1 AND pid.inscricao_id = $2 AND pi.projeto_id = $3 LIMIT 1`,
+      [doc_id, inscricao_id, projeto_id],
+    );
+    if (!doc) throw new NotFoundException('Documento não encontrado');
+    await this.documentosRepo.update(doc_id, { nome_arquivo: nome_arquivo.trim() || null });
+    return { ok: true };
+  }
+
   // ── Documentos ────────────────────────────────────────────────────────────
 
   private docPath(projeto_id: string, inscricao_id: string, tipo: string, mimetype?: string) {
@@ -322,14 +334,16 @@ export class ProjetosService {
     const uploadedPath = await this.supabase.upload(file.buffer, path, file.mimetype);
     const tamanho_bytes = file.buffer.length; // tamanho original recebido; compressão já ocorreu no cliente
 
+    const nome_arquivo = tipo.startsWith('extra') ? (file.originalname || null) : null;
+
     // Upsert — mesmo tipo substitui
     const existing = await this.documentosRepo.findOne({ where: { inscricao_id, tipo } });
     if (existing) {
-      await this.documentosRepo.update(existing.id, { url_arquivo: uploadedPath, tamanho_bytes });
-      return { ...existing, url_arquivo: uploadedPath, tamanho_bytes };
+      await this.documentosRepo.update(existing.id, { url_arquivo: uploadedPath, tamanho_bytes, ...(nome_arquivo !== undefined && { nome_arquivo }) });
+      return { ...existing, url_arquivo: uploadedPath, tamanho_bytes, nome_arquivo: nome_arquivo ?? existing.nome_arquivo };
     }
 
-    const doc = this.documentosRepo.create({ inscricao_id, tipo, url_arquivo: uploadedPath, tamanho_bytes });
+    const doc = this.documentosRepo.create({ inscricao_id, tipo, url_arquivo: uploadedPath, tamanho_bytes, nome_arquivo });
     return this.documentosRepo.save(doc);
   }
 
@@ -345,7 +359,7 @@ export class ProjetosService {
     // Projeto docs — CASE filtra base64 (com/sem prefixo 'data:'), 'fisico' e strings longas (base64 raw)
     const projDocs: Array<{ id: string; tipo: string; fisico: boolean; storage_path: string | null; tamanho_bytes: number | null }> =
       await this.dataSource.query(
-        `SELECT id, tipo, tamanho_bytes,
+        `SELECT id, tipo, tamanho_bytes, nome_arquivo,
            (url_arquivo = 'fisico') AS fisico,
            CASE
              WHEN url_arquivo LIKE 'data:%'  THEN NULL
@@ -376,6 +390,7 @@ export class ProjetosService {
         fisico: doc.fisico,
         signed_url,
         tamanho_bytes: doc.tamanho_bytes ?? null,
+        nome_arquivo: (doc as any).nome_arquivo ?? null,
         source: 'projetos' as const,
       });
     }

@@ -149,6 +149,17 @@ export class ProjetosController {
     return this.svc.removeDocumento(id, iId, docId);
   }
 
+  @Patch(':id/inscricoes/:iId/documentos/:docId/nome')
+  renomearDocumento(
+    @Param('id') id: string,
+    @Param('iId') iId: string,
+    @Param('docId') docId: string,
+    @Body('nome_arquivo') nomeArquivo: string,
+  ) {
+    if (!nomeArquivo?.trim()) throw new BadRequestException('nome_arquivo é obrigatório');
+    return this.svc.renomearDocumento(id, iId, docId, nomeArquivo);
+  }
+
   @Post(':id/inscricoes/:iId/documentos/declaracao-fisica')
   marcarDeclaracaoFisica(@Param('id') id: string, @Param('iId') iId: string) {
     return this.svc.marcarDeclaracaoFisica(id, iId);
