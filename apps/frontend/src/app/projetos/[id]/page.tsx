@@ -666,23 +666,36 @@ export default function ProjetoDashboard() {
 
             {/* Table */}
             <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 overflow-x-auto">
-              <div className="rounded-2xl min-w-[900px]">
+              <div className="min-w-[580px]">
+                {/* Summary bar */}
+                <div className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    {inscritosFiltrados.length} inscrito{inscritosFiltrados.length !== 1 ? 's' : ''}
+                    {inscritosFiltrados.length !== inscritos.length && ` · ${inscritos.length} total`}
+                  </span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-[10px] font-black text-green-600 dark:text-green-400">
+                      {inscritos.filter(i => i.doc_status === 'ok').length} completo{inscritos.filter(i => i.doc_status === 'ok').length !== 1 ? 's' : ''}
+                    </span>
+                    {inscritos.filter(i => i.doc_status !== 'ok').length > 0 && (
+                      <span className="text-[10px] font-black text-orange-500">
+                        {inscritos.filter(i => i.doc_status !== 'ok').length} pendente{inscritos.filter(i => i.doc_status !== 'ok').length !== 1 ? 's' : ''}
+                      </span>
+                    )}
+                  </div>
+                </div>
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-slate-100 dark:border-slate-800">
                       {([
-                        { key: 'nome',       label: 'Nome' },
-                        { key: 'idade',      label: 'Idade' },
-                        { key: 'responsavel',label: 'Responsável' },
-                        { key: 'rua',        label: 'Endereço' },
-                        { key: 'condicao',   label: 'Condição' },
-                        { key: 'inscricao',  label: 'Insc.' },
-                        { key: null,         label: 'Equipe' },
-                        { key: 'docs',       label: 'Docs' },
+                        { key: 'nome',      label: 'Nome' },
+                        { key: null,        label: 'Equipe' },
+                        { key: 'inscricao', label: 'Insc.' },
+                        { key: 'docs',      label: 'Docs' },
                       ] as { key: string | null; label: string }[]).map(({ key, label }) => (
                         <th key={label}
                           onClick={key ? () => handleSort(key) : undefined}
-                          className={`text-left px-2 py-2.5 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap select-none ${key ? 'cursor-pointer hover:text-purple-500 transition-colors' : ''}`}>
+                          className={`text-left px-3 py-2.5 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap select-none ${key ? 'cursor-pointer hover:text-purple-500 transition-colors' : ''}`}>
                           <span className="inline-flex items-center gap-1">
                             {label}
                             {key && sortCol === key && (sortDir === 'asc'
@@ -691,7 +704,7 @@ export default function ProjetoDashboard() {
                           </span>
                         </th>
                       ))}
-                      <th className="w-6"/>
+                      <th className="w-8"/>
                     </tr>
                   </thead>
                   <tbody>
@@ -699,88 +712,89 @@ export default function ProjetoDashboard() {
                       const eq    = equipes.find(e => e.id === ins.equipe_id);
                       const idade = calcIdade(ins.data_nascimento);
                       const temCuidado = ins.cuidado_especial && ins.cuidado_especial !== 'Não';
+                      const nPend = ins.docs_pendentes?.length ?? 0;
+                      const avatarBg = eq?.cor ?? '#7c3aed';
                       return (
                         <tr key={ins.id}
                           onClick={() => setDrawerInscricao(ins)}
-                          className="border-b border-slate-50 dark:border-slate-800/50 last:border-0 hover:bg-purple-50/40 dark:hover:bg-purple-900/10 cursor-pointer transition-colors">
-                          {/* Nome */}
-                          <td className="px-2 py-2.5">
-                            <div className="flex items-center gap-2">
-                              <div className="w-6 h-6 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center text-[10px] font-black text-purple-600 shrink-0">
-                                {ins.nome_completo[0]}
+                          className="border-b border-slate-50 dark:border-slate-800/50 last:border-0 hover:bg-purple-50/40 dark:hover:bg-purple-900/10 cursor-pointer transition-colors group">
+
+                          {/* Nome + responsável + cuidado */}
+                          <td className="px-3 py-3">
+                            <div className="flex items-center gap-3">
+                              <div className="relative shrink-0">
+                                <div className="w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black text-white select-none"
+                                  style={{ backgroundColor: avatarBg }}>
+                                  {ins.nome_completo[0]?.toUpperCase()}
+                                </div>
+                                {temCuidado && (
+                                  <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-orange-500 rounded-full border-2 border-white dark:border-slate-900"
+                                    title={`Cuidado: ${ins.cuidado_especial}`}/>
+                                )}
                               </div>
                               <div className="min-w-0">
-                                <p className="font-bold text-slate-800 dark:text-slate-100 text-xs leading-tight">{ins.nome_completo}</p>
-                                <span className={`text-[8px] font-black px-1 py-0.5 rounded-full ${ins.tipo === 'regular' ? 'bg-purple-100 text-purple-600' : 'bg-slate-100 dark:bg-slate-700 text-slate-500'}`}>
-                                  {ins.tipo}
-                                </span>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <p className="font-bold text-slate-800 dark:text-slate-100 text-xs leading-tight">{ins.nome_completo}</p>
+                                  {idade !== null && (
+                                    <span className="text-[9px] font-black text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded-full whitespace-nowrap">{idade}a</span>
+                                  )}
+                                  <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ${ins.tipo === 'regular' ? 'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400' : 'bg-slate-100 dark:bg-slate-700 text-slate-500'}`}>
+                                    {ins.tipo === 'regular' ? 'ITP' : 'ext'}
+                                  </span>
+                                </div>
+                                {ins.nome_responsavel && (
+                                  <p className="text-[10px] text-slate-400 mt-0.5 truncate max-w-[260px]">
+                                    {ins.nome_responsavel}
+                                    {ins.telefone_responsavel && <span className="text-slate-300"> · {fmtTelefone(ins.telefone_responsavel)}</span>}
+                                  </p>
+                                )}
                               </div>
                             </div>
                           </td>
-                          {/* Idade */}
-                          <td className="px-2 py-2.5 text-xs text-slate-500 whitespace-nowrap">
-                            {idade !== null ? `${idade}a` : '—'}
-                          </td>
-                          {/* Responsável */}
-                          <td className="px-2 py-2.5 max-w-[220px]">
-                            <p className="text-xs text-slate-700 dark:text-slate-300 leading-tight break-words">{ins.nome_responsavel || '—'}</p>
-                            {ins.telefone_responsavel && (
-                              <p className="text-[10px] text-slate-400 whitespace-nowrap">{fmtTelefone(ins.telefone_responsavel)}</p>
-                            )}
-                          </td>
-                          {/* Rua / Bairro */}
-                          <td className="px-2 py-2.5 max-w-[180px]">
-                            {ins.logradouro
-                              ? <p className="text-xs text-slate-700 dark:text-slate-300 leading-tight truncate">{ins.logradouro}{ins.numero ? `, ${ins.numero}` : ''}</p>
-                              : <span className="text-xs text-slate-300">—</span>}
-                            {ins.bairro && <p className="text-[10px] text-slate-400 truncate">{ins.bairro}</p>}
-                          </td>
-                          {/* Cuidados */}
-                          <td className="px-2 py-2.5 max-w-[140px]">
-                            {temCuidado ? (
-                              <span className="flex items-start gap-1 text-[10px] font-black text-red-600 dark:text-red-400 leading-tight">
-                                <AlertTriangle size={10} className="shrink-0 mt-0.5"/> {ins.cuidado_especial}
-                              </span>
-                            ) : <span className="text-xs text-slate-300">—</span>}
-                          </td>
-                          {/* Data inscrição */}
-                          <td className="px-2 py-2.5 text-xs text-slate-500 whitespace-nowrap">
-                            {fmtDateShort(ins.created_at)}
-                          </td>
+
                           {/* Equipe */}
-                          <td className="px-2 py-2.5" onClick={e => e.stopPropagation()}>
+                          <td className="px-3 py-3 whitespace-nowrap" onClick={e => e.stopPropagation()}>
                             <select value={ins.equipe_id ?? ''}
                               onChange={async e => {
                                 await api.patch(`/projetos/${id}/inscricoes/${ins.id}`, { equipe_id: e.target.value || null });
                                 await load();
                               }}
-                              className="text-[10px] font-black border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-purple-400"
-                              style={eq ? { borderColor: eq.cor, color: eq.cor } : {}}>
+                              className="text-[10px] font-black border rounded-lg px-2 py-1 bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-400 max-w-[130px]"
+                              style={eq ? { borderColor: eq.cor, color: eq.cor } : { borderColor: '#e2e8f0', color: '#94a3b8' }}>
                               <option value="">—</option>
                               {equipes.map(e => <option key={e.id} value={e.id}>{e.nome}</option>)}
                             </select>
                           </td>
-                          {/* Docs */}
-                          <td className="px-2 py-2.5">
-                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase
-                              ${ins.doc_status === 'ok'
-                                ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
-                                : 'bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400'
-                              }`}
-                              title={ins.doc_status !== 'ok' ? `Pendentes: ${ins.docs_pendentes?.map(t => LABELS_DOCS[t]).join(', ')}` : undefined}>
-                              {ins.doc_status === 'ok' ? <CheckCircle2 size={9}/> : <AlertCircle size={9}/>}
-                              {ins.doc_status === 'ok' ? 'OK' : 'Pend.'}
-                            </span>
+
+                          {/* Data inscrição */}
+                          <td className="px-3 py-3 text-[10px] text-slate-400 whitespace-nowrap">
+                            {fmtDateShort(ins.created_at)}
                           </td>
+
+                          {/* Docs */}
+                          <td className="px-3 py-3 whitespace-nowrap">
+                            {ins.doc_status === 'ok' ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[9px] font-black bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
+                                <CheckCircle2 size={9}/> Completo
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[9px] font-black bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 cursor-help"
+                                title={nPend > 0 ? `Pendentes: ${ins.docs_pendentes?.map(t => LABELS_DOCS[t]).join(', ')}` : undefined}>
+                                <AlertCircle size={9}/>
+                                {nPend > 0 ? `${nPend} pend.` : 'Pend.'}
+                              </span>
+                            )}
+                          </td>
+
                           {/* Delete */}
-                          <td className="px-1 py-2.5" onClick={e => e.stopPropagation()}>
+                          <td className="px-2 py-3" onClick={e => e.stopPropagation()}>
                             <button
                               onClick={async () => {
                                 if (!confirm(`Remover "${ins.nome_completo}" do projeto?`)) return;
                                 await api.delete(`/projetos/${id}/inscricoes/${ins.id}`);
                                 await load();
                               }}
-                              className="p-1.5 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-300 hover:text-red-500 transition-colors">
+                              className="p-1.5 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100">
                               <Trash2 size={12}/>
                             </button>
                           </td>
@@ -790,7 +804,10 @@ export default function ProjetoDashboard() {
                   </tbody>
                 </table>
                 {inscritosFiltrados.length === 0 && (
-                  <p className="py-12 text-center text-slate-400 text-sm">Nenhum inscrito encontrado.</p>
+                  <div className="py-16 text-center">
+                    <p className="text-slate-400 text-sm font-semibold">Nenhum inscrito encontrado</p>
+                    <p className="text-slate-300 dark:text-slate-600 text-xs mt-1">Tente ajustar os filtros</p>
+                  </div>
                 )}
               </div>
             </div>
@@ -1135,7 +1152,9 @@ export default function ProjetoDashboard() {
                   </div>
                 )}
 
-                {/* Dados pessoais */}
+                {/* ── Dados do Aluno ── */}
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Dados do Aluno</p>
+
                 <InputField label="Nome Completo" required>
                   <input required value={formInscricao.nome_completo ?? ''}
                     onChange={e => setFormInscricao(p => ({ ...p, nome_completo: e.target.value }))}
@@ -1143,24 +1162,70 @@ export default function ProjetoDashboard() {
                     autoFocus className={inputCls}/>
                 </InputField>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <InputField label="Nascimento">
-                    <input type="date" value={formInscricao.data_nascimento ?? ''}
-                      onChange={e => {
-                        const dob = e.target.value;
-                        const equipe_id = sugerirEquipe(dob);
-                        setFormInscricao(p => ({ ...p, data_nascimento: dob, equipe_id: equipe_id ?? p.equipe_id }));
-                        if (equipe_id) setEquipeAutoSugerida(equipe_id);
-                      }}
-                      onBlur={checkReinscrição}
+                {(() => {
+                  const maior18 = (calcIdade(formInscricao.data_nascimento) ?? 0) >= 18;
+                  return (<>
+                    <div className={`grid grid-cols-1 gap-3 ${maior18 ? 'sm:grid-cols-2' : 'sm:grid-cols-1'}`}>
+                      <InputField label="Nascimento">
+                        <input type="date" value={formInscricao.data_nascimento ?? ''}
+                          onChange={e => {
+                            const dob = e.target.value;
+                            const equipe_id = sugerirEquipe(dob);
+                            setFormInscricao(p => ({ ...p, data_nascimento: dob, equipe_id: equipe_id ?? p.equipe_id }));
+                            if (equipe_id) setEquipeAutoSugerida(equipe_id);
+                          }}
+                          onBlur={checkReinscrição}
+                          className={inputCls}/>
+                      </InputField>
+                      {maior18 && (
+                        <InputField label="CPF">
+                          <input value={formInscricao.cpf ?? ''}
+                            onChange={e => setFormInscricao(p => ({ ...p, cpf: e.target.value }))}
+                            placeholder="000.000.000-00" className={inputCls}/>
+                        </InputField>
+                      )}
+                    </div>
+
+                    {maior18 && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <InputField label="Celular do aluno">
+                          <input value={formInscricao.celular ?? ''}
+                            onChange={e => setFormInscricao(p => ({ ...p, celular: e.target.value }))}
+                            placeholder="(11) 99999-9999" className={inputCls}/>
+                        </InputField>
+                        <InputField label="E-mail do aluno">
+                          <input type="email" value={formInscricao.email ?? ''}
+                            onChange={e => setFormInscricao(p => ({ ...p, email: e.target.value }))}
+                            placeholder="email@exemplo.com" className={inputCls}/>
+                        </InputField>
+                      </div>
+                    )}
+                  </>);
+                })()}
+
+                <InputField label="Cuidado Especial">
+                  <input value={formInscricao.cuidado_especial ?? ''}
+                    onChange={e => setFormInscricao(p => ({ ...p, cuidado_especial: e.target.value }))}
+                    placeholder="ex: TEA, alérgico a glúten..."
+                    className={inputCls}/>
+                </InputField>
+                {formInscricao.cuidado_especial && (
+                  <InputField label="Detalhes">
+                    <input value={formInscricao.detalhes_cuidado ?? ''}
+                      onChange={e => setFormInscricao(p => ({ ...p, detalhes_cuidado: e.target.value }))}
+                      placeholder="Descreva o cuidado necessário..."
                       className={inputCls}/>
                   </InputField>
-                  <InputField label="Responsável">
-                    <input value={formInscricao.nome_responsavel ?? ''}
-                      onChange={e => setFormInscricao(p => ({ ...p, nome_responsavel: e.target.value }))}
-                      className={inputCls}/>
-                  </InputField>
-                </div>
+                )}
+
+                {/* ── Dados do Responsável ── */}
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 pt-1">Dados do Responsável</p>
+
+                <InputField label="Nome do Responsável">
+                  <input value={formInscricao.nome_responsavel ?? ''}
+                    onChange={e => setFormInscricao(p => ({ ...p, nome_responsavel: e.target.value }))}
+                    className={inputCls}/>
+                </InputField>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <InputField label="Telefone">
@@ -1176,6 +1241,9 @@ export default function ProjetoDashboard() {
                       className={inputCls}/>
                   </InputField>
                 </div>
+
+                {/* ── Endereço ── */}
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 pt-1">Endereço</p>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <InputField label="CEP">
@@ -1224,23 +1292,8 @@ export default function ProjetoDashboard() {
                   </InputField>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <InputField label="CPF">
-                    <input value={formInscricao.cpf ?? ''}
-                      onChange={e => setFormInscricao(p => ({ ...p, cpf: e.target.value }))}
-                      placeholder="000.000.000-00" className={inputCls}/>
-                  </InputField>
-                  <InputField label="Celular do aluno">
-                    <input value={formInscricao.celular ?? ''}
-                      onChange={e => setFormInscricao(p => ({ ...p, celular: e.target.value }))}
-                      placeholder="(11) 99999-9999" className={inputCls}/>
-                  </InputField>
-                  <InputField label="E-mail do aluno">
-                    <input type="email" value={formInscricao.email ?? ''}
-                      onChange={e => setFormInscricao(p => ({ ...p, email: e.target.value }))}
-                      placeholder="email@exemplo.com" className={inputCls}/>
-                  </InputField>
-                </div>
+                {/* ── Configuração ── */}
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 pt-1">Configuração</p>
 
                 <div>
                   <div className="flex items-center justify-between mb-1">
@@ -1256,21 +1309,6 @@ export default function ProjetoDashboard() {
                     {equipes.map(eq => <option key={eq.id} value={eq.id}>{eq.nome}{eq.faixa_min != null || eq.faixa_max != null ? ` (${eq.faixa_min ?? '?'}–${eq.faixa_max ?? '?'} anos)` : ''}</option>)}
                   </select>
                 </div>
-
-                <InputField label="Cuidado Especial">
-                  <input value={formInscricao.cuidado_especial ?? ''}
-                    onChange={e => setFormInscricao(p => ({ ...p, cuidado_especial: e.target.value }))}
-                    placeholder="ex: TEA, alérgico a glúten..."
-                    className={inputCls}/>
-                </InputField>
-                {formInscricao.cuidado_especial && (
-                  <InputField label="Detalhes">
-                    <input value={formInscricao.detalhes_cuidado ?? ''}
-                      onChange={e => setFormInscricao(p => ({ ...p, detalhes_cuidado: e.target.value }))}
-                      placeholder="Descreva o cuidado necessário..."
-                      className={inputCls}/>
-                  </InputField>
-                )}
 
                 <div className="flex justify-end gap-3 pt-2">
                   <button type="button" onClick={resetModal}
