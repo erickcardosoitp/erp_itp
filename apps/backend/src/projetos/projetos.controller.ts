@@ -1,6 +1,6 @@
 import {
   Controller, Get, Post, Patch, Delete,
-  Param, Body, Query, UseInterceptors, UploadedFile, BadRequestException, Res,
+  Param, Body, Query, UseInterceptors, UploadedFile, BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
@@ -119,32 +119,11 @@ export class ProjetosController {
   // ── Documentos de inscrição ───────────────────────────────────────────────
 
   @Get(':id/inscricoes/:iId/documentos')
-  async findDocumentos(
+  findDocumentos(
     @Param('id') id: string,
     @Param('iId') iId: string,
-    @Res() res: any,
   ) {
-    try {
-      const result = await this.svc.findDocumentos(id, iId);
-      let payload = result;
-      const str0 = JSON.stringify(result);
-      const bytes = Buffer.byteLength(str0, 'utf8');
-      if (bytes > 1_000_000) {
-        console.error(`[CTRL] findDocumentos ${iId}: ${bytes} bytes — truncating`);
-        payload = Array.isArray(result)
-          ? result.map((d: any) => ({ id: d.id, tipo: d.tipo, fisico: d.fisico ?? false, signed_url: null, source: d.source }))
-          : [];
-      }
-      const body = payload === result ? str0 : JSON.stringify(payload);
-      res.statusCode = 200;
-      res.setHeader('Content-Type', 'application/json; charset=utf-8');
-      res.end(body);
-    } catch (err: any) {
-      const status = err.status || err.statusCode || 500;
-      res.statusCode = status;
-      res.setHeader('Content-Type', 'application/json; charset=utf-8');
-      res.end(JSON.stringify({ message: err.message, statusCode: status }));
-    }
+    return this.svc.findDocumentos(id, iId);
   }
 
   @Post(':id/inscricoes/:iId/documentos')

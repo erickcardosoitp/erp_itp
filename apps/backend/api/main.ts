@@ -7,6 +7,7 @@ import * as cookieParser from 'cookie-parser';
 import * as express from 'express';
 import { join } from 'path';
 import { existsSync } from 'fs';
+import { PayloadSizeInterceptor } from '../src/common/payload-size.interceptor';
 
 const logger = new Logger('Bootstrap');
 
@@ -111,6 +112,10 @@ export const setupApp = async (app: NestExpressApplication) => {
     }),
   );
 
+  // Interceptor global: trunca respostas > 1MB antes que o Vercel retorne 413
+  // Roda DENTRO do pipeline NestJS, antes de qualquer res.json() — independente da implementação do res
+  app.useGlobalInterceptors(new PayloadSizeInterceptor());
+
   return app;
 };
 
@@ -159,6 +164,10 @@ const CORS_METHODS = 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS';
 const CORS_HEADERS = 'Content-Type,Authorization,Accept,Cookie,X-Requested-With';
 
 export default async function handler(req: any, res: any) {
+  // Log imediato — aparece mesmo que o Lambda não chegue ao NestJS
+  // Confirma se o Lambda FOI invocado para requests que retornam 413
+  console.log(`[HANDLER_EARLY] ${req.method} ${req.url} cookies=${Object.keys(req.cookies || {}).join(',')} auth=${req.headers?.authorization ? 'yes:' + String(req.headers.authorization).length : 'no'}`);
+
   // Preflight: responde imediatamente sem precisar do NestJS
   if (req.method === 'OPTIONS') {
     res.setHeader('Access-Control-Allow-Origin', CORS_ORIGIN);
@@ -215,38 +224,6 @@ export default async function handler(req: any, res: any) {
     }
     bootstrapping = false;
   }
-
-  // ─── Diagnóstico de resposta grande ───────────────────────────────────────
-  // Rastreia write()/end() para saber EXATAMENTE quantos bytes o Lambda envia
-  {
-    const origWrite = typeof res.write === 'function' ? res.write.bind(res) : null;
-    const origEnd   = typeof res.end   === 'function' ? res.end.bind(res)   : null;
-    let bytesSent = 0;
-    let endCount  = 0;
-
-    const countBytes = (chunk: any): number => {
-      if (!chunk) return 0;
-      if (Buffer.isBuffer(chunk)) return chunk.length;
-      try { return Buffer.byteLength(String(chunk), 'utf8'); } catch { return 0; }
-    };
-
-    if (origWrite) {
-      res.write = function(chunk: any, ...rest: any[]) {
-        bytesSent += countBytes(chunk);
-        return origWrite(chunk, ...rest);
-      };
-    }
-    if (origEnd) {
-      res.end = function(chunk?: any, ...rest: any[]) {
-        bytesSent += countBytes(chunk);
-        endCount++;
-        const label = bytesSent > 500_000 ? '[DIAG-END-LARGE]' : '[DIAG-END]';
-        console.log(`${label} ${req.method} ${req.url} end#${endCount} chunk=${countBytes(chunk)} total=${bytesSent}`);
-        return origEnd(chunk, ...rest);
-      };
-    }
-  }
-  // ──────────────────────────────────────────────────────────────────────────
 
   const server = app.getHttpAdapter().getInstance();
   return server(req, res);

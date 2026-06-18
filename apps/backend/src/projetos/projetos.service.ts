@@ -323,6 +323,7 @@ export class ProjetosService {
   }
 
   async findDocumentos(projeto_id: string, inscricao_id: string) {
+    this.logger.log(`[DIAG-START] findDocumentos projeto=${projeto_id} inscricao=${inscricao_id}`);
     // Raw SQL puro — sem TypeORM entities, sem risco de serialização de relações
     const [inscricao] = await this.dataSource.query(
       `SELECT id, aluno_id FROM projeto_inscricoes WHERE id = $1 AND projeto_id = $2 LIMIT 1`,
