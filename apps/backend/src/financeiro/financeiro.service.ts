@@ -424,7 +424,7 @@ export class FinanceiroService {
       const existentes = await this.dataSource.query<any[]>(
         `SELECT id FROM notificacoes
          WHERE referencia_id = $1 AND referencia_tipo = 'boleto_parcela'
-           AND DATE("createdAt") = $2
+           AND DATE(criado_em) = $2
          LIMIT 1`,
         [referencia_id, hojeStr],
       );
