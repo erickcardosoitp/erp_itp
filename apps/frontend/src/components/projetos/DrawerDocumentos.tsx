@@ -206,7 +206,7 @@ export default function DrawerDocumentos({ projetoId, inscricao, onClose, onRefr
           return;
         }
       }
-      toast.error('Nenhuma imagem na área de transferência');
+      toast.error('Nenhuma imagem na área de transferência. Para PDFs, use o botão de arquivo (↑)');
     } catch {
       toast.error('Permissão negada — verifique as permissões do navegador');
     }
@@ -391,21 +391,21 @@ export default function DrawerDocumentos({ projetoId, inscricao, onClose, onRefr
                     {isExterno && (
                       <div className="flex items-center gap-1 shrink-0">
                         {busy && <span className="text-[10px] text-slate-400 animate-pulse px-2">Enviando...</span>}
-                        {!busy && !doc && (
+                        {!busy && (
                           <>
-                            <button onClick={() => setCameraDoc(tipo)} title="Fotografar"
+                            <button onClick={() => setCameraDoc(tipo)} title={doc ? 'Substituir via câmera' : 'Fotografar'}
                               className="p-2 rounded-lg bg-purple-100 dark:bg-purple-900/30 text-purple-600 hover:bg-purple-200 transition-colors">
                               <Camera size={13} />
                             </button>
-                            <button onClick={() => { fileInputTipo.current = tipo; fileInputRef.current?.click(); }} title="Upload arquivo"
+                            <button onClick={() => { fileInputTipo.current = tipo; fileInputRef.current?.click(); }} title={doc ? 'Substituir via arquivo' : 'Upload arquivo'}
                               className="p-2 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">
                               <Upload size={13} />
                             </button>
-                            <button onClick={() => colarDaArea(tipo)} title="Colar da área de transferência"
+                            <button onClick={() => colarDaArea(tipo)} title={doc ? 'Substituir da área de transferência' : 'Colar da área de transferência'}
                               className="p-2 rounded-lg bg-amber-100 dark:bg-amber-900/30 text-amber-600 hover:bg-amber-200 transition-colors">
                               <Clipboard size={13} />
                             </button>
-                            {tipo === 'declaracao_escolar' && (
+                            {!doc && tipo === 'declaracao_escolar' && (
                               <button
                                 onClick={marcarFisico}
                                 disabled={!!uploading['fisico']}
@@ -413,23 +413,17 @@ export default function DrawerDocumentos({ projetoId, inscricao, onClose, onRefr
                                 {uploading['fisico'] ? '...' : 'Físico'}
                               </button>
                             )}
-                          </>
-                        )}
-                        {!busy && doc && (
-                          <>
-                            <button onClick={() => setCameraDoc(tipo)} title="Substituir"
-                              className="p-2 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">
-                              <Camera size={13} />
-                            </button>
-                            <button
-                              onClick={() => remover(doc.id)}
-                              disabled={!!uploading[`del_${doc.id}`]}
-                              className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-400 hover:text-red-500 transition-colors disabled:opacity-40">
-                              {uploading[`del_${doc.id}`]
-                                ? <Loader2 size={13} className="animate-spin" />
-                                : <Trash2 size={13} />
-                              }
-                            </button>
+                            {doc && doc.source !== 'matriculas' && (
+                              <button
+                                onClick={() => remover(doc.id)}
+                                disabled={!!uploading[`del_${doc.id}`]}
+                                className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-400 hover:text-red-500 transition-colors disabled:opacity-40">
+                                {uploading[`del_${doc.id}`]
+                                  ? <Loader2 size={13} className="animate-spin" />
+                                  : <Trash2 size={13} />
+                                }
+                              </button>
+                            )}
                           </>
                         )}
                       </div>
