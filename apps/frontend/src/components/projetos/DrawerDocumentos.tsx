@@ -55,7 +55,7 @@ const OBRIGATORIOS: string[] = ['identidade_aluno', 'declaracao_escolar'];
 interface DocRecord {
   id: string;
   tipo: string;
-  url_arquivo: string;
+  fisico?: boolean;
   signed_url?: string | null;
   mimetype?: string | null;
   source?: 'matriculas' | 'projetos';
@@ -350,7 +350,7 @@ export default function DrawerDocumentos({ projetoId, inscricao, onClose, onRefr
               {/* Documentos obrigatórios/padrão */}
               {TIPOS_DOCS.map(tipo => {
                 const doc    = docMap[tipo];
-                const fisico = doc?.url_arquivo === 'fisico';
+                const fisico = !!doc?.fisico;
                 const busy   = uploading[tipo];
                 const obrig  = OBRIGATORIOS.includes(tipo as any);
 

@@ -330,7 +330,15 @@ export class ProjetosService {
         if (doc.url_arquivo !== 'fisico') {
           signed_url = await this.supabase.getSignedUrl(doc.url_arquivo, 3600).catch(() => null);
         }
-        return { ...doc, signed_url };
+        // Nunca devolver url_arquivo ao client — pode ser base64 enorme
+        return {
+          id: doc.id,
+          tipo: doc.tipo,
+          inscricao_id: doc.inscricao_id,
+          fisico: doc.url_arquivo === 'fisico',
+          signed_url,
+          source: 'projetos' as const,
+        };
       }),
     );
 
@@ -362,13 +370,11 @@ export class ProjetosService {
         let signed_url: string | null = null;
         const url = row.url_arquivo;
         if (url?.startsWith('data:')) {
-          // base64 — usar direto
-          signed_url = url;
+          // base64 — não devolver ao client (causa FUNCTION_PAYLOAD_TOO_LARGE)
+          signed_url = null;
         } else if (url?.startsWith('/uploads/') || url?.startsWith('uploads/')) {
-          // arquivo local do backend — retornar o path, frontend proxia via /uploads/*
           signed_url = url.startsWith('/') ? url : `/${url}`;
         } else if (url && url !== 'fisico') {
-          // path no Supabase Storage
           signed_url = await this.supabase.getSignedUrl(url, 3600).catch(() => null);
         }
 
@@ -376,7 +382,7 @@ export class ProjetosService {
           id: String(row.id),
           tipo: mappedTipo,
           inscricao_id,
-          url_arquivo: row.url_arquivo,
+          fisico: url === 'fisico',
           signed_url,
           mimetype: row.mimetype,
           source: 'matriculas',
