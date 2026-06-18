@@ -1,3 +1,4 @@
 {
-  "version": 2
+  "version": 2,
+  "installCommand": "npm install && cd apps/backend && npm install && cd ../../ && cd apps/frontend && npm install"
 }
