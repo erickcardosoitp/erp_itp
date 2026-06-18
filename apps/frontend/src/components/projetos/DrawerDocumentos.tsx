@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Upload, Trash2, Camera, CheckCircle2, AlertCircle, FileCheck, FileText, UserPlus, PlusCircle, Loader2, Clipboard } from 'lucide-react';
+import { X, Upload, Trash2, Camera, CheckCircle2, AlertCircle, FileCheck, FileText, UserPlus, PlusCircle, Loader2, Clipboard, ScanLine } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import api from '@/services/api';
 import { toast } from 'sonner';
@@ -249,6 +249,28 @@ export default function DrawerDocumentos({ projetoId, inscricao, onClose, onRefr
     }
   };
 
+  const digitalizarDoc = async (tipo: string) => {
+    try {
+      const res = await fetch('http://localhost:7734/scan');
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        if (err.error === 'cancelled') return;
+        throw new Error(err.error || 'Erro ao digitalizar');
+      }
+      const { data, mimetype } = await res.json();
+      const imgRes = await fetch(data);
+      const blob = await imgRes.blob();
+      const compressed = await compressImageBlob(blob);
+      await uploadBlob(tipo, compressed, 'digitalizado.jpg');
+    } catch (e: any) {
+      if (!e.message || e.message.includes('fetch') || e.message.includes('Failed')) {
+        toast.error('Agente não encontrado. Abra o scanner_agent.py primeiro.');
+      } else {
+        toast.error(e.message);
+      }
+    }
+  };
+
   const handleExtraFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -458,6 +480,10 @@ export default function DrawerDocumentos({ projetoId, inscricao, onClose, onRefr
                               className="p-2 rounded-lg bg-amber-100 dark:bg-amber-900/30 text-amber-600 hover:bg-amber-200 transition-colors">
                               <Clipboard size={13} />
                             </button>
+                            <button onClick={() => digitalizarDoc(tipo)} title="Digitalizar com scanner"
+                              className="p-2 rounded-lg bg-teal-100 dark:bg-teal-900/30 text-teal-600 hover:bg-teal-200 transition-colors">
+                              <ScanLine size={13} />
+                            </button>
                             {!doc && tipo === 'declaracao_escolar' && (
                               <button
                                 onClick={marcarFisico}
@@ -501,6 +527,12 @@ export default function DrawerDocumentos({ projetoId, inscricao, onClose, onRefr
                         onClick={() => extraFileInputRef.current?.click()}
                         className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors text-[10px] font-black">
                         <PlusCircle size={11} /> Arquivo
+                      </button>
+                      <button
+                        onClick={() => digitalizarDoc(`extra_${Date.now()}`)}
+                        title="Digitalizar com scanner"
+                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-teal-100 dark:bg-teal-900/30 text-teal-600 hover:bg-teal-200 transition-colors text-[10px] font-black">
+                        <ScanLine size={11} /> Scan
                       </button>
                     </div>
                   </div>
