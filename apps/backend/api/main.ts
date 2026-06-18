@@ -15,6 +15,40 @@ export const setupApp = async (app: NestExpressApplication) => {
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
   const cookieMiddleware = (cookieParser as any).default || cookieParser;
   app.use(cookieMiddleware());
+
+  // Guard: intercepta respostas grandes antes que o Vercel retorne 413
+  // Qualquer resposta >3MB loga o path/tamanho e retorna 200 com payload seguro
+  app.use((req: any, res: any, next: any) => {
+    const originalJson = (res.json as Function).bind(res);
+    (res as any).json = function(body: any) {
+      try {
+        const str = JSON.stringify(body);
+        const bytes = Buffer.byteLength(str, 'utf8');
+        if (bytes > 3_000_000) {
+          console.error(`[PAYLOAD_GUARD] ${req.method} ${req.path}: ${bytes} bytes — TRUNCATING`);
+          // Devolve payload seguro com diagnóstico
+          if (Array.isArray(body)) {
+            return originalJson(body.map((item: any) => ({
+              id: item?.id,
+              tipo: item?.tipo,
+              fisico: item?.fisico ?? false,
+              signed_url: null,
+              source: item?.source,
+            })));
+          }
+          return res.status(500).send(JSON.stringify({ error: 'PAYLOAD_TOO_LARGE', path: req.path, bytes }));
+        }
+        if (bytes > 50_000) {
+          console.warn(`[PAYLOAD_SIZE] ${req.method} ${req.path}: ${bytes} bytes`);
+        }
+      } catch (e: any) {
+        console.error(`[PAYLOAD_GUARD] serialization error: ${e?.message}`);
+      }
+      return originalJson(body);
+    };
+    next();
+  });
+
   app.setGlobalPrefix('api');
 
   const publicDir = join(__dirname, '..', '..', 'public');
