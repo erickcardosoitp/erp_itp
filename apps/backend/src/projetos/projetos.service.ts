@@ -353,12 +353,20 @@ export class ProjetosService {
         declaracao_escolaridade: 'declaracao_escolar',
       };
 
-      const rows: Array<{ id: number; tipo: string; url_arquivo: string; mimetype: string | null }> = await this.dataSource.query(`
-        SELECT di.id, di.tipo, di.url_arquivo, di.mimetype
+      // CASE no SQL garante que base64 nunca é transmitido do banco para memória (evita OOM/413)
+      const rows: Array<{ id: number; tipo: string; url_safe: string | null; fisico: boolean; mimetype: string | null }> = await this.dataSource.query(`
+        SELECT di.id, di.tipo, di.mimetype,
+          (di.url_arquivo = 'fisico') AS fisico,
+          CASE
+            WHEN di.url_arquivo LIKE 'data:%' THEN NULL
+            WHEN di.url_arquivo = 'fisico'    THEN NULL
+            ELSE di.url_arquivo
+          END AS url_safe
         FROM documentos_inscricao di
         JOIN inscricoes insc ON insc.id = di.inscricao_id
         WHERE insc.aluno_id::text = $1::text
         ORDER BY di.id DESC
+        LIMIT 100
       `, [inscricao.aluno_id]);
 
       for (const row of rows) {
@@ -368,13 +376,10 @@ export class ProjetosService {
         if (result.some(d => d.tipo === mappedTipo)) continue;
 
         let signed_url: string | null = null;
-        const url = row.url_arquivo;
-        if (url?.startsWith('data:')) {
-          // base64 — não devolver ao client (causa FUNCTION_PAYLOAD_TOO_LARGE)
-          signed_url = null;
-        } else if (url?.startsWith('/uploads/') || url?.startsWith('uploads/')) {
+        const url = row.url_safe;
+        if (url?.startsWith('/uploads/') || url?.startsWith('uploads/')) {
           signed_url = url.startsWith('/') ? url : `/${url}`;
-        } else if (url && url !== 'fisico') {
+        } else if (url) {
           signed_url = await this.supabase.getSignedUrl(url, 3600).catch(() => null);
         }
 
@@ -382,7 +387,7 @@ export class ProjetosService {
           id: String(row.id),
           tipo: mappedTipo,
           inscricao_id,
-          fisico: url === 'fisico',
+          fisico: row.fisico,
           signed_url,
           mimetype: row.mimetype,
           source: 'matriculas',
