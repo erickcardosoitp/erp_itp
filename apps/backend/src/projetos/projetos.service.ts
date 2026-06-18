@@ -147,9 +147,12 @@ export class ProjetosService {
       const bairro     = r.aluno_bairro;
       const cidade     = r.aluno_cidade;
 
-      // Para alunos ITP: mapeia tipos de matrículas → tipos de projetos antes de comparar
+      // Para alunos ITP: combina documentos da matrícula + documentos enviados diretamente no projeto
       const tiposExistentes: string[] = r.aluno_id
-        ? (r.docs_itp_tipos || []).map((t: string) => ITP_TIPO_MAP[t] ?? t)
+        ? [
+            ...(r.docs_itp_tipos || []).map((t: string) => ITP_TIPO_MAP[t] ?? t),
+            ...(r.docs_ext_tipos || []),
+          ]
         : (r.docs_ext_tipos || []);
       const docsPendentes = TIPOS_OBRIGATORIOS_EXT.filter(t => !tiposExistentes.includes(t));
 
