@@ -662,8 +662,8 @@ export default function ProjetoDashboard() {
                             {idade !== null ? `${idade}a` : '—'}
                           </td>
                           {/* Responsável */}
-                          <td className="px-2 py-2.5 max-w-[180px]">
-                            <p className="text-xs text-slate-700 dark:text-slate-300 leading-tight truncate">{ins.nome_responsavel || '—'}</p>
+                          <td className="px-2 py-2.5 max-w-[220px]">
+                            <p className="text-xs text-slate-700 dark:text-slate-300 leading-tight break-words">{ins.nome_responsavel || '—'}</p>
                             {ins.telefone_responsavel && (
                               <p className="text-[10px] text-slate-400 whitespace-nowrap">{fmtTelefone(ins.telefone_responsavel)}</p>
                             )}
