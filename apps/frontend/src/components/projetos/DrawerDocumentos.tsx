@@ -103,6 +103,32 @@ interface Props {
   onRefresh: () => void;
 }
 
+// Comprime imagens no cliente antes do upload — evita 413 "File too large"
+// PDFs e outros tipos são retornados sem alteração
+async function compressImageBlob(blob: Blob): Promise<Blob> {
+  if (!blob.type.startsWith('image/')) return blob;
+  return new Promise((resolve) => {
+    const img = new Image();
+    const url = URL.createObjectURL(blob);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const MAX_W = 1920;
+      const scale = Math.min(1, MAX_W / img.width);
+      const canvas = document.createElement('canvas');
+      canvas.width  = Math.round(img.width  * scale);
+      canvas.height = Math.round(img.height * scale);
+      canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob(
+        (b) => resolve(b ?? blob),
+        'image/jpeg',
+        0.85,
+      );
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(blob); };
+    img.src = url;
+  });
+}
+
 export default function DrawerDocumentos({ projetoId, inscricao, onClose, onRefresh }: Props) {
   const [docs, setDocs]                   = useState<DocRecord[]>([]);
   const [loading, setLoading]             = useState(false);
@@ -187,7 +213,9 @@ export default function DrawerDocumentos({ projetoId, inscricao, onClose, onRefr
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !fileInputTipo.current) return;
-    await uploadBlob(fileInputTipo.current, new Blob([file], { type: file.type }));
+    const raw = new Blob([file], { type: file.type });
+    const blob = await compressImageBlob(raw);
+    await uploadBlob(fileInputTipo.current, blob);
     e.target.value = '';
   };
 
@@ -201,7 +229,8 @@ export default function DrawerDocumentos({ projetoId, inscricao, onClose, onRefr
       for (const item of items) {
         const imageType = item.types.find(t => t.startsWith('image/'));
         if (imageType) {
-          const blob = await item.getType(imageType);
+          const raw = await item.getType(imageType);
+          const blob = await compressImageBlob(raw);
           await uploadBlob(tipo, blob);
           return;
         }
@@ -216,7 +245,9 @@ export default function DrawerDocumentos({ projetoId, inscricao, onClose, onRefr
     const file = e.target.files?.[0];
     if (!file) return;
     const tipo = `extra_${Date.now()}`;
-    await uploadBlob(tipo, new Blob([file], { type: file.type }), file.name);
+    const raw = new Blob([file], { type: file.type });
+    const blob = await compressImageBlob(raw);
+    await uploadBlob(tipo, blob, file.name);
     e.target.value = '';
   };
 
