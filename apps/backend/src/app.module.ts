@@ -83,10 +83,12 @@ import { SupabaseModule } from './modules/supabase/supabase.module';
         if (!dbUrl) {
           throw new Error('A variável de ambiente DATABASE_URL não foi definida.');
         }
+        // Normaliza sslmode para verify-full (silencia warning do pg v9 sobre sslmode=require)
+        const dbUrlSsl = dbUrl.replace(/sslmode=(?:require|prefer|verify-ca)/g, 'sslmode=verify-full');
         // connect_timeout=15 — cada tentativa espera até 15s pelo Neon acordar
-        const dbUrlWithTimeout = dbUrl.includes('connect_timeout')
-          ? dbUrl
-          : (dbUrl.includes('?') ? `${dbUrl}&connect_timeout=15` : `${dbUrl}?connect_timeout=15`);
+        const dbUrlWithTimeout = dbUrlSsl.includes('connect_timeout')
+          ? dbUrlSsl
+          : (dbUrlSsl.includes('?') ? `${dbUrlSsl}&connect_timeout=15` : `${dbUrlSsl}?connect_timeout=15`);
         return {
           type: 'postgres',
           url: dbUrlWithTimeout,
