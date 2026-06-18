@@ -294,7 +294,7 @@ export class FinanceiroService {
           tipo_movimentacao: 'Receita',
           plano_contas: 'Boletos a Receber',
           status: 'Pendente',
-          descricao: boleto.descricao ?? undefined,
+          descricao: [boleto.descricao, `Recebedor: ${boleto.recebedor}`].filter(Boolean).join(' · '),
         } as any)) as unknown as MovimentacaoFinanceira;
 
         const p = await this.parcelaRepo.save(this.parcelaRepo.create({
@@ -318,7 +318,7 @@ export class FinanceiroService {
         tipo_movimentacao: 'Receita',
         plano_contas: 'Boletos a Receber',
         status: 'Pendente',
-        descricao: boleto.descricao ?? undefined,
+        descricao: [boleto.descricao, `Recebedor: ${boleto.recebedor}`].filter(Boolean).join(' · '),
       } as any)) as unknown as MovimentacaoFinanceira;
 
       const p = await this.parcelaRepo.save(this.parcelaRepo.create({
@@ -347,6 +347,10 @@ export class FinanceiroService {
   async marcarParcelaPaga(parcelaId: string, dto: { data_pagamento: string }) {
     const parcela = await this.parcelaRepo.findOneBy({ id: parcelaId });
     if (!parcela) throw new NotFoundException('Parcela não encontrada');
+
+    if (!dto.data_pagamento || isNaN(new Date(dto.data_pagamento).getTime())) {
+      throw new BadRequestException('Data de pagamento inválida ou ausente');
+    }
 
     await this.parcelaRepo.update(parcelaId, {
       pago: true,

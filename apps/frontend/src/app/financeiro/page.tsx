@@ -416,7 +416,10 @@ export default function FinanceiroPage() {
                   {filtrados.map(m => (
                     <tr key={m.id} className="hover:bg-emerald-50/30 dark:hover:bg-emerald-900/20 transition-colors">
                       <td className="px-4 py-3 text-xs font-mono text-slate-600 dark:text-slate-300 whitespace-nowrap">{dataFmt(m.data)}</td>
-                      <td className="px-4 py-3 font-bold text-slate-800 dark:text-slate-100 text-sm max-w-[160px] truncate">{m.nome}</td>
+                      <td className="px-4 py-3 max-w-[220px]">
+                        <p className="font-bold text-slate-800 dark:text-slate-100 text-sm truncate">{m.nome}</p>
+                        {m.descricao && <p className="text-[10px] text-slate-400 truncate mt-0.5">{m.descricao}</p>}
+                      </td>
                       <td className="px-4 py-3 text-xs text-slate-500">{m.competencia || '–'}</td>
                       <td className="px-4 py-3 text-xs">
                         <span className={`px-2 py-0.5 rounded-lg text-[9px] font-black uppercase border ${
@@ -665,10 +668,27 @@ function BoletosTab({ podeEscrever, podeEditar, podeExcluir }: { podeEscrever: b
     setSalvando(true);
     try {
       const valorNum = parseFloat(String(form.valor).replace(',', '.'));
+
+      // Valida código de barras principal
+      if (form.cod_barras) {
+        const digits = form.cod_barras.replace(/\D/g, '');
+        if ((digits.length === 44 || digits.length === 47) && !parsearCodigoBarras(digits).valido) {
+          alert('Código de barras inválido. Corrija antes de salvar.');
+          setSalvando(false); return;
+        }
+      }
+
       let parcelasPayload: { valor: number; data_vencimento: string; cod_barras?: string | null }[] = [];
       if (form.parcelado && parcelas.length > 0) {
         const semVenc = parcelas.findIndex(p => !p.data_vencimento);
         if (semVenc >= 0) { alert(`Informe o vencimento da parcela ${semVenc + 1}.`); setSalvando(false); return; }
+        // Valida código de barras de cada parcela
+        for (let i = 0; i < parcelas.length; i++) {
+          const d = (parcelas[i].cod_barras || '').replace(/\D/g, '');
+          if ((d.length === 44 || d.length === 47) && !parsearCodigoBarras(d).valido) {
+            alert(`Código de barras inválido na parcela ${i + 1}.`); setSalvando(false); return;
+          }
+        }
         parcelasPayload = parcelas.map(p => ({ valor: parseFloat(p.valor), data_vencimento: p.data_vencimento, cod_barras: p.cod_barras || null }));
       } else if (!form.parcelado && form.data_vencimento) {
         // à vista com vencimento extraído do código de barras
@@ -1018,7 +1038,9 @@ function BoletosTab({ podeEscrever, podeEditar, podeExcluir }: { podeEscrever: b
                 />
                 {form.cod_barras && form.cod_barras.replace(/\D/g, '').length >= 44 && (() => {
                   const info = parsearCodigoBarras(form.cod_barras);
-                  if (!info.valido) return null;
+                  if (!info.valido) return (
+                    <p className="mt-1 text-[10px] text-red-500 font-bold">Código de barras inválido — verifique os dígitos.</p>
+                  );
                   return (
                     <div className="mt-2 flex flex-wrap gap-3 text-xs bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700 rounded-xl px-3 py-2">
                       {info.banco && <span className="text-emerald-700 dark:text-emerald-400 font-semibold">{info.banco}</span>}
