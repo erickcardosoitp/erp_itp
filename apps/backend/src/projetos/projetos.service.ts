@@ -103,10 +103,10 @@ export class ProjetosService {
         COALESCE(pi.nome_responsavel, a.nome_responsavel, insc_orig.nome_responsavel)                          AS nome_responsavel,
         COALESCE(pi.telefone_responsavel, a.telefone_alternativo, a.celular, insc_orig.celular, insc_orig.telefone_alternativo) AS telefone_responsavel,
         row_to_json(pe) as equipe,
-        a.logradouro  as aluno_logradouro,
-        a.numero      as aluno_numero,
-        a.bairro      as aluno_bairro,
-        a.cidade      as aluno_cidade,
+        COALESCE(a.logradouro, insc_orig.logradouro)  as aluno_logradouro,
+        COALESCE(a.numero, insc_orig.numero)          as aluno_numero,
+        COALESCE(a.bairro, insc_orig.bairro)          as aluno_bairro,
+        COALESCE(a.cidade, insc_orig.cidade)          as aluno_cidade,
         foto.url_arquivo as foto_url,
         (
           SELECT array_agg(pid.tipo)
@@ -151,6 +151,9 @@ export class ProjetosService {
 
       return {
         ...r,
+        logradouro,
+        numero,
+        bairro,
         endereco: [logradouro, numero, bairro, cidade].filter(Boolean).join(', ') || null,
         doc_status: docsPendentes.length === 0 ? 'ok' : 'pendente',
         docs_pendentes: docsPendentes,

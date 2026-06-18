@@ -614,7 +614,7 @@ export default function ProjetoDashboard() {
                         { key: 'nome',       label: 'Nome' },
                         { key: 'idade',      label: 'Idade' },
                         { key: 'responsavel',label: 'Responsável' },
-                        { key: 'rua',        label: 'Rua / Bairro' },
+                        { key: 'rua',        label: 'Endereço' },
                         { key: 'condicao',   label: 'Condição' },
                         { key: 'inscricao',  label: 'Insc.' },
                         { key: null,         label: 'Equipe' },
