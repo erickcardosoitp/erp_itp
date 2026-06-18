@@ -126,7 +126,11 @@ export class ProjetosService {
       LEFT JOIN alunos a ON a.id = pi.aluno_id
       LEFT JOIN inscricoes insc_orig ON insc_orig.id = a.inscricao_id
       LEFT JOIN LATERAL (
-        SELECT d.url_arquivo
+        SELECT CASE
+          WHEN d.url_arquivo LIKE 'data:%'  THEN NULL
+          WHEN LENGTH(d.url_arquivo) > 2000 THEN NULL
+          ELSE d.url_arquivo
+        END AS url_arquivo
         FROM inscricoes insc
         JOIN documentos_inscricao d ON d.inscricao_id = insc.id AND d.tipo = 'foto_aluno'
         WHERE insc.aluno_id::text = pi.aluno_id::text
@@ -326,14 +330,15 @@ export class ProjetosService {
     );
     if (!inscricao) throw new NotFoundException('Inscrição não encontrada');
 
-    // Projeto docs — CASE filtra base64 E 'fisico' para nunca chegar em Node.js nem em getSignedUrl
+    // Projeto docs — CASE filtra base64 (com/sem prefixo 'data:'), 'fisico' e strings longas (base64 raw)
     const projDocs: Array<{ id: string; tipo: string; fisico: boolean; storage_path: string | null }> =
       await this.dataSource.query(
         `SELECT id, tipo,
            (url_arquivo = 'fisico') AS fisico,
            CASE
-             WHEN url_arquivo LIKE 'data:%' THEN NULL
-             WHEN url_arquivo = 'fisico'    THEN NULL
+             WHEN url_arquivo LIKE 'data:%'  THEN NULL
+             WHEN url_arquivo = 'fisico'     THEN NULL
+             WHEN LENGTH(url_arquivo) > 2000 THEN NULL
              ELSE url_arquivo
            END AS storage_path
          FROM projeto_inscricao_documentos
@@ -346,8 +351,12 @@ export class ProjetosService {
     for (const doc of projDocs) {
       let signed_url: string | null = null;
       // Guarda dupla: CASE no SQL + checagem TS para evitar passar base64 ao getSignedUrl
-      if (!doc.fisico && doc.storage_path && !doc.storage_path.startsWith('data:')) {
-        signed_url = await this.supabase.getSignedUrl(doc.storage_path, 3600).catch(() => null);
+      const sp = doc.storage_path;
+      if (!doc.fisico && sp && !sp.startsWith('data:') && sp.length <= 2000) {
+        signed_url = await this.supabase.getSignedUrl(sp, 3600).catch(() => null);
+      }
+      if (sp && sp.length > 2000) {
+        this.logger.warn(`[DIAG] projDocs doc ${doc.id} tipo=${doc.tipo} storage_path.length=${sp.length} — SKIPPED (base64 raw)`);
       }
       result.push({
         id: doc.id,
@@ -369,13 +378,14 @@ export class ProjetosService {
         declaracao_escolaridade: 'declaracao_escolar',
       };
 
-      // CASE no SQL garante que base64 nunca é transmitido do banco para memória (evita OOM/413)
+      // CASE no SQL filtra base64 (com/sem prefixo), 'fisico' e strings longas (base64 raw sem prefixo)
       const rows: Array<{ id: number; tipo: string; url_safe: string | null; fisico: boolean; mimetype: string | null }> = await this.dataSource.query(`
         SELECT di.id, di.tipo, di.mimetype,
           (di.url_arquivo = 'fisico') AS fisico,
           CASE
-            WHEN di.url_arquivo LIKE 'data:%' THEN NULL
-            WHEN di.url_arquivo = 'fisico'    THEN NULL
+            WHEN di.url_arquivo LIKE 'data:%'  THEN NULL
+            WHEN di.url_arquivo = 'fisico'     THEN NULL
+            WHEN LENGTH(di.url_arquivo) > 2000 THEN NULL
             ELSE di.url_arquivo
           END AS url_safe
         FROM documentos_inscricao di
@@ -393,7 +403,9 @@ export class ProjetosService {
 
         let signed_url: string | null = null;
         const url = row.url_safe;
-        if (url?.startsWith('/uploads/') || url?.startsWith('uploads/')) {
+        if (url && url.length > 2000) {
+          this.logger.warn(`[DIAG] matricula doc ${row.id} tipo=${row.tipo} url_safe.length=${url.length} — SKIPPED`);
+        } else if (url?.startsWith('/uploads/') || url?.startsWith('uploads/')) {
           signed_url = url.startsWith('/') ? url : `/${url}`;
         } else if (url) {
           signed_url = await this.supabase.getSignedUrl(url, 3600).catch(() => null);
@@ -412,7 +424,11 @@ export class ProjetosService {
     }
 
     const bytes = Buffer.byteLength(JSON.stringify(result), 'utf8');
-    this.logger.log(`findDocumentos(${inscricao_id}): ${result.length} docs, ${bytes} bytes`);
+    this.logger.log(`[DIAG] findDocumentos(${inscricao_id}): ${result.length} docs, ${bytes} bytes`);
+    if (bytes > 500_000) {
+      this.logger.error(`[DIAG] findDocumentos RESPOSTA GRANDE ${bytes} bytes — retornando apenas metadados`);
+      return result.map(d => ({ id: d.id, tipo: d.tipo, fisico: d.fisico ?? false, signed_url: null, source: d.source }));
+    }
     return result;
   }
 

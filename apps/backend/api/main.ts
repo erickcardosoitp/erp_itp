@@ -17,35 +17,54 @@ export const setupApp = async (app: NestExpressApplication) => {
   app.use(cookieMiddleware());
 
   // Guard: intercepta respostas grandes antes que o Vercel retorne 413
-  // Qualquer resposta >3MB loga o path/tamanho e retorna 200 com payload seguro
+  // Cobre res.json() E res.send() para capturar TODOS os caminhos de resposta
+  const PAYLOAD_LIMIT = 1_000_000; // 1MB — bem abaixo do limite do Vercel (4.5MB)
   app.use((req: any, res: any, next: any) => {
-    const originalJson = (res.json as Function).bind(res);
-    (res as any).json = function(body: any) {
+    const checkSize = (body: any, via: string): { truncated: boolean; bytes?: number } => {
       try {
-        const str = JSON.stringify(body);
+        const str = typeof body === 'string' ? body : JSON.stringify(body);
         const bytes = Buffer.byteLength(str, 'utf8');
-        if (bytes > 3_000_000) {
-          console.error(`[PAYLOAD_GUARD] ${req.method} ${req.path}: ${bytes} bytes — TRUNCATING`);
-          // Devolve payload seguro com diagnóstico
-          if (Array.isArray(body)) {
-            return originalJson(body.map((item: any) => ({
-              id: item?.id,
-              tipo: item?.tipo,
-              fisico: item?.fisico ?? false,
-              signed_url: null,
-              source: item?.source,
-            })));
-          }
-          return res.status(500).send(JSON.stringify({ error: 'PAYLOAD_TOO_LARGE', path: req.path, bytes }));
+        if (bytes > PAYLOAD_LIMIT) {
+          console.error(`[PAYLOAD_GUARD] ${req.method} ${req.path}: ${bytes} bytes (via ${via}) — TRUNCATING`);
+          return { truncated: true, bytes };
         }
         if (bytes > 50_000) {
           console.warn(`[PAYLOAD_SIZE] ${req.method} ${req.path}: ${bytes} bytes`);
         }
       } catch (e: any) {
-        console.error(`[PAYLOAD_GUARD] serialization error: ${e?.message}`);
+        console.error(`[PAYLOAD_GUARD] serialize error (${via}): ${e?.message}`);
+      }
+      return { truncated: false };
+    };
+
+    const originalJson = (res.json as Function).bind(res);
+    (res as any).json = function(body: any) {
+      const { truncated, bytes } = checkSize(body, 'json');
+      if (truncated) {
+        if (Array.isArray(body)) {
+          return originalJson(body.map((item: any) => ({
+            id: item?.id, tipo: item?.tipo,
+            fisico: item?.fisico ?? false,
+            signed_url: null, source: item?.source,
+          })));
+        }
+        return originalJson({ error: 'PAYLOAD_TOO_LARGE', path: req.path, bytes });
       }
       return originalJson(body);
     };
+
+    const originalSend = (res.send as Function).bind(res);
+    (res as any).send = function(body: any) {
+      if (body && typeof body !== 'number') {
+        const { truncated, bytes } = checkSize(body, 'send');
+        if (truncated) {
+          (res as any).set('Content-Type', 'application/json');
+          return originalSend(JSON.stringify({ error: 'PAYLOAD_TOO_LARGE', path: req.path, bytes }));
+        }
+      }
+      return originalSend(body);
+    };
+
     next();
   });
 
