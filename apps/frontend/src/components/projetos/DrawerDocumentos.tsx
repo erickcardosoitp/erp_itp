@@ -672,8 +672,8 @@ export default function DrawerDocumentos({ projetoId, inscricao, onClose, onRefr
                               <button onClick={() => setEditandoNome(null)} className="p-1 text-slate-400 hover:text-slate-600"><X size={13} /></button>
                             </div>
                           ) : (
-                            <div className="flex items-center gap-1 group">
-                              <p className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate">
+                            <div className="flex items-start gap-1 group">
+                              <p className="text-xs font-bold text-slate-700 dark:text-slate-200 break-words min-w-0">
                                 {doc.nome_arquivo || `Extra ${i + 1}`}
                               </p>
                               <button
