@@ -5,6 +5,7 @@ import {
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { Role } from '../auth/constants/roles.enum';
 import { ResponsaveisService } from './responsaveis.service';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -26,19 +27,19 @@ export class ResponsaveisController {
   }
 
   @Post()
-  @Roles('assist')
+  @Roles(Role.ASSIST)
   criar(@Body() body: any) {
     return this.svc.criar(body);
   }
 
   @Patch(':id')
-  @Roles('assist')
+  @Roles(Role.ASSIST)
   atualizar(@Param('id') id: string, @Body() body: any) {
     return this.svc.atualizar(id, body);
   }
 
   @Delete(':id')
-  @Roles('drt')
+  @Roles(Role.DRT)
   desativar(@Param('id') id: string) {
     return this.svc.desativar(id);
   }
