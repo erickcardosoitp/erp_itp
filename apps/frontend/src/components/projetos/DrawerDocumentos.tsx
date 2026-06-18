@@ -250,24 +250,61 @@ export default function DrawerDocumentos({ projetoId, inscricao, onClose, onRefr
   };
 
   const digitalizarDoc = async (tipo: string) => {
+    const AGENT = 'http://localhost:7734';
+
+    const agentUp = async () => {
+      try {
+        const r = await fetch(`${AGENT}/status`, { signal: AbortSignal.timeout(1500) });
+        return r.ok;
+      } catch { return false; }
+    };
+
+    const launchAgent = () => {
+      const a = document.createElement('a');
+      a.href = 'itpscan://start';
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    };
+
+    const waitForAgent = async (maxMs = 12000): Promise<boolean> => {
+      const t0 = Date.now();
+      while (Date.now() - t0 < maxMs) {
+        if (await agentUp()) return true;
+        await new Promise(r => setTimeout(r, 1500));
+      }
+      return false;
+    };
+
     try {
-      const res = await fetch('http://localhost:7734/scan');
+      let up = await agentUp();
+      if (!up) {
+        launchAgent();
+        toast.loading('Iniciando scanner...', { id: 'scan-init' });
+        up = await waitForAgent(12000);
+        toast.dismiss('scan-init');
+        if (!up) {
+          toast.error('Scanner agent não iniciou. Execute instalar_scanner.bat uma vez para configurar.');
+          return;
+        }
+      }
+
+      const res = await fetch(`${AGENT}/scan`);
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         if (err.error === 'cancelled') return;
         throw new Error(err.error || 'Erro ao digitalizar');
       }
-      const { data, mimetype } = await res.json();
+      const { data } = await res.json();
       const imgRes = await fetch(data);
       const blob = await imgRes.blob();
       const compressed = await compressImageBlob(blob);
       await uploadBlob(tipo, compressed, 'digitalizado.jpg');
     } catch (e: any) {
-      if (!e.message || e.message.includes('fetch') || e.message.includes('Failed')) {
-        toast.error('Agente não encontrado. Abra o scanner_agent.py primeiro.');
-      } else {
-        toast.error(e.message);
-      }
+      toast.error(e.message?.includes('fetch') || e.message?.includes('Failed')
+        ? 'Execute instalar_scanner.bat para configurar o scanner.'
+        : (e.message || 'Erro ao digitalizar'));
     }
   };
 
