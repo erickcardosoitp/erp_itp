@@ -319,28 +319,39 @@ export class ProjetosService {
   }
 
   async findDocumentos(projeto_id: string, inscricao_id: string) {
-    const inscricao = await this.inscricoesRepo.findOne({ where: { id: inscricao_id, projeto_id } });
+    // Raw SQL puro — sem TypeORM entities, sem risco de serialização de relações
+    const [inscricao] = await this.dataSource.query(
+      `SELECT id, aluno_id FROM projeto_inscricoes WHERE id = $1 AND projeto_id = $2 LIMIT 1`,
+      [inscricao_id, projeto_id],
+    );
     if (!inscricao) throw new NotFoundException('Inscrição não encontrada');
 
-    const docs = await this.documentosRepo.find({ where: { inscricao_id } });
+    // Projeto docs — nunca selecionar url_arquivo inteiro; CASE evita trazer base64
+    const projDocs: Array<{ id: string; tipo: string; fisico: boolean; storage_path: string | null }> =
+      await this.dataSource.query(
+        `SELECT id, tipo,
+           (url_arquivo = 'fisico') AS fisico,
+           CASE WHEN url_arquivo = 'fisico' THEN NULL ELSE url_arquivo END AS storage_path
+         FROM projeto_inscricao_documentos
+         WHERE inscricao_id = $1
+         LIMIT 50`,
+        [inscricao_id],
+      );
 
-    const result: any[] = await Promise.all(
-      docs.map(async doc => {
-        let signed_url: string | null = null;
-        if (doc.url_arquivo !== 'fisico') {
-          signed_url = await this.supabase.getSignedUrl(doc.url_arquivo, 3600).catch(() => null);
-        }
-        // Nunca devolver url_arquivo ao client — pode ser base64 enorme
-        return {
-          id: doc.id,
-          tipo: doc.tipo,
-          inscricao_id: doc.inscricao_id,
-          fisico: doc.url_arquivo === 'fisico',
-          signed_url,
-          source: 'projetos' as const,
-        };
-      }),
-    );
+    const result: any[] = [];
+    for (const doc of projDocs) {
+      let signed_url: string | null = null;
+      if (!doc.fisico && doc.storage_path) {
+        signed_url = await this.supabase.getSignedUrl(doc.storage_path, 3600).catch(() => null);
+      }
+      result.push({
+        id: doc.id,
+        tipo: doc.tipo,
+        fisico: doc.fisico,
+        signed_url,
+        source: 'projetos' as const,
+      });
+    }
 
     // Para alunos ITP: também carregar documentos do sistema de matrículas
     if (inscricao.aluno_id) {
@@ -395,6 +406,8 @@ export class ProjetosService {
       }
     }
 
+    const bytes = Buffer.byteLength(JSON.stringify(result), 'utf8');
+    this.logger.log(`findDocumentos(${inscricao_id}): ${result.length} docs, ${bytes} bytes`);
     return result;
   }
 
