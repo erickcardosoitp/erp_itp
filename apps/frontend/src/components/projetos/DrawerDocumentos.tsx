@@ -446,7 +446,7 @@ export default function DrawerDocumentos({ projetoId, inscricao, onClose, onRefr
 
                   {extraDocs.map((doc, i) => {
                     const busy = uploading[doc.tipo];
-                    const isPdf = doc.mimetype === 'application/pdf' || doc.url_arquivo?.toLowerCase().includes('.pdf');
+                    const isPdf = doc.mimetype === 'application/pdf' || doc.signed_url?.toLowerCase().includes('.pdf');
                     return (
                       <div key={doc.id} className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/40 p-3 flex items-center gap-3 mb-1.5">
                         <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0 bg-slate-100 dark:bg-slate-700 flex items-center justify-center">
