@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft, Plus, Users, ClipboardCheck, Printer, X, Edit3, Trash2,
   AlertTriangle, Search, Camera, Upload, CheckCircle2, AlertCircle,
-  Mail, MessageSquare, ChevronRight, ChevronUp, ChevronDown, RefreshCw, FileCheck, Download, Filter,
+  Mail, MessageSquare, ChevronRight, ChevronUp, ChevronDown, RefreshCw, FileCheck, Download, Filter, Clipboard,
 } from 'lucide-react';
 import api from '@/services/api';
 import { toast } from 'sonner';
@@ -36,7 +36,9 @@ interface Inscricao {
   data_nascimento?: string; nome_responsavel?: string;
   telefone_responsavel?: string; email_responsavel?: string;
   cep?: string; logradouro?: string; numero?: string; bairro?: string;
-  complemento?: string; cuidado_especial?: string;
+  complemento?: string; cidade?: string; estado_uf?: string;
+  cpf?: string; celular?: string; sexo?: string;
+  cuidado_especial?: string;
   detalhes_cuidado?: string; status: string;
   equipe_id?: string; equipe?: Equipe; aluno_id?: string;
   created_at?: string;
@@ -281,6 +283,9 @@ export default function ProjetoDashboard() {
           ...prev,
           logradouro: d.logradouro || prev.logradouro,
           complemento: d.complemento || prev.complemento,
+          bairro: d.bairro || prev.bairro,
+          cidade: d.localidade || prev.cidade,
+          estado_uf: d.uf || prev.estado_uf,
         }));
       }
     } catch {}
@@ -343,6 +348,45 @@ export default function ProjetoDashboard() {
       setUploadStatus(p => ({ ...p, [tipo]: 'error' }));
       toast.error(err?.response?.data?.message || `Erro ao enviar ${LABELS_DOCS[tipo]}`);
     } finally { setCameraDocWizard(null); }
+  };
+
+  async function compressImageBlob(blob: Blob): Promise<Blob> {
+    if (!blob.type.startsWith('image/')) return blob;
+    return new Promise((resolve) => {
+      const img = new Image();
+      const url = URL.createObjectURL(blob);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const MAX_W = 1920;
+        const scale = Math.min(1, MAX_W / img.width);
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob((b) => resolve(b ?? blob), 'image/jpeg', 0.85);
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); resolve(blob); };
+      img.src = url;
+    });
+  }
+
+  const colarDocWizard = async (tipo: string) => {
+    if (!inscricaoCriada) return;
+    try {
+      const items = await navigator.clipboard.read();
+      for (const item of items) {
+        const imageType = item.types.find(t => t.startsWith('image/'));
+        if (imageType) {
+          const raw = await item.getType(imageType);
+          const blob = await compressImageBlob(raw);
+          await uploadDocWizard(tipo as TipoDoc, blob);
+          return;
+        }
+      }
+      toast.error('Nenhuma imagem na área de transferência');
+    } catch {
+      toast.error('Permissão negada para acessar área de transferência');
+    }
   };
 
   const marcarDeclaracaoFisica = async () => {
@@ -1100,6 +1144,37 @@ export default function ProjetoDashboard() {
                   </InputField>
                 </div>
 
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <InputField label="Bairro">
+                    <input value={formInscricao.bairro ?? ''}
+                      onChange={e => setFormInscricao(p => ({ ...p, bairro: e.target.value }))}
+                      className={inputCls}/>
+                  </InputField>
+                  <InputField label="Cidade">
+                    <input value={formInscricao.cidade ?? ''}
+                      onChange={e => setFormInscricao(p => ({ ...p, cidade: e.target.value }))}
+                      className={inputCls}/>
+                  </InputField>
+                  <InputField label="UF">
+                    <input value={formInscricao.estado_uf ?? ''} maxLength={2}
+                      onChange={e => setFormInscricao(p => ({ ...p, estado_uf: e.target.value.toUpperCase() }))}
+                      placeholder="SP" className={inputCls}/>
+                  </InputField>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <InputField label="CPF">
+                    <input value={formInscricao.cpf ?? ''}
+                      onChange={e => setFormInscricao(p => ({ ...p, cpf: e.target.value }))}
+                      placeholder="000.000.000-00" className={inputCls}/>
+                  </InputField>
+                  <InputField label="Celular do aluno">
+                    <input value={formInscricao.celular ?? ''}
+                      onChange={e => setFormInscricao(p => ({ ...p, celular: e.target.value }))}
+                      placeholder="(11) 99999-9999" className={inputCls}/>
+                  </InputField>
+                </div>
+
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Equipe</label>
@@ -1192,6 +1267,10 @@ export default function ProjetoDashboard() {
                             <button onClick={() => { fileInputWizardTipo.current = tipo; fileInputWizardRef.current?.click(); }}
                               className="flex items-center gap-1 px-3 py-2 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-black hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">
                               <Upload size={14}/>
+                            </button>
+                            <button onClick={() => colarDocWizard(tipo)}
+                              className="flex items-center gap-1 px-3 py-2 rounded-lg bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 text-xs font-black hover:bg-amber-200 transition-colors">
+                              <Clipboard size={14}/>
                             </button>
                             {tipo === 'declaracao_escolar' && !isDone && (
                               <button onClick={marcarDeclaracaoFisica}

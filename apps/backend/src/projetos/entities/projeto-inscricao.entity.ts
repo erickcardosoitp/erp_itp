@@ -66,6 +66,24 @@ export class ProjetoInscricao {
   @Column({ type: 'varchar', nullable: true })
   complemento: string | null;
 
+  @Column({ type: 'varchar', nullable: true })
+  bairro: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  cidade: string | null;
+
+  @Column({ name: 'estado_uf', type: 'varchar', length: 2, nullable: true })
+  estado_uf: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  cpf: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  celular: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  sexo: string | null;
+
   @Column({ name: 'cuidado_especial', type: 'varchar', nullable: true })
   cuidado_especial: string | null;
 

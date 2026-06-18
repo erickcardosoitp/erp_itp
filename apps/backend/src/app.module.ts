@@ -162,7 +162,7 @@ export class AppModule implements OnModuleInit {
   private async runMigrations() {
     try {
       // ── Versão do schema — pula migrations se já rodaram neste banco ──────
-      const SCHEMA_VERSION = 15; // incrementar aqui ao adicionar novas migrations
+      const SCHEMA_VERSION = 16; // incrementar aqui ao adicionar novas migrations
       await this.dataSource.query(`
         CREATE TABLE IF NOT EXISTS _schema_version (
           id      INT PRIMARY KEY DEFAULT 1,
@@ -1473,6 +1473,18 @@ export class AppModule implements OnModuleInit {
           ADD COLUMN IF NOT EXISTS tamanho_bytes INTEGER
       `);
       this.logger.log('✅ tamanho_bytes adicionado em projeto_inscricao_documentos');
+
+      // v16: colunas extras em projeto_inscricoes
+      await this.dataSource.query(`
+        ALTER TABLE projeto_inscricoes
+          ADD COLUMN IF NOT EXISTS bairro VARCHAR,
+          ADD COLUMN IF NOT EXISTS cidade VARCHAR,
+          ADD COLUMN IF NOT EXISTS estado_uf VARCHAR(2),
+          ADD COLUMN IF NOT EXISTS cpf VARCHAR,
+          ADD COLUMN IF NOT EXISTS celular VARCHAR,
+          ADD COLUMN IF NOT EXISTS sexo VARCHAR
+      `);
+      this.logger.log('✅ colunas extras adicionadas em projeto_inscricoes');
 
       // ── Marca schema como atualizado — próximos cold starts pulam tudo ────
       await this.dataSource.query(`UPDATE _schema_version SET version = $1, ran_at = now() WHERE id = 1`, [SCHEMA_VERSION]);

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Upload, Trash2, Camera, CheckCircle2, AlertCircle, FileCheck, FileText, UserPlus, PlusCircle, Loader2, Clipboard, ScanLine } from 'lucide-react';
+import { X, Upload, Trash2, Camera, CheckCircle2, AlertCircle, FileCheck, FileText, UserPlus, PlusCircle, Loader2, Clipboard, ScanLine, ChevronDown } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import api from '@/services/api';
 import { toast } from 'sonner';
@@ -141,6 +141,7 @@ export default function DrawerDocumentos({ projetoId, inscricao, onClose, onRefr
   const [docs, setDocs]                   = useState<DocRecord[]>([]);
   const [loading, setLoading]             = useState(false);
   const [uploading, setUploading]         = useState<Record<string, boolean>>({});
+  const [showDados, setShowDados]         = useState(false);
   const [cameraDoc, setCameraDoc]         = useState<string | null>(null);
   const fileInputRef                      = useRef<HTMLInputElement>(null);
   const fileInputTipo                     = useRef('');
@@ -453,6 +454,50 @@ export default function DrawerDocumentos({ projetoId, inscricao, onClose, onRefr
                     ? <>Documentos pendentes: <strong>{inscricao.docs_pendentes.map(t => LABELS_DOCS[t]).join(', ')}</strong>. Acesse a ficha do aluno em Matrículas para enviar.</>
                     : 'Todos os documentos do aluno estão OK.'
                   }
+                </div>
+              )}
+
+              {/* Dados pessoais do externo — colapsável */}
+              {isExterno && (
+                <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden mb-1">
+                  <button
+                    onClick={() => setShowDados(p => !p)}
+                    className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Dados Pessoais</span>
+                    <ChevronDown size={14} className={`text-slate-400 transition-transform ${showDados ? 'rotate-180' : ''}`} />
+                  </button>
+                  {showDados && (
+                    <div className="px-4 py-3 space-y-1.5 bg-white dark:bg-slate-900/40">
+                      {[
+                        ['Nome', inscricao.nome_completo],
+                        ['CPF', inscricao.cpf],
+                        ['Nascimento', inscricao.data_nascimento],
+                        ['Sexo', inscricao.sexo],
+                        ['Celular', inscricao.celular || inscricao.telefone_responsavel],
+                        ['Email', inscricao.email],
+                        ['Endereço', [inscricao.logradouro, inscricao.numero].filter(Boolean).join(', ')],
+                        ['Bairro', inscricao.bairro],
+                        ['Cidade/UF', [inscricao.cidade, inscricao.estado_uf].filter(Boolean).join(' / ')],
+                        ['CEP', inscricao.cep],
+                        ['Responsável', inscricao.nome_responsavel],
+                        ['Tel. Resp.', inscricao.telefone_responsavel],
+                        ['Email Resp.', inscricao.email_responsavel],
+                        ['Parentesco', inscricao.grau_parentesco],
+                        ['CPF Resp.', inscricao.cpf_responsavel],
+                        ['Cuidado especial', inscricao.cuidado_especial],
+                        ['Detalhes', inscricao.detalhes_cuidado],
+                        ['Alergias', inscricao.possui_alergias],
+                        ['Medicamento', inscricao.uso_medicamento],
+                        ['Escolaridade', inscricao.escolaridade],
+                        ['Turno', inscricao.turno_escolar],
+                      ].filter(([, v]) => v).map(([label, value]) => (
+                        <div key={label as string} className="flex gap-2">
+                          <span className="text-[10px] text-slate-400 w-24 shrink-0">{label}</span>
+                          <span className="text-[10px] text-slate-700 dark:text-slate-300 font-medium break-all">{value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 
