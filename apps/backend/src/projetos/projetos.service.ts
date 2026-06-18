@@ -326,12 +326,16 @@ export class ProjetosService {
     );
     if (!inscricao) throw new NotFoundException('Inscrição não encontrada');
 
-    // Projeto docs — nunca selecionar url_arquivo inteiro; CASE evita trazer base64
+    // Projeto docs — CASE filtra base64 E 'fisico' para nunca chegar em Node.js nem em getSignedUrl
     const projDocs: Array<{ id: string; tipo: string; fisico: boolean; storage_path: string | null }> =
       await this.dataSource.query(
         `SELECT id, tipo,
            (url_arquivo = 'fisico') AS fisico,
-           CASE WHEN url_arquivo = 'fisico' THEN NULL ELSE url_arquivo END AS storage_path
+           CASE
+             WHEN url_arquivo LIKE 'data:%' THEN NULL
+             WHEN url_arquivo = 'fisico'    THEN NULL
+             ELSE url_arquivo
+           END AS storage_path
          FROM projeto_inscricao_documentos
          WHERE inscricao_id = $1
          LIMIT 50`,
@@ -341,7 +345,8 @@ export class ProjetosService {
     const result: any[] = [];
     for (const doc of projDocs) {
       let signed_url: string | null = null;
-      if (!doc.fisico && doc.storage_path) {
+      // Guarda dupla: CASE no SQL + checagem TS para evitar passar base64 ao getSignedUrl
+      if (!doc.fisico && doc.storage_path && !doc.storage_path.startsWith('data:')) {
         signed_url = await this.supabase.getSignedUrl(doc.storage_path, 3600).catch(() => null);
       }
       result.push({
