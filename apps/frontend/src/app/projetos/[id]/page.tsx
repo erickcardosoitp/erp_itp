@@ -451,7 +451,7 @@ export default function ProjetoDashboard() {
         case 'inscricao':  av = a.created_at || ''; bv = b.created_at || ''; break;
         case 'docs':       av = a.doc_status || ''; bv = b.doc_status || ''; break;
       }
-      const cmp = typeof av === 'number' ? av - bv : String(av).localeCompare(String(bv), 'pt-BR');
+      const cmp = typeof av === 'number' ? av - (bv as number) : String(av).localeCompare(String(bv), 'pt-BR');
       return sortDir === 'asc' ? cmp : -cmp;
     });
   })();
