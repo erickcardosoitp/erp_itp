@@ -1,10 +1,16 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Upload, Trash2, Camera, CheckCircle2, AlertCircle, FileCheck, FileText } from 'lucide-react';
+import { X, Upload, Trash2, Camera, CheckCircle2, AlertCircle, FileCheck, FileText, UserPlus, PlusCircle, Loader2 } from 'lucide-react';
+import dynamic from 'next/dynamic';
 import api from '@/services/api';
 import { toast } from 'sonner';
 import DocumentCamera from './DocumentCamera';
+
+const CadastroDiretoModal = dynamic(
+  () => import('@/app/matriculas/components/CadastroDiretoModal'),
+  { ssr: false },
+);
 
 function DocThumb({ signedUrl, fisico, hasDoc, obrig, mimetype }: {
   signedUrl?: string | null; fisico: boolean; hasDoc: boolean; obrig: boolean; mimetype?: string | null;
@@ -61,6 +67,33 @@ interface Inscricao {
   tipo: string;
   doc_status?: 'ok' | 'pendente';
   docs_pendentes?: string[];
+  // Dados para "Tornar Aluno"
+  cpf?: string;
+  data_nascimento?: string;
+  sexo?: string;
+  email?: string;
+  celular?: string;
+  telefone_alternativo?: string;
+  telefone_responsavel?: string;
+  logradouro?: string;
+  numero?: string;
+  complemento?: string;
+  bairro?: string;
+  cidade?: string;
+  estado_uf?: string;
+  cep?: string;
+  nome_responsavel?: string;
+  email_responsavel?: string;
+  grau_parentesco?: string;
+  cpf_responsavel?: string;
+  possui_alergias?: string;
+  cuidado_especial?: string;
+  detalhes_cuidado?: string;
+  uso_medicamento?: string;
+  escolaridade?: string;
+  turno_escolar?: string;
+  ultima_freq_escolar?: string;
+  auto_declaracao?: string;
 }
 
 interface Props {
@@ -77,6 +110,12 @@ export default function DrawerDocumentos({ projetoId, inscricao, onClose, onRefr
   const [cameraDoc, setCameraDoc]         = useState<string | null>(null);
   const fileInputRef                      = useRef<HTMLInputElement>(null);
   const fileInputTipo                     = useRef('');
+  const extraFileInputRef                 = useRef<HTMLInputElement>(null);
+
+  // Tornar Aluno
+  const [showTornarAluno, setShowTornarAluno]       = useState(false);
+  const [cursos, setCursos]                         = useState<any[]>([]);
+  const [carregandoCursos, setCarregandoCursos]     = useState(false);
 
   const carregarDocs = async () => {
     if (!inscricao) return;
@@ -92,21 +131,22 @@ export default function DrawerDocumentos({ projetoId, inscricao, onClose, onRefr
     if (inscricao) carregarDocs();
   }, [inscricao?.id]);
 
-  const uploadBlob = async (tipo: string, blob: Blob) => {
+  const uploadBlob = async (tipo: string, blob: Blob, filename?: string) => {
     if (!inscricao) return;
     setUploading(p => ({ ...p, [tipo]: true }));
     try {
+      const ext = blob.type.includes('pdf') ? 'pdf' : 'jpg';
       const fd = new FormData();
-      fd.append('arquivo', blob, `${tipo}.jpg`);
+      fd.append('arquivo', blob, filename ?? `${tipo}.${ext}`);
       fd.append('tipo', tipo);
       await api.post(`/projetos/${projetoId}/inscricoes/${inscricao.id}/documentos`, fd, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       await carregarDocs();
       onRefresh();
-      toast.success(`${LABELS_DOCS[tipo] ?? tipo} salvo`);
+      toast.success(`${LABELS_DOCS[tipo] ?? 'Documento'} salvo`);
     } catch (err: any) {
-      toast.error(err?.response?.data?.message || `Erro ao enviar ${LABELS_DOCS[tipo] ?? tipo}`);
+      toast.error(err?.response?.data?.message || `Erro ao enviar documento`);
     } finally {
       setUploading(p => ({ ...p, [tipo]: false }));
       setCameraDoc(null);
@@ -139,9 +179,78 @@ export default function DrawerDocumentos({ projetoId, inscricao, onClose, onRefr
     e.target.value = '';
   };
 
+  const handleExtraFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const tipo = `extra_${Date.now()}`;
+    await uploadBlob(tipo, new Blob([file], { type: file.type }), file.name);
+    e.target.value = '';
+  };
+
+  const abrirTornarAluno = async () => {
+    if (cursos.length === 0) {
+      setCarregandoCursos(true);
+      try {
+        const r = await api.get('/matriculas/cursos-ativos-academico');
+        setCursos(r.data);
+      } catch {
+        toast.error('Erro ao carregar cursos');
+      } finally {
+        setCarregandoCursos(false);
+      }
+    }
+    setShowTornarAluno(true);
+  };
+
+  const handleTornarAlunoSuccess = async (alunoId: string) => {
+    if (!inscricao) return;
+    try {
+      await api.patch(`/projetos/${projetoId}/inscricoes/${inscricao.id}`, {
+        aluno_id: alunoId,
+        tipo: 'regular',
+      });
+      toast.success('Inscrito convertido para aluno ITP!');
+      onRefresh();
+      setShowTornarAluno(false);
+      onClose();
+    } catch {
+      toast.error('Aluno criado. Vincule manualmente em Matrículas se necessário.');
+    }
+  };
+
   if (!inscricao) return null;
   const isExterno = inscricao.tipo === 'externo';
   const docMap = Object.fromEntries(docs.map(d => [d.tipo, d]));
+  const extraDocs = docs.filter(d => d.tipo.startsWith('extra'));
+
+  const initialDataParaAluno: Record<string, any> = {
+    nome_completo:       inscricao.nome_completo || '',
+    cpf:                 inscricao.cpf || '',
+    data_nascimento:     inscricao.data_nascimento || '',
+    sexo:                inscricao.sexo || '',
+    email:               inscricao.email || '',
+    celular:             inscricao.celular || inscricao.telefone_responsavel || '',
+    telefone_alternativo: inscricao.telefone_alternativo || '',
+    logradouro:          inscricao.logradouro || '',
+    numero:              inscricao.numero || '',
+    complemento:         inscricao.complemento || '',
+    bairro:              inscricao.bairro || '',
+    cidade:              inscricao.cidade || '',
+    estado_uf:           inscricao.estado_uf || '',
+    cep:                 inscricao.cep || '',
+    nome_responsavel:    inscricao.nome_responsavel || '',
+    email_responsavel:   inscricao.email_responsavel || '',
+    grau_parentesco:     inscricao.grau_parentesco || '',
+    cpf_responsavel:     inscricao.cpf_responsavel || '',
+    possui_alergias:     inscricao.possui_alergias || 'Não',
+    cuidado_especial:    inscricao.cuidado_especial || 'Não',
+    detalhes_cuidado:    inscricao.detalhes_cuidado || '',
+    uso_medicamento:     inscricao.uso_medicamento || 'Não',
+    escolaridade:        inscricao.escolaridade || '',
+    turno_escolar:       inscricao.turno_escolar || '',
+    ultima_freq_escolar: inscricao.ultima_freq_escolar || '',
+    auto_declaracao:     inscricao.auto_declaracao || '',
+  };
 
   return (
     <>
@@ -150,6 +259,16 @@ export default function DrawerDocumentos({ projetoId, inscricao, onClose, onRefr
           tipo={cameraDoc}
           onCapture={blob => uploadBlob(cameraDoc, blob)}
           onClose={() => setCameraDoc(null)}
+        />
+      )}
+
+      {showTornarAluno && (
+        <CadastroDiretoModal
+          cursosAcademico={cursos}
+          initialData={initialDataParaAluno}
+          onClose={() => setShowTornarAluno(false)}
+          onSuccess={() => {}}
+          onSuccessWithId={handleTornarAlunoSuccess}
         />
       )}
 
@@ -170,9 +289,24 @@ export default function DrawerDocumentos({ projetoId, inscricao, onClose, onRefr
               }
             </p>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 shrink-0">
-            <X size={16} />
-          </button>
+          <div className="flex items-center gap-1 shrink-0">
+            {isExterno && (
+              <button
+                onClick={abrirTornarAluno}
+                disabled={carregandoCursos}
+                title="Converter para aluno ITP"
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-[10px] font-black hover:bg-green-200 transition-colors disabled:opacity-60">
+                {carregandoCursos
+                  ? <Loader2 size={12} className="animate-spin" />
+                  : <UserPlus size={12} />
+                }
+                Tornar Aluno
+              </button>
+            )}
+            <button onClick={onClose} className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400">
+              <X size={16} />
+            </button>
+          </div>
         </div>
 
         {/* Content */}
@@ -190,6 +324,7 @@ export default function DrawerDocumentos({ projetoId, inscricao, onClose, onRefr
                 </div>
               )}
 
+              {/* Documentos obrigatórios/padrão */}
               {TIPOS_DOCS.map(tipo => {
                 const doc    = docMap[tipo];
                 const fisico = doc?.url_arquivo === 'fisico';
@@ -204,12 +339,10 @@ export default function DrawerDocumentos({ projetoId, inscricao, onClose, onRefr
                         : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/40'
                       }`}>
 
-                    {/* Thumbnail / icon */}
                     <div className="w-12 h-12 rounded-lg overflow-hidden shrink-0 bg-slate-100 dark:bg-slate-700 flex items-center justify-center">
                       <DocThumb signedUrl={doc?.signed_url} fisico={fisico} hasDoc={!!doc} obrig={obrig} mimetype={doc?.mimetype} />
                     </div>
 
-                    {/* Info */}
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">{LABELS_DOCS[tipo]}</p>
                       <p className={`text-[10px] font-bold mt-0.5
@@ -221,7 +354,6 @@ export default function DrawerDocumentos({ projetoId, inscricao, onClose, onRefr
                       </p>
                     </div>
 
-                    {/* Actions — only for external */}
                     {isExterno && (
                       <div className="flex items-center gap-1 shrink-0">
                         {busy && <span className="text-[10px] text-slate-400 animate-pulse px-2">Enviando...</span>}
@@ -260,11 +392,59 @@ export default function DrawerDocumentos({ projetoId, inscricao, onClose, onRefr
                   </div>
                 );
               })}
+
+              {/* Documentos extras */}
+              {isExterno && (
+                <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Documentos Extras</p>
+                    <button
+                      onClick={() => extraFileInputRef.current?.click()}
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors text-[10px] font-black">
+                      <PlusCircle size={11} /> Adicionar
+                    </button>
+                  </div>
+
+                  {extraDocs.length === 0 && (
+                    <p className="text-[10px] text-slate-400 text-center py-2">Nenhum documento extra</p>
+                  )}
+
+                  {extraDocs.map((doc, i) => {
+                    const busy = uploading[doc.tipo];
+                    const isPdf = doc.mimetype === 'application/pdf' || doc.url_arquivo?.toLowerCase().includes('.pdf');
+                    return (
+                      <div key={doc.id} className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/40 p-3 flex items-center gap-3 mb-1.5">
+                        <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0 bg-slate-100 dark:bg-slate-700 flex items-center justify-center">
+                          {isPdf
+                            ? <a href={doc.signed_url ?? '#'} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}>
+                                <FileText size={16} className="text-blue-600" />
+                              </a>
+                            : doc.signed_url
+                              ? <img src={doc.signed_url} alt="" className="w-full h-full object-cover" />
+                              : <CheckCircle2 size={16} className="text-green-500" />
+                          }
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate">Extra {i + 1}</p>
+                          <p className="text-[10px] text-green-600 font-bold">Enviado</p>
+                        </div>
+                        {!busy && (
+                          <button onClick={() => remover(doc.id)}
+                            className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-400 hover:text-red-500 transition-colors">
+                            <Trash2 size={13} />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </>
           )}
         </div>
 
-        <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
+        <input ref={fileInputRef} type="file" accept="image/*,.pdf,application/pdf" className="hidden" onChange={handleFile} />
+        <input ref={extraFileInputRef} type="file" accept="image/*,.pdf,application/pdf" className="hidden" onChange={handleExtraFile} />
       </div>
     </>
   );

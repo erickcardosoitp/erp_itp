@@ -10,6 +10,8 @@ interface Props {
   cursosAcademico: Curso[];
   onClose: () => void;
   onSuccess: () => void;
+  onSuccessWithId?: (alunoId: string) => void;
+  initialData?: Record<string, any>;
 }
 
 const OPCOES_CUIDADO_ESPECIAL = [
@@ -61,8 +63,8 @@ const FORM_VAZIO = {
   banco: '', agencia: '', agencia_digito: '', conta_corrente: '', conta_digito: '', tipo_conta: '',
 };
 
-export default function CadastroDiretoModal({ cursosAcademico, onClose, onSuccess }: Props) {
-  const [form, setForm] = useState<Record<string, any>>({ ...FORM_VAZIO });
+export default function CadastroDiretoModal({ cursosAcademico, onClose, onSuccess, onSuccessWithId, initialData }: Props) {
+  const [form, setForm] = useState<Record<string, any>>({ ...FORM_VAZIO, ...initialData });
   const [salvando, setSalvando] = useState(false);
   const [buscandoCep, setBuscandoCep] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -151,6 +153,7 @@ export default function CadastroDiretoModal({ cursosAcademico, onClose, onSucces
 
       const r = await api.post('/matriculas/aluno-direto', payload);
       const alunoId = r.data?.id;
+      if (alunoId && onSuccessWithId) onSuccessWithId(alunoId);
       if (alunoId) {
         const campos = ['rg','orgao_expedidor','uf_expedicao','genero','banco','agencia','agencia_digito','conta_corrente','conta_digito','tipo_conta'] as const;
         const comp: Record<string, any> = {};
