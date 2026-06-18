@@ -462,14 +462,11 @@ export default function DrawerDocumentos({ projetoId, inscricao, onClose, onRefr
             <p className="py-12 text-center text-slate-400 text-xs">Carregando...</p>
           ) : (
             <>
-              {!isExterno && (
+              {!isExterno && inscricao.docs_pendentes?.length ? (
                 <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-900/30 rounded-xl p-3 mb-2 text-xs text-blue-700 dark:text-blue-300">
-                  {inscricao.docs_pendentes?.length
-                    ? <>Documentos pendentes: <strong>{inscricao.docs_pendentes.map(t => LABELS_DOCS[t]).join(', ')}</strong>. Acesse a ficha do aluno em Matrículas para enviar.</>
-                    : 'Todos os documentos do aluno estão OK.'
-                  }
+                  Documentos pendentes: <strong>{inscricao.docs_pendentes.map(t => LABELS_DOCS[t]).join(', ')}</strong>. Envie diretamente aqui ou pela ficha em Matrículas.
                 </div>
-              )}
+              ) : null}
 
               {/* Dados pessoais do externo — colapsável */}
               {isExterno && (
@@ -559,7 +556,8 @@ export default function DrawerDocumentos({ projetoId, inscricao, onClose, onRefr
                       </p>
                     </div>
 
-                    {isExterno && (
+                    {/* Mostrar ações quando: doc ainda não existe OU foi enviado direto no projeto (não via matrículas) */}
+                    {(!doc || doc.source !== 'matriculas') && (
                       <div className="flex items-center gap-1 shrink-0">
                         {busy && <span className="text-[10px] text-slate-400 animate-pulse px-2">Enviando...</span>}
                         {!busy && (
@@ -608,7 +606,7 @@ export default function DrawerDocumentos({ projetoId, inscricao, onClose, onRefr
               })}
 
               {/* Documentos extras */}
-              {isExterno && (
+              {(
                 <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
                   <div className="flex items-center justify-between mb-2">
                     <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Documentos Extras</p>

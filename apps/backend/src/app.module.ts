@@ -48,6 +48,7 @@ import { AlunosModule } from './alunos/alunos.module';
 import { PublicoModule } from './publico/publico.module';
 import { ProjetosModule } from './projetos/projetos.module';
 import { CaptacaoModule } from './captacao/captacao.module';
+import { ResponsaveisModule } from './responsaveis/responsaveis.module';
 import { SupabaseModule } from './modules/supabase/supabase.module';
 
 @Module({
@@ -128,6 +129,7 @@ import { SupabaseModule } from './modules/supabase/supabase.module';
     PublicoModule,
     ProjetosModule,
     CaptacaoModule,
+    ResponsaveisModule,
     SupabaseModule,
   ],
   controllers: [
@@ -162,7 +164,7 @@ export class AppModule implements OnModuleInit {
   private async runMigrations() {
     try {
       // ── Versão do schema — pula migrations se já rodaram neste banco ──────
-      const SCHEMA_VERSION = 18; // incrementar aqui ao adicionar novas migrations
+      const SCHEMA_VERSION = 19; // incrementar aqui ao adicionar novas migrations
       await this.dataSource.query(`
         CREATE TABLE IF NOT EXISTS _schema_version (
           id      INT PRIMARY KEY DEFAULT 1,
@@ -1499,6 +1501,36 @@ export class AppModule implements OnModuleInit {
           ADD COLUMN IF NOT EXISTS email VARCHAR
       `);
       this.logger.log('✅ email adicionado em projeto_inscricoes');
+
+      // v19: tabela de responsáveis + FK em projeto_inscricoes
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS responsaveis (
+          id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          nome_completo    VARCHAR NOT NULL,
+          cpf              VARCHAR,
+          data_nascimento  DATE,
+          email            VARCHAR,
+          telefone         VARCHAR,
+          cep              VARCHAR,
+          logradouro       VARCHAR,
+          numero           VARCHAR,
+          complemento      VARCHAR,
+          bairro           VARCHAR,
+          cidade           VARCHAR,
+          estado_uf        VARCHAR(2),
+          pais             VARCHAR NOT NULL DEFAULT 'Brasil',
+          foto_url         VARCHAR,
+          eh_aluno         BOOLEAN NOT NULL DEFAULT FALSE,
+          ativo            BOOLEAN NOT NULL DEFAULT TRUE,
+          created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+          updated_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE projeto_inscricoes
+          ADD COLUMN IF NOT EXISTS responsavel_id UUID REFERENCES responsaveis(id)
+      `);
+      this.logger.log('✅ tabela responsaveis criada e responsavel_id adicionado em projeto_inscricoes');
 
       // ── Marca schema como atualizado — próximos cold starts pulam tudo ────
       await this.dataSource.query(`UPDATE _schema_version SET version = $1, ran_at = now() WHERE id = 1`, [SCHEMA_VERSION]);

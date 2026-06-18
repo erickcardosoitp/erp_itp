@@ -4,10 +4,12 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   GraduationCap, Users, BookOpen, LayoutGrid, History,
   ClipboardList, AlertCircle, RefreshCw, ClipboardCheck,
-  FileText, Activity, Shield, UserPlus,
+  FileText, Activity, Shield, UserPlus, Heart,
 } from 'lucide-react';
 import api from '@/services/api';
 import { useAuth } from '@/context/auth-context';
+import dynamic from 'next/dynamic';
+const ResponsaveisTab = dynamic(() => import('@/components/responsaveis/ResponsaveisTab'), { ssr: false });
 import { usePermissions } from '@/hooks/use-permissions';
 
 import { TabBtn } from './components/_shared';
@@ -117,6 +119,7 @@ export default function AcademicoPage() {
     { id: 'chamados',      label: 'Chamados',      Icon: AlertCircle },
     { id: 'monitoramento', label: 'Monitoramento', Icon: Activity },
     { id: 'controles',     label: 'Controles',     Icon: Shield },
+    { id: 'responsaveis',  label: 'Pais e Resp.',  Icon: Heart },
   ];
 
   return (
@@ -162,6 +165,7 @@ export default function AcademicoPage() {
           {activeTab === 'chamados'      && <ChamadosTab alunos={alunos} turmas={turmas} podeEditar={podeEditar} />}
           {activeTab === 'monitoramento' && <MonitoramentoTab />}
           {activeTab === 'controles'     && <ControlesTab podeEditar={podeEditar} />}
+          {activeTab === 'responsaveis'  && <ResponsaveisTab />}
         </main>
       </div>
     </div>

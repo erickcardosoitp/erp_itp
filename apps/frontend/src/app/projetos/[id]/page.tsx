@@ -158,7 +158,10 @@ export default function ProjetoDashboard() {
   // Modal inscrição — estado geral
   const [modalInscricao, setModalInscricao] = useState(false);
   const [modoExterno,    setModoExterno]    = useState(false);
-  const [formInscricao,  setFormInscricao]  = useState<Partial<Inscricao> & { email_responsavel?: string }>({});
+  const [formInscricao,  setFormInscricao]  = useState<Partial<Inscricao> & { email_responsavel?: string; responsavel_id?: string }>({});
+  const [responsaveisSug,   setResponsaveisSug]   = useState<any[]>([]);
+  const [buscandoResp,      setBuscandoResp]      = useState(false);
+  const [respSugOpen,       setRespSugOpen]       = useState(false);
   const [salvando,       setSalvando]       = useState(false);
   const [buscandoCEP,    setBuscandoCEP]    = useState(false);
 
@@ -1221,10 +1224,60 @@ export default function ProjetoDashboard() {
                 {/* ── Dados do Responsável ── */}
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 pt-1">Dados do Responsável</p>
 
+                {/* Autocomplete responsável */}
                 <InputField label="Nome do Responsável">
-                  <input value={formInscricao.nome_responsavel ?? ''}
-                    onChange={e => setFormInscricao(p => ({ ...p, nome_responsavel: e.target.value }))}
-                    className={inputCls}/>
+                  <div className="relative">
+                    <input value={formInscricao.nome_responsavel ?? ''}
+                      autoComplete="off"
+                      onChange={async e => {
+                        const v = e.target.value;
+                        setFormInscricao(p => ({ ...p, nome_responsavel: v, responsavel_id: undefined }));
+                        if (v.length < 2) { setResponsaveisSug([]); setRespSugOpen(false); return; }
+                        setBuscandoResp(true);
+                        setRespSugOpen(true);
+                        try {
+                          const r = await api.get('/responsaveis', { params: { search: v, limit: 6 } });
+                          setResponsaveisSug(r.data);
+                        } catch { /* silent */ }
+                        finally { setBuscandoResp(false); }
+                      }}
+                      onBlur={() => setTimeout(() => setRespSugOpen(false), 150)}
+                      onFocus={() => { if (responsaveisSug.length) setRespSugOpen(true); }}
+                      className={inputCls}
+                      placeholder="Digite para buscar no cadastro..."/>
+                    {formInscricao.responsavel_id && (
+                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] font-black text-purple-600 bg-purple-100 dark:bg-purple-900/30 px-1.5 py-0.5 rounded-full pointer-events-none">
+                        Cadastrado
+                      </span>
+                    )}
+                    {respSugOpen && (responsaveisSug.length > 0 || buscandoResp) && (
+                      <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg overflow-hidden">
+                        {buscandoResp && responsaveisSug.length === 0 && (
+                          <p className="px-3 py-2 text-xs text-slate-400">Buscando...</p>
+                        )}
+                        {responsaveisSug.map(resp => (
+                          <button key={resp.id} type="button"
+                            onMouseDown={() => {
+                              setFormInscricao(p => ({
+                                ...p,
+                                nome_responsavel:    resp.nome_completo,
+                                telefone_responsavel: resp.telefone ?? p.telefone_responsavel,
+                                email_responsavel:   resp.email ?? p.email_responsavel,
+                                responsavel_id:      resp.id,
+                              }));
+                              setRespSugOpen(false);
+                              setResponsaveisSug([]);
+                            }}
+                            className="w-full text-left px-3 py-2 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors border-b border-slate-50 dark:border-slate-700/50 last:border-0">
+                            <p className="text-xs font-bold text-slate-800 dark:text-slate-100">{resp.nome_completo}</p>
+                            <p className="text-[10px] text-slate-400">
+                              {[resp.telefone, resp.email].filter(Boolean).join(' · ')}
+                            </p>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </InputField>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
