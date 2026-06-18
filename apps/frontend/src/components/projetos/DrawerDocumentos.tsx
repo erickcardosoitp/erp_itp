@@ -142,9 +142,11 @@ export default function DrawerDocumentos({ projetoId, inscricao, onClose, onRefr
       await api.post(`/projetos/${projetoId}/inscricoes/${inscricao.id}/documentos`, fd, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      await carregarDocs();
-      onRefresh();
+      // Toast de sucesso imediato — não depende do reload
       toast.success(`${LABELS_DOCS[tipo] ?? 'Documento'} salvo`);
+      onRefresh();
+      // Reload em background — erro de rede/413 não vira falso toast de falha
+      carregarDocs().catch(() => {});
     } catch (err: any) {
       toast.error(err?.response?.data?.message || `Erro ao enviar documento`);
     } finally {

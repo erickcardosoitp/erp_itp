@@ -16,10 +16,10 @@ const UPLOAD_OPTIONS = {
   storage: memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (_req: any, file: any, cb: any) => {
-    if (['image/jpeg', 'image/png', 'image/heic', 'image/heif'].includes(file.mimetype)) {
+    if (['image/jpeg', 'image/png', 'image/heic', 'image/heif', 'application/pdf'].includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new BadRequestException('Use JPEG, PNG ou HEIC.'), false);
+      cb(new BadRequestException('Use JPEG, PNG, HEIC ou PDF.'), false);
     }
   },
 };

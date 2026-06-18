@@ -285,8 +285,9 @@ export class ProjetosService {
 
   // ── Documentos ────────────────────────────────────────────────────────────
 
-  private docPath(projeto_id: string, inscricao_id: string, tipo: string) {
-    return `projetos/${projeto_id}/inscricoes/${inscricao_id}/${tipo}.jpg`;
+  private docPath(projeto_id: string, inscricao_id: string, tipo: string, mimetype?: string) {
+    const ext = mimetype === 'application/pdf' ? 'pdf' : 'jpg';
+    return `projetos/${projeto_id}/inscricoes/${inscricao_id}/${tipo}.${ext}`;
   }
 
   async uploadDocumento(
@@ -295,14 +296,15 @@ export class ProjetosService {
     tipo: string,
     file: Express.Multer.File,
   ) {
-    if (!(TIPOS_DOCUMENTO_PROJETO as readonly string[]).includes(tipo)) {
+    const tipoValido = (TIPOS_DOCUMENTO_PROJETO as readonly string[]).includes(tipo) || tipo.startsWith('extra');
+    if (!tipoValido) {
       throw new BadRequestException(`Tipo inválido: ${tipo}`);
     }
 
     const inscricao = await this.inscricoesRepo.findOne({ where: { id: inscricao_id, projeto_id } });
     if (!inscricao) throw new NotFoundException('Inscrição não encontrada');
 
-    const path = this.docPath(projeto_id, inscricao_id, tipo);
+    const path = this.docPath(projeto_id, inscricao_id, tipo, file.mimetype);
     await this.supabase.upload(file.buffer, path, file.mimetype);
 
     // Upsert — mesmo tipo substitui
