@@ -4,7 +4,6 @@ import React from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
-import Cookies from 'js-cookie';
 import {
   LayoutDashboard, UserPlus,
   LogOut, Settings, PanelLeftClose, PanelLeftOpen,
@@ -84,8 +83,6 @@ export default function Sidebar({ isCollapsed, setIsCollapsed, mobileOpen, setMo
     } catch (error) {
       console.error('Erro ao deslogar:', error);
     } finally {
-      // Sempre limpa o cookie client-side e redireciona, independente da resposta da API
-      Cookies.remove('itp_token', { path: '/' });
       setIsLoggingOut(false);
       window.location.href = '/login';
     }

@@ -1,8 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, Suspense } from 'react';
-import Cookies from 'js-cookie';
-import { 
+import {
   Lock, User, Loader2, 
   AlertCircle, ShieldCheck, Eye, EyeOff,
   ChevronRight, Sparkles
@@ -63,12 +62,7 @@ function LoginForm() {
         localStorage.setItem('usuario', JSON.stringify(infoUsuario));
       }
 
-      if (data.access_token) {
-        // Se "lembrar", cookie de 30 dias; caso contrário, 8h (session cookie)
-        const expires = lembrar ? 30 : 1 / 3;
-        Cookies.set('itp_token', data.access_token, { expires, path: '/' });
-      }
-
+      // Cookie httpOnly já foi definido pelo backend via Set-Cookie (credentials: 'include')
       // Se o usuário precisa trocar a senha, redireciona antes do dashboard
       if (data.deve_trocar_senha) {
         setTimeout(() => { window.location.href = '/trocar-senha'; }, 100);

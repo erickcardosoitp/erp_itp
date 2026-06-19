@@ -26,7 +26,7 @@ export class AuthController {
       const cookieOpts: Record<string, any> = {
         httpOnly: true,
         secure: isProd,
-        sameSite: 'lax',
+        sameSite: 'strict',
         path: '/',
         maxAge: lembrar
           ? 30 * 24 * 60 * 60 * 1000  // 30 dias em ms
@@ -54,8 +54,13 @@ export class AuthController {
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   async logout(@Res({ passthrough: true }) res: Response) {
-    // ✅ Mantendo a consistência no nome ao remover
-    res.clearCookie('itp_token');
+    const isProd = process.env.NODE_ENV === 'production';
+    res.clearCookie('itp_token', {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: 'strict',
+      path: '/',
+    });
     return { message: 'Sessão encerrada' };
   }
 
@@ -101,9 +106,9 @@ export class AuthController {
     @Headers('x-cron-secret') cronSecret: string,
     @Headers('authorization') authHeader: string,
   ) {
-    const expected = process.env.CRON_SECRET || 'itp-cron-2026';
+    const expected = process.env.CRON_SECRET;
     const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : '';
-    if (cronSecret !== expected && bearerToken !== expected) {
+    if (!expected || (cronSecret !== expected && bearerToken !== expected)) {
       throw new UnauthorizedException('Cron secret inválido.');
     }
     return this.authService.enviarLembretesSenhaFraca();

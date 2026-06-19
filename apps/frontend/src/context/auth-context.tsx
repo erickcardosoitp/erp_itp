@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import Cookies from 'js-cookie';
+
 
 export interface GrupoPermissoes {
   modulos_visiveis?: Record<string, boolean>;
@@ -42,19 +42,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const fetchUser = async () => {
       try {
-        const token = Cookies.get('itp_token');
-
-        // Monta os headers: se o cookie for legível pelo js-cookie, usa Bearer.
-        // Caso contrário, o browser enviará automaticamente o cookie httpOnly
-        // graças a credentials: 'include'.
-        const headers: Record<string, string> = {};
-        if (token) {
-          headers['Authorization'] = `Bearer ${token.replace(/"/g, '')}`;
-        }
-
         const response = await fetch(
           `${process.env.NEXT_PUBLIC_API_BASE_URL}/usuarios/perfil`,
-          { method: 'GET', credentials: 'include', headers }
+          { method: 'GET', credentials: 'include' }
         );
 
         if (response.ok) {
