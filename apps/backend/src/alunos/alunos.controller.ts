@@ -1,6 +1,9 @@
 import {
   Controller, Get, Post, Patch, Param, Body, ParseUUIDPipe, Req,
+  UseInterceptors, UploadedFile, BadRequestException,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '../auth/constants/roles.enum';
 import { AlunosService } from './alunos.service';
@@ -54,6 +57,22 @@ export class AlunosController {
     @Body() dto: EnviarDocumentoDto,
   ) {
     return this.svc.enviarDocumento(id, dto);
+  }
+
+  @Post(':id/documentos/upload')
+  @UseInterceptors(FileInterceptor('arquivo', {
+    storage: memoryStorage(),
+    limits: { fileSize: 8 * 1024 * 1024 },
+  }))
+  async uploadDocumentoArquivo(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body('tipo') tipo: string,
+    @Body('nome_extra') nomeExtra: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!file) throw new BadRequestException('Nenhum arquivo enviado.');
+    if (!tipo) throw new BadRequestException('Tipo de documento obrigatório.');
+    return this.svc.uploadArquivoDossie(id, tipo, file, nomeExtra);
   }
 
   // ── Validação (admin) ─────────────────────────────────────────────

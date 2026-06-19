@@ -160,14 +160,41 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
   const turmasAtivas = turmasDoAluno.filter((t: any) => t.status === 'ativo' && t.turma_id);
   const mostrarComplemento = complementoCarregado && isCursoEspecial(turmasDoAluno, formData.cursos_desejados);
 
+  const _alunoId = fichaData?.aluno?.id ?? null;
+
   const recarregarDocumentos = useCallback(() => {
-    if (!formData.id) return;
     setLoadingDocs(true);
-    api.get(`/matriculas/inscricao/${formData.id}/documentos`)
-      .then(res => { setUploadedDocs(res.data?.documentos ?? []); setObrigatoriosPendentes(res.data?.obrigatorios_pendentes ?? []); setTiposEnviados(res.data?.tipos_enviados ?? []); setDocsCompleto(res.data?.completo ?? false); })
-      .catch(() => { setUploadedDocs([]); setObrigatoriosPendentes([]); setTiposEnviados([]); setDocsCompleto(false); })
-      .finally(() => setLoadingDocs(false));
-  }, [formData.id]);
+    if (formData.id) {
+      api.get(`/matriculas/inscricao/${formData.id}/documentos`)
+        .then(res => { setUploadedDocs(res.data?.documentos ?? []); setObrigatoriosPendentes(res.data?.obrigatorios_pendentes ?? []); setTiposEnviados(res.data?.tipos_enviados ?? []); setDocsCompleto(res.data?.completo ?? false); })
+        .catch(() => { setUploadedDocs([]); setObrigatoriosPendentes([]); setTiposEnviados([]); setDocsCompleto(false); })
+        .finally(() => setLoadingDocs(false));
+    } else if (_alunoId) {
+      api.get(`/alunos/${_alunoId}/documentos`)
+        .then(res => {
+          const docs = (res.data ?? [])
+            .filter((d: any) => d.url_drive)
+            .map((d: any) => ({ id: d.id, tipo: d.tipo, nome_extra: null, url_arquivo: d.url_drive, mimetype: null, tamanho_bytes: null, createdAt: d.createdAt, source: 'alunos' }));
+          setUploadedDocs(docs);
+          setObrigatoriosPendentes([]);
+          setTiposEnviados(docs.map((d: any) => d.tipo));
+          setDocsCompleto(false);
+        })
+        .catch(() => { setUploadedDocs([]); setObrigatoriosPendentes([]); setTiposEnviados([]); setDocsCompleto(false); })
+        .finally(() => setLoadingDocs(false));
+    } else {
+      setLoadingDocs(false);
+    }
+  }, [formData.id, _alunoId]);
+
+  const uploadDocFd = useCallback(async (fd: FormData) => {
+    if (formData.id) {
+      return api.post(`/matriculas/inscricao/${formData.id}/documentos/upload`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+    } else if (_alunoId) {
+      return api.post(`/alunos/${_alunoId}/documentos/upload`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+    }
+    throw new Error('Sem ID de inscrição ou aluno para upload.');
+  }, [formData.id, _alunoId]);
 
   useEffect(() => { if (abaAtiva === 'documentos') recarregarDocumentos(); }, [abaAtiva, recarregarDocumentos]);
 
@@ -885,7 +912,7 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
                       fd.append('arquivo', compressed, `${tipo}.jpg`);
                       fd.append('tipo', tipo);
                       if (tipo === 'extra' && uploadNomeExtra.trim()) fd.append('nome_extra', uploadNomeExtra.trim());
-                      await api.post(`/matriculas/inscricao/${formData.id}/documentos/upload`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+                      await uploadDocFd(fd);
                       setUploadNomeExtra(''); recarregarDocumentos();
                       toast.success('Documento enviado');
                     } catch (err: any) { toast.error(err?.response?.data?.message || 'Erro ao enviar documento'); }
@@ -932,7 +959,7 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
                           fd.append('arquivo', blob, file.name);
                           fd.append('tipo', uploadTipo);
                           if (uploadTipo === 'extra' && uploadNomeExtra.trim()) fd.append('nome_extra', uploadNomeExtra.trim());
-                          await api.post(`/matriculas/inscricao/${formData.id}/documentos/upload`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+                          await uploadDocFd(fd);
                           e.target.value = ''; setUploadNomeExtra(''); recarregarDocumentos();
                           toast.success('Documento enviado');
                         } catch (err: any) { toast.error(err?.response?.data?.message || 'Erro ao enviar documento'); }
@@ -957,7 +984,7 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
                               fd.append('arquivo', blob, `${uploadTipo}.jpg`);
                               fd.append('tipo', uploadTipo);
                               if (uploadTipo === 'extra' && uploadNomeExtra.trim()) fd.append('nome_extra', uploadNomeExtra.trim());
-                              await api.post(`/matriculas/inscricao/${formData.id}/documentos/upload`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+                              await uploadDocFd(fd);
                               setUploadNomeExtra(''); recarregarDocumentos();
                               toast.success('Documento enviado');
                             } finally { setUploadingDoc(false); }
@@ -992,7 +1019,7 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
                           fd.append('arquivo', blob, 'digitalizado.jpg');
                           fd.append('tipo', uploadTipo);
                           if (uploadTipo === 'extra' && uploadNomeExtra.trim()) fd.append('nome_extra', uploadNomeExtra.trim());
-                          await api.post(`/matriculas/inscricao/${formData.id}/documentos/upload`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+                          await uploadDocFd(fd);
                           setUploadNomeExtra(''); recarregarDocumentos();
                           toast.success('Documento digitalizado e enviado');
                         } finally { setUploadingDoc(false); }

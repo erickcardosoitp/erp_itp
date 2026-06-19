@@ -7,6 +7,7 @@ import { AlunoComplemento } from './entities/aluno-complemento.entity';
 import { DocumentoValidacao, StatusDocumento, TipoDocumentoValidacao, LABELS_DOCUMENTO } from './entities/documento-validacao.entity';
 import { UpsertComplementoDto } from './dto/upsert-complemento.dto';
 import { EnviarDocumentoDto, ValidarDocumentoDto, InvalidarDocumentoDto } from './dto/enviar-documento.dto';
+import { SupabaseService } from '../modules/supabase/supabase.service';
 
 @Injectable()
 export class AlunosService {
@@ -19,6 +20,8 @@ export class AlunosService {
 
     @InjectRepository(DocumentoValidacao)
     private readonly docRepo: Repository<DocumentoValidacao>,
+
+    private readonly supabase: SupabaseService,
   ) {}
 
   // ── Helpers ───────────────────────────────────────────────────────
@@ -96,6 +99,46 @@ export class AlunosService {
     doc.motivo_pendencia = null;
 
     return this.docRepo.save(doc);
+  }
+
+  async uploadArquivoDossie(
+    alunoId: string,
+    tipo: string,
+    file: Express.Multer.File,
+    nomeExtra?: string,
+  ) {
+    await this.assertAluno(alunoId);
+
+    const MIMETYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+    if (!MIMETYPES.includes(file.mimetype)) throw new BadRequestException('Tipo de arquivo não permitido.');
+    if (file.size > 8 * 1024 * 1024) throw new BadRequestException('Arquivo excede 8 MB.');
+
+    const ext = file.mimetype === 'application/pdf' ? 'pdf' : file.mimetype.includes('png') ? 'png' : 'jpg';
+    const path = `alunos/${alunoId}/${tipo}_${Date.now()}.${ext}`;
+    const url = await this.supabase.upload(file.buffer, path, file.mimetype);
+
+    let doc = await this.docRepo.findOne({ where: { aluno_id: alunoId, tipo } });
+    if (!doc) {
+      doc = this.docRepo.create({ aluno_id: alunoId, tipo, status: StatusDocumento.AGUARDANDO });
+    } else if (doc.status === StatusDocumento.APROVADO) {
+      throw new BadRequestException('Documento aprovado não pode ser substituído.');
+    }
+    doc.url_drive = url;
+    doc.status = StatusDocumento.AGUARDANDO;
+    doc.motivo_pendencia = null;
+    await this.docRepo.save(doc);
+
+    // Retorna formato compatível com DocEnviado do DossieCandidato
+    return {
+      id: doc.id,
+      tipo,
+      nome_extra: nomeExtra ?? null,
+      url_arquivo: url,
+      mimetype: file.mimetype,
+      tamanho_bytes: file.size,
+      createdAt: doc.createdAt,
+      source: 'alunos',
+    };
   }
 
   async validarDocumento(
