@@ -1558,16 +1558,17 @@ export class AcademicoService {
       [funcRows, profRows] = await Promise.all([
         this.dataSource.query(
           // Also fetch usuario_id so we can match turmas assigned to the linked user account
+          // lpad normaliza CPFs armazenados sem zero à esquerda (ex: 10 dígitos → 11)
           `SELECT id::text, nome, COALESCE(usuario_id::text, '') AS usuario_id
            FROM funcionarios
-           WHERE replace(replace(cpf,'.',''),'-','') = $1
+           WHERE lpad(replace(replace(cpf,'.',''),'-',''), 11, '0') = $1
              AND (ativo IS NOT FALSE)
            LIMIT 1`,
           [cpfLimpo],
         ),
         this.dataSource.query(
           `SELECT id::text, nome FROM professores
-           WHERE replace(replace(cpf,'.',''),'-','') = $1 LIMIT 1`,
+           WHERE lpad(replace(replace(cpf,'.',''),'-',''), 11, '0') = $1 LIMIT 1`,
           [cpfLimpo],
         ),
       ]);
