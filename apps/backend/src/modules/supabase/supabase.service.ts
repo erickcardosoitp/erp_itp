@@ -83,4 +83,15 @@ export class SupabaseService {
       this.logger.warn(`Supabase delete warning: ${error.message}`);
     }
   }
+
+  /** Checagem de conectividade — usada pelo cron de monitoramento. */
+  async checkHealth(): Promise<{ ok: boolean; error?: string }> {
+    try {
+      const { error } = await this.client.storage.from(this.bucket).list('', { limit: 1 });
+      if (error) return { ok: false, error: error.message };
+      return { ok: true };
+    } catch (e: any) {
+      return { ok: false, error: e?.message ?? 'Erro desconhecido' };
+    }
+  }
 }

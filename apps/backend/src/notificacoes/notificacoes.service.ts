@@ -59,6 +59,11 @@ export class NotificacoesService {
     return this.repo.save(n);
   }
 
+  /** Busca alerta de sistema não-lido por tipo/referência — usado para evitar alertas duplicados. */
+  async buscarNaoLida(tipo: string, referencia_tipo: string): Promise<Notificacao | null> {
+    return this.repo.findOne({ where: { tipo, referencia_tipo, lida: false } });
+  }
+
   async marcarTodasLidas() {
     await this.repo.update({ lida: false }, { lida: true });
     return { ok: true, mensagem: 'Todas as notificações foram marcadas como lidas.' };
