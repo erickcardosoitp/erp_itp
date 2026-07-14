@@ -300,7 +300,7 @@ export default function DrawerDocumentos({ projetoId, inscricao, onClose, onRefr
         up = await waitForAgent(12000);
         toast.dismiss('scan-init');
         if (!up) {
-          toast.error('Scanner agent não iniciou. Execute instalar_scanner.bat uma vez para configurar.');
+          toast.error('Scanner agent não instalado. Baixe em "Instalar Scanner" na página de Projetos.');
           return;
         }
       }
@@ -318,7 +318,7 @@ export default function DrawerDocumentos({ projetoId, inscricao, onClose, onRefr
       await uploadBlob(tipo, compressed, 'digitalizado.jpg');
     } catch (e: any) {
       toast.error(e.message?.includes('fetch') || e.message?.includes('Failed')
-        ? 'Execute instalar_scanner.bat para configurar o scanner.'
+        ? 'Scanner agent não instalado. Baixe em "Instalar Scanner" na página de Projetos.'
         : (e.message || 'Erro ao digitalizar'));
     }
   };

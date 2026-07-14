@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, FolderOpen, Calendar, Edit3, Trash2, X } from 'lucide-react';
+import { Plus, FolderOpen, Calendar, Edit3, Trash2, X, ScanLine } from 'lucide-react';
 import api from '@/services/api';
 import { toast } from 'sonner';
 
@@ -86,10 +86,17 @@ export default function ProjetosPage() {
             <h1 className="text-2xl font-black text-slate-800 dark:text-slate-100 tracking-tight">Projetos</h1>
             <p className="text-xs text-slate-400 mt-0.5">Colônia de Férias e projetos sazonais</p>
           </div>
-          <button onClick={() => abrir()}
-            className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase transition-colors">
-            <Plus size={14}/> Novo Projeto
-          </button>
+          <div className="flex items-center gap-2">
+            <a href="/downloads/ITP-Scanner-Agent.exe" download
+              title="Baixa o agente que conecta o scanner físico ao sistema — instala e inicia sozinho, sem precisar do software da impressora"
+              className="flex items-center gap-2 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 px-4 py-2.5 rounded-xl font-black text-xs uppercase transition-colors">
+              <ScanLine size={14}/> Instalar Scanner
+            </a>
+            <button onClick={() => abrir()}
+              className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase transition-colors">
+              <Plus size={14}/> Novo Projeto
+            </button>
+          </div>
         </div>
 
         {loading && <div className="text-center py-16 text-slate-400 text-sm">Carregando...</div>}
