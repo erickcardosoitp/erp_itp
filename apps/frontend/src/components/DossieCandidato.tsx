@@ -1013,7 +1013,15 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
                       const waitForAgent = async (maxMs = 12000): Promise<boolean> => { const t0 = Date.now(); while (Date.now() - t0 < maxMs) { if (await agentUp()) return true; await new Promise(r => setTimeout(r, 1500)); } return false; };
                       try {
                         let up = await agentUp();
-                        if (!up) { launchAgent(); toast.loading('Iniciando scanner...', { id: 'scan-init' }); up = await waitForAgent(12000); toast.dismiss('scan-init'); if (!up) { toast.error('Scanner agent não instalado. Baixe em "Instalar Scanner" na página de Projetos.'); return; } }
+                        if (!up) {
+                          launchAgent(); toast.loading('Iniciando scanner...', { id: 'scan-init' }); up = await waitForAgent(12000); toast.dismiss('scan-init');
+                          if (!up) {
+                            toast.error('Scanner agent não instalado.', {
+                              action: { label: 'Baixar', onClick: () => { window.location.href = '/downloads/ITP-Scanner-Agent.exe'; } },
+                            });
+                            return;
+                          }
+                        }
                         const res = await fetch(`${AGENT}/scan`);
                         if (!res.ok) { const err = await res.json().catch(() => ({})); if (err.error === 'cancelled') return; throw new Error(err.error || 'Erro ao digitalizar'); }
                         const { data } = await res.json();
@@ -1029,7 +1037,15 @@ export default function DossieCandidato({ aluno, onClose, onSuccess, fichaData, 
                           setUploadNomeExtra(''); recarregarDocumentos();
                           toast.success('Documento digitalizado e enviado');
                         } finally { setUploadingDoc(false); }
-                      } catch (e: any) { toast.error(e.message?.includes('fetch') ? 'Scanner agent não instalado. Baixe em "Instalar Scanner" na página de Projetos.' : (e.message || 'Erro ao digitalizar')); }
+                      } catch (e: any) {
+                        if (e.message?.includes('fetch')) {
+                          toast.error('Scanner agent não instalado.', {
+                            action: { label: 'Baixar', onClick: () => { window.location.href = '/downloads/ITP-Scanner-Agent.exe'; } },
+                          });
+                        } else {
+                          toast.error(e.message || 'Erro ao digitalizar');
+                        }
+                      }
                     }}
                     className="flex items-center gap-1.5 flex-1 min-w-[80px] justify-center py-2.5 rounded-xl text-xs font-black transition-colors bg-teal-100 dark:bg-teal-900/30 text-teal-600 hover:bg-teal-200 disabled:opacity-40">
                     <ScanLine size={13}/> Scan

@@ -300,7 +300,9 @@ export default function DrawerDocumentos({ projetoId, inscricao, onClose, onRefr
         up = await waitForAgent(12000);
         toast.dismiss('scan-init');
         if (!up) {
-          toast.error('Scanner agent não instalado. Baixe em "Instalar Scanner" na página de Projetos.');
+          toast.error('Scanner agent não instalado.', {
+            action: { label: 'Baixar', onClick: () => { window.location.href = '/downloads/ITP-Scanner-Agent.exe'; } },
+          });
           return;
         }
       }
@@ -317,9 +319,13 @@ export default function DrawerDocumentos({ projetoId, inscricao, onClose, onRefr
       const compressed = await compressImageBlob(blob);
       await uploadBlob(tipo, compressed, 'digitalizado.jpg');
     } catch (e: any) {
-      toast.error(e.message?.includes('fetch') || e.message?.includes('Failed')
-        ? 'Scanner agent não instalado. Baixe em "Instalar Scanner" na página de Projetos.'
-        : (e.message || 'Erro ao digitalizar'));
+      if (e.message?.includes('fetch') || e.message?.includes('Failed')) {
+        toast.error('Scanner agent não instalado.', {
+          action: { label: 'Baixar', onClick: () => { window.location.href = '/downloads/ITP-Scanner-Agent.exe'; } },
+        });
+      } else {
+        toast.error(e.message || 'Erro ao digitalizar');
+      }
     }
   };
 

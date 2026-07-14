@@ -36,6 +36,7 @@ export default function ProjetosPage() {
   const [modal, setModal] = useState<{ open: boolean; editando: Projeto | null }>({ open: false, editando: null });
   const [form, setForm] = useState<Partial<Projeto>>({});
   const [salvando, setSalvando] = useState(false);
+  const [showInstalarScanner, setShowInstalarScanner] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -87,13 +88,13 @@ export default function ProjetosPage() {
             <p className="text-xs text-slate-400 mt-0.5">Colônia de Férias e projetos sazonais</p>
           </div>
           <div className="flex items-center gap-2">
-            <a href="/downloads/ITP-Scanner-Agent.exe" download
+            <button onClick={() => setShowInstalarScanner(true)}
               title="Baixa o agente que conecta o scanner físico ao sistema — instala e inicia sozinho, sem precisar do software da impressora"
-              className="flex items-center gap-2 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 px-4 py-2.5 rounded-xl font-black text-xs uppercase transition-colors">
+              className="flex items-center gap-2 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 px-4 py-3 rounded-xl font-black text-xs uppercase transition-colors">
               <ScanLine size={14}/> Instalar Scanner
-            </a>
+            </button>
             <button onClick={() => abrir()}
-              className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase transition-colors">
+              className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-4 py-3 rounded-xl font-black text-xs uppercase transition-colors">
               <Plus size={14}/> Novo Projeto
             </button>
           </div>
@@ -175,6 +176,37 @@ export default function ProjetosPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Instalar Scanner */}
+      {showInstalarScanner && (
+        <div className="fixed inset-0 z-[300] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden">
+            <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 dark:border-slate-800">
+              <h3 className="font-black text-sm uppercase tracking-tight text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                <ScanLine size={16} className="text-purple-600"/> Instalar Scanner
+              </h3>
+              <button onClick={() => setShowInstalarScanner(false)} className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400">
+                <X size={16}/>
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Instala o agente que conecta o scanner físico ao sistema — não precisa do software da impressora.
+              </p>
+              <ol className="text-xs text-slate-600 dark:text-slate-300 space-y-2 list-decimal pl-4">
+                <li>O download começa automaticamente ao clicar em "Baixar agora" (arquivo de 14 MB)</li>
+                <li>Se o Windows mostrar um aviso azul de segurança, clique em <strong>"Mais informações"</strong> e depois <strong>"Executar assim mesmo"</strong></li>
+                <li>Uma janela vai confirmar quando a instalação terminar — pode fechá-la e usar o sistema normalmente</li>
+              </ol>
+              <a href="/downloads/ITP-Scanner-Agent.exe" download
+                onClick={() => setShowInstalarScanner(false)}
+                className="flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl py-3 text-xs font-black uppercase transition-colors">
+                <ScanLine size={14}/> Baixar agora
+              </a>
+            </div>
           </div>
         </div>
       )}
