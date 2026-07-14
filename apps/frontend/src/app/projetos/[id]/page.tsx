@@ -566,7 +566,7 @@ export default function ProjetoDashboard() {
           </div>
           <button onClick={() => router.push(`/projetos/${id}/pulseiras`)}
             className="flex items-center gap-1.5 bg-white/15 hover:bg-white/25 border border-white/20 text-white px-3 py-2 rounded-xl text-xs font-black uppercase transition-all">
-            <Printer size={13}/> Pulseiras
+            <Printer size={13}/> Crachás
           </button>
         </div>
         <div className="grid grid-cols-3 gap-3 mt-5">

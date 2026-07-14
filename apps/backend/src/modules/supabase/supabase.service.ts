@@ -56,7 +56,8 @@ export class SupabaseService {
     }
     try {
       return await this.getSignedUrl(urlOrPath, expiresIn);
-    } catch {
+    } catch (e: any) {
+      this.logger.error(`resolveUrl falhou para "${urlOrPath}": ${e?.message}`);
       return null;
     }
   }

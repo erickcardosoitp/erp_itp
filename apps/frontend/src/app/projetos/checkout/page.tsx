@@ -95,7 +95,7 @@ export default function CheckoutPage() {
           </div>
           <div>
             <h1 className="text-white font-black text-3xl tracking-tight">Check-out</h1>
-            <p className="text-white/50 text-sm mt-2">Passe o leitor na pulseira do participante</p>
+            <p className="text-white/50 text-sm mt-2">Passe o leitor no crachá do participante</p>
           </div>
           <div className="text-white/30 text-xs font-mono">
             {new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
