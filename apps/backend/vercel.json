@@ -64,7 +64,7 @@
     },
     {
       "path": "/api/supabase/cron/health-check",
-      "schedule": "0 * * * *"
+      "schedule": "30 8 * * *"
     }
   ]
 }

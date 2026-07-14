@@ -1,3 +1,4 @@
+import '../src/common/suppress-known-warnings';
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../src/app.module';
