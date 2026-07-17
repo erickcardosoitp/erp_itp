@@ -347,11 +347,9 @@ export class AcademicoService {
     try {
       // Retorna apenas boolean (tem foto?) — evita transferir base64 ~150KB por aluno
       const fotoRows = await this.dataSource.query(
-        `SELECT DISTINCT a.id::text AS aluno_id, true AS tem_foto
-         FROM alunos a
-         JOIN inscricoes i ON i.aluno_id::text = a.id::text
-         JOIN documentos_inscricao d ON d.inscricao_id = i.id AND d.tipo = 'foto_aluno'
-         WHERE a.id::text IN (${alunoIds})`,
+        `SELECT DISTINCT v.aluno_id AS aluno_id, true AS tem_foto
+         FROM documentos_aluno_unificado v
+         WHERE v.tipo = 'foto_aluno' AND v.aluno_id IN (${alunoIds})`,
       );
       fotoRows.forEach((r: any) => { fotoMap[r.aluno_id] = true; });
     } catch (e: any) {
@@ -426,10 +424,10 @@ export class AcademicoService {
     try {
       // Tenta via inscricao_id direto ou via inscricoes.aluno_id (cobre registros antigos)
       const [fotoRow] = await this.dataSource.query(
-        `SELECT url_arquivo FROM documentos_inscricao
-         WHERE inscricao_id = COALESCE($1, (SELECT id FROM inscricoes WHERE aluno_id::text = $2 LIMIT 1))
-           AND tipo = 'foto_aluno'
-         ORDER BY created_at DESC LIMIT 1`,
+        `SELECT url_arquivo FROM documentos_aluno_unificado
+         WHERE aluno_id = $2 AND tipo = 'foto_aluno'
+         ORDER BY CASE WHEN source = 'matriculas' THEN 0 ELSE 1 END, created_at DESC
+         LIMIT 1`,
         [inscricao_id, id],
       );
       foto_url = await this.supabase.resolveUrl(fotoRow?.url_arquivo);
@@ -630,9 +628,10 @@ export class AcademicoService {
        FROM turma_alunos ta
        JOIN alunos a ON a.id = ta.aluno_id
        LEFT JOIN LATERAL (
-         SELECT url_arquivo FROM documentos_inscricao
-         WHERE inscricao_id = a.inscricao_id AND tipo = 'foto_aluno'
-         ORDER BY created_at DESC LIMIT 1
+         SELECT url_arquivo FROM documentos_aluno_unificado v
+         WHERE v.aluno_id = a.id::text AND v.tipo = 'foto_aluno'
+         ORDER BY CASE WHEN v.source = 'matriculas' THEN 0 ELSE 1 END, v.created_at DESC
+         LIMIT 1
        ) d ON true
        WHERE ta.turma_id::text = $1 AND ta.status = 'ativo' AND a.ativo = true
        ORDER BY a.nome_completo ASC`,
@@ -1256,10 +1255,10 @@ export class AcademicoService {
         ) ORDER BY ac.nome_completo) AS alunos
       FROM alunos_chave ac
       LEFT JOIN LATERAL (
-        SELECT d.url_arquivo
-        FROM inscricoes i
-        JOIN documentos_inscricao d ON d.inscricao_id = i.id AND d.tipo = 'foto_aluno'
-        WHERE i.aluno_id::text = ac.id::text
+        SELECT v.url_arquivo
+        FROM documentos_aluno_unificado v
+        WHERE v.aluno_id = ac.id::text AND v.tipo = 'foto_aluno'
+        ORDER BY CASE WHEN v.source = 'matriculas' THEN 0 ELSE 1 END, v.created_at DESC
         LIMIT 1
       ) doc ON true
       GROUP BY ac.chave
@@ -1635,7 +1634,7 @@ export class AcademicoService {
         )                          AS turmas
       FROM alunos a
       LEFT JOIN inscricoes i        ON i.aluno_id::text = a.id::text
-      LEFT JOIN documentos_inscricao d ON d.inscricao_id = COALESCE(a.inscricao_id, i.id)
+      LEFT JOIN documentos_aluno_unificado d ON d.aluno_id = a.id::text
       LEFT JOIN turma_alunos ta     ON ta.aluno_id::text = a.id::text AND ta.status = 'ativo'
       LEFT JOIN turmas t            ON t.id::text = ta.turma_id::text
       WHERE (a.ativo IS NOT FALSE)
@@ -2212,17 +2211,15 @@ export class AcademicoService {
           LIMIT 1)                                    AS turma_id,
         -- documentos obrigatórios (tipos fixos, excluindo 'extra')
         COALESCE((
-          SELECT COUNT(*) FROM documentos_inscricao di
-          JOIN inscricoes i2 ON i2.id = di.inscricao_id
-          WHERE i2.aluno_id::text = a.id::text
-            AND di.tipo IN ('foto_aluno','identidade','comprovante_residencia','certidao_nascimento','identidade_responsavel','declaracao_escolaridade')
+          SELECT COUNT(DISTINCT v.tipo) FROM documentos_aluno_unificado v
+          WHERE v.aluno_id = a.id::text
+            AND v.tipo IN ('foto_aluno','identidade','comprovante_residencia','certidao_nascimento','identidade_responsavel','declaracao_escolaridade')
         ), 0)                                          AS docs_total_obrig,
         COALESCE((
-          SELECT COUNT(*) FROM documentos_inscricao di
-          JOIN inscricoes i2 ON i2.id = di.inscricao_id
-          WHERE i2.aluno_id::text = a.id::text
-            AND di.tipo IN ('foto_aluno','identidade','comprovante_residencia','certidao_nascimento','identidade_responsavel','declaracao_escolaridade')
-            AND di.url_arquivo IS NOT NULL AND di.url_arquivo <> ''
+          SELECT COUNT(DISTINCT v.tipo) FROM documentos_aluno_unificado v
+          WHERE v.aluno_id = a.id::text
+            AND v.tipo IN ('foto_aluno','identidade','comprovante_residencia','certidao_nascimento','identidade_responsavel','declaracao_escolaridade')
+            AND v.url_arquivo IS NOT NULL AND v.url_arquivo <> ''
         ), 0)                                          AS docs_enviados,
         -- estoque
         up.nome                                       AS uniforme_nome,

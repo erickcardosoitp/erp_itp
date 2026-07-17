@@ -164,7 +164,7 @@ export class AppModule implements OnModuleInit {
   private async runMigrations() {
     try {
       // ── Versão do schema — pula migrations se já rodaram neste banco ──────
-      const SCHEMA_VERSION = 19; // incrementar aqui ao adicionar novas migrations
+      const SCHEMA_VERSION = 20; // incrementar aqui ao adicionar novas migrations
       await this.dataSource.query(`
         CREATE TABLE IF NOT EXISTS _schema_version (
           id      INT PRIMARY KEY DEFAULT 1,
@@ -1531,6 +1531,47 @@ export class AppModule implements OnModuleInit {
           ADD COLUMN IF NOT EXISTS responsavel_id UUID REFERENCES responsaveis(id)
       `);
       this.logger.log('✅ tabela responsaveis criada e responsavel_id adicionado em projeto_inscricoes');
+
+      // ── View unificada de documentos do aluno (matrículas + projetos) ────
+      // Read-through: acadêmico lê esta view; documentos enviados no projeto de
+      // um aluno ITP passam a refletir no acadêmico, e vice-versa. Fonte única
+      // por documento → exclusão reflete automaticamente (sem cópia de arquivo).
+      // Tipos do projeto são mapeados para o vocabulário canônico das matrículas.
+      await this.dataSource.query(`
+        CREATE OR REPLACE VIEW documentos_aluno_unificado AS
+        SELECT
+          COALESCE(i.aluno_id, a.id)::text AS aluno_id,
+          di.tipo                          AS tipo,
+          di.url_arquivo                   AS url_arquivo,
+          di.mimetype                      AS mimetype,
+          di.tamanho_bytes                 AS tamanho_bytes,
+          'matriculas'::text               AS source,
+          di.created_at                    AS created_at
+        FROM documentos_inscricao di
+        JOIN inscricoes i ON i.id = di.inscricao_id
+        LEFT JOIN alunos a ON a.inscricao_id = di.inscricao_id
+        WHERE COALESCE(i.aluno_id, a.id) IS NOT NULL
+
+        UNION ALL
+
+        SELECT
+          pi.aluno_id::text                AS aluno_id,
+          CASE pid.tipo
+            WHEN 'identidade_aluno'   THEN 'identidade'
+            WHEN 'declaracao_escolar' THEN 'declaracao_escolaridade'
+            ELSE pid.tipo
+          END                              AS tipo,
+          pid.url_arquivo                  AS url_arquivo,
+          NULL::varchar                    AS mimetype,
+          pid.tamanho_bytes                AS tamanho_bytes,
+          'projetos'::text                 AS source,
+          pid.created_at                   AS created_at
+        FROM projeto_inscricao_documentos pid
+        JOIN projeto_inscricoes pi ON pi.id = pid.inscricao_id
+        WHERE pi.aluno_id IS NOT NULL
+          AND pid.tipo NOT LIKE 'extra%'
+      `);
+      this.logger.log('✅ view documentos_aluno_unificado criada (espelhamento matrículas ↔ projetos)');
 
       // ── Marca schema como atualizado — próximos cold starts pulam tudo ────
       await this.dataSource.query(`UPDATE _schema_version SET version = $1, ran_at = now() WHERE id = 1`, [SCHEMA_VERSION]);
