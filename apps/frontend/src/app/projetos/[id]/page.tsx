@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft, Plus, Users, ClipboardCheck, Printer, X, Edit3, Trash2,
@@ -141,6 +141,9 @@ export default function ProjetoDashboard() {
   const [presencas, setPresencas] = useState<Presenca[]>([]);
   const [tab,           setTab]           = useState<Tab>('inscritos');
   const [dataPresenca,  setDataPresenca]  = useState(hoje);
+  const [buscaPresenca, setBuscaPresenca] = useState('');
+  const [equipePresenca, setEquipePresenca] = useState('');
+  const [salvandoBulk,  setSalvandoBulk]  = useState(false);
   const [busca,         setBusca]         = useState('');
   const [filtroStatus,   setFiltroStatus]   = useState<'todos' | 'ok' | 'pendente'>('todos');
   const [filtroEquipe,   setFiltroEquipe]   = useState('');
@@ -472,14 +475,65 @@ export default function ProjetoDashboard() {
 
   // ── Presença ──────────────────────────────────────────────────────────────
 
-  const togglePresenca = async (ins: Inscricao) => {
-    const atual    = presencas.find(p => p.inscricao_id === ins.id);
-    const presente = !atual?.presente;
-    await api.post(`/projetos/${id}/presencas/${ins.id}/${dataPresenca}`, {
+  // Lista de presença: filtrada (busca + equipe) e ordenada alfabeticamente
+  const inscritosPresenca = useMemo(() => {
+    const q = buscaPresenca.trim().toLowerCase();
+    return inscritos
+      .filter(ins => !equipePresenca || ins.equipe_id === equipePresenca)
+      .filter(ins => !q || ins.nome_completo.toLowerCase().includes(q))
+      .slice()
+      .sort((a, b) => a.nome_completo.localeCompare(b.nome_completo, 'pt-BR', { sensitivity: 'base' }));
+  }, [inscritos, buscaPresenca, equipePresenca]);
+
+  const presentesVisiveis = useMemo(
+    () => inscritosPresenca.filter(ins => presencas.find(p => p.inscricao_id === ins.id)?.presente).length,
+    [inscritosPresenca, presencas],
+  );
+
+  // Atualiza o estado local imediatamente (feedback instantâneo)
+  const setPresencaLocal = useCallback((insId: string, presente: boolean) => {
+    setPresencas(prev => {
+      if (prev.find(p => p.inscricao_id === insId)) {
+        return prev.map(p => p.inscricao_id === insId ? { ...p, presente } : p);
+      }
+      return [...prev, { id: `tmp-${insId}`, inscricao_id: insId, data: dataPresenca, presente }];
+    });
+  }, [dataPresenca]);
+
+  const salvarPresenca = (ins: Inscricao, presente: boolean) =>
+    api.post(`/projetos/${id}/presencas/${ins.id}/${dataPresenca}`, {
       presente, equipe_id: ins.equipe_id,
       hora_entrada: presente ? new Date().toTimeString().slice(0, 8) : null,
     });
-    await loadPresencas();
+
+  const togglePresenca = async (ins: Inscricao) => {
+    const presente = !presencas.find(p => p.inscricao_id === ins.id)?.presente;
+    setPresencaLocal(ins.id, presente); // otimista
+    try {
+      await salvarPresenca(ins, presente);
+    } catch {
+      toast.error('Erro ao salvar presença');
+      setPresencaLocal(ins.id, !presente); // reverte
+    }
+  };
+
+  // Marca/limpa presença em massa na lista visível (só quem precisa mudar)
+  const marcarTodos = async (presente: boolean) => {
+    const alvos = inscritosPresenca.filter(
+      ins => !!presencas.find(p => p.inscricao_id === ins.id)?.presente !== presente,
+    );
+    if (alvos.length === 0) return;
+    setSalvandoBulk(true);
+    alvos.forEach(ins => setPresencaLocal(ins.id, presente)); // otimista
+    try {
+      await Promise.all(alvos.map(ins => salvarPresenca(ins, presente)));
+      toast.success(presente ? `${alvos.length} marcados presentes` : `${alvos.length} desmarcados`);
+    } catch {
+      toast.error('Erro ao salvar em massa');
+      await loadPresencas();
+    } finally {
+      setSalvandoBulk(false);
+    }
   };
 
   // ── Filters ───────────────────────────────────────────────────────────────
@@ -869,41 +923,106 @@ export default function ProjetoDashboard() {
         {/* ── TAB PRESENÇA ─────────────────────────────────────────────────── */}
         {tab === 'presenca' && (
           <>
-            <div className="flex items-center gap-3">
-              <label className="text-[10px] font-black uppercase text-slate-500">Data</label>
-              <input type="date" value={dataPresenca} onChange={e => setDataPresenca(e.target.value)}
-                className="border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-400"/>
-              <span className="text-xs text-slate-400">{presencas.filter(p => p.presente).length} / {inscritos.length} presentes</span>
+            {/* Toolbar */}
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2">
+                <label className="text-[10px] font-black uppercase text-slate-500">Data</label>
+                <input type="date" value={dataPresenca} onChange={e => setDataPresenca(e.target.value)}
+                  className="border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-400"/>
+              </div>
+              <div className="relative flex-1 min-w-[180px]">
+                <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"/>
+                <input value={buscaPresenca} onChange={e => setBuscaPresenca(e.target.value)}
+                  placeholder="Buscar nome..."
+                  className="w-full pl-8 pr-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-400"/>
+              </div>
+              <div className="flex gap-2 ml-auto">
+                <button onClick={() => marcarTodos(true)} disabled={salvandoBulk}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 transition-all">
+                  <CheckCircle2 size={13}/> Todos presentes
+                </button>
+                <button onClick={() => marcarTodos(false)} disabled={salvandoBulk}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 disabled:opacity-50 transition-all">
+                  <X size={13}/> Limpar
+                </button>
+              </div>
             </div>
+
+            {/* Filtro por equipe */}
+            {equipes.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                <button onClick={() => setEquipePresenca('')}
+                  className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all
+                    ${!equipePresenca ? 'bg-purple-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-800'}`}>
+                  Todas
+                </button>
+                {equipes.map(eq => (
+                  <button key={eq.id} onClick={() => setEquipePresenca(eq.id === equipePresenca ? '' : eq.id)}
+                    className="px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest text-white transition-all"
+                    style={{ background: eq.id === equipePresenca ? eq.cor : `${eq.cor}99` }}>
+                    {eq.nome}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Progresso */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-slate-400">
+                <span>{presentesVisiveis} / {inscritosPresenca.length} presentes</span>
+                <span>{inscritosPresenca.length ? Math.round((presentesVisiveis / inscritosPresenca.length) * 100) : 0}%</span>
+              </div>
+              <div className="h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                <div className="h-full bg-green-500 transition-all duration-300"
+                  style={{ width: `${inscritosPresenca.length ? (presentesVisiveis / inscritosPresenca.length) * 100 : 0}%` }}/>
+              </div>
+            </div>
+
+            {/* Lista — ordenada A→Z com cabeçalhos por letra */}
             <div className="space-y-2">
-              {inscritos.map(ins => {
+              {inscritosPresenca.map((ins, idx) => {
                 const p  = presencas.find(p => p.inscricao_id === ins.id);
                 const eq = equipes.find(e => e.id === ins.equipe_id);
+                const letra = ins.nome_completo.trim()[0]?.toUpperCase() || '#';
+                const letraAnterior = idx > 0 ? (inscritosPresenca[idx - 1].nome_completo.trim()[0]?.toUpperCase() || '#') : null;
                 return (
-                  <div key={ins.id}
-                    className={`flex items-center gap-3 px-4 py-3 rounded-xl border cursor-pointer transition-all
-                      ${p?.presente ? 'bg-green-50 dark:bg-green-900/10 border-green-100 dark:border-green-900/30' : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800 hover:border-purple-200'}`}
-                    onClick={() => togglePresenca(ins)}>
-                    <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 transition-colors
-                      ${p?.presente ? 'bg-green-500' : 'bg-slate-200 dark:bg-slate-700'}`}>
-                      {p?.presente && <span className="text-white text-[10px] font-black">✓</span>}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">{ins.nome_completo}</p>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        {eq && <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full text-white" style={{ background: eq.cor }}>{eq.nome}</span>}
-                        {p?.hora_entrada && <span className="text-[9px] text-slate-400">entrada {p.hora_entrada.slice(0, 5)}</span>}
-                        {p?.hora_saida   && <span className="text-[9px] text-slate-400">saída {p.hora_saida.slice(0, 5)}</span>}
-                        {ins.cuidado_especial && ins.cuidado_especial !== 'Não' && (
-                          <span className="flex items-center gap-0.5 text-[9px] font-black text-red-600 dark:text-red-400">
-                            <AlertTriangle size={8}/> {ins.cuidado_especial}
-                          </span>
-                        )}
+                  <React.Fragment key={ins.id}>
+                    {letra !== letraAnterior && (
+                      <div className="flex items-center gap-2 pt-2 pb-0.5">
+                        <span className="w-6 h-6 rounded-lg bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 flex items-center justify-center text-[11px] font-black">{letra}</span>
+                        <div className="flex-1 h-px bg-slate-100 dark:bg-slate-800"/>
+                      </div>
+                    )}
+                    <div
+                      className={`flex items-center gap-3 px-4 py-3 rounded-xl border cursor-pointer transition-all select-none
+                        ${p?.presente ? 'bg-green-50 dark:bg-green-900/10 border-green-100 dark:border-green-900/30' : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800 hover:border-purple-200'}`}
+                      onClick={() => togglePresenca(ins)}>
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 transition-colors
+                        ${p?.presente ? 'bg-green-500' : 'bg-slate-200 dark:bg-slate-700'}`}>
+                        {p?.presente && <span className="text-white text-[10px] font-black">✓</span>}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">{ins.nome_completo}</p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          {eq && <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full text-white" style={{ background: eq.cor }}>{eq.nome}</span>}
+                          {p?.hora_entrada && <span className="text-[9px] text-slate-400">entrada {p.hora_entrada.slice(0, 5)}</span>}
+                          {p?.hora_saida   && <span className="text-[9px] text-slate-400">saída {p.hora_saida.slice(0, 5)}</span>}
+                          {ins.cuidado_especial && ins.cuidado_especial !== 'Não' && (
+                            <span className="flex items-center gap-0.5 text-[9px] font-black text-red-600 dark:text-red-400">
+                              <AlertTriangle size={8}/> {ins.cuidado_especial}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  </React.Fragment>
                 );
               })}
+              {inscritosPresenca.length === 0 && (
+                <div className="py-12 text-center text-slate-400 text-sm">
+                  {inscritos.length === 0 ? 'Nenhum inscrito no projeto.' : 'Nenhum inscrito encontrado.'}
+                </div>
+              )}
             </div>
           </>
         )}
