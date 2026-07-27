@@ -104,6 +104,9 @@ import { SupabaseModule } from './modules/supabase/supabase.module';
           // 10 tentativas = 30s de cobertura, bem dentro do maxDuration:60s
           retryAttempts: 10,
           retryDelay: 3000,
+          // Cada invocação serverless abre seu próprio pool — limitar o tamanho
+          // evita esgotar as conexões do Neon quando várias instâncias sobem juntas
+          extra: { max: 5, idleTimeoutMillis: 10_000 },
         };
       },
     }),

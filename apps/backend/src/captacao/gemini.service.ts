@@ -807,9 +807,9 @@ export class GeminiService {
     const startedAt = Date.now();
 
     // Se OpenRouter → usa Tavily para busca web real (LLM gratuito é lento demais)
-    const apiKey = this.getApiKey();
-    const isOpenRouter = apiKey.startsWith('sk-or-');
     const hasTavily = !!this.config.get<string>('TAVILY_API_KEY');
+    const rawKey = (this.config.get<string>('GEMINI_API_KEY') ?? '').trim();
+    const isOpenRouter = rawKey.startsWith('sk-or-');
 
     this.logger.log(JSON.stringify({
       event: 'search_config',

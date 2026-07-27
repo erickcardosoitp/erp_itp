@@ -117,10 +117,10 @@ export default function NotificationBell() {
     }
   }, []);
 
-  // Polling a cada 10s para atualizar badge
+  // Polling a cada 2min para atualizar badge
   useEffect(() => {
     carregarContagem();
-    const timer = setInterval(carregarContagem, 10_000);
+    const timer = setInterval(carregarContagem, 120_000);
     return () => clearInterval(timer);
   }, [carregarContagem]);
 
