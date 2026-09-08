@@ -9,6 +9,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ModuloPermGuard } from '../auth/guards/modulo-perm.guard';
 import { ModuloPerm } from '../auth/decorators/modulo-perm.decorator';
+import { Public } from '../auth/decorators/public.decorator';
 import { CaptacaoService } from './captacao.service';
 import { PipelineStatus, SourceType } from './entities/captacao-opportunity.entity';
 import { ConfigService } from '@nestjs/config';
@@ -255,8 +256,10 @@ export class CaptacaoController {
   }
 
   // ── POST /captacao/cron/expire (protegido por cron-secret) ────────────────
+  // @Public() bypassa o JwtAuthGuard de classe; sem @ModuloPerm, o
+  // ModuloPermGuard nao exige request.user (nao ha JWT numa chamada de cron).
   @Post('cron/expire')
-  @ModuloPerm('captacao', 'visualizar')
+  @Public()
   async cronExpire(@Headers('x-cron-secret') secret: string) {
     const expected = this.config.get<string>('CRON_SECRET');
     if (!expected || !secret || !timingSafeEqual(expected, secret)) throw new BadRequestException('Acesso negado');
