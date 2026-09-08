@@ -96,7 +96,7 @@ import { SupabaseModule } from './modules/supabase/supabase.module';
           entities: [Usuario, Aluno, Inscricao, InscricaoAnotacao, InscricaoMovimentacao, Grupo, DocumentoInscricao],
           autoLoadEntities: true,
           synchronize: false,
-          ssl: (dbUrl.includes('localhost') || dbUrl.includes('127.0.0.1'))
+          ssl: (dbUrl.includes('localhost') || dbUrl.includes('127.0.0.1') || dbUrl.includes('@postgres:'))
             ? false
             : { rejectUnauthorized: false },
           // Neon recusa conexões durante wake-up (~10s). Com retryDelay=3s,
