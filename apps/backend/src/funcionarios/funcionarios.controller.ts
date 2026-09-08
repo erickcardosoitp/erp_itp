@@ -50,6 +50,16 @@ export class FuncionariosController {
   }
 
 
+  /**
+   * Recebido do Google Forms (google-apps-script/formulario-funcionario.gs).
+   * Sem autenticacao (mesmo padrao de matriculas/inscricao) — validacao no service.
+   */
+  @Post('webhook')
+  @Public()
+  async receberWebhook(@Body() dto: any) {
+    return this.svc.criarViaWebhook(dto);
+  }
+
   @Post('test-email')
   @Public()
   async testEmail() {
