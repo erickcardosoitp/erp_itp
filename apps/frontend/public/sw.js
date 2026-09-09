@@ -22,6 +22,11 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   const url = new URL(event.request.url);
   if (url.pathname.startsWith('/api/')) return;
+  // /backend-api/* é o proxy do Next pro backend (next.config.mjs) — inclui
+  // rotas de OAuth (SSO Microsoft) que redirecionam pra domínio externo.
+  // fetch() seguindo redirect cross-origin numa requisição de navegação
+  // interceptada pelo SW cancela silenciosamente — nunca intercepta essa rota.
+  if (url.pathname.startsWith('/backend-api/')) return;
 
   event.respondWith(
     fetch(event.request)
