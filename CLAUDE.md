@@ -1,6 +1,6 @@
 # CLAUDE.md — ERP ITP
 
-Sistema de Gestão Empresarial para o ITP (Instituto Técnico/Politécnico). Monorepo NestJS + Next.js para gestão acadêmica, financeira e operacional.
+Sistema de Gestão Empresarial para o ITP (Instituto Tia Pretinha). Monorepo NestJS + Next.js para gestão acadêmica, financeira e operacional.
 
 > 📐 **Arquitetura completa (infra, módulos, dependências, dívidas conhecidas):
 > ver [ARCHITECTURE.md](ARCHITECTURE.md).**
