@@ -72,7 +72,7 @@ class GraphClient:
         aplicacao_escapada = aplicacao.replace("'", "''")
         filtro = f"fields/Aplicacao eq '{aplicacao_escapada}' and fields/Status ne 'descartado'"
         params = {
-            "$expand": "fields(select=CodErro,TipoErro,Assinatura,Categoria)",
+            "$expand": "fields($select=CodErro,TipoErro,Assinatura,Categoria)",
             "$filter": filtro,
             "$top": str(top),
             "$orderby": "fields/UltimaVez desc",
