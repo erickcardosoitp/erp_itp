@@ -112,6 +112,20 @@ export class AuthController {
     return this.authService.criarUsuarioParaFuncionario(body);
   }
 
+  /** DIAGNOSTICO TEMPORARIO — remover depois de achar o bug do cookie SSO. */
+  @Public()
+  @Get('debug-cookie')
+  async debugCookie(@Res() res: Response) {
+    res.cookie('debug_cookie_test', 'valor123', {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'strict',
+      path: '/',
+      maxAge: 5 * 60 * 1000,
+    });
+    return res.redirect(MS_FRONTEND_URL + '/login?debug=1');
+  }
+
   /**
    * Inicia o login via SSO Microsoft (Entra ID). Redireciona pro consent
    * screen da Microsoft; state em cookie httpOnly protege contra CSRF.
