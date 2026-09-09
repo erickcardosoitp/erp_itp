@@ -60,7 +60,8 @@ Lembre-se: na dúvida sobre "eh_reincidencia_de", prefira null (item novo) \
 a forçar uma correspondência errada — fundir dois problemas diferentes é \
 pior do que duplicar. Se o erro não representa um bug de verdade (ex: \
 exploração manual do banco, ruído de redeploy), diga isso claramente no \
-diagnóstico e marque ia_pode_resolver como "nao"."""
+diagnóstico e marque ia_pode_resolver como "sem risco" (não há ação/risco \
+nenhum a avaliar)."""
 
 
 def _formatar_shortlist(shortlist: list[dict]) -> str:
