@@ -30,7 +30,8 @@ export class RelatoriosService {
         SUM(valor) AS total,
         COUNT(*) AS qtd
       FROM movimentacoes_financeiras
-      WHERE data BETWEEN $1 AND $2
+      WHERE deleted_at IS NULL
+        AND data BETWEEN $1 AND $2
       GROUP BY tipo_movimentacao, categoria, status
       ORDER BY tipo_movimentacao, total DESC
     `, [data_ini, data_fim]);
@@ -70,7 +71,8 @@ export class RelatoriosService {
         tipo_movimentacao,
         SUM(valor) AS total
       FROM movimentacoes_financeiras
-      WHERE EXTRACT(YEAR FROM data) = $1
+      WHERE deleted_at IS NULL
+        AND EXTRACT(YEAR FROM data) = $1
         AND status IN ('Pago', 'Confirmado')
       GROUP BY mes, tipo_movimentacao
       ORDER BY mes
@@ -96,7 +98,8 @@ export class RelatoriosService {
         SUM(valor) AS total,
         COUNT(*) AS qtd
       FROM movimentacoes_financeiras
-      WHERE EXTRACT(MONTH FROM data) = $1
+      WHERE deleted_at IS NULL
+        AND EXTRACT(MONTH FROM data) = $1
         AND EXTRACT(YEAR FROM data) = $2
       GROUP BY plano_contas, tipo_movimentacao
       ORDER BY plano_contas, tipo_movimentacao
@@ -138,7 +141,7 @@ export class RelatoriosService {
           COUNT(*) AS qtd,
           MAX(data) AS ultima_doacao
         FROM movimentacoes_financeiras
-        WHERE categoria = 'Doação' AND data BETWEEN $1 AND $2
+        WHERE deleted_at IS NULL AND categoria = 'Doação' AND data BETWEEN $1 AND $2
         GROUP BY nome
         ORDER BY total DESC
         LIMIT 20
@@ -149,14 +152,14 @@ export class RelatoriosService {
           SUM(valor) AS total,
           COUNT(*) AS qtd
         FROM movimentacoes_financeiras
-        WHERE categoria = 'Doação' AND data BETWEEN $1 AND $2
+        WHERE deleted_at IS NULL AND categoria = 'Doação' AND data BETWEEN $1 AND $2
         GROUP BY mes
         ORDER BY mes
       `, [data_ini, data_fim]),
       this.db.query(`
         SELECT COUNT(DISTINCT nome) AS total_doadores
         FROM movimentacoes_financeiras
-        WHERE categoria = 'Doação' AND data BETWEEN $1 AND $2
+        WHERE deleted_at IS NULL AND categoria = 'Doação' AND data BETWEEN $1 AND $2
       `, [data_ini, data_fim]),
     ]);
 
@@ -317,7 +320,7 @@ export class RelatoriosService {
           SUM(valor) FILTER (WHERE categoria = 'Doação')                       AS total_doacoes,
           COUNT(*) FILTER (WHERE categoria = 'Doação')                         AS qtd_doacoes
         FROM movimentacoes_financeiras
-        WHERE EXTRACT(YEAR FROM data) = EXTRACT(YEAR FROM CURRENT_DATE)
+        WHERE deleted_at IS NULL AND EXTRACT(YEAR FROM data) = EXTRACT(YEAR FROM CURRENT_DATE)
       `),
       this.db.query(`
         SELECT COUNT(*) AS total_doadores_ativos FROM doadores WHERE ativo = true
@@ -505,7 +508,8 @@ export class RelatoriosService {
         plano_contas,
         SUM(valor) AS total
       FROM movimentacoes_financeiras
-      WHERE EXTRACT(YEAR FROM data) = $1
+      WHERE deleted_at IS NULL
+        AND EXTRACT(YEAR FROM data) = $1
         AND EXTRACT(MONTH FROM data) BETWEEN $2 AND $3
         AND status IN ('Pago', 'Confirmado')
       GROUP BY tipo_movimentacao, categoria, plano_contas
@@ -573,7 +577,8 @@ export class RelatoriosService {
         SUM(valor) FILTER (WHERE tipo_movimentacao IN ('Receita','Entrada')) AS receita,
         SUM(valor) FILTER (WHERE tipo_movimentacao IN ('Despesa','Saída'))   AS despesa
       FROM movimentacoes_financeiras
-      WHERE EXTRACT(YEAR FROM data) = $1
+      WHERE deleted_at IS NULL
+        AND EXTRACT(YEAR FROM data) = $1
         AND EXTRACT(MONTH FROM data) BETWEEN $2 AND $3
         AND status IN ('Pago', 'Confirmado')
       GROUP BY mes ORDER BY mes
@@ -622,7 +627,7 @@ export class RelatoriosService {
              tipo_movimentacao, categoria, plano_contas, competencia,
              forma_pagamento, valor, status
       FROM movimentacoes_financeiras
-      WHERE data BETWEEN $1 AND $2 AND status IN ('Pago', 'Confirmado')${extraWhere}
+      WHERE deleted_at IS NULL AND data BETWEEN $1 AND $2 AND status IN ('Pago', 'Confirmado')${extraWhere}
       ORDER BY data ASC, created_at ASC
     `, params);
 
@@ -643,7 +648,7 @@ export class RelatoriosService {
     const rows: any[] = await this.db.query(`
       SELECT EXTRACT(MONTH FROM data)::INT AS mes, tipo_movimentacao, SUM(valor) AS total, COUNT(*) AS qtd
       FROM movimentacoes_financeiras
-      WHERE EXTRACT(YEAR FROM data) = $1
+      WHERE deleted_at IS NULL AND EXTRACT(YEAR FROM data) = $1
       GROUP BY mes, tipo_movimentacao ORDER BY mes
     `, [ano]);
 
@@ -671,7 +676,7 @@ export class RelatoriosService {
     const rows: any[] = await this.db.query(`
       SELECT COALESCE(competencia,'Geral') AS projeto, tipo_movimentacao, SUM(valor) AS total, COUNT(*) AS qtd
       FROM movimentacoes_financeiras
-      WHERE EXTRACT(YEAR FROM data) = $1
+      WHERE deleted_at IS NULL AND EXTRACT(YEAR FROM data) = $1
       GROUP BY projeto, tipo_movimentacao ORDER BY projeto
     `, [ano]);
 
@@ -698,7 +703,8 @@ export class RelatoriosService {
     const rows: any[] = await this.db.query(`
       SELECT COALESCE(plano_contas, categoria, 'Sem categoria') AS categoria, SUM(valor) AS total, COUNT(*) AS qtd
       FROM movimentacoes_financeiras
-      WHERE data BETWEEN $1 AND $2
+      WHERE deleted_at IS NULL
+        AND data BETWEEN $1 AND $2
         AND tipo_movimentacao IN ('Despesa','Saída') AND status IN ('Pago', 'Confirmado')
       GROUP BY categoria ORDER BY total DESC
     `, [data_ini, data_fim]);
@@ -722,7 +728,8 @@ export class RelatoriosService {
       SELECT COALESCE(competencia,'Sem projeto') AS projeto, COALESCE(categoria,'Sem categoria') AS categoria,
              SUM(valor) AS total, COUNT(*) AS qtd
       FROM movimentacoes_financeiras
-      WHERE data BETWEEN $1 AND $2
+      WHERE deleted_at IS NULL
+        AND data BETWEEN $1 AND $2
         AND tipo_movimentacao IN ('Despesa','Saída') AND status IN ('Pago', 'Confirmado')
       GROUP BY projeto, categoria ORDER BY projeto, total DESC
     `, [data_ini, data_fim]);
@@ -753,7 +760,8 @@ export class RelatoriosService {
     const rows: any[] = await this.db.query(`
       SELECT COALESCE(categoria,'Outras Receitas') AS fonte, SUM(valor) AS total, COUNT(*) AS qtd
       FROM movimentacoes_financeiras
-      WHERE data BETWEEN $1 AND $2
+      WHERE deleted_at IS NULL
+        AND data BETWEEN $1 AND $2
         AND tipo_movimentacao IN ('Receita','Entrada') AND status IN ('Pago', 'Confirmado')
       GROUP BY fonte ORDER BY total DESC
     `, [data_ini, data_fim]);
@@ -776,7 +784,8 @@ export class RelatoriosService {
              COALESCE(competencia,'Geral') AS projeto,
              categoria, plano_contas, valor, data, forma_pagamento
       FROM movimentacoes_financeiras
-      WHERE data BETWEEN $1 AND $2
+      WHERE deleted_at IS NULL
+        AND data BETWEEN $1 AND $2
         AND tipo_movimentacao IN ('Despesa','Saída') AND status IN ('Pago', 'Confirmado')
       ORDER BY data DESC
     `, [data_ini, data_fim]);
@@ -805,7 +814,7 @@ export class RelatoriosService {
           SUM(valor) FILTER (WHERE tipo_movimentacao IN ('Receita','Entrada')) AS receitas,
           SUM(valor) FILTER (WHERE tipo_movimentacao IN ('Despesa','Saída'))   AS despesas
         FROM movimentacoes_financeiras
-        WHERE EXTRACT(YEAR FROM data) = $1
+        WHERE deleted_at IS NULL AND EXTRACT(YEAR FROM data) = $1
         GROUP BY mes ORDER BY mes
       `, [ano]),
       this.db.query(`
@@ -814,7 +823,7 @@ export class RelatoriosService {
           SUM(valor) FILTER (WHERE tipo_movimentacao IN ('Despesa','Saída'))   AS total_despesas,
           SUM(valor) FILTER (WHERE categoria = 'Doação')                       AS total_doacoes,
           COUNT(*) AS total_lancamentos
-        FROM movimentacoes_financeiras WHERE EXTRACT(YEAR FROM data) = $1
+        FROM movimentacoes_financeiras WHERE deleted_at IS NULL AND EXTRACT(YEAR FROM data) = $1
       `, [ano]),
     ]);
 
@@ -848,7 +857,7 @@ export class RelatoriosService {
       SELECT tipo_movimentacao, categoria, plano_contas,
              nome, descricao, valor, data, forma_pagamento, status
       FROM movimentacoes_financeiras
-      WHERE data BETWEEN $1 AND $2${projWhere}
+      WHERE deleted_at IS NULL AND data BETWEEN $1 AND $2${projWhere}
       ORDER BY data ASC
     `, params);
 
@@ -881,7 +890,8 @@ export class RelatoriosService {
       this.db.query(`
         SELECT COALESCE(competencia,'Geral') AS projeto, SUM(valor) AS total_despesas
         FROM movimentacoes_financeiras
-        WHERE data BETWEEN $1 AND $2
+        WHERE deleted_at IS NULL
+          AND data BETWEEN $1 AND $2
           AND tipo_movimentacao IN ('Despesa','Saída') AND status IN ('Pago', 'Confirmado')
         GROUP BY projeto
       `, [data_ini, data_fim]),
@@ -910,7 +920,7 @@ export class RelatoriosService {
         SELECT
           SUM(valor) FILTER (WHERE tipo_movimentacao IN ('Despesa','Saída'))   AS total_despesas,
           SUM(valor) FILTER (WHERE tipo_movimentacao IN ('Receita','Entrada')) AS total_receitas
-        FROM movimentacoes_financeiras WHERE data BETWEEN $1 AND $2 AND status IN ('Pago', 'Confirmado')
+        FROM movimentacoes_financeiras WHERE deleted_at IS NULL AND data BETWEEN $1 AND $2 AND status IN ('Pago', 'Confirmado')
       `, [data_ini, data_fim]),
       this.db.query(`
         SELECT COUNT(*) AS total_sessoes, COALESCE(SUM(total_presentes), 0) AS total_presencas
@@ -947,7 +957,8 @@ export class RelatoriosService {
         END AS fonte,
         SUM(valor) AS total, COUNT(*) AS qtd
       FROM movimentacoes_financeiras
-      WHERE data BETWEEN $1 AND $2
+      WHERE deleted_at IS NULL
+        AND data BETWEEN $1 AND $2
         AND tipo_movimentacao IN ('Receita','Entrada') AND status IN ('Pago', 'Confirmado')
       GROUP BY fonte ORDER BY total DESC
     `, [data_ini, data_fim]);
@@ -974,13 +985,14 @@ export class RelatoriosService {
         SELECT COALESCE(SUM(CASE
           WHEN tipo_movimentacao IN ('Receita','Entrada') THEN valor ELSE -valor
         END), 0) AS saldo_atual
-        FROM movimentacoes_financeiras WHERE status IN ('Pago', 'Confirmado')
+        FROM movimentacoes_financeiras WHERE deleted_at IS NULL AND status IN ('Pago', 'Confirmado')
       `),
       this.db.query(`
         SELECT COALESCE(AVG(mensal), 0) AS media_mensal FROM (
           SELECT DATE_TRUNC('month', data) AS mes, SUM(valor) AS mensal
           FROM movimentacoes_financeiras
-          WHERE tipo_movimentacao IN ('Despesa','Saída') AND status IN ('Pago', 'Confirmado')
+          WHERE deleted_at IS NULL
+            AND tipo_movimentacao IN ('Despesa','Saída') AND status IN ('Pago', 'Confirmado')
             AND data >= NOW() - INTERVAL '12 months'
           GROUP BY mes
         ) sub

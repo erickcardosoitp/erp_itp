@@ -2516,7 +2516,7 @@ export class AcademicoService {
     const somaPaga = await this.dataSource.query(
       `SELECT COALESCE(SUM(valor), 0) AS total
        FROM movimentacoes_financeiras
-       WHERE id = ANY($1::uuid[]) AND status IN ('Pago', 'Confirmado')`,
+       WHERE id = ANY($1::uuid[]) AND status IN ('Pago', 'Confirmado') AND deleted_at IS NULL`,
       [novosIds],
     );
     const totalPago = Number(somaPaga[0]?.total ?? 0);

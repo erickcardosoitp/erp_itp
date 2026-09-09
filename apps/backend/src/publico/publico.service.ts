@@ -27,7 +27,8 @@ export class PublicoService {
           COALESCE(tipo_movimentacao, 'Não classificado') AS tipo,
           SUM(valor)::numeric AS total
         FROM movimentacoes_financeiras
-        WHERE EXTRACT(YEAR FROM data) = $1
+        WHERE deleted_at IS NULL
+          AND EXTRACT(YEAR FROM data) = $1
           ${mesFiltro ? `AND EXTRACT(MONTH FROM data) = ${parseInt(mesFiltro)}` : ''}
           AND status NOT IN ('Cancelada', 'Cancelado')
         GROUP BY tipo_movimentacao
@@ -40,7 +41,8 @@ export class PublicoService {
           COALESCE(tipo_movimentacao, 'Não classificado') AS tipo,
           SUM(valor)::numeric AS total
         FROM movimentacoes_financeiras
-        WHERE EXTRACT(YEAR FROM data) = $1
+        WHERE deleted_at IS NULL
+          AND EXTRACT(YEAR FROM data) = $1
           AND status NOT IN ('Cancelada', 'Cancelado')
         GROUP BY mes, tipo_movimentacao
         ORDER BY mes ASC
@@ -53,7 +55,8 @@ export class PublicoService {
           COALESCE(tipo_movimentacao, 'Não classificado') AS tipo,
           SUM(valor)::numeric AS total
         FROM movimentacoes_financeiras
-        WHERE EXTRACT(YEAR FROM data) = $1
+        WHERE deleted_at IS NULL
+          AND EXTRACT(YEAR FROM data) = $1
           ${mesFiltro ? `AND EXTRACT(MONTH FROM data) = ${parseInt(mesFiltro)}` : ''}
           AND status NOT IN ('Cancelada', 'Cancelado')
         GROUP BY categoria, plano_contas, tipo_movimentacao
@@ -72,7 +75,8 @@ export class PublicoService {
           COALESCE(plano_contas, categoria, '') AS categoria,
           status
         FROM movimentacoes_financeiras
-        WHERE EXTRACT(YEAR FROM data) = $1
+        WHERE deleted_at IS NULL
+          AND EXTRACT(YEAR FROM data) = $1
           ${mesFiltro ? `AND EXTRACT(MONTH FROM data) = ${parseInt(mesFiltro)}` : ''}
           AND status NOT IN ('Cancelada', 'Cancelado')
         ORDER BY data DESC
@@ -99,7 +103,8 @@ export class PublicoService {
       this.ds.query<{ total_investido: string }[]>(`
         SELECT COALESCE(SUM(valor), 0)::numeric AS total_investido
         FROM movimentacoes_financeiras
-        WHERE EXTRACT(YEAR FROM data) = $1
+        WHERE deleted_at IS NULL
+          AND EXTRACT(YEAR FROM data) = $1
           ${mesFiltro ? `AND EXTRACT(MONTH FROM data) = ${parseInt(mesFiltro)}` : ''}
           AND tipo_movimentacao IN ('Despesa', 'Saída')
           AND status IN ('Pago', 'Confirmado')
