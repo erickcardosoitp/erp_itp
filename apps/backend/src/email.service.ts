@@ -3,6 +3,94 @@ import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 import { escape as validatorEscape } from 'validator';
 
+/**
+ * Transport nodemailer customizado que envia via Microsoft Graph API
+ * (`POST /users/{mailbox}/sendMail`) em vez de SMTP. Motivo: o tenant tem
+ * "Security Defaults" ativo, que bloqueia autenticacao legada (SMTP AUTH
+ * usuario+senha) tenant-wide — Graph usa OAuth2/client-credentials (app-only),
+ * nao e afetado por essa politica e e o caminho recomendado pela propria
+ * Microsoft hoje. Reaproveita o mesmo App Registration do SSO (MS_CLIENT_ID/
+ * MS_CLIENT_SECRET/MS_TENANT_ID), permissao Mail.Send (Application),
+ * concedida em 2026-09-09.
+ *
+ * Implementa a interface minima que o nodemailer espera de um transport
+ * customizado (name/version/send) — assim os ~11 pontos que chamam
+ * `transporter.sendMail({...})` no resto deste arquivo nao precisam mudar.
+ */
+class GraphMailTransport {
+  name = 'GraphMailTransport';
+  version = '1.0.0';
+  private tenantId: string;
+  private clientId: string;
+  private clientSecret: string;
+  private mailbox: string;
+  private token: { value: string; expiresAt: number } | null = null;
+
+  constructor(opts: { tenantId: string; clientId: string; clientSecret: string; mailbox: string }) {
+    this.tenantId = opts.tenantId;
+    this.clientId = opts.clientId;
+    this.clientSecret = opts.clientSecret;
+    this.mailbox = opts.mailbox;
+  }
+
+  private async getToken(): Promise<string> {
+    if (this.token && this.token.expiresAt > Date.now() + 30_000) return this.token.value;
+    const resp = await fetch(`https://login.microsoftonline.com/${this.tenantId}/oauth2/v2.0/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: this.clientId,
+        client_secret: this.clientSecret,
+        grant_type: 'client_credentials',
+        scope: 'https://graph.microsoft.com/.default',
+      }),
+    });
+    const body: any = await resp.json();
+    if (!resp.ok || !body.access_token) throw new Error(`Falha ao obter token Graph: ${JSON.stringify(body)}`);
+    this.token = { value: body.access_token, expiresAt: Date.now() + (body.expires_in ?? 3600) * 1000 };
+    return this.token.value;
+  }
+
+  private parseAddr(addr: any): string | null {
+    if (!addr) return null;
+    const s = typeof addr === 'string' ? addr : addr.address;
+    const match = String(s).match(/<([^>]+)>/);
+    return match ? match[1] : String(s).trim();
+  }
+
+  private parseAddrList(addr: any): string[] {
+    if (!addr) return [];
+    const list = Array.isArray(addr) ? addr : [addr];
+    return list.map((a) => this.parseAddr(a)).filter((a): a is string => !!a);
+  }
+
+  // Assinatura exigida pelo nodemailer pra um transport customizado.
+  async send(mail: any, callback: (err: Error | null, info?: any) => void) {
+    try {
+      const data = mail.data;
+      const token = await this.getToken();
+      const message = {
+        subject: data.subject,
+        body: { contentType: data.html ? 'HTML' : 'Text', content: data.html || data.text || '' },
+        toRecipients: this.parseAddrList(data.to).map((address) => ({ emailAddress: { address } })),
+        replyTo: this.parseAddrList(data.replyTo).map((address) => ({ emailAddress: { address } })),
+      };
+      const resp = await fetch(`https://graph.microsoft.com/v1.0/users/${this.mailbox}/sendMail`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message, saveToSentItems: true }),
+      });
+      if (!resp.ok) {
+        const errBody = await resp.text();
+        throw new Error(`Graph sendMail falhou: ${resp.status} ${errBody}`);
+      }
+      callback(null, { envelope: mail.data.envelope, messageId: `graph-${Date.now()}` });
+    } catch (err: any) {
+      callback(err);
+    }
+  }
+}
+
 @Injectable()
 export class EmailService implements OnModuleInit {
   private readonly logger = new Logger(EmailService.name);
@@ -18,6 +106,19 @@ export class EmailService implements OnModuleInit {
   }
 
   async onModuleInit() {
+    const msTenantId = this.config.get<string>('MS_TENANT_ID');
+    const msClientId = this.config.get<string>('MS_CLIENT_ID');
+    const msClientSecret = this.config.get<string>('MS_CLIENT_SECRET');
+    const mailbox = this.config.get<string>('SMTP_USER');
+
+    if (msTenantId && msClientId && msClientSecret && mailbox) {
+      this.transporter = nodemailer.createTransport(
+        new GraphMailTransport({ tenantId: msTenantId, clientId: msClientId, clientSecret: msClientSecret, mailbox }) as any,
+      );
+      this.logger.log(`📧 Envio via Microsoft Graph API configurado (caixa: ${mailbox})`);
+      return;
+    }
+
     const host = this.config.get<string>('SMTP_HOST');
     if (host) {
       this.transporter = nodemailer.createTransport({
