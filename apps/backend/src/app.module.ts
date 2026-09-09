@@ -167,7 +167,7 @@ export class AppModule implements OnModuleInit {
   private async runMigrations() {
     try {
       // ── Versão do schema — pula migrations se já rodaram neste banco ──────
-      const SCHEMA_VERSION = 20; // incrementar aqui ao adicionar novas migrations
+      const SCHEMA_VERSION = 21; // incrementar aqui ao adicionar novas migrations
       await this.dataSource.query(`
         CREATE TABLE IF NOT EXISTS _schema_version (
           id      INT PRIMARY KEY DEFAULT 1,
@@ -1575,6 +1575,69 @@ export class AppModule implements OnModuleInit {
           AND pid.tipo NOT LIKE 'extra%'
       `);
       this.logger.log('✅ view documentos_aluno_unificado criada (espelhamento matrículas ↔ projetos)');
+
+      // ── v21: FK do financeiro (categoria/plano_contas/tipo_movimentacao/
+      // forma_pagamento) — colunas varchar antigas mantidas intactas, FK nova
+      // em paralelo. Backfill via nome (case-insensitive), cria a linha na
+      // tabela de lookup se ainda não existir. Auditoria de banco 2026-09-08. ─
+      await this.dataSource.query(`ALTER TABLE movimentacoes_financeiras ADD COLUMN IF NOT EXISTS categoria_id uuid REFERENCES categorias_financeiras(id)`);
+      await this.dataSource.query(`ALTER TABLE movimentacoes_financeiras ADD COLUMN IF NOT EXISTS plano_contas_id uuid REFERENCES planos_contas(id)`);
+      await this.dataSource.query(`ALTER TABLE movimentacoes_financeiras ADD COLUMN IF NOT EXISTS tipo_movimentacao_id uuid REFERENCES tipos_movimentacao(id)`);
+      await this.dataSource.query(`ALTER TABLE movimentacoes_financeiras ADD COLUMN IF NOT EXISTS forma_pagamento_id uuid REFERENCES formas_pagamento(id)`);
+
+      await this.dataSource.query(`
+        INSERT INTO categorias_financeiras (nome)
+        SELECT DISTINCT trim(categoria) FROM movimentacoes_financeiras m
+        WHERE categoria IS NOT NULL AND trim(categoria) <> ''
+          AND NOT EXISTS (SELECT 1 FROM categorias_financeiras cf WHERE LOWER(cf.nome) = LOWER(trim(m.categoria)))
+      `);
+      await this.dataSource.query(`
+        UPDATE movimentacoes_financeiras m SET categoria_id = cf.id
+        FROM categorias_financeiras cf
+        WHERE m.categoria_id IS NULL AND m.categoria IS NOT NULL AND LOWER(cf.nome) = LOWER(trim(m.categoria))
+      `);
+
+      await this.dataSource.query(`
+        INSERT INTO planos_contas (nome)
+        SELECT DISTINCT trim(plano_contas) FROM movimentacoes_financeiras m
+        WHERE plano_contas IS NOT NULL AND trim(plano_contas) <> ''
+          AND NOT EXISTS (SELECT 1 FROM planos_contas pc WHERE LOWER(pc.nome) = LOWER(trim(m.plano_contas)))
+      `);
+      await this.dataSource.query(`
+        UPDATE movimentacoes_financeiras m SET plano_contas_id = pc.id
+        FROM planos_contas pc
+        WHERE m.plano_contas_id IS NULL AND m.plano_contas IS NOT NULL AND LOWER(pc.nome) = LOWER(trim(m.plano_contas))
+      `);
+
+      await this.dataSource.query(`
+        INSERT INTO tipos_movimentacao (nome)
+        SELECT DISTINCT trim(tipo_movimentacao) FROM movimentacoes_financeiras m
+        WHERE tipo_movimentacao IS NOT NULL AND trim(tipo_movimentacao) <> ''
+          AND NOT EXISTS (SELECT 1 FROM tipos_movimentacao tm WHERE LOWER(tm.nome) = LOWER(trim(m.tipo_movimentacao)))
+      `);
+      await this.dataSource.query(`
+        UPDATE movimentacoes_financeiras m SET tipo_movimentacao_id = tm.id
+        FROM tipos_movimentacao tm
+        WHERE m.tipo_movimentacao_id IS NULL AND m.tipo_movimentacao IS NOT NULL AND LOWER(tm.nome) = LOWER(trim(m.tipo_movimentacao))
+      `);
+
+      await this.dataSource.query(`
+        INSERT INTO formas_pagamento (nome)
+        SELECT DISTINCT trim(forma_pagamento) FROM movimentacoes_financeiras m
+        WHERE forma_pagamento IS NOT NULL AND trim(forma_pagamento) <> ''
+          AND NOT EXISTS (SELECT 1 FROM formas_pagamento fp WHERE LOWER(fp.nome) = LOWER(trim(m.forma_pagamento)))
+      `);
+      await this.dataSource.query(`
+        UPDATE movimentacoes_financeiras m SET forma_pagamento_id = fp.id
+        FROM formas_pagamento fp
+        WHERE m.forma_pagamento_id IS NULL AND m.forma_pagamento IS NOT NULL AND LOWER(fp.nome) = LOWER(trim(m.forma_pagamento))
+      `);
+
+      await this.dataSource.query(`CREATE INDEX IF NOT EXISTS idx_movfin_categoria_id ON movimentacoes_financeiras(categoria_id)`);
+      await this.dataSource.query(`CREATE INDEX IF NOT EXISTS idx_movfin_plano_contas_id ON movimentacoes_financeiras(plano_contas_id)`);
+      await this.dataSource.query(`CREATE INDEX IF NOT EXISTS idx_movfin_tipo_movimentacao_id ON movimentacoes_financeiras(tipo_movimentacao_id)`);
+      await this.dataSource.query(`CREATE INDEX IF NOT EXISTS idx_movfin_forma_pagamento_id ON movimentacoes_financeiras(forma_pagamento_id)`);
+      this.logger.log('✅ v21: FK financeiro criada e backfillada (categoria/plano_contas/tipo_movimentacao/forma_pagamento)');
 
       // ── Marca schema como atualizado — próximos cold starts pulam tudo ────
       await this.dataSource.query(`UPDATE _schema_version SET version = $1, ran_at = now() WHERE id = 1`, [SCHEMA_VERSION]);

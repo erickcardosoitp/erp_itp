@@ -169,6 +169,41 @@ export class FinanceiroService {
 
   // ── MOVIMENTAÇÕES FINANCEIRAS ─────────────────────────────────────────────
 
+  /**
+   * Resolve categoria/plano_contas/tipo_movimentacao/forma_pagamento (texto
+   * livre, como o frontend ainda envia) pros *_id correspondentes, criando a
+   * linha na tabela de lookup se ainda não existir. Mantém as colunas de
+   * texto intactas — só preenche a FK em paralelo (ver auditoria de banco
+   * 2026-09-08 / migration v21 em app.module.ts).
+   */
+  private async resolverFksFinanceiro(dto: Partial<MovimentacaoFinanceira>): Promise<Partial<MovimentacaoFinanceira>> {
+    const resolver = async <T extends { id: string; nome: string }>(
+      repo: Repository<T>,
+      nome: string | undefined,
+    ): Promise<string | undefined> => {
+      if (nome === undefined) return undefined;
+      const trimmed = nome?.trim();
+      if (!trimmed) return undefined;
+      let row = await repo
+        .createQueryBuilder('r')
+        .where('LOWER(r.nome) = LOWER(:nome)', { nome: trimmed })
+        .getOne();
+      if (!row) row = (await repo.save(repo.create({ nome: trimmed } as any))) as unknown as T;
+      return (row as T).id;
+    };
+
+    const patch: Partial<MovimentacaoFinanceira> = {};
+    const categoriaId = await resolver(this.categoriaRepo, dto.categoria);
+    if (categoriaId !== undefined) patch.categoria_id = categoriaId;
+    const planoId = await resolver(this.planoRepo, dto.plano_contas);
+    if (planoId !== undefined) patch.plano_contas_id = planoId;
+    const tipoId = await resolver(this.tipoMovRepo, dto.tipo_movimentacao);
+    if (tipoId !== undefined) patch.tipo_movimentacao_id = tipoId;
+    const formaId = await resolver(this.formaPagRepo, dto.forma_pagamento);
+    if (formaId !== undefined) patch.forma_pagamento_id = formaId;
+    return patch;
+  }
+
   listarMovimentacoes() { return this.movRepo.find({ order: { data: 'DESC', created_at: 'DESC' } }); }
 
   listarDoacoes() {
@@ -178,7 +213,8 @@ export class FinanceiroService {
   async criarMovimentacao(dto: Partial<MovimentacaoFinanceira>) {
     if (!dto.nome) throw new BadRequestException('Nome é obrigatório');
     if (!dto.valor && dto.valor !== 0) throw new BadRequestException('Valor é obrigatório');
-    const mov = await this.movRepo.save(this.movRepo.create(dto));
+    const fks = await this.resolverFksFinanceiro(dto);
+    const mov = await this.movRepo.save(this.movRepo.create({ ...dto, ...fks }));
     // Notificações automáticas por tipo de movimentação
     const valor = Number(mov.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     if (mov.categoria?.toLowerCase().includes('doação') || mov.categoria?.toLowerCase() === 'doacao') {
@@ -207,7 +243,8 @@ export class FinanceiroService {
   async editarMovimentacao(id: string, dto: Partial<MovimentacaoFinanceira>) {
     const e = await this.movRepo.findOneBy({ id });
     if (!e) throw new NotFoundException('Movimentação não encontrada');
-    await this.movRepo.update(id, dto);
+    const fks = await this.resolverFksFinanceiro(dto);
+    await this.movRepo.update(id, { ...dto, ...fks });
     return this.movRepo.findOneByOrFail({ id });
   }
 
@@ -282,6 +319,10 @@ export class FinanceiroService {
 
     const parcelas: BoletoParcela[] = [];
     const parcelasConfig: any[] = dto.parcelas ?? [];
+    const fksBoleto = await this.resolverFksFinanceiro({
+      tipo_movimentacao: 'Receita',
+      plano_contas: 'Boletos a Receber',
+    });
 
     if (parcelasConfig.length > 0) {
       for (let i = 0; i < parcelasConfig.length; i++) {
@@ -293,6 +334,7 @@ export class FinanceiroService {
           data: pc.data_vencimento,
           tipo_movimentacao: 'Receita',
           plano_contas: 'Boletos a Receber',
+          ...fksBoleto,
           status: 'Pendente',
           descricao: [boleto.descricao, `Recebedor: ${boleto.recebedor}`].filter(Boolean).join(' · '),
         } as any)) as unknown as MovimentacaoFinanceira;
@@ -317,6 +359,7 @@ export class FinanceiroService {
         data: boleto.data_emissao,
         tipo_movimentacao: 'Receita',
         plano_contas: 'Boletos a Receber',
+        ...fksBoleto,
         status: 'Pendente',
         descricao: [boleto.descricao, `Recebedor: ${boleto.recebedor}`].filter(Boolean).join(' · '),
       } as any)) as unknown as MovimentacaoFinanceira;

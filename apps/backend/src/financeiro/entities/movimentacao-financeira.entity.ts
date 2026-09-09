@@ -44,6 +44,20 @@ export class MovimentacaoFinanceira {
   @Column({ name: 'usuario_nome', type: 'varchar', nullable: true })
   usuario_nome: string;
 
+  // FK adicionadas na auditoria de banco (2026-09-08) em paralelo às colunas
+  // varchar acima (mantidas por compatibilidade — ver app.module.ts v21).
+  @Column({ type: 'uuid', nullable: true })
+  categoria_id: string;
+
+  @Column({ type: 'uuid', nullable: true })
+  plano_contas_id: string;
+
+  @Column({ type: 'uuid', nullable: true })
+  tipo_movimentacao_id: string;
+
+  @Column({ type: 'uuid', nullable: true })
+  forma_pagamento_id: string;
+
   @CreateDateColumn()
   created_at: Date;
 
