@@ -28,6 +28,24 @@ const CORES_CRITICIDADE: Record<string, string> = {
   critica: "#dc2626",
 };
 
+// Fundo bem suave da linha inteira, pra bater o olho na criticidade sem
+// competir com o destaque de seleção (azul).
+const FUNDO_LINHA_CRITICIDADE: Record<string, string> = {
+  baixa: "transparent",
+  media: "#fefce8",
+  alta: "#fff7ed",
+  critica: "#fef2f2",
+};
+
+// Cor da contagem de ocorrências por volume — não é sobre gravidade do
+// erro, é sobre "isso está acontecendo demais" independente da criticidade.
+function corPorOcorrencias(qtd: number): string {
+  if (qtd >= 10) return "#dc2626";
+  if (qtd >= 4) return "#ea580c";
+  if (qtd >= 2) return "#ca8a04";
+  return "#334155";
+}
+
 function Pill({ texto, cor }: { texto: string; cor?: string }) {
   return (
     <span
@@ -181,7 +199,10 @@ export default function Home() {
                   style={{
                     borderTop: "1px solid #f1f5f9",
                     cursor: "pointer",
-                    background: selecionado?.CodErro === item.CodErro ? "#eff6ff" : undefined,
+                    background:
+                      selecionado?.CodErro === item.CodErro
+                        ? "#eff6ff"
+                        : FUNDO_LINHA_CRITICIDADE[item.Criticidade] || undefined,
                   }}
                 >
                   <td style={tdStyle}>
@@ -192,7 +213,9 @@ export default function Home() {
                   <td style={tdStyle}>{item.TipoErro}</td>
                   <td style={tdStyle}><Pill texto={item.Criticidade} cor={CORES_CRITICIDADE[item.Criticidade]} /></td>
                   <td style={tdStyle}>{item.UltimoStatusConhecido}</td>
-                  <td style={tdStyle}>{item.OcorrenciasNoPeriodo}</td>
+                  <td style={{ ...tdStyle, fontWeight: 700, color: corPorOcorrencias(item.OcorrenciasNoPeriodo) }}>
+                    {item.OcorrenciasNoPeriodo}
+                  </td>
                   <td style={tdStyle}>{new Date(item.UltimaNoPeriodo).toLocaleString("pt-BR")}</td>
                 </tr>
               ))}
@@ -218,9 +241,18 @@ export default function Home() {
                 <LinhaContexto nome="Aplicação" valor={selecionado.Aplicacao} />
                 <LinhaContexto nome="Categoria" valor={selecionado.Categoria} />
                 <LinhaContexto nome="Tipo de Erro" valor={selecionado.TipoErro} />
-                <LinhaContexto nome="Criticidade" valor={<Pill texto={selecionado.Criticidade} cor={CORES_CRITICIDADE[selecionado.Criticidade]} />} />
+                {selecionado.Criticidade && (
+                  <LinhaContexto nome="Criticidade" valor={<Pill texto={selecionado.Criticidade} cor={CORES_CRITICIDADE[selecionado.Criticidade]} />} />
+                )}
                 <LinhaContexto nome="Status" valor={selecionado.UltimoStatusConhecido} />
-                <LinhaContexto nome="Ocorrências no período" valor={selecionado.OcorrenciasNoPeriodo} />
+                <LinhaContexto
+                  nome="Ocorrências no período"
+                  valor={
+                    <span style={{ fontWeight: 700, color: corPorOcorrencias(selecionado.OcorrenciasNoPeriodo) }}>
+                      {selecionado.OcorrenciasNoPeriodo}
+                    </span>
+                  }
+                />
                 <LinhaContexto nome="Primeira ocorrência" valor={new Date(selecionado.PrimeiraNoPeriodo).toLocaleString("pt-BR")} />
                 <LinhaContexto nome="Última ocorrência" valor={new Date(selecionado.UltimaNoPeriodo).toLocaleString("pt-BR")} />
               </tbody>

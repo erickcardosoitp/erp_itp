@@ -99,9 +99,12 @@ def processar_grupo(
     primeiro_timestamp: datetime,
     ultimo_timestamp: datetime,
     custo_acumulado: list,
-) -> tuple[str, str]:
+) -> dict:
     """Processa um grupo (mesma assinatura normalizada) visto neste lote.
-    Devolve (CodErro, Aplicacao) usados — pra gravar as linhas do Parquet."""
+    Devolve os campos usados pra gravar as linhas do Parquet — inclui
+    Categoria/TipoErro/Criticidade/Status reais, não só CodErro/Aplicacao
+    (bug corrigido em 2026-09-09: ficavam vazios, quebrando os filtros e o
+    painel de contexto da app de visualização)."""
     qtd = len(exemplos_brutos)
 
     # Camada 2: busca exata (sem custo de IA).
@@ -114,10 +117,19 @@ def processar_grupo(
             "UltimaVez": ultimo_timestamp.isoformat(),
             "MensagemExemplo": exemplos_brutos[-1][:5000],
         }
+        status_atualizado = atualizacao.get("Status") or fields.get("Status")
         atualizacao.update(aplicar_matriz_reincidencia(fields, fields.get("Categoria"), qtd))
+        status_atualizado = atualizacao.get("Status", status_atualizado)
         client.atualizar_item(existente["id"], atualizacao)
         log(f"  reincidência exata: {cod_erro} (+{qtd} ocorrências)")
-        return cod_erro, aplicacao_sugerida
+        return {
+            "cod_erro": cod_erro,
+            "aplicacao": aplicacao_sugerida,
+            "categoria": fields.get("Categoria", ""),
+            "tipo_erro": fields.get("TipoErro", ""),
+            "criticidade": fields.get("Criticidade", ""),
+            "status": status_atualizado or "",
+        }
 
     # Camada 3: sem match exato — classifica e checa semelhança semântica.
     shortlist = client.listar_shortlist(aplicacao_sugerida)
@@ -149,12 +161,21 @@ def processar_grupo(
                     "Ocorrencias": fields.get("Ocorrencias", 0) + qtd,
                     "UltimaVez": ultimo_timestamp.isoformat(),
                 }
+                status_atualizado = fields.get("Status")
                 atualizacao.update(
                     aplicar_matriz_reincidencia(fields, fields.get("Categoria"), qtd)
                 )
+                status_atualizado = atualizacao.get("Status", status_atualizado)
                 client.atualizar_item(item_completo["id"], atualizacao)
                 log(f"  fundido via IA com {cod_erro_fundido} (+{qtd} ocorrências)")
-                return cod_erro_fundido, aplicacao_final
+                return {
+                    "cod_erro": cod_erro_fundido,
+                    "aplicacao": aplicacao_final,
+                    "categoria": fields.get("Categoria", ""),
+                    "tipo_erro": fields.get("TipoErro", ""),
+                    "criticidade": fields.get("Criticidade", ""),
+                    "status": status_atualizado or "",
+                }
         log(f"  aviso: IA apontou fusão com {cod_erro_fundido} mas item não foi "
             f"reencontrado — criando novo por segurança")
 
@@ -186,7 +207,14 @@ def processar_grupo(
     client.atualizar_item(novo_item["id"], {"CodCat": cod_cat})
     log(f"  item novo criado: {cod_cat} / {cod_erro} ({classificacao['categoria']}, "
         f"criticidade={classificacao['criticidade']})")
-    return cod_erro, aplicacao_final
+    return {
+        "cod_erro": cod_erro,
+        "aplicacao": aplicacao_final,
+        "categoria": classificacao["categoria"],
+        "tipo_erro": classificacao["tipo_erro"],
+        "criticidade": classificacao["criticidade"],
+        "status": "aberto",
+    }
 
 
 def main() -> None:
@@ -229,7 +257,7 @@ def main() -> None:
             ts_grupo = sorted(timestamps_por_grupo[msg_normalizada])
             primeiro_ts, ultimo_ts = ts_grupo[0], ts_grupo[-1]
 
-            cod_erro, aplicacao_final = processar_grupo(
+            resultado = processar_grupo(
                 client=client,
                 container=nome,
                 aplicacao_sugerida=aplicacao_sugerida,
@@ -241,13 +269,13 @@ def main() -> None:
             )
             for ts_ocorrencia in ts_grupo:
                 linhas_parquet.append({
-                    "CodErro": cod_erro,
-                    "Aplicacao": aplicacao_final,
-                    "Categoria": "",  # preenchido só na SharePoint List hoje; ok ficar vazio aqui
-                    "TipoErro": "",
+                    "CodErro": resultado["cod_erro"],
+                    "Aplicacao": resultado["aplicacao"],
+                    "Categoria": resultado["categoria"],
+                    "TipoErro": resultado["tipo_erro"],
                     "MensagemNormalizada": msg_normalizada,
-                    "Criticidade": "",
-                    "StatusNoMomento": "",
+                    "Criticidade": resultado["criticidade"],
+                    "StatusNoMomento": resultado["status"],
                     "TimestampOcorrencia": ts_ocorrencia,
                     "FoiAutoCorrigido": False,
                 })
