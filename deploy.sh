@@ -13,8 +13,8 @@ cd "$STACK_DIR"
 docker compose build
 docker compose up -d
 
-echo "==> Limpeza de build cache (mantém cache das últimas 24h)"
-docker builder prune -f --filter "until=24h"
+echo "==> Limpeza de build cache (mantém no máx. 5GB)"
+docker builder prune -f --keep-storage 5GB
 docker image prune -f
 
 echo "==> Deploy concluído"
