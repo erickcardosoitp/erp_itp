@@ -1311,7 +1311,7 @@ export class AcademicoService {
       this.dataSource.query(`
         SELECT cpf,
                json_agg(json_build_object('id', id::text, 'nome', nome_completo, 'status', status_matricula,
-                 'created_at', "createdAt"::text) ORDER BY "createdAt") AS registros
+                 'created_at', created_at::text) ORDER BY created_at) AS registros
         FROM inscricoes
         WHERE cpf IS NOT NULL AND cpf <> ''
           AND status_matricula NOT IN ('Desistente','Cancelada')
@@ -1322,7 +1322,7 @@ export class AcademicoService {
         SELECT LOWER(TRIM(nome_completo)) AS nome_chave,
                data_nascimento::text AS data_nascimento,
                json_agg(json_build_object('id', id::text, 'nome', nome_completo, 'status', status_matricula,
-                 'cpf', cpf, 'created_at', "createdAt"::text) ORDER BY "createdAt") AS registros
+                 'cpf', cpf, 'created_at', created_at::text) ORDER BY created_at) AS registros
         FROM inscricoes
         WHERE data_nascimento IS NOT NULL
           AND status_matricula NOT IN ('Desistente','Cancelada')
