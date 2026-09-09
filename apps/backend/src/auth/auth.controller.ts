@@ -214,10 +214,17 @@ export class AuthController {
 
       const result = await this.authService.loginComSSO(email, claims.name);
 
+      // sameSite 'lax' (nao 'strict' como o login normal): esta requisicao
+      // ainda faz parte da cadeia de redirect iniciada pela Microsoft
+      // (cross-site). Cookie 'Strict' setado aqui nao seria enviado no
+      // request seguinte (redirect pra '/'), so num reload manual novo -
+      // e exatamente o bug visto (login "nao pega" ate recarregar a pagina).
+      // 'Lax' permite envio em navegacao GET top-level mesmo vindo de
+      // redirect cross-site, mantendo protecao contra CSRF via POST/AJAX.
       res.cookie('itp_token', result.access_token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
+        sameSite: 'lax',
         path: '/',
         maxAge: 8 * 60 * 60 * 1000,
       });
