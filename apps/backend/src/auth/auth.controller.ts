@@ -1,7 +1,24 @@
-import { Controller, Post, Body, Res, Logger, HttpStatus, HttpCode, UnauthorizedException, Patch, Req, Headers, Get } from '@nestjs/common';
+import { Controller, Post, Body, Res, Logger, HttpStatus, HttpCode, UnauthorizedException, Patch, Req, Headers, Get, Query } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { Response } from 'express';
+import { Response, Request } from 'express';
 import { Public } from './decorators/public.decorator';
+import * as crypto from 'crypto';
+import * as jwt from 'jsonwebtoken';
+import jwksClient = require('jwks-rsa');
+
+const MS_TENANT_ID = process.env.MS_TENANT_ID || '';
+const MS_CLIENT_ID = process.env.MS_CLIENT_ID || '';
+const MS_CLIENT_SECRET = process.env.MS_CLIENT_SECRET || '';
+// Passa pelo proxy do frontend (/backend-api) de proposito: o Set-Cookie da
+// resposta precisa vir do dominio itp.institutotiapretinha.org (onde o
+// middleware le o cookie), nao de api.itp.* (dominio diferente, cookie
+// host-only nao seria visto pelo frontend).
+const MS_REDIRECT_URI = process.env.MS_REDIRECT_URI || 'https://itp.institutotiapretinha.org/backend-api/auth/microsoft/callback';
+const MS_FRONTEND_URL = process.env.APP_URL || 'https://itp.institutotiapretinha.org';
+
+const msJwks = MS_TENANT_ID
+  ? jwksClient({ jwksUri: `https://login.microsoftonline.com/${MS_TENANT_ID}/discovery/v2.0/keys` })
+  : null;
 
 @Controller('auth')
 export class AuthController {
@@ -95,7 +112,120 @@ export class AuthController {
     return this.authService.criarUsuarioParaFuncionario(body);
   }
 
-  /** 
+  /**
+   * Inicia o login via SSO Microsoft (Entra ID). Redireciona pro consent
+   * screen da Microsoft; state em cookie httpOnly protege contra CSRF.
+   */
+  @Public()
+  @Get('microsoft')
+  async iniciarLoginMicrosoft(@Res() res: Response) {
+    if (!MS_TENANT_ID || !MS_CLIENT_ID) {
+      throw new UnauthorizedException('SSO Microsoft não configurado.');
+    }
+    const state = crypto.randomBytes(16).toString('hex');
+    // path '/' porque o navegador ve /backend-api/... (proxy do Next), nao
+    // /api/... (rota interna do backend) — restringir o path quebraria o
+    // envio do cookie de volta no callback.
+    res.cookie('ms_oauth_state', state, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 5 * 60 * 1000,
+    });
+
+    const params = new URLSearchParams({
+      client_id: MS_CLIENT_ID,
+      response_type: 'code',
+      redirect_uri: MS_REDIRECT_URI,
+      response_mode: 'query',
+      scope: 'openid email profile',
+      state,
+    });
+    return res.redirect(
+      `https://login.microsoftonline.com/${MS_TENANT_ID}/oauth2/v2.0/authorize?${params.toString()}`,
+    );
+  }
+
+  /**
+   * Callback do SSO Microsoft: troca o code por token, valida a assinatura
+   * do id_token (JWKS da Microsoft), casa/cria usuário por e-mail, emite o
+   * mesmo cookie de sessão do login normal.
+   */
+  @Public()
+  @Get('microsoft/callback')
+  async callbackMicrosoft(
+    @Query('code') code: string,
+    @Query('state') state: string,
+    @Req() req: Request,
+    @Res() res: Response,
+  ) {
+    try {
+      const stateCookie = (req as any).cookies?.ms_oauth_state;
+      res.clearCookie('ms_oauth_state', { path: '/' });
+      if (!code || !state || !stateCookie || state !== stateCookie) {
+        throw new UnauthorizedException('Requisição SSO inválida (state divergente).');
+      }
+
+      const tokenResp = await fetch(
+        `https://login.microsoftonline.com/${MS_TENANT_ID}/oauth2/v2.0/token`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            client_id: MS_CLIENT_ID,
+            client_secret: MS_CLIENT_SECRET,
+            grant_type: 'authorization_code',
+            code,
+            redirect_uri: MS_REDIRECT_URI,
+            scope: 'openid email profile',
+          }),
+        },
+      );
+      const tokenBody: any = await tokenResp.json();
+      if (!tokenResp.ok || !tokenBody.id_token) {
+        this.logger.error(`Falha ao trocar code por token SSO: ${JSON.stringify(tokenBody)}`);
+        throw new UnauthorizedException('Falha na autenticação com a Microsoft.');
+      }
+
+      const claims: any = await new Promise((resolve, reject) => {
+        jwt.verify(
+          tokenBody.id_token,
+          (header, callback) => {
+            msJwks!.getSigningKey(header.kid, (err: Error | null, key?: jwksClient.SigningKey) => {
+              if (err) return callback(err);
+              callback(null, key!.getPublicKey());
+            });
+          },
+          {
+            audience: MS_CLIENT_ID,
+            issuer: `https://login.microsoftonline.com/${MS_TENANT_ID}/v2.0`,
+          },
+          (err, decoded) => (err ? reject(err) : resolve(decoded)),
+        );
+      });
+
+      const email = claims.email || claims.preferred_username;
+      if (!email) throw new UnauthorizedException('Conta Microsoft sem e-mail disponível.');
+
+      const result = await this.authService.loginComSSO(email, claims.name);
+
+      res.cookie('itp_token', result.access_token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        path: '/',
+        maxAge: 8 * 60 * 60 * 1000,
+      });
+
+      return res.redirect(MS_FRONTEND_URL);
+    } catch (error: any) {
+      this.logger.error(`❌ Falha no login SSO Microsoft: ${error.message}`);
+      return res.redirect(`${MS_FRONTEND_URL}/login?erro=sso`);
+    }
+  }
+
+  /**
    * Endpoint de Cron Job — envia lembretes diários de troca de senha.
    * Protegido pelo header x-cron-secret (local) ou Authorization Bearer (Vercel Cron).
    */

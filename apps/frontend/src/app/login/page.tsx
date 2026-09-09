@@ -23,6 +23,11 @@ function LoginForm() {
     // Recupera e-mail/matrícula lembrado
     const salvo = localStorage.getItem('itp_lembrar_email');
     if (salvo) { setEmail(salvo); setLembrar(true); }
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('erro') === 'sso') {
+      setError('Não foi possível entrar com a Microsoft. Tente novamente.');
+    }
   }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -200,6 +205,25 @@ function LoginForm() {
                 )}
               </button>
             </form>
+
+            <div className="flex items-center gap-3 pt-1">
+              <div className="h-px flex-1 bg-slate-100" />
+              <span className="text-[10px] font-black uppercase text-slate-300 tracking-widest">ou</span>
+              <div className="h-px flex-1 bg-slate-100" />
+            </div>
+
+            <a
+              href={`${API_BASE}/auth/microsoft`}
+              className="w-full bg-white hover:bg-slate-50 border-2 border-slate-100 hover:border-slate-200 text-slate-700 font-black py-4 sm:py-5 rounded-[20px] sm:rounded-[24px] flex items-center justify-center gap-3 transition-all active:scale-[0.98] uppercase text-xs tracking-widest"
+            >
+              <svg width="18" height="18" viewBox="0 0 21 21">
+                <rect x="1" y="1" width="9" height="9" fill="#f25022" />
+                <rect x="11" y="1" width="9" height="9" fill="#7fba00" />
+                <rect x="1" y="11" width="9" height="9" fill="#00a4ef" />
+                <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
+              </svg>
+              Entrar com Microsoft
+            </a>
           </div>
         </div>
 

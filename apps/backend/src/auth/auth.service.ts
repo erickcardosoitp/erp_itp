@@ -151,6 +151,57 @@ export class AuthService {
   }
 
   /**
+   * LOGIN VIA SSO MICROSOFT: casa por e-mail; cria conta nova (role 'user',
+   * menor privilegio do ROLE_LEVEL) se nao existir ainda. Sem senha utilizavel
+   * (hash aleatorio) — essa conta so entra por SSO.
+   */
+  async loginComSSO(email: string, nome: string) {
+    const emailNormalizado = email.toLowerCase().trim();
+
+    let usuario = await this.usuarioRepository
+      .createQueryBuilder('user')
+      .leftJoinAndSelect('user.grupo', 'grupo')
+      .where('LOWER(user.email) = LOWER(:email)', { email: emailNormalizado })
+      .getOne();
+
+    if (!usuario) {
+      const senhaAleatoria = crypto.randomBytes(32).toString('hex');
+      const novoUsuario = this.usuarioRepository.create({
+        nome: nome || emailNormalizado,
+        email: emailNormalizado,
+        password: await bcrypt.hash(senhaAleatoria, 12),
+        role: 'user',
+        deve_trocar_senha: false,
+      });
+      usuario = await this.usuarioRepository.save(novoUsuario);
+      this.logger.log(`👤 Usuário criado via SSO Microsoft: ${emailNormalizado}`);
+    }
+
+    const roleLimpa = String(usuario.role || 'user').toLowerCase().trim();
+
+    const payload = {
+      sub: usuario.id,
+      email: usuario.email,
+      nome: usuario.nome || usuario.email,
+      role: roleLimpa,
+      grupo: usuario.grupo?.nome || 'SEM_GRUPO',
+      permissoes: usuario.grupo?.grupo_permissoes || {},
+      deve_trocar_senha: false,
+    };
+
+    const { password, ...usuarioSemSenha } = usuario as any;
+    usuarioSemSenha.role = roleLimpa;
+
+    this.logger.log(`✅ Login SSO Microsoft: ${emailNormalizado} [Cargo: ${roleLimpa}]`);
+
+    return {
+      access_token: await this.jwtService.signAsync(payload, { expiresIn: '8h' }),
+      usuario: { ...usuarioSemSenha, deve_trocar_senha: false },
+      deve_trocar_senha: false,
+    };
+  }
+
+  /**
    * PERFIL: Retorna os dados completos do usuário pelo ID (sub do JWT).
    */
   async getProfile(userId: string) {
