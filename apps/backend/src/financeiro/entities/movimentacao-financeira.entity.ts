@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, DeleteDateColumn } from 'typeorm';
 
 @Entity('movimentacoes_financeiras')
 export class MovimentacaoFinanceira {
@@ -57,6 +57,10 @@ export class MovimentacaoFinanceira {
 
   @Column({ type: 'uuid', nullable: true })
   forma_pagamento_id: string;
+
+  /** Soft delete — auditoria de banco 2026-09-08 (P0 #4). NULL = ativo. */
+  @DeleteDateColumn({ name: 'deleted_at' })
+  deleted_at: Date | null;
 
   @CreateDateColumn()
   created_at: Date;

@@ -204,6 +204,8 @@ export class FinanceiroService {
     return patch;
   }
 
+  // deleted_at é @DeleteDateColumn — TypeORM já filtra soft-deleted
+  // automaticamente em todo find()/findOne(), sem precisar de where manual.
   listarMovimentacoes() { return this.movRepo.find({ order: { data: 'DESC', created_at: 'DESC' } }); }
 
   listarDoacoes() {
@@ -251,7 +253,7 @@ export class FinanceiroService {
   async deletarMovimentacao(id: string) {
     const e = await this.movRepo.findOneBy({ id });
     if (!e) throw new NotFoundException('Movimentação não encontrada');
-    await this.movRepo.delete(id);
+    await this.movRepo.softDelete(id);
     return { message: 'Movimentação removida' };
   }
 
@@ -421,15 +423,15 @@ export class FinanceiroService {
   async deletarBoleto(id: string) {
     const b = await this.boletoRepo.findOneBy({ id });
     if (!b) throw new NotFoundException('Boleto não encontrado');
-    // Clean up movimentacoes linked to parcelas
+    // Soft-delete movimentacoes linked to parcelas (mantém trilha, não corta FK)
     const parcelas = await this.parcelaRepo.findBy({ boleto_id: id });
     for (const p of parcelas) {
       if (p.movimentacao_id) {
-        await this.movRepo.delete(p.movimentacao_id).catch(() => {});
+        await this.movRepo.softDelete(p.movimentacao_id).catch(() => {});
       }
     }
     await this.parcelaRepo.delete({ boleto_id: id });
-    await this.boletoRepo.delete(id);
+    await this.boletoRepo.softDelete(id);
     return { message: 'Boleto removido' };
   }
 

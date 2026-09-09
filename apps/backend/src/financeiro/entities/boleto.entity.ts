@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, DeleteDateColumn } from 'typeorm';
 
 @Entity('boletos')
 export class Boleto {
@@ -52,4 +52,8 @@ export class Boleto {
 
   @UpdateDateColumn({ name: 'updated_at' })
   updated_at: Date;
+
+  /** Soft delete — auditoria de banco 2026-09-08 (P0 #4). NULL = ativo. */
+  @DeleteDateColumn({ name: 'deleted_at' })
+  deleted_at: Date | null;
 }

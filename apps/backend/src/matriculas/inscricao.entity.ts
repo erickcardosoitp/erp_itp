@@ -1,9 +1,10 @@
 import { 
   Entity, 
   PrimaryGeneratedColumn, 
-  Column, 
-  CreateDateColumn, 
+  Column,
+  CreateDateColumn,
   UpdateDateColumn,
+  DeleteDateColumn,
   OneToOne,
   JoinColumn
 } from 'typeorm';
@@ -170,9 +171,13 @@ export class Inscricao {
   @JoinColumn({ name: 'aluno_id' })
   aluno: Aluno;
 
-  @CreateDateColumn({ name: 'created_at' }) 
+  @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
-  @UpdateDateColumn({ name: 'updated_at' }) 
+  @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
+
+  /** Soft delete — auditoria de banco 2026-09-08 (P0 #4). NULL = ativo. */
+  @DeleteDateColumn({ name: 'deleted_at' })
+  deletedAt: Date | null;
 }

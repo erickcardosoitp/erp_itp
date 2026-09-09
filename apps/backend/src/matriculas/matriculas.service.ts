@@ -1228,7 +1228,7 @@ export class MatriculasService {
 
   async limparDesistentes(): Promise<{ deletados: number }> {
     const result = await this.dataSource.query(
-      `DELETE FROM inscricoes WHERE status_matricula = 'Desistente' RETURNING id`,
+      `UPDATE inscricoes SET deleted_at = now() WHERE status_matricula = 'Desistente' AND deleted_at IS NULL RETURNING id`,
     );
     return { deletados: result.length };
   }

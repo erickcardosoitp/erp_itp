@@ -139,4 +139,8 @@ export class Aluno {
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+  /** Soft delete — auditoria de banco 2026-09-08 (P0 #4). NULL = ativo. */
+  @Column({ name: 'deleted_at', type: 'timestamptz', nullable: true })
+  deletedAt: Date | null;
 }

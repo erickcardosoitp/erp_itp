@@ -167,7 +167,7 @@ export class AppModule implements OnModuleInit {
   private async runMigrations() {
     try {
       // ── Versão do schema — pula migrations se já rodaram neste banco ──────
-      const SCHEMA_VERSION = 21; // incrementar aqui ao adicionar novas migrations
+      const SCHEMA_VERSION = 22; // incrementar aqui ao adicionar novas migrations
       await this.dataSource.query(`
         CREATE TABLE IF NOT EXISTS _schema_version (
           id      INT PRIMARY KEY DEFAULT 1,
@@ -1638,6 +1638,24 @@ export class AppModule implements OnModuleInit {
       await this.dataSource.query(`CREATE INDEX IF NOT EXISTS idx_movfin_tipo_movimentacao_id ON movimentacoes_financeiras(tipo_movimentacao_id)`);
       await this.dataSource.query(`CREATE INDEX IF NOT EXISTS idx_movfin_forma_pagamento_id ON movimentacoes_financeiras(forma_pagamento_id)`);
       this.logger.log('✅ v21: FK financeiro criada e backfillada (categoria/plano_contas/tipo_movimentacao/forma_pagamento)');
+
+      // ── v22: soft delete em tabelas criticas (alunos, usuarios,
+      // movimentacoes_financeiras, inscricoes, boletos) — exclusao vira
+      // reversivel/auditavel em vez de hard delete. Auditoria de banco
+      // 2026-09-08, item P0 #4. Indice parcial (WHERE deleted_at IS NULL)
+      // pra nao pagar custo de index em linha excluida, e acelerar o filtro
+      // que os services passam a aplicar em toda listagem. ──────────────
+      await this.dataSource.query(`ALTER TABLE alunos ADD COLUMN IF NOT EXISTS deleted_at timestamptz`);
+      await this.dataSource.query(`ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS deleted_at timestamptz`);
+      await this.dataSource.query(`ALTER TABLE movimentacoes_financeiras ADD COLUMN IF NOT EXISTS deleted_at timestamptz`);
+      await this.dataSource.query(`ALTER TABLE inscricoes ADD COLUMN IF NOT EXISTS deleted_at timestamptz`);
+      await this.dataSource.query(`ALTER TABLE boletos ADD COLUMN IF NOT EXISTS deleted_at timestamptz`);
+      await this.dataSource.query(`CREATE INDEX IF NOT EXISTS idx_alunos_deleted_at ON alunos(id) WHERE deleted_at IS NULL`);
+      await this.dataSource.query(`CREATE INDEX IF NOT EXISTS idx_usuarios_deleted_at ON usuarios(id) WHERE deleted_at IS NULL`);
+      await this.dataSource.query(`CREATE INDEX IF NOT EXISTS idx_movfin_deleted_at ON movimentacoes_financeiras(id) WHERE deleted_at IS NULL`);
+      await this.dataSource.query(`CREATE INDEX IF NOT EXISTS idx_inscricoes_deleted_at ON inscricoes(id) WHERE deleted_at IS NULL`);
+      await this.dataSource.query(`CREATE INDEX IF NOT EXISTS idx_boletos_deleted_at ON boletos(id) WHERE deleted_at IS NULL`);
+      this.logger.log('✅ v22: soft delete (deleted_at) em alunos/usuarios/movimentacoes_financeiras/inscricoes/boletos');
 
       // ── Marca schema como atualizado — próximos cold starts pulam tudo ────
       await this.dataSource.query(`UPDATE _schema_version SET version = $1, ran_at = now() WHERE id = 1`, [SCHEMA_VERSION]);

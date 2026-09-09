@@ -79,12 +79,13 @@ export class AuthService {
 
     const qb = this.usuarioRepository.createQueryBuilder('user')
       .addSelect('user.password')
-      .leftJoinAndSelect('user.grupo', 'grupo');
+      .leftJoinAndSelect('user.grupo', 'grupo')
+      .where('user.deletedAt IS NULL');
 
     if (isEmail) {
-      qb.where('LOWER(user.email) = LOWER(:email)', { email: id });
+      qb.andWhere('LOWER(user.email) = LOWER(:email)', { email: id });
     } else {
-      qb.where('user.matricula = :matricula', { matricula: id });
+      qb.andWhere('user.matricula = :matricula', { matricula: id });
     }
 
     const usuario = await qb.getOne();
@@ -171,7 +172,8 @@ export class AuthService {
     const usuario = await this.usuarioRepository
       .createQueryBuilder('user')
       .leftJoinAndSelect('user.grupo', 'grupo')
-      .where('LOWER(user.email) = LOWER(:email)', { email: emailNormalizado })
+      .where('user.deletedAt IS NULL')
+      .andWhere('LOWER(user.email) = LOWER(:email)', { email: emailNormalizado })
       .getOne();
 
     if (!usuario) {

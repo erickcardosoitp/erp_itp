@@ -82,7 +82,7 @@ export class UsersService {
   async deletar(id: string) {
     const usuario = await this.usuarioRepo.findOneBy({ id });
     if (!usuario) throw new NotFoundException('Usuário não encontrado.');
-    await this.usuarioRepo.delete(id);
+    await this.usuarioRepo.softDelete(id);
     return { message: 'Usuário removido com sucesso.' };
   }
 }

@@ -1,11 +1,12 @@
-import { 
-  Entity, 
-  PrimaryGeneratedColumn, 
-  Column, 
-  CreateDateColumn, 
-  UpdateDateColumn, 
-  ManyToOne, 
-  JoinColumn 
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  DeleteDateColumn,
+  ManyToOne,
+  JoinColumn
 } from 'typeorm';
 import { Grupo } from '../grupos/grupo.entity';
 
@@ -67,4 +68,13 @@ export class Usuario {
   /** Data de expiração do token de reset */
   @Column({ name: 'reset_token_expires', type: 'timestamptz', nullable: true, select: false })
   resetTokenExpires: Date;
+
+  /**
+   * Soft delete — auditoria de banco 2026-09-08 (P0 #4). NULL = ativo.
+   * @DeleteDateColumn filtra automaticamente todo find()/findOne() do
+   * TypeORM (sem precisar adicionar WHERE em cada listagem) — usar
+   * repo.softDelete(id) pra excluir, repo.restore(id) pra reverter.
+   */
+  @DeleteDateColumn({ name: 'deleted_at' })
+  deletedAt: Date | null;
 }
