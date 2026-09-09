@@ -81,6 +81,22 @@ class GraphClient:
         resp.raise_for_status()
         return [item["fields"] for item in resp.json().get("value", [])]
 
+    def buscar_aprovados_pendentes(self, top: int = 20) -> list[dict]:
+        """Itens que o Power Automate já aprovou (Status=aprovado) e já
+        montou o PromptExecucao, mas que o aplicador.py ainda não rodou.
+        Usa Fase != 'aplicando' como proteção extra contra reprocessar um
+        item que já está em execução (não é lock de verdade — só reduz a
+        janela de corrida entre execuções concorrentes do aplicador)."""
+        filtro = "fields/Status eq 'aprovado'"
+        params = {"$expand": "fields", "$filter": filtro, "$top": str(top)}
+        resp = requests.get(self._items_url(), headers=self._headers(), params=params, timeout=30)
+        resp.raise_for_status()
+        itens = resp.json().get("value", [])
+        return [
+            i for i in itens
+            if i["fields"].get("PromptExecucao") and i["fields"].get("Fase") != "aplicando"
+        ]
+
     def criar_item(self, fields: dict) -> dict:
         resp = requests.post(
             self._items_url(), headers=self._headers(), json={"fields": fields}, timeout=30

@@ -64,10 +64,11 @@ o mesmo problema com confiança alta, ou null se for genuinamente novo>",
   "aplicacao": "<ITP, APRXM, DW ou BD>",
   "categoria": "<uma de: banco, código, infra, security, integracao, usuario, terceiros>",
   "tipo_erro": "<rótulo curto e específico, texto livre, ex: 'Divergência de tipo UUID/varchar em FK'>",
-  "descricao_resumida": "<o erro explicado em português simples, sem jargão \
-técnico, pra alguém não-técnico entender o que aconteceu em 1-2 frases. \
-Ex: 'O sistema tentou salvar a turma de um aluno, mas o banco de dados \
-recusou porque o tipo de dado estava errado.'>",
+  "descricao_resumida": "<UMA frase curta (máximo ~15 palavras), português \
+simples, sem jargão técnico — tipo texto de notificação, não parágrafo. \
+Ex: 'Não deu pra salvar a turma do aluno por erro de tipo no banco.' \
+NÃO explique a causa técnica aqui, só o que aconteceu na prática — a causa \
+detalhada já vai no campo 'diagnostico'.>",
   "criticidade": "<uma de: baixa, media, alta, critica — aplique a rubrica acima>",
   "camada_investigacao": "<uma de: log_app, schema_banco, infra_vm, integracao_ext>",
   "confianca": <número de 0 a 10, aplique a rubrica de confiança acima>,
@@ -140,6 +141,64 @@ def classificar(
     _validar(classificacao)
     classificacao["_custo_usd"] = custo_usd
     return classificacao
+
+
+PROMPT_EXECUCAO_WRAPPER = """Você vai executar uma correção JÁ APROVADA por um \
+humano — não decida uma abordagem alternativa, não investigue de novo, não \
+mude o escopo. Sua única tarefa é aplicar exatamente o que está descrito \
+abaixo e reportar o resultado.
+
+{prompt_execucao}
+
+Regras (CATALOGO-ERROS.md, seção de segurança):
+- Só execute ações do catálogo fechado (CHECK_*, RESTART_CONTAINER, \
+CLEAR_BUILD_CACHE, APPLY_MIGRATION, FIX_CODE_AND_DEPLOY, ESCALATE_HUMAN).
+- Se a correção envolver código: commit + push, e rode o deploy.sh do erp_itp.
+- Se a correção envolver schema de banco: aplique via migration idempotente \
+(ADD COLUMN IF NOT EXISTS etc.), nunca DROP/ALTER destrutivo.
+- Depois de aplicar, valide se o erro realmente sumiu (reproduza a consulta/
+condição que causava o erro, se possível).
+- Se em qualquer momento a correção não for tão simples quanto parecia, ou \
+exigir uma decisão que não estava no escopo aprovado, PARE e reporte \
+precisa_atencao_humana=true em vez de improvisar.
+
+Responda ESTRITAMENTE com um objeto JSON válido, sem markdown, sem texto \
+antes ou depois:
+
+{{
+  "sucesso": <true se a correção foi aplicada e validada, false caso contrário>,
+  "resumo": "<o que foi feito, em 1-3 frases>",
+  "link_commit": "<URL do commit no GitHub, ou null se não houve commit>",
+  "precisa_atencao_humana": <true se travou em algo que exige decisão humana>
+}}"""
+
+
+def executar(prompt_execucao: str) -> dict:
+    """Chamada da etapa de RESOLUÇÃO (pós-aprovação) — diferente de
+    classificar(), que só investiga/propõe. Aqui o Claude Code CLI de fato
+    aplica a correção (commit, deploy, migration), sempre dentro do escopo
+    já aprovado por humano (nunca decide sozinho o que fazer)."""
+    prompt = PROMPT_EXECUCAO_WRAPPER.format(prompt_execucao=prompt_execucao)
+
+    resultado = subprocess.run(
+        ["claude", "-p", prompt, "--output-format", "json"],
+        capture_output=True,
+        text=True,
+        timeout=600,  # execução real (commit/deploy) demora mais que classificação
+    )
+    if resultado.returncode != 0:
+        raise RuntimeError(f"claude CLI falhou na execução: {resultado.stderr[:500]}")
+
+    envelope = json.loads(resultado.stdout)
+    custo_usd = envelope.get("total_cost_usd")
+    texto_resposta = envelope.get("result", "")
+    execucao = _extrair_json(texto_resposta)
+
+    if "sucesso" not in execucao or "resumo" not in execucao:
+        raise ValueError(f"Resposta de execução fora do schema esperado: {execucao}")
+
+    execucao["_custo_usd"] = custo_usd
+    return execucao
 
 
 def _validar(c: dict) -> None:

@@ -159,20 +159,22 @@ não `Aplicacao=BD`.
 **Bloco 4 — Diagnóstico da IA**
 | Coluna | Tipo | Valores/formato |
 |---|---|---|
-| `CamadaInvestigacao` | Escolha | log_app, schema_banco, infra_vm, integracao_externa |
-| `Confianca` | Número | 0 a 10 (corte de auto-elegibilidade proposto: 8,5) |
-| `IAPodeResolver` | Escolha | sim_seguro, sim_com_risco, nao |
-| `Diagnostico` | Texto longo | Análise do Claude |
+| `CamadaInvestigacao` | Escolha | log_app, schema_banco, infra_vm, integracao_ext |
+| `Confianca` | Número | 0 a 10 — rubrica ancorada em qualidade de evidência (ver `catalogo-erros/claude_client.py`, rubrica no `PROMPT_TEMPLATE`) |
+| `IAPodeResolver` | Escolha | seguro, sem risco, mediano, alto risco (escala de risco, não booleano) |
+| `Diagnostico` | Texto longo | Análise do Claude — deve justificar a nota de `Confianca` |
 | `MensagemExemplo` | Texto longo | Última mensagem bruta, sem normalizar |
 
 **Bloco 5 — Correção e execução**
 | Coluna | Tipo | Valores/formato |
 |---|---|---|
-| `CorrecaoProposta` | Texto longo | Correção sugerida |
+| `CorrecaoProposta` | Texto longo | Correção sugerida pelo Claude na classificação |
+| `PromptExecucao` | Texto longo | Montado pelo Power Automate na aprovação (padrão + comentário livre do aprovador) — é isso que o `aplicador.py` manda pro Claude Code CLI executar |
+| `ResultadoExecucao` | Texto longo | Resumo do que foi feito, escrito pelo `aplicador.py` depois de executar |
 | `AcaoExecutada` | Texto | Código da ação do catálogo (seção 7) |
 | `LinkCommit` | Hyperlink | |
 | `ResolvidoEm` | Data/hora | |
-| `TentativasResolucao` | Número | |
+| `TentativasResolucao` | Número | Limite de 2 — no 3º ciclo sem sucesso, escala sem tentar de novo |
 
 **Bloco 6 — Aprovação humana**
 | Coluna | Tipo | Valores/formato |
@@ -180,6 +182,38 @@ não `Aplicacao=BD`.
 | `AprovadoPor` | Pessoa | |
 | `AprovadoEm` | Data/hora | |
 | `MotivoRejeicao` | Texto longo | |
+
+### 5.1 Fluxo de aprovação → execução (Power Automate + aplicador.py)
+
+```
+Item novo/reincidente na lista (Status=aberto/reaberto)
+        ↓
+Power Automate Fluxo A:
+    dispara em "item criado" OU "Reincidente=true"
+    → notifica na hora (email/Teams) com diagnóstico completo
+    → Approval (campo de comentário livre)
+    → aprovado (+ comentário opcional) ou rejeitado
+    → Compose: PromptExecucao = template padrão + comentário do aprovador
+    → grava: Status=aprovado, PromptExecucao
+        ↓
+VM — aplicador.py (cron, 15/15min):
+    → busca Status=aprovado com PromptExecucao preenchido
+    → checa TentativasResolucao < 2, senão escala direto
+    → claude_client.executar(PromptExecucao) — só aplica o que foi
+      aprovado, nunca decide algo fora do escopo (wrapper de segurança
+      dedicado, diferente do classificar() do coletor.py)
+    → grava: ResultadoExecucao, Status (resolvido/aberto+escalado), LinkCommit
+        ↓
+Power Automate Fluxo C: notifica resultado (sucesso → email; precisa
+    atenção → Teams)
+
+Fluxo B (separado, diário): resumo consolidado do dia inteiro
+```
+
+`PromptExecucao` é deliberadamente separado de `CorrecaoProposta`: o
+segundo é a proposta que o Claude gerou na classificação (só leitura,
+histórico); o primeiro é o que de fato vai ser executado, podendo ter
+instrução adicional do humano que aprovou.
 
 `Fase` (estágio técnico do pipeline) e `Status` (resumo de negócio pro
 relatório) são campos **separados de propósito** — não redundantes.
