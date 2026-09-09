@@ -2,6 +2,9 @@
 
 Sistema de Gestão Empresarial para o ITP (Instituto Técnico/Politécnico). Monorepo NestJS + Next.js para gestão acadêmica, financeira e operacional.
 
+> 📐 **Arquitetura completa (infra, módulos, dependências, dívidas conhecidas):
+> ver [ARCHITECTURE.md](ARCHITECTURE.md).**
+
 ---
 
 ## Estrutura do Projeto
