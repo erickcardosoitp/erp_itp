@@ -12,7 +12,7 @@
 - **Frontend**: Next.js 15 (App Router), proxy `/backend-api/*` → backend (`next.config.mjs`), elimina CORS.
 - **Auth**: JWT em cookie httpOnly (`itp_token`) — login por email/matrícula+senha, **e** SSO Microsoft (Entra ID), em paralelo.
 - **Storage de arquivos**: Azure Blob Storage (`stitperpprod`, container `arquivos`) — migrado do Supabase Storage em 2026-09-09. Interface em `apps/backend/src/modules/supabase/supabase.service.ts` (nome mantido por compatibilidade, ver nota no arquivo).
-- **Email**: SMTP Microsoft 365 (`smtp.office365.com`, caixa `projetos@institutotiapretinha.org`) — migrado do Gmail em 2026-09-09 (Gmail bloqueava login pelo IP novo da VM).
+- **Email**: Microsoft Graph API (`POST /users/{mailbox}/sendMail`), caixa `projetos@institutotiapretinha.org` — migrado do Gmail SMTP em 2026-09-09. Não usa SMTP: o tenant tem "Security Defaults" ativo (bloqueia autenticação legada/SMTP AUTH tenant-wide) e não há licença Entra ID P1 pra Conditional Access de exceção — Graph API com OAuth2 app-only contorna isso sem enfraquecer a segurança do tenant. `GraphMailTransport` em `apps/backend/src/email.service.ts` implementa a interface de transport do nodemailer, reaproveitando o App Registration do SSO (`MS_CLIENT_ID`/`MS_CLIENT_SECRET`/`MS_TENANT_ID`), permissão `Mail.Send` (Application). **Pendência de hardening**: `Mail.Send` (Application) por padrão permite enviar como qualquer mailbox do tenant, não só `projetos@` — restringir via Application Access Policy do Exchange Online exige Exchange Online PowerShell, que está bloqueado nesta VM/sessão por Conditional Access (dispositivo não gerenciado/compliant).
 
 ---
 
