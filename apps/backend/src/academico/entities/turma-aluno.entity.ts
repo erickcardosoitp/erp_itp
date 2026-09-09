@@ -5,10 +5,10 @@ export class TurmaAluno {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'turma_id', type: 'varchar', nullable: true })
+  @Column({ name: 'turma_id', type: 'uuid', nullable: true })
   turma_id: string | null;
 
-  @Column({ name: 'aluno_id', type: 'varchar', nullable: true })
+  @Column({ name: 'aluno_id', type: 'uuid', nullable: true })
   aluno_id: string | null;
 
   @Column({ name: 'inscricao_id', type: 'int', nullable: true })

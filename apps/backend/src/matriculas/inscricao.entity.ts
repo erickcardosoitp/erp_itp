@@ -96,17 +96,23 @@ export class Inscricao {
   @Column({ name: 'telefone_alternativo', type: 'varchar', nullable: true }) 
   telefone_alternativo: string;
 
-  @Column({ name: 'possui_alergias', type: 'varchar', nullable: true }) 
+  @Column({ name: 'possui_alergias', type: 'varchar', nullable: true })
   possui_alergias: string;
 
-  @Column({ name: 'cuidado_especial', type: 'varchar', nullable: true }) 
+  @Column({ name: 'alergias_descricao', type: 'text', nullable: true })
+  alergias_descricao: string;
+
+  @Column({ name: 'cuidado_especial', type: 'varchar', nullable: true })
   cuidado_especial: string;
 
-  @Column({ name: 'detalhes_cuidado', type: 'text', nullable: true }) 
+  @Column({ name: 'detalhes_cuidado', type: 'text', nullable: true })
   detalhes_cuidado: string;
 
   @Column({ name: 'uso_medicamento', type: 'varchar', nullable: true })
   uso_medicamento: string;
+
+  @Column({ name: 'medicamentos_descricao', type: 'text', nullable: true })
+  medicamentos_descricao: string;
 
   @Column({ name: 'auto_declaracao', type: 'varchar', nullable: true })
   auto_declaracao: string;

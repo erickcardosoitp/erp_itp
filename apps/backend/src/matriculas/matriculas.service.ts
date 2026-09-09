@@ -737,7 +737,7 @@ export class MatriculasService {
         for (const turmaId of turmaIds) {
           await queryRunner.manager.query(
             `INSERT INTO turma_alunos (id, aluno_id, turma_id, status, tipo_vinculo, created_at)
-             VALUES (gen_random_uuid(), $1, $2, 'ativo', 'aluno', NOW())
+             VALUES (gen_random_uuid(), $1::uuid, $2::uuid, 'ativo', 'aluno', NOW())
              ON CONFLICT DO NOTHING`,
             [alunoSalvo.id, turmaId]
           );
@@ -864,7 +864,7 @@ export class MatriculasService {
         for (const turmaId of turmaIds) {
           await queryRunner.manager.query(
             `INSERT INTO turma_alunos (id, aluno_id, turma_id, status, tipo_vinculo, created_at)
-             VALUES (gen_random_uuid(), $1, $2, 'ativo', 'aluno', NOW())`,
+             VALUES (gen_random_uuid(), $1::uuid, $2::uuid, 'ativo', 'aluno', NOW())`,
             [alunoSalvo.id, turmaId]
           );
           this.logger.log(`✅ Aluno ${alunoSalvo.numero_matricula} adicionado à turma ${turmaId}`);
@@ -879,7 +879,7 @@ export class MatriculasService {
           if (turma) {
             await queryRunner.manager.query(
               `INSERT INTO turma_alunos (id, aluno_id, turma_id, status, tipo_vinculo, created_at)
-               VALUES (gen_random_uuid(), $1, $2, 'ativo', 'aluno', NOW())`,
+               VALUES (gen_random_uuid(), $1::uuid, $2::uuid, 'ativo', 'aluno', NOW())`,
               [alunoSalvo.id, turma.id]
             );
             this.logger.log(`✅ Aluno ${alunoSalvo.numero_matricula} adicionado à turma ${turma.id} (${turma.nome})`);

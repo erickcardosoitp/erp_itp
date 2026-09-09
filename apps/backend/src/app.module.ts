@@ -167,7 +167,7 @@ export class AppModule implements OnModuleInit {
   private async runMigrations() {
     try {
       // ── Versão do schema — pula migrations se já rodaram neste banco ──────
-      const SCHEMA_VERSION = 22; // incrementar aqui ao adicionar novas migrations
+      const SCHEMA_VERSION = 23; // incrementar aqui ao adicionar novas migrations
       await this.dataSource.query(`
         CREATE TABLE IF NOT EXISTS _schema_version (
           id      INT PRIMARY KEY DEFAULT 1,
@@ -1656,6 +1656,17 @@ export class AppModule implements OnModuleInit {
       await this.dataSource.query(`CREATE INDEX IF NOT EXISTS idx_inscricoes_deleted_at ON inscricoes(id) WHERE deleted_at IS NULL`);
       await this.dataSource.query(`CREATE INDEX IF NOT EXISTS idx_boletos_deleted_at ON boletos(id) WHERE deleted_at IS NULL`);
       this.logger.log('✅ v22: soft delete (deleted_at) em alunos/usuarios/movimentacoes_financeiras/inscricoes/boletos');
+
+      // ── v23: alergias_descricao/medicamentos_descricao em alunos/inscricoes
+      // — campos já existiam em funcionarios/professores mas nunca foram
+      // migrados pra alunos/inscricoes, apesar de CAMPOS_ALUNO (matriculas.
+      // service.ts) já tentar sincronizá-los, causando "column does not
+      // exist" em produção. ──────────────────────────────────────────────
+      await this.dataSource.query(`ALTER TABLE alunos ADD COLUMN IF NOT EXISTS alergias_descricao TEXT`);
+      await this.dataSource.query(`ALTER TABLE alunos ADD COLUMN IF NOT EXISTS medicamentos_descricao TEXT`);
+      await this.dataSource.query(`ALTER TABLE inscricoes ADD COLUMN IF NOT EXISTS alergias_descricao TEXT`);
+      await this.dataSource.query(`ALTER TABLE inscricoes ADD COLUMN IF NOT EXISTS medicamentos_descricao TEXT`);
+      this.logger.log('✅ v23: alergias_descricao/medicamentos_descricao em alunos/inscricoes');
 
       // ── Marca schema como atualizado — próximos cold starts pulam tudo ────
       await this.dataSource.query(`UPDATE _schema_version SET version = $1, ran_at = now() WHERE id = 1`, [SCHEMA_VERSION]);

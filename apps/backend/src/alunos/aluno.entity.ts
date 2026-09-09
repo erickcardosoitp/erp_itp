@@ -91,11 +91,17 @@ export class Aluno {
   @Column({ type: 'varchar', nullable: true })
   possui_alergias: string;
 
+  @Column({ type: 'text', nullable: true })
+  alergias_descricao: string;
+
   @Column({ type: 'varchar', nullable: true })
   cuidado_especial: string;
 
   @Column({ type: 'text', nullable: true })
   detalhes_cuidado: string;
+
+  @Column({ type: 'text', nullable: true })
+  medicamentos_descricao: string;
 
   @Column({ type: 'varchar', nullable: true })
   uso_medicamento: string;
