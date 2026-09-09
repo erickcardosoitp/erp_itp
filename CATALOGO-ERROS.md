@@ -135,7 +135,8 @@ não `Aplicacao=BD`.
 | Coluna | Tipo | Valores/formato |
 |---|---|---|
 | `Aplicacao` | Escolha | ITP, APRXM, DW, BD |
-| `Categoria` | Escolha | banco, codigo, infra, seguranca, usuario, integracao (aberta a crescer) |
+| `DescricaoResumida` | Texto longo | O erro em português simples, sem jargão técnico — pra quem não é da área entender em 1-2 frases |
+| `Categoria` | Escolha | banco, código, infra, security, integracao, usuario, terceiros (aberta a crescer) |
 | `TipoErro` | Texto | Rótulo livre gerado pelo Claude, não é enum fixo |
 | `Criticidade` | Escolha | baixa, media, alta, critica |
 | `Status` | Escolha | aberto, resolvido, reaberto, conhecido, descartado |

@@ -12,10 +12,10 @@ import json
 import re
 import subprocess
 
-CATEGORIAS_VALIDAS = {"banco", "codigo", "infra", "seguranca", "usuario", "integracao"}
+CATEGORIAS_VALIDAS = {"banco", "código", "infra", "security", "integracao", "usuario", "terceiros"}
 CRITICIDADES_VALIDAS = {"baixa", "media", "alta", "critica"}
-IA_PODE_RESOLVER_VALIDOS = {"sim_seguro", "sim_com_risco", "nao"}
-CAMADAS_VALIDAS = {"log_app", "schema_banco", "infra_vm", "integracao_externa"}
+IA_PODE_RESOLVER_VALIDOS = {"seguro", "sem risco", "mediano", "alto risco"}
+CAMADAS_VALIDAS = {"log_app", "schema_banco", "infra_vm", "integracao_ext"}
 
 PROMPT_TEMPLATE = """Você está classificando um erro capturado nos logs da VM \
 vm-itp-prod, pro catálogo automático de erros descrito em CATALOGO-ERROS.md \
@@ -40,12 +40,18 @@ Mensagem bruta de exemplo: {mensagem_bruta}
   "eh_reincidencia_de": "<CodErro do shortlist acima, se for essencialmente \
 o mesmo problema com confiança alta, ou null se for genuinamente novo>",
   "aplicacao": "<ITP, APRXM, DW ou BD>",
-  "categoria": "<uma de: banco, codigo, infra, seguranca, usuario, integracao>",
+  "categoria": "<uma de: banco, código, infra, security, integracao, usuario, terceiros>",
   "tipo_erro": "<rótulo curto e específico, texto livre, ex: 'Divergência de tipo UUID/varchar em FK'>",
+  "descricao_resumida": "<o erro explicado em português simples, sem jargão \
+técnico, pra alguém não-técnico entender o que aconteceu em 1-2 frases. \
+Ex: 'O sistema tentou salvar a turma de um aluno, mas o banco de dados \
+recusou porque o tipo de dado estava errado.'>",
   "criticidade": "<uma de: baixa, media, alta, critica>",
-  "camada_investigacao": "<uma de: log_app, schema_banco, infra_vm, integracao_externa>",
+  "camada_investigacao": "<uma de: log_app, schema_banco, infra_vm, integracao_ext>",
   "confianca": <número de 0 a 10, quão confiante você está no diagnóstico>,
-  "ia_pode_resolver": "<uma de: sim_seguro, sim_com_risco, nao>",
+  "ia_pode_resolver": "<escala de risco da correção proposta, EXATAMENTE \
+uma destas strings (com espaço, sem underscore): \"seguro\", \"sem risco\", \
+\"mediano\", \"alto risco\" — nessa ordem crescente de risco>",
   "diagnostico": "<análise da causa raiz, texto>",
   "correcao_proposta": "<correção sugerida, texto, ou 'Nenhuma ação de código — ruído esperado' se não for bug de verdade>"
 }}

@@ -163,6 +163,7 @@ def processar_grupo(
     novo_item = client.criar_item({
         "Title": classificacao["tipo_erro"][:255],
         "Aplicacao": aplicacao_final,
+        "DescricaoResumida": classificacao["descricao_resumida"],
         "Categoria": classificacao["categoria"],
         "TipoErro": classificacao["tipo_erro"],
         "Assinatura": msg_normalizada[:500],
