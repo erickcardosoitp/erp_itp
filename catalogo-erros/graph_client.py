@@ -6,6 +6,8 @@ Autenticação: client credentials flow com o app registration dedicado
 VM, nunca o Power Automate chamando pra dentro — decisão registrada no
 spec (seção 3 do CATALOGO-ERROS.md).
 """
+from __future__ import annotations  # PEP 604 (X | None) — VM roda Python 3.9
+
 import requests
 
 GRAPH_BASE = "https://graph.microsoft.com/v1.0"

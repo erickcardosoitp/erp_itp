@@ -7,6 +7,8 @@ arquivo, cada execução do coletor escreve um arquivo novo dentro da
 partição do dia (padrão Hive: app=X/data=YYYY-MM-DD/part-<id>.parquet).
 DuckDB/pyarrow leem o diretório inteiro como uma tabela lógica só.
 """
+from __future__ import annotations  # PEP 604 (X | None) — VM roda Python 3.9
+
 import os
 import uuid
 from datetime import datetime, timezone
