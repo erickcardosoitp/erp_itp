@@ -1,0 +1,122 @@
+services:
+  traefik:
+    image: traefik:v3.5
+    container_name: itp_traefik
+    restart: unless-stopped
+    command:
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.endpoint=unix:///var/run/docker.sock"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+      - "--certificatesresolvers.leresolver.acme.httpchallenge=true"
+      - "--certificatesresolvers.leresolver.acme.httpchallenge.entrypoint=web"
+      - "--certificatesresolvers.leresolver.acme.email=erickcardoso@institutotiapretinha.org"
+      - "--certificatesresolvers.leresolver.acme.storage=/letsencrypt/acme.json"
+      - "--accesslog=true"
+      - "--log.level=INFO"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik_letsencrypt:/letsencrypt
+
+  postgres:
+    image: postgres:17-alpine
+    container_name: itp_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: itp_admin
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  erp_itp_backend:
+    build:
+      context: /home/itpadmin/erp_itp/apps/backend
+    container_name: erp_itp_backend
+    restart: unless-stopped
+    env_file:
+      - erp_itp_backend.env
+    depends_on:
+      - postgres
+    ports:
+      - "3001:3001"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.erpitp-backend.rule=Host(`api.itp.institutotiapretinha.org`)"
+      - "traefik.http.routers.erpitp-backend.entrypoints=websecure"
+      - "traefik.http.routers.erpitp-backend.tls.certresolver=leresolver"
+      - "traefik.http.services.erpitp-backend.loadbalancer.server.port=3001"
+
+  erp_itp_frontend:
+    build:
+      context: /home/itpadmin/erp_itp/apps/frontend
+      args:
+        NEXT_PUBLIC_API_BASE_URL: /backend-api
+        NEXT_PUBLIC_COLETOR_TOKEN: itp-coletor-2026
+        NEXT_PUBLIC_CHAMADA_TOKEN: itp-chamada-2026
+    container_name: erp_itp_frontend
+    restart: unless-stopped
+    env_file:
+      - erp_itp_frontend.env
+    depends_on:
+      - erp_itp_backend
+    ports:
+      - "3000:3000"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.erpitp-frontend.rule=Host(`itp.institutotiapretinha.org`)"
+      - "traefik.http.routers.erpitp-frontend.entrypoints=websecure"
+      - "traefik.http.routers.erpitp-frontend.tls.certresolver=leresolver"
+      - "traefik.http.services.erpitp-frontend.loadbalancer.server.port=3000"
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: itp_pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@institutotiapretinha.org
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - postgres
+    ports:
+      - "5050:80"
+
+  catalogo_backend:
+    build:
+      context: /home/itpadmin/erp_itp/catalogo-erros-viewer/backend
+    container_name: catalogo_backend
+    restart: unless-stopped
+    volumes:
+      - /home/itpadmin/itp-stack/catalogo-erros-parquet:/root/itp-stack/catalogo-erros-parquet:ro
+    environment:
+      PARQUET_BASE_DIR: /root/itp-stack/catalogo-erros-parquet
+    ports:
+      - "127.0.0.1:8001:8000"
+
+  catalogo_frontend:
+    build:
+      context: /home/itpadmin/erp_itp/catalogo-erros-viewer/frontend
+      args:
+        BACKEND_INTERNAL_URL: http://catalogo_backend:8000
+    container_name: catalogo_frontend
+    restart: unless-stopped
+    environment:
+      BACKEND_INTERNAL_URL: http://catalogo_backend:8000
+    depends_on:
+      - catalogo_backend
+    ports:
+      - "127.0.0.1:8080:3000"
+
+volumes:
+  pg_data:
+  pgadmin_data:
+  traefik_letsencrypt:
