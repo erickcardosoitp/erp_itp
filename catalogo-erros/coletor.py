@@ -248,7 +248,13 @@ def main() -> None:
         grupos: dict[str, list[str]] = defaultdict(list)
         timestamps_por_grupo: dict[str, list] = defaultdict(list)
         for linha in linhas_erro:
-            assinatura = normalizador.normalizar(linha)
+            # Trunca já aqui, na origem — a coluna Assinatura da SharePoint
+            # List tem limite de 500 caracteres. Se truncássemos só na hora
+            # de gravar (e não na comparação de dedup), uma mensagem longa
+            # nunca seria reconhecida como reincidência (bug real, achado
+            # em revisão 2026-09-09): a busca compararia a string inteira
+            # contra o que foi salvo truncado, nunca batendo.
+            assinatura = normalizador.normalizar(linha)[:500]
             grupos[assinatura].append(linha)
             ts = normalizador.extrair_timestamp(linha) or agora
             timestamps_por_grupo[assinatura].append(ts)
