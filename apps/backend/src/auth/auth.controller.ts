@@ -1,5 +1,5 @@
 import { Controller, Post, Body, Res, Logger, HttpStatus, HttpCode, UnauthorizedException, Patch, Req, Headers, Get, Query } from '@nestjs/common';
-import { AuthService } from './auth.service';
+import { AuthService, SsoSemContaException } from './auth.service';
 import { Response, Request } from 'express';
 import { Public } from './decorators/public.decorator';
 import * as crypto from 'crypto';
@@ -141,6 +141,10 @@ export class AuthController {
       response_mode: 'query',
       scope: 'openid email profile',
       state,
+      // Sempre mostra o seletor de conta — sem isso a Microsoft reloga
+      // silenciosamente na ultima conta usada no navegador, sem deixar
+      // trocar.
+      prompt: 'select_account',
     });
     return res.redirect(
       `https://login.microsoftonline.com/${MS_TENANT_ID}/oauth2/v2.0/authorize?${params.toString()}`,
@@ -220,6 +224,10 @@ export class AuthController {
 
       return res.redirect(MS_FRONTEND_URL);
     } catch (error: any) {
+      if (error instanceof SsoSemContaException) {
+        this.logger.warn(`🔒 SSO sem conta correspondente: ${error.message}`);
+        return res.redirect(`${MS_FRONTEND_URL}/login?erro=sso-sem-conta`);
+      }
       this.logger.error(`❌ Falha no login SSO Microsoft: ${error.message}`);
       return res.redirect(`${MS_FRONTEND_URL}/login?erro=sso`);
     }

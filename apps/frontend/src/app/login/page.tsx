@@ -25,7 +25,10 @@ function LoginForm() {
     if (salvo) { setEmail(salvo); setLembrar(true); }
 
     const params = new URLSearchParams(window.location.search);
-    if (params.get('erro') === 'sso') {
+    const erroSso = params.get('erro');
+    if (erroSso === 'sso-sem-conta') {
+      setError('Sua conta Microsoft ainda não tem acesso ao sistema. Sua solicitação foi enviada — aguarde a liberação.');
+    } else if (erroSso === 'sso') {
       setError('Não foi possível entrar com a Microsoft. Tente novamente.');
     }
   }, []);

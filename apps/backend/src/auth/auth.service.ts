@@ -7,6 +7,10 @@ import { EmailService } from '../email.service';
 import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
 import { SupabaseService } from '../modules/supabase/supabase.service';
+import { NotificacoesService } from '../notificacoes/notificacoes.service';
+
+/** Lançada quando o e-mail do SSO não tem conta no ITP — controller redireciona pra tela de "solicitação enviada". */
+export class SsoSemContaException extends Error {}
 
 @Injectable()
 export class AuthService {
@@ -18,6 +22,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly emailService: EmailService,
     private readonly supabase: SupabaseService,
+    private readonly notificacoesService: NotificacoesService,
   ) {}
 
   /**
@@ -151,30 +156,34 @@ export class AuthService {
   }
 
   /**
-   * LOGIN VIA SSO MICROSOFT: casa por e-mail; cria conta nova (role 'user',
-   * menor privilegio do ROLE_LEVEL) se nao existir ainda. Sem senha utilizavel
-   * (hash aleatorio) — essa conta so entra por SSO.
+   * LOGIN VIA SSO MICROSOFT: casa por e-mail contra conta ja existente.
+   * NAO cria conta automaticamente — sem conta previa, registra uma
+   * solicitacao de acesso (notificacao pros grupos com privilegio de
+   * conceder acesso) e lanca SsoSemContaException.
    */
   async loginComSSO(email: string, nome: string) {
     const emailNormalizado = email.toLowerCase().trim();
 
-    let usuario = await this.usuarioRepository
+    const usuario = await this.usuarioRepository
       .createQueryBuilder('user')
       .leftJoinAndSelect('user.grupo', 'grupo')
       .where('LOWER(user.email) = LOWER(:email)', { email: emailNormalizado })
       .getOne();
 
     if (!usuario) {
-      const senhaAleatoria = crypto.randomBytes(32).toString('hex');
-      const novoUsuario = this.usuarioRepository.create({
-        nome: nome || emailNormalizado,
-        email: emailNormalizado,
-        password: await bcrypt.hash(senhaAleatoria, 12),
-        role: 'user',
-        deve_trocar_senha: false,
-      });
-      usuario = await this.usuarioRepository.save(novoUsuario);
-      this.logger.log(`👤 Usuário criado via SSO Microsoft: ${emailNormalizado}`);
+      const jaSolicitado = await this.notificacoesService.buscarNaoLida('solicitacao_acesso_sso', 'sso_email');
+      if (!jaSolicitado || jaSolicitado.referencia_id !== emailNormalizado) {
+        await this.notificacoesService.criar({
+          tipo: 'solicitacao_acesso_sso',
+          titulo: '🔐 Solicitação de acesso via Microsoft',
+          mensagem: `${nome || emailNormalizado} (${emailNormalizado}) tentou entrar via SSO Microsoft mas não tem conta no sistema. Crie o acesso manualmente se aprovado.`,
+          referencia_id: emailNormalizado,
+          referencia_tipo: 'sso_email',
+          cargo_minimo: 8, // DRT e acima — quem pode conceder acesso
+        });
+      }
+      this.logger.warn(`🔒 SSO sem conta correspondente: ${emailNormalizado} — solicitação registrada.`);
+      throw new SsoSemContaException(emailNormalizado);
     }
 
     const roleLimpa = String(usuario.role || 'user').toLowerCase().trim();
