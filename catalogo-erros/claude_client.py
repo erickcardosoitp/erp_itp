@@ -34,6 +34,28 @@ Mensagem bruta de exemplo: {mensagem_bruta}
 
 {shortlist_formatada}
 
+## Rubrica de Criticidade — use impacto real, não a categoria do erro
+
+- critica: impede função central do sistema pra todos os usuários, ou há \
+dado sendo perdido/corrompido em produção agora.
+- alta: afeta função importante ou um subconjunto relevante de usuários/dados; \
+tem contorno manual, mas doloroso.
+- media: degrada experiência ou gera retrabalho, sem bloquear nada essencial.
+- baixa: cosmético, ruído esperado, ou não é bug de verdade (exploração \
+manual, log de acesso normal).
+
+## Rubrica de Confiança — ancore na qualidade da evidência, não numa sensação
+
+- 9-10: causa raiz confirmada por evidência direta e inequívoca (ex: comparou \
+schema real com a entidade/código, bate exatamente com a mensagem de erro).
+- 7-8: causa muito provável, evidência forte mas não 100% confirmada/testada.
+- 4-6: hipótese plausível, evidência indireta ou parcial — pode haver outra explicação.
+- 0-3: chute educado — faltou informação suficiente pra investigar a fundo.
+
+O campo "diagnostico" deve justificar explicitamente qual evidência sustenta \
+a nota de confiança escolhida (não é permitido dar uma nota sem dizer o \
+porquê) — isso é validado depois por revisão humana.
+
 ## O que responder (JSON exato, sem campos a mais nem a menos)
 
 {{
@@ -46,13 +68,14 @@ o mesmo problema com confiança alta, ou null se for genuinamente novo>",
 técnico, pra alguém não-técnico entender o que aconteceu em 1-2 frases. \
 Ex: 'O sistema tentou salvar a turma de um aluno, mas o banco de dados \
 recusou porque o tipo de dado estava errado.'>",
-  "criticidade": "<uma de: baixa, media, alta, critica>",
+  "criticidade": "<uma de: baixa, media, alta, critica — aplique a rubrica acima>",
   "camada_investigacao": "<uma de: log_app, schema_banco, infra_vm, integracao_ext>",
-  "confianca": <número de 0 a 10, quão confiante você está no diagnóstico>,
+  "confianca": <número de 0 a 10, aplique a rubrica de confiança acima>,
   "ia_pode_resolver": "<escala de risco da correção proposta, EXATAMENTE \
 uma destas strings (com espaço, sem underscore): \"seguro\", \"sem risco\", \
 \"mediano\", \"alto risco\" — nessa ordem crescente de risco>",
-  "diagnostico": "<análise da causa raiz, texto>",
+  "diagnostico": "<análise da causa raiz, incluindo a justificativa explícita \
+da nota de confiança escolhida>",
   "correcao_proposta": "<correção sugerida, texto, ou 'Nenhuma ação de código — ruído esperado' se não for bug de verdade>"
 }}
 
@@ -133,5 +156,14 @@ def _validar(c: dict) -> None:
         erros.append(f"camada_investigacao inválida: {c.get('camada_investigacao')}")
     if not isinstance(c.get("confianca"), (int, float)) or not (0 <= c["confianca"] <= 10):
         erros.append(f"confianca fora do range 0-10: {c.get('confianca')}")
+    # Não valida a semântica da justificativa (impossível por regra fixa),
+    # só um piso de sanidade: uma nota de confiança alta com diagnóstico
+    # genérico/curto é sinal de que a rubrica não foi aplicada de verdade.
+    diagnostico = c.get("diagnostico", "") or ""
+    if isinstance(c.get("confianca"), (int, float)) and c["confianca"] >= 7 and len(diagnostico) < 40:
+        erros.append(
+            f"confianca alta ({c['confianca']}) com diagnostico curto demais "
+            f"({len(diagnostico)} caracteres) pra justificar a rubrica"
+        )
     if erros:
         raise ValueError("Resposta do Claude fora do schema esperado: " + "; ".join(erros))
