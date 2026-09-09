@@ -20,6 +20,76 @@ const msJwks = MS_TENANT_ID
   ? jwksClient({ jwksUri: `https://login.microsoftonline.com/${MS_TENANT_ID}/discovery/v2.0/keys` })
   : null;
 
+/**
+ * Hierarquia de grupos do Entra ID -> role sugerida no ITP, do mais alto
+ * pro mais baixo (primeiro grupo que a pessoa estiver, vence). Confirmado
+ * com o usuario em 2026-09-09 correlacionando os 6 usuarios reais do ITP
+ * com seus grupos no Entra (nao ha correlacao perfeita - grupos do Entra
+ * sao por area/departamento, role do ITP e nivel de permissao - mas serve
+ * como sugestao pro admin que for criar a conta manualmente, nao aplica
+ * sozinho).
+ */
+const GRUPO_ROLE_HIERARQUIA: { grupos: string[]; role: string }[] = [
+  { grupos: ['ITP_AM_Executiva_Geral'], role: 'admin' },
+  { grupos: ['ITP & AM - Diretoria'], role: 'prt' },
+  { grupos: ['ITP_AM_ADMINISTRACAO'], role: 'drt' },
+  { grupos: ['AM_GERENCIA'], role: 'adjunto' },
+  { grupos: ['ITP_AM_TECNOLOGIA', 'ITP & AM - Tecnologia'], role: 'admin' },
+  { grupos: ['ITP_DOCENTES', 'ITP - Professores'], role: 'prof' },
+  { grupos: ['AM_OPERACAO', 'ITP_COZINHA', 'ITP & AM - Cozinha'], role: 'cozinha' },
+  { grupos: ['Voluntários'], role: 'user' },
+];
+
+let graphAppToken: { token: string; expiresAt: number } | null = null;
+
+async function getGraphAppToken(): Promise<string> {
+  if (graphAppToken && graphAppToken.expiresAt > Date.now() + 30_000) {
+    return graphAppToken.token;
+  }
+  const resp = await fetch(`https://login.microsoftonline.com/${MS_TENANT_ID}/oauth2/v2.0/token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: MS_CLIENT_ID,
+      client_secret: MS_CLIENT_SECRET,
+      grant_type: 'client_credentials',
+      scope: 'https://graph.microsoft.com/.default',
+    }),
+  });
+  const body: any = await resp.json();
+  if (!resp.ok || !body.access_token) {
+    throw new Error(`Falha ao obter token app-only do Graph: ${JSON.stringify(body)}`);
+  }
+  graphAppToken = { token: body.access_token, expiresAt: Date.now() + (body.expires_in ?? 3600) * 1000 };
+  return graphAppToken.token;
+}
+
+/** Busca os grupos do usuario no Entra e sugere a role de maior hierarquia. Retorna null se falhar ou nao achar nenhuma. */
+async function sugerirRolePorGrupo(email: string, logger: Logger): Promise<{ role: string; grupo: string } | null> {
+  try {
+    const token = await getGraphAppToken();
+    const resp = await fetch(
+      `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(email)}/memberOf?$select=displayName`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    if (!resp.ok) {
+      logger.warn(`sugerirRolePorGrupo: Graph retornou ${resp.status} pra ${email}`);
+      return null;
+    }
+    const body: any = await resp.json();
+    const nomesGrupos: string[] = (body.value ?? []).map((g: any) => g.displayName).filter(Boolean);
+
+    for (const nivel of GRUPO_ROLE_HIERARQUIA) {
+      const achou = nivel.grupos.find((g) => nomesGrupos.includes(g));
+      if (achou) return { role: nivel.role, grupo: achou };
+    }
+    return null;
+  } catch (err: any) {
+    logger.warn(`sugerirRolePorGrupo falhou pra ${email}: ${err.message}`);
+    return null;
+  }
+}
+
 @Controller('auth')
 export class AuthController {
   private readonly logger = new Logger(AuthController.name);
@@ -212,7 +282,11 @@ export class AuthController {
       const email = claims.email || claims.preferred_username;
       if (!email) throw new UnauthorizedException('Conta Microsoft sem e-mail disponível.');
 
-      const result = await this.authService.loginComSSO(email, claims.name);
+      const result = await this.authService.loginComSSO(
+        email,
+        claims.name,
+        () => sugerirRolePorGrupo(email, this.logger),
+      );
 
       // sameSite 'lax' (nao 'strict' como o login normal): esta requisicao
       // ainda faz parte da cadeia de redirect iniciada pela Microsoft

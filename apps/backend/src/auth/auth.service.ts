@@ -161,7 +161,11 @@ export class AuthService {
    * solicitacao de acesso (notificacao pros grupos com privilegio de
    * conceder acesso) e lanca SsoSemContaException.
    */
-  async loginComSSO(email: string, nome: string) {
+  async loginComSSO(
+    email: string,
+    nome: string,
+    buscarSugestaoRole?: () => Promise<{ role: string; grupo: string } | null>,
+  ) {
     const emailNormalizado = email.toLowerCase().trim();
 
     const usuario = await this.usuarioRepository
@@ -173,10 +177,16 @@ export class AuthService {
     if (!usuario) {
       const jaSolicitado = await this.notificacoesService.buscarNaoLida('solicitacao_acesso_sso', 'sso_email');
       if (!jaSolicitado || jaSolicitado.referencia_id !== emailNormalizado) {
+        // Sugestao de role a partir do grupo de maior hierarquia no Entra
+        // ID — so uma sugestao pro admin, nao cria/concede acesso sozinho.
+        const sugestao = buscarSugestaoRole ? await buscarSugestaoRole() : null;
+        const linhaSugestao = sugestao
+          ? ` Sugestão de cargo pelo grupo do Entra ID "${sugestao.grupo}": ${sugestao.role}.`
+          : '';
         await this.notificacoesService.criar({
           tipo: 'solicitacao_acesso_sso',
           titulo: '🔐 Solicitação de acesso via Microsoft',
-          mensagem: `${nome || emailNormalizado} (${emailNormalizado}) tentou entrar via SSO Microsoft mas não tem conta no sistema. Crie o acesso manualmente se aprovado.`,
+          mensagem: `${nome || emailNormalizado} (${emailNormalizado}) tentou entrar via SSO Microsoft mas não tem conta no sistema.${linhaSugestao} Crie o acesso manualmente se aprovado.`,
           referencia_id: emailNormalizado,
           referencia_tipo: 'sso_email',
           cargo_minimo: 8, // DRT e acima — quem pode conceder acesso
