@@ -143,7 +143,7 @@ export function ChamadosTable({ chamados, canWrite, onAtender, onResolver, onAco
                           <Globe size={7} />Site
                         </span>
                       )}
-                      <p className="font-semibold text-slate-800 dark:text-slate-100 truncate leading-snug" title={c.titulo}>{(c as any).tituloTypo.toUpperCase()}</p>
+                      <p className="font-semibold text-slate-800 dark:text-slate-100 truncate leading-snug" title={c.titulo}>{c.titulo}</p>
                     </div>
                     {(c.aluno_nome || c.turma_nome) && (
                       <p className="text-[10px] text-slate-400 flex items-center gap-0.5 truncate">
