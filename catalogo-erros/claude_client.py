@@ -190,7 +190,16 @@ def executar(prompt_execucao: str) -> dict:
     prompt = PROMPT_EXECUCAO_WRAPPER.format(prompt_execucao=prompt_execucao)
 
     resultado = subprocess.run(
-        ["claude", "-p", prompt, "--output-format", "json"],
+        # --allowedTools: só aqui, nunca em classificar(). A aprovação
+        # humana já aconteceu (Power Automate) antes de chegar neste ponto
+        # — é o que substitui a confirmação interativa que o Claude Code
+        # CLI pediria por padrão pra cada Edit/Bash. Escopo deliberadamente
+        # restrito às 3 ferramentas que a execução de correção usa, em vez
+        # de liberar tudo. Achado em teste real (2026-09-10): sem isso,
+        # toda tentativa de escrever arquivo/rodar comando é bloqueada,
+        # mesmo com diagnóstico e correção corretos.
+        ["claude", "-p", prompt, "--output-format", "json",
+         "--allowedTools", "Edit,Write,Bash"],
         capture_output=True,
         text=True,
         timeout=600,  # execução real (commit/deploy) demora mais que classificação
