@@ -39,7 +39,8 @@ function isChunkError(msg: string): boolean {
     /loading chunk/i.test(msg) ||
     /failed to fetch dynamically imported module/i.test(msg) ||
     /importing a module script failed/i.test(msg) ||
-    /load failed/i.test(msg)
+    /load failed/i.test(msg) ||
+    /failed to find server action/i.test(msg)
   );
 }
 

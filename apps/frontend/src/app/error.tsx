@@ -9,7 +9,8 @@ function isChunkError(error: Error): boolean {
     /loading chunk/i.test(error?.message || '') ||
     /failed to fetch dynamically imported module/i.test(error?.message || '') ||
     /importing a module script failed/i.test(error?.message || '') ||
-    /load failed/i.test(error?.message || '')
+    /load failed/i.test(error?.message || '') ||
+    /failed to find server action/i.test(error?.message || '')
   );
 }
 
