@@ -79,8 +79,6 @@ def main() -> None:
             "ResultadoExecucao": resultado["resumo"],
             "TentativasResolucao": fields.get("TentativasResolucao", 0) + 1,
         }
-        if resultado.get("link_commit"):
-            atualizacao["LinkCommit"] = resultado["link_commit"]
 
         if resultado.get("precisa_atencao_humana"):
             atualizacao["Fase"] = "escalado"
@@ -97,6 +95,19 @@ def main() -> None:
             log(f"  {cod_erro}: não resolvido — {resultado['resumo']}")
 
         client.atualizar_item(item["id"], atualizacao)
+
+        # LinkCommit isolado numa escrita própria: essa coluna já deu 400
+        # em testes anteriores (schema sem type facet exposto pela Graph
+        # API — achado 2026-09-09). Uma falha aqui não pode derrubar a
+        # gravação do resultado principal acima (aconteceu de verdade em
+        # 2026-09-10: correção real foi aplicada com sucesso, mas o
+        # Status=resolvido nunca chegou a salvar por causa desse campo).
+        if resultado.get("link_commit"):
+            try:
+                client.atualizar_item(item["id"], {"LinkCommit": resultado["link_commit"]})
+            except Exception as exc:
+                log(f"  {cod_erro}: aviso — não consegui gravar LinkCommit "
+                    f"({exc}), mas o resultado principal já foi salvo")
 
     log("Aplicação concluída.")
 
