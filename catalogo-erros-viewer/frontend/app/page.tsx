@@ -89,7 +89,7 @@ export default function Home() {
   const [selecionado, setSelecionado] = useState<ErroAgrupado | null>(null);
   const [historico, setHistorico] = useState<Ocorrencia[]>([]);
 
-  useEffect(() => {
+  const carregarItens = () => {
     setCarregando(true);
     const params = new URLSearchParams();
     if (filtroAplicacao) params.set("aplicacao", filtroAplicacao);
@@ -105,7 +105,9 @@ export default function Home() {
       })
       .catch((e) => setAviso(String(e)))
       .finally(() => setCarregando(false));
-  }, [filtroAplicacao, filtroCategoria, filtroCriticidade, filtroStatus]);
+  };
+
+  useEffect(carregarItens, [filtroAplicacao, filtroCategoria, filtroCriticidade, filtroStatus]);
 
   const itensFiltrados = useMemo(() => {
     if (!busca.trim()) return itens;
@@ -171,6 +173,20 @@ export default function Home() {
           <option value="conhecido">conhecido</option>
           <option value="descartado">descartado</option>
         </select>
+        <button
+          onClick={() => {
+            carregarItens();
+            if (selecionado) selecionar(selecionado);
+          }}
+          disabled={carregando}
+          style={{
+            ...selectStyle, cursor: carregando ? "default" : "pointer",
+            background: "#1e293b", color: "#fff", fontWeight: 600, border: "none",
+            opacity: carregando ? 0.6 : 1,
+          }}
+        >
+          {carregando ? "Atualizando..." : "↻ Atualizar"}
+        </button>
         <span style={{ fontSize: 12, color: "#94a3b8", alignSelf: "center", marginLeft: "auto" }}>
           {itensFiltrados.length} erro(s)
         </span>
