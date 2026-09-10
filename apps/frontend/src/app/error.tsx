@@ -25,7 +25,21 @@ export default function GlobalError({
     // Se for erro de chunk desatualizado (novo deploy), recarrega silenciosamente
     if (isChunkError(error)) {
       window.location.reload();
+      return;
     }
+    // Sem isso, um crash pego por este error.tsx global fica só no
+    // navegador — nunca chega no docker logs, nunca é visto pelo
+    // catálogo de erros (mesmo ponto cego do PageErrorBoundary, mas
+    // aqui na raiz do app router).
+    fetch('/backend-api/frontend-logs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: error.message,
+        stack: error.stack,
+        pathname: typeof window !== 'undefined' ? window.location.pathname : undefined,
+      }),
+    }).catch(() => {});
   }, [error]);
 
   // Se for chunk error não mostra nada (vai recarregar)
