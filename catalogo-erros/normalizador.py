@@ -24,12 +24,17 @@ _UUID = re.compile(
 # Números soltos (posição de caractere, IDs numéricos, PIDs sem colchete).
 # Não mexe em números colados a letra (ex: "v23", "erp_itp_backend").
 _NUMERO_SOLTO = re.compile(r"(?<![a-zA-Z_])\d+(?![a-zA-Z_])")
+# Códigos de cor ANSI (comum em logs de app tipo Nest Logger). Sem isso,
+# caracteres de controle (ESC etc.) quebram a query OData pro Graph API
+# (achado em teste real, 2026-09-10: 400 Bad Request no $filter).
+_ANSI = re.compile(r"\x1b\[[0-9;]*m")
 
 
 def normalizar(mensagem: str) -> str:
     """Aplica as substituições na ordem certa (timestamp/uuid antes de
     número solto, senão o regex de número já teria comido os dígitos)."""
     m = mensagem.strip()
+    m = _ANSI.sub("", m)
     m = _TIMESTAMP.sub("<timestamp>", m)
     m = _UUID.sub("<uuid>", m)
     m = _PID.sub("[N]", m)
