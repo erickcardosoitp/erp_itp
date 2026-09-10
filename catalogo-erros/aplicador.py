@@ -79,6 +79,8 @@ def main() -> None:
             "ResultadoExecucao": resultado["resumo"],
             "TentativasResolucao": fields.get("TentativasResolucao", 0) + 1,
         }
+        if resultado.get("acao_realizada"):
+            atualizacao["AcaoExecutada"] = resultado["acao_realizada"].strip()[:255]
 
         if resultado.get("precisa_atencao_humana"):
             atualizacao["Fase"] = "escalado"

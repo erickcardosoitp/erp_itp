@@ -193,7 +193,11 @@ def processar_grupo(
         "Ocorrencias": qtd,
         "PrimeiraVez": primeiro_timestamp.isoformat(),
         "UltimaVez": ultimo_timestamp.isoformat(),
-        "Diagnostico": classificacao["diagnostico"],
+        "Diagnostico": (
+            classificacao["diagnostico"]
+            + "\n\nImpacto avaliado: "
+            + classificacao.get("impacto_avaliado", "(não informado)")
+        ),
         "CorrecaoProposta": classificacao["correcao_proposta"],
         "Criticidade": classificacao["criticidade"],
         "Fase": "diagnosticado",

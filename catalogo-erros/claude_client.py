@@ -64,6 +64,20 @@ O campo "diagnostico" deve justificar explicitamente qual evidência sustenta \
 a nota de confiança escolhida (não é permitido dar uma nota sem dizer o \
 porquê) — isso é validado depois por revisão humana.
 
+## Análise de impacto — obrigatória antes de propor a correção
+
+Você está rodando com acesso de leitura ao repositório erp_itp inteiro (não \
+só à mensagem de erro). Antes de finalizar "correcao_proposta":
+
+1. Leia o código-fonte real relacionado ao erro — não infira só pela \
+mensagem de log. Abra o arquivo/função/entidade que o erro aponta.
+2. Procure (grep/busca) outros lugares do código que usam a mesma tabela, \
+coluna, função ou padrão afetado. Uma correção que resolve um caso mas \
+quebra outro uso já existente é pior do que não corrigir nada.
+3. Se não for possível investigar o código de verdade (ex: sem tempo, sem \
+acesso a algum arquivo), diga isso explicitamente — e isso deve reduzir a \
+nota de confiança (rubrica acima), nunca ficar escondido.
+
 ## O que responder (JSON exato, sem campos a mais nem a menos)
 
 {{
@@ -85,6 +99,9 @@ uma destas strings (com espaço, sem underscore): \"seguro\", \"sem risco\", \
 \"mediano\", \"alto risco\" — nessa ordem crescente de risco>",
   "diagnostico": "<análise da causa raiz, incluindo a justificativa explícita \
 da nota de confiança escolhida>",
+  "impacto_avaliado": "<o que você verificou no código real pra confirmar que \
+a correção não quebra outros usos da mesma tabela/coluna/função — ou, se não \
+deu pra verificar, diga isso explicitamente>",
   "correcao_proposta": "<correção sugerida, texto, ou 'Nenhuma ação de código — ruído esperado' se não for bug de verdade>"
 }}
 
@@ -177,6 +194,11 @@ antes ou depois:
 {{
   "sucesso": <true se a correção foi aplicada e validada, false caso contrário>,
   "resumo": "<o que foi feito, em 1-3 frases>",
+  "acao_realizada": "<descrição curta e específica da ação concreta, no \
+estilo de mensagem de commit — ex: 'Adicionado cast ::uuid em 3 inserts \
+SQL de turma_alunos' ou 'Migration v24: coluna alergias_descricao em \
+alunos/inscricoes'. NÃO use o código genérico do catálogo (FIX_CODE_AND_DEPLOY \
+etc.) aqui — isso é texto específico do que você de fato mudou.>",
   "link_commit": "<URL do commit no GitHub, ou null se não houve commit>",
   "precisa_atencao_humana": <true se travou em algo que exige decisão humana>
 }}"""

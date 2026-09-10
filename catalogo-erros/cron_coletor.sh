@@ -6,17 +6,21 @@
 # (barato, é só ler um JSON pequeno) mas só EXECUTA o coletor de verdade
 # quando a hora programada em catalogo-erros-cron-state.json chegar.
 #
-# Regra (pedida pelo usuário 2026-09-09): normalmente 6h em 6h; se o
-# último run encontrou muitos itens novos (> LIMITE_MUITOS_ERROS), reduz
-# o intervalo pra 1h (assumindo que pode ser um incidente em andamento);
-# senão, volta pro intervalo normal de 6h.
+# Regra (2026-09-09, refinada em 2026-09-10): intervalo escalona pela
+# CRITICIDADE do pior item novo encontrado, não só pela quantidade —
+# erro crítico merece reação em minutos, erro banal pode esperar horas.
+# O cron em si precisa tickar de 5 em 5 min (ver crontab) pra esse
+# intervalo curto ser possível — a maioria dos ticks só lê o state file
+# e sai sem custo, só executa o coletor de verdade quando chega a hora.
 set -euo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 STATE_FILE="$HOME/itp-stack/catalogo-erros-cron-state.json"
 LIMITE_MUITOS_ERROS=5
-INTERVALO_NORMAL_H=6
-INTERVALO_CURTO_H=1
+INTERVALO_NORMAL_H=6      # nenhum item novo, ou só criticidade baixa
+INTERVALO_MEDIA_MIN=120   # pior item novo = criticidade media
+INTERVALO_ALTA_MIN=30     # pior item novo = criticidade alta
+INTERVALO_CRITICA_MIN=5   # pior item novo = criticidade critica
 
 AGORA_EPOCH=$(date -u +%s)
 
@@ -36,9 +40,21 @@ echo "$SAIDA"
 
 ITENS_NOVOS=$(echo "$SAIDA" | grep -c "item novo criado" || true)
 
-if [ "$ITENS_NOVOS" -gt "$LIMITE_MUITOS_ERROS" ]; then
-  PROXIMO_INTERVALO_S=$((INTERVALO_CURTO_H * 3600))
-  echo "AVISO: $ITENS_NOVOS itens novos (> $LIMITE_MUITOS_ERROS) — próxima varredura em ${INTERVALO_CURTO_H}h em vez de ${INTERVALO_NORMAL_H}h"
+# Escolhe pela pior (mais alta) criticidade vista entre os itens novos
+# deste run — não importa se só 1 dos 5 itens novos é crítico, o
+# intervalo curto vale pra todos até a próxima varredura.
+if echo "$SAIDA" | grep -q "criticidade=critica"; then
+  PROXIMO_INTERVALO_S=$((INTERVALO_CRITICA_MIN * 60))
+  echo "AVISO: item CRÍTICO encontrado — próxima varredura em ${INTERVALO_CRITICA_MIN} min"
+elif echo "$SAIDA" | grep -q "criticidade=alta"; then
+  PROXIMO_INTERVALO_S=$((INTERVALO_ALTA_MIN * 60))
+  echo "AVISO: item de criticidade ALTA encontrado — próxima varredura em ${INTERVALO_ALTA_MIN} min"
+elif echo "$SAIDA" | grep -q "criticidade=media"; then
+  PROXIMO_INTERVALO_S=$((INTERVALO_MEDIA_MIN * 60))
+  echo "Item de criticidade média encontrado — próxima varredura em ${INTERVALO_MEDIA_MIN} min"
+elif [ "$ITENS_NOVOS" -gt "$LIMITE_MUITOS_ERROS" ]; then
+  PROXIMO_INTERVALO_S=$((INTERVALO_ALTA_MIN * 60))
+  echo "AVISO: $ITENS_NOVOS itens novos (> $LIMITE_MUITOS_ERROS), mesmo que baixa criticidade — próxima varredura em ${INTERVALO_ALTA_MIN} min"
 else
   PROXIMO_INTERVALO_S=$((INTERVALO_NORMAL_H * 3600))
 fi
