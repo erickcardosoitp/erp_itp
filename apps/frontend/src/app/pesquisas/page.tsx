@@ -298,7 +298,7 @@ export default function PesquisasPage() {
                 <div className="flex flex-wrap items-center gap-3 px-5 py-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-black text-sm text-slate-800 truncate">{(p as any).tituloTypo.toUpperCase()}</span>
+                      <span className="font-black text-sm text-slate-800 truncate">{p.titulo}</span>
                       <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">{TIPO_LABELS[p.tipo] || p.tipo}</span>
                       {p.categoria && <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full bg-purple-100 text-purple-600">{CAT_LABELS[p.categoria] || p.categoria}</span>}
                       {statusBadge(p)}
