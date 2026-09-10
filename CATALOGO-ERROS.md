@@ -4,7 +4,7 @@
 > `vm-itp-prod`. Para o design técnico detalhado e o histórico de decisões,
 > ver `docs/superpowers/specs/2026-09-09-catalogo-erros-vm-design.md`
 > (v4). Este arquivo é o resumo executivo + estado atual.
-> Última atualização: 2026-09-09.
+> Última atualização: 2026-09-10.
 
 ---
 
@@ -94,7 +94,8 @@ nem lookup eficiente), então todo estado mutável vive na SharePoint List.
 | App registration | `Catalogo Erros - VM`, client ID `baf58f64-f423-4188-8dd1-462ede6afe22` (dedicado, separado do app de SSO) |
 | Permissão Graph | `Sites.ReadWrite.All` (Application), consentida |
 | Segredo | `~/itp-stack/catalogo_erros.env` na VM, `chmod 600` — nunca passou pelo chat |
-| Lista `CatalogoErros` | **Pendente** — criação manual pela UI (ver seção 5, limitação de API) |
+| Lista `CatalogoErros` | Criada manualmente, 26 colunas ativas — feito 2026-09-09 |
+| Push do VM pro GitHub | Deploy key SSH dedicada (ed25519, "Allow write access", escopo só `erp_itp`), `~/.ssh/config` com host alias `github-erp_itp` — feito 2026-09-10, necessário pro `aplicador.py` poder commitar/dar push sozinho |
 
 **Achados de configuração que valem registrar:**
 - `Sites.Selected` (opção mais restrita, cogitada inicialmente) foi
@@ -140,7 +141,7 @@ não `Aplicacao=BD`.
 | `TipoErro` | Texto | Rótulo livre gerado pelo Claude, não é enum fixo |
 | `Criticidade` | Escolha | baixa, media, alta, critica |
 | `Status` | Escolha | aberto, resolvido, reaberto, conhecido, descartado |
-| `Fase` | Escolha | detectado, investigando, diagnosticado, aguardando_aprovacao, aplicando, validando, escalado |
+| `Fase` | Escolha | detectado, investigando, diagnosticado, ag aprovacao, aplicando, validando, escalado |
 
 **Bloco 2 — Rastreamento de ocorrência**
 | Coluna | Tipo | Valores/formato |
@@ -277,18 +278,81 @@ explicar a causa).
 
 Aplicação própria, só leitura, pra navegar o histórico do Parquet — não
 substitui a SharePoint List (que continua sendo o catálogo operacional
-editável).
+editável). **Construída e em produção desde 2026-09-10.**
 
-- **Escopo v1**: tabela de erros agrupados por `CodErro`, filtro por
-  `Aplicacao`/`Categoria`/`Criticidade`/`Status`/período, drill-down no
-  histórico completo de ocorrências de um erro, gráfico de tendência
-  simples (erros por dia/semana, por categoria).
+- **Escopo v1** (feito): tabela de erros agrupados por `CodErro`, filtro
+  por `Aplicacao`/`Categoria`/`Criticidade`/`Status`/busca livre,
+  drill-down no histórico completo de ocorrências de um erro (master-detail,
+  estilo SAP Error Log — tabela em cima, painel de contexto fixo embaixo),
+  botão manual de atualizar (o Parquet é gravado na mesma execução do
+  coletor que cria o item no SharePoint, então o atraso percebido era só
+  o frontend não re-buscar sem reload — não um problema de gravação).
 - **Fora do escopo v1**: edição de dados (fica só na SharePoint List),
-  autenticação própria, notificações.
-- **Stack**: backend Python (FastAPI + DuckDB lendo os Parquet), frontend
-  Next.js (mesmo padrão do `erp_itp`).
-- **Deploy**: mais 2 containers no `docker-compose.yml` da VM, atrás do
-  mesmo Traefik (ex: `observabilidade.institutotiapretinha.org`).
+  autenticação própria, notificações, gráfico de tendência (adiado).
+- **Stack**: backend Python (FastAPI + DuckDB lendo os Parquet via
+  `read_parquet(glob, hive_partitioning=true)`), frontend Next.js 14.2.15
+  (mesmo padrão do `erp_itp`).
+- **Deploy**: containers `catalogo_backend` (porta interna 8000 →
+  `127.0.0.1:8001`) e `catalogo_frontend` (porta interna 3000 →
+  `127.0.0.1:8080`) no `docker-compose.yml` do `~/itp-stack` da VM —
+  **restritos a localhost**, não expostos via Traefik/domínio público.
+  Acesso via atalho de desktop MATE (`~/Desktop/catalogo-erros.desktop`,
+  ícone `x-office-address-book`) na sessão gráfica da própria VM.
+
+---
+
+## 9. Teste end-to-end real (2026-09-10) — ciclo completo validado
+
+Primeira validação do pipeline inteiro rodando de ponta a ponta, com dois
+casos reais:
+
+**Caso A — bug de banco real (CAT-0003)**: erro real de schema encontrado
+em produção, classificado com confiança alta, aprovado, e **corrigido
+autonomamente pelo Claude Code CLI na VM** (commit `3aecaeb5`, push, deploy,
+`Status=resolvido`). Primeira correção de produção feita sem intervenção
+manual de código.
+
+**Caso B — crash de frontend proposital (CAT-0014 / `ERR-9d8025bfe2`)**:
+bug de teste introduzido de propósito (`ChamadosTable.tsx`, campo
+inexistente `tituloTypo`) pra validar a cadeia inteira: crash real no
+navegador → captura via `POST /frontend-logs` → `docker logs` →
+coletor → SharePoint → Power Automate (email + Teams) → aprovação →
+`aplicador.py` executa, corrige, commita, dá push, roda `deploy.sh` →
+`Status=resolvido`, `Fase=validando`. Diagnóstico e correção propostos
+pelo Claude bateram exatamente com a causa raiz, incluindo grep do
+histórico de commits pra confirmar que era teste proposital.
+
+**Bugs reais encontrados só por causa desse teste ao vivo** (não seriam
+achados só lendo o código):
+
+- **Crash de UI client-side nunca chegava a log nenhum.** O
+  `PageErrorBoundary` (`ClientShell.tsx`) capturava o erro só no
+  navegador — sem reportar pro backend, o catálogo nunca veria esse tipo
+  de erro. Corrigido com `componentDidCatch` chamando
+  `POST /backend-api/frontend-logs` (endpoint novo, `@Public()`, loga via
+  `Logger.error`).
+- **Mesmo ponto cego em outro lugar**: existe um `error.tsx` global na
+  raiz do App Router (`apps/frontend/src/app/error.tsx`) que intercepta o
+  crash *antes* do `PageErrorBoundary` dentro do `ClientShell` — ele não
+  tinha o mesmo report. Corrigido replicando o mesmo `fetch` best-effort
+  ali. **Lição**: ao adicionar reporte de erro num boundary, sempre
+  verificar se existe outro boundary mais acima na árvore (Next.js App
+  Router permite vários `error.tsx` por segmento de rota + 1 global).
+- **Logs coloridos (ANSI) quebravam a query pro SharePoint.** O Nest
+  Logger grava logs com sequências de escape ANSI (`\x1b[32m` etc.); sem
+  removê-las na normalização, a assinatura carregava caracteres de
+  controle que geravam `400 Bad Request` na query OData `$filter` do
+  Graph API — o coletor não conseguia nem checar duplicidade. Corrigido
+  em `normalizador.py` (remove ANSI antes de qualquer outra substituição).
+- **`LinkCommit` continua sem funcionar via Graph API** (mesmo problema
+  já visto antes — a coluna Hyperlink não tem um formato de escrita que a
+  API aceite). Isolado em `try/except` separado desde a correção
+  anterior, então nunca bloqueia o resultado principal — mas segue sem
+  solução real (ver seção 11).
+- **Fuso horário da lista SharePoint em UTC**, não Brasília — as datas
+  gravadas estão corretas (UTC, como deveria ser internamente), mas a
+  exibição na lista não convertia pro fuso local. Corrigido nas
+  Configurações Regionais do site (não é bug de código).
 
 ---
 
@@ -297,22 +361,39 @@ editável).
 - [x] Criar site, app registration, permissão Graph, lista `CatalogoErros` (26 colunas) — feito 2026-09-09.
 - [x] Validar escrita/leitura de item completo via API — feito e testado 2026-09-09.
 - [x] Decidir local do Parquet — disco local da VM, dentro do backup existente.
-- [ ] Escrever o script coletor (normalização regex → dedup 3 camadas → Claude Code CLI → sync SharePoint + Parquet).
-- [ ] Rodar o coletor manualmente contra os logs reais da VM e validar contra os 6 grupos já identificados (seção 6).
-- [ ] Agendar os 2 crons (coletor 3/3h; aplicação de correção aprovada, proposto 30 min).
-- [ ] Montar os 2 flows do Power Automate (aprovação + relatório diário) — passo a passo depois que o coletor estiver gerando itens de verdade.
+- [x] Escrever o script coletor (normalização regex → dedup 3 camadas → Claude Code CLI → sync SharePoint + Parquet).
+- [x] Rodar o coletor manualmente contra os logs reais da VM e validar contra os 6 grupos já identificados (seção 6).
+- [x] Agendar os crons — coletor `*/5min` (wrapper adaptativo: 5min/30min/2h/6h
+      conforme a pior criticidade vista no lote, ver `cron_coletor.sh`),
+      aplicador `*/15min`.
+- [x] Montar o Fluxo A do Power Automate (notificação + Approval) — feito e
+      testado 2026-09-09/10 com casos reais.
+- [x] Construir a app de visualização do Parquet (seção 8) — feito e em
+      produção 2026-09-10.
+- [x] Validar o ciclo inteiro ponta a ponta com 2 casos reais (seção 9) —
+      feito 2026-09-10, incluindo correção autônoma aplicada em produção.
+- [ ] Montar Fluxo B (relatório diário consolidado) e Fluxo C (notificação
+      de resultado após `aplicador.py` rodar) — só desenhados no design doc,
+      não construídos na UI ainda.
 - [ ] Popular o catálogo de ações/playbooks além dos 9 exemplos da seção 7.
-- [ ] Construir a app de visualização do Parquet (seção 8): backend FastAPI+DuckDB, frontend Next.js, deploy como 2 containers novos na VM.
-- [ ] Rodar 1-2 semanas em modo piloto (só observando) antes de aprovar qualquer correção de verdade.
+- [ ] Varredura mais ampla de outros pontos cegos de erro client-side além
+      dos 2 `error.tsx`/`PageErrorBoundary` já cobertos (pedido explícito do
+      usuário, adiado deliberadamente pra depois do teste inicial: "o certo
+      depois é fazer uma varredura desses tipos de erros que não chegam até
+      nós").
+- [ ] Rodar 1-2 semanas em modo piloto (aprovação manual sempre) antes de
+      considerar liberar qualquer auto-fix sem aprovação.
 
 ---
 
 ## 11. Em aberto
 
-- Frequência do cron de aplicação de correções aprovadas (proposto: 30 min).
-- Threshold de "pico de frequência" pra categoria `integracao` (proposto: >5/1h).
-- Regras de auto-fix da v2 (quando liberar ações de baixo risco sem aprovação).
-- Data de expiração do client secret do app `Catalogo Erros - VM` (anotar quando disponível).
-- Onde plugar APRXM e DW quando migrarem.
-- Onde plugar APRXM e DW quando migrarem.
+- `LinkCommit` sem formato de escrita funcional via Graph API (400 em toda
+  tentativa, isolado em try/except pra não bloquear o resultado principal
+  — ver seção 9). Sem solução real ainda.
+- Threshold de "pico de frequência" pra categoria `integracao` (proposto: >5/1h) — em uso em `aplicar_matriz_reincidencia()`, mas não validado com volume real ainda.
+- Regras de auto-fix da v2 (quando liberar ações de baixo risco sem aprovação) — não antes do piloto de 1-2 semanas.
 - Data de expiração do client secret do app `Catalogo Erros - VM` (anotar quando disponível, pra não pegar de surpresa a rotação).
+- Data de expiração/rotação da deploy key SSH usada pro push autônomo do `aplicador.py`.
+- Onde plugar APRXM e DW quando migrarem.
+- Fluxos B e C do Power Automate ainda não construídos na UI (seção 10).

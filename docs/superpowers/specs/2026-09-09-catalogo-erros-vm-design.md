@@ -1,6 +1,6 @@
 # Catálogo de Erros da VM — Design Spec
 **Data:** 2026-09-09 (v4 — schema final da lista, fingerprinting em 3 camadas, infra validada)
-**Status:** Em discussão / infraestrutura parcialmente provisionada
+**Status:** Implementado e validado em produção (ciclo completo testado 2026-09-10, ver `CATALOGO-ERROS.md` seção 9 pro estado/achados atuais — este documento é o registro histórico de design, não é atualizado com o dia a dia)
 **Projeto:** Infra vm-itp-prod (multi-app: ITP, APRXM, DW futuramente)
 
 ---
