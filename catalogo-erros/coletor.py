@@ -184,7 +184,11 @@ def processar_grupo(
     novo_item = client.criar_item({
         "Title": classificacao["tipo_erro"][:255],
         "Aplicacao": aplicacao_final,
-        "DescricaoResumida": classificacao["descricao_resumida"].strip()[:150],
+        # Nome interno real da coluna (acento em "Descrição" gerou esse
+        # escape no SharePoint) — achado em teste real 2026-09-10, nunca
+        # tinha sido exercitado porque os 8 itens de backfill usaram PATCH
+        # manual direto com o nome certo, não passaram por criar_item().
+        "Descri_x00e7__x00e3_oResumida": classificacao["descricao_resumida"].strip()[:150],
         "Categoria": classificacao["categoria"],
         "TipoErro": classificacao["tipo_erro"],
         "Assinatura": msg_normalizada[:500],
