@@ -9,8 +9,16 @@ mesmo problema de algo já no shortlist. Nunca escolhe/executa ação
 etapa posterior, separada, só depois de aprovação humana.
 """
 import json
+import os
 import re
 import subprocess
+
+# Diretório de trabalho pro Claude Code CLI — precisa ser a raiz do repo,
+# não a subpasta catalogo-erros/. Achado em teste real (2026-09-10): rodando
+# de dentro de catalogo-erros/, o Claude corretamente se recusou a mexer em
+# apps/frontend/ ou rodar deploy.sh por não ter escopo — teve que reportar
+# "precisa de atenção humana" em vez de aplicar a correção real.
+DIRETORIO_REPO = os.path.expanduser("~/erp_itp")
 
 CATEGORIAS_VALIDAS = {"banco", "código", "infra", "security", "integracao", "usuario", "terceiros"}
 CRITICIDADES_VALIDAS = {"baixa", "media", "alta", "critica"}
@@ -129,6 +137,7 @@ def classificar(
         capture_output=True,
         text=True,
         timeout=120,
+        cwd=DIRETORIO_REPO,
     )
     if resultado.returncode != 0:
         raise RuntimeError(f"claude CLI falhou: {resultado.stderr[:500]}")
@@ -185,6 +194,7 @@ def executar(prompt_execucao: str) -> dict:
         capture_output=True,
         text=True,
         timeout=600,  # execução real (commit/deploy) demora mais que classificação
+        cwd=DIRETORIO_REPO,
     )
     if resultado.returncode != 0:
         raise RuntimeError(f"claude CLI falhou na execução: {resultado.stderr[:500]}")
