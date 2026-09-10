@@ -48,6 +48,7 @@ import { AlunosModule } from './alunos/alunos.module';
 import { PublicoModule } from './publico/publico.module';
 import { ProjetosModule } from './projetos/projetos.module';
 import { CaptacaoModule } from './captacao/captacao.module';
+import { FrontendLogsModule } from './frontend-logs/frontend-logs.module';
 import { ResponsaveisModule } from './responsaveis/responsaveis.module';
 import { SupabaseModule } from './modules/supabase/supabase.module';
 
@@ -132,6 +133,7 @@ import { SupabaseModule } from './modules/supabase/supabase.module';
     PublicoModule,
     ProjetosModule,
     CaptacaoModule,
+    FrontendLogsModule,
     ResponsaveisModule,
     SupabaseModule,
   ],

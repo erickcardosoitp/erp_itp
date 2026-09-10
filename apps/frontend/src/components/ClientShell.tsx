@@ -15,6 +15,21 @@ import { Menu, RefreshCw } from 'lucide-react';
 class PageErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state = { error: null };
   static getDerivedStateFromError(error: Error) { return { error }; }
+  componentDidCatch(error: Error) {
+    // Sem isso, um crash de renderização fica só no navegador — nunca
+    // chega no docker logs, nunca é visto pelo catálogo de erros
+    // (achado em teste real, 2026-09-10). Best-effort: se o próprio
+    // fetch falhar, não faz nada, não deixa o app mais quebrado ainda.
+    fetch('/backend-api/frontend-logs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: error.message,
+        stack: error.stack,
+        pathname: typeof window !== 'undefined' ? window.location.pathname : undefined,
+      }),
+    }).catch(() => {});
+  }
   render() {
     if (this.state.error) {
       return (
