@@ -35,8 +35,28 @@ if [ "$AGORA_EPOCH" -lt "$PROXIMA_EPOCH" ]; then
 fi
 
 echo "=== $(date -u -Iseconds) - executando coletor ==="
+# set +e ao redor da chamada: sob set -e, se coletor.py sair != 0, a
+# ATRIBUICAO "SAIDA=$(...)" ja aborta o script na hora — o "echo $SAIDA"
+# nunca roda, e o traceback real do Python nunca aparece no log (achado
+# real, 2026-09-11: log só mostrava o cabeçalho, sem pista nenhuma do
+# motivo da falha, levando a suposição errada de que era limite de
+# token do Claude — não era, o erro nem chegava a invocar IA).
+set +e
 SAIDA=$(python3 "$DIR/coletor.py" 2>&1)
+CODIGO_SAIDA=$?
+set -e
 echo "$SAIDA"
+
+if [ "$CODIGO_SAIDA" -ne 0 ]; then
+  echo "ERRO: coletor.py saiu com código $CODIGO_SAIDA — ver traceback acima"
+  # Retry curto (5 min) em vez de ficar mudo ou esperar 6h às cegas.
+  PROXIMA_NOVA_EPOCH=$((AGORA_EPOCH + 300))
+  python3 -c "
+import json
+json.dump({'proxima_execucao_epoch': $PROXIMA_NOVA_EPOCH, 'ultima_execucao_epoch': $AGORA_EPOCH, 'ultimos_itens_novos': 0}, open('$STATE_FILE', 'w'), indent=2)
+"
+  exit "$CODIGO_SAIDA"
+fi
 
 ITENS_NOVOS=$(echo "$SAIDA" | grep -c "item novo criado" || true)
 
