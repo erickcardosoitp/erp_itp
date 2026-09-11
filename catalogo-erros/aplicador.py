@@ -19,6 +19,7 @@ import sys
 from datetime import datetime, timezone
 
 import config
+import custos
 from claude_client import executar
 from graph_client import GraphClient
 
@@ -74,9 +75,20 @@ def main() -> None:
 
         if resultado.get("_custo_usd"):
             log(f"  {cod_erro}: custo desta execução ${resultado['_custo_usd']:.4f}")
+            custos.registrar("aplicador", resultado["_custo_usd"], cod_erro=cod_erro)
+
+        resumo_final = resultado["resumo"]
+        if resultado.get("link_commit"):
+            # Coluna LinkCommit nunca aceita escrita (400 sempre, testado
+            # 2026-09-11: nem string simples nem objeto {Url,Description}
+            # de hyperlink funcionam — a coluna nao expoe NENHUM type facet
+            # no Graph, limitacao da API pra esse schema especifico, fora
+            # do nosso controle). Em vez de tentar de novo a cada execucao,
+            # embute o link no campo que ja funciona.
+            resumo_final = f"{resumo_final}\n\nCommit: {resultado['link_commit']}"
 
         atualizacao = {
-            "ResultadoExecucao": resultado["resumo"],
+            "ResultadoExecucao": resumo_final,
             "TentativasResolucao": fields.get("TentativasResolucao", 0) + 1,
         }
         if resultado.get("acao_realizada"):
@@ -108,19 +120,6 @@ def main() -> None:
             log(f"  {cod_erro}: não resolvido — {resultado['resumo']}")
 
         client.atualizar_item(item["id"], atualizacao)
-
-        # LinkCommit isolado numa escrita própria: essa coluna já deu 400
-        # em testes anteriores (schema sem type facet exposto pela Graph
-        # API — achado 2026-09-09). Uma falha aqui não pode derrubar a
-        # gravação do resultado principal acima (aconteceu de verdade em
-        # 2026-09-10: correção real foi aplicada com sucesso, mas o
-        # Status=resolvido nunca chegou a salvar por causa desse campo).
-        if resultado.get("link_commit"):
-            try:
-                client.atualizar_item(item["id"], {"LinkCommit": resultado["link_commit"]})
-            except Exception as exc:
-                log(f"  {cod_erro}: aviso — não consegui gravar LinkCommit "
-                    f"({exc}), mas o resultado principal já foi salvo")
 
     log("Aplicação concluída.")
 

@@ -318,6 +318,7 @@ def analisar_com_ia(tarefa_id: str):
     return {"analise": analise, "cache": False}
 
 
+CUSTOS_JSONL = Path.home() / "itp-stack" / "catalogo-erros-custos.jsonl"
 CATALOGO_LOGS = [
     Path.home() / "itp-stack" / "catalogo-erros-cron.log",
     Path.home() / "itp-stack" / "catalogo-erros-aplicador.log",
@@ -327,15 +328,33 @@ _PADRAO_CUSTO = re.compile(
 )
 
 
-@app.get("/custos")
-def custos_claude():
-    """Agrega o \\$custo_usd que coletor.py/aplicador.py ja logam em texto -
-    nao existe (ainda) persistencia estruturada, so o log bruto. Ver
-    pendencia registrada no spec (2026-09-11): persistir isso de verdade
-    no Parquet/SharePoint e o caminho certo pra frente, isso aqui e' um
-    jeito rapido de dar visibilidade sem esperar por aquilo."""
-    por_dia: dict[str, float] = {}
-    eventos: list[dict] = []
+def _custos_estruturados() -> list[dict]:
+    """Fonte primaria (2026-09-11 em diante): coletor.py/aplicador.py
+    gravam um evento estruturado por chamada ao Claude (custos.py)."""
+    if not CUSTOS_JSONL.exists():
+        return []
+    eventos = []
+    for linha in CUSTOS_JSONL.read_text(encoding="utf-8").splitlines():
+        linha = linha.strip()
+        if not linha:
+            continue
+        try:
+            e = json.loads(linha)
+            eventos.append({
+                "dia": e["timestamp"][:10],
+                "valor_usd": e["valor_usd"],
+                "linha": f"[{e['origem']}] {e.get('cod_erro') or ''} ${e['valor_usd']:.4f}".strip(),
+            })
+        except (json.JSONDecodeError, KeyError):
+            continue
+    return eventos
+
+
+def _custos_legado_por_log() -> list[dict]:
+    """Fallback pra eventos anteriores a 2026-09-11 (so existiam em texto
+    de log, sem persistencia estruturada) - garante que o historico nao
+    some so porque o formato mudou."""
+    eventos = []
     for log_path in CATALOGO_LOGS:
         if not log_path.exists():
             continue
@@ -349,10 +368,22 @@ def custos_claude():
             m = _PADRAO_CUSTO.match(linha)
             if not m:
                 continue
-            dia, valor_str = m.group(1), m.group(2)
-            valor = float(valor_str)
-            por_dia[dia] = por_dia.get(dia, 0.0) + valor
-            eventos.append({"dia": dia, "valor_usd": valor, "linha": linha.strip()[:200]})
+            eventos.append({"dia": m.group(1), "valor_usd": float(m.group(2)), "linha": linha.strip()[:200]})
+    return eventos
+
+
+@app.get("/custos")
+def custos_claude():
+    estruturados = _custos_estruturados()
+    # So usa o fallback de log pra dias que o JSONL ainda nao cobre -
+    # evita contar em dobro o mesmo evento nos dois formatos.
+    dias_cobertos = {e["dia"] for e in estruturados}
+    legado = [e for e in _custos_legado_por_log() if e["dia"] not in dias_cobertos]
+    eventos = estruturados + legado
+
+    por_dia: dict[str, float] = {}
+    for e in eventos:
+        por_dia[e["dia"]] = por_dia.get(e["dia"], 0.0) + e["valor_usd"]
 
     eventos.sort(key=lambda e: e["dia"], reverse=True)
     return {

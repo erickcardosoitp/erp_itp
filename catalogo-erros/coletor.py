@@ -20,6 +20,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 
 import config
+import custos
 import normalizador
 import parquet_writer
 from claude_client import classificar
@@ -146,6 +147,7 @@ def processar_grupo(
     )
     if classificacao.get("_custo_usd"):
         custo_acumulado.append(classificacao["_custo_usd"])
+        custos.registrar("coletor", classificacao["_custo_usd"])
 
     aplicacao_final = classificacao["aplicacao"]
 
