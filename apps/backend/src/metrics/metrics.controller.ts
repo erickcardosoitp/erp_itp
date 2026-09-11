@@ -48,7 +48,7 @@ export class MetricsController {
         .map((a: any) => `[${a.status?.toUpperCase()}] ${a.labels?.alertname || '(sem nome)'} — ${a.annotations?.summary || a.annotations?.description || ''}`)
         .join('\n');
       await this.emailService.enviarGenerico(
-        'erickcardoso@institutotiapretinha.org',
+        'monitoramento@institutotiapretinha.org',
         `[Grafana] ${body?.title || 'Alerta de monitoramento'}`,
         `<pre>${resumo || JSON.stringify(body).slice(0, 2000)}</pre>`,
       );
