@@ -10,6 +10,10 @@ const ITENS = [
   { href: "/custos", label: "Custos IA (Claude)" },
 ];
 
+const LINKS_EXTERNOS = [
+  { href: "https://grafana.itp.institutotiapretinha.org", label: "Grafana ↗" },
+];
+
 export default function Nav() {
   const pathname = usePathname();
   return (
@@ -44,6 +48,21 @@ export default function Nav() {
           </a>
         );
       })}
+      <span style={{ flex: 1 }} />
+      {LINKS_EXTERNOS.map((link) => (
+        <a
+          key={link.href}
+          href={link.href}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            color: "#d8c8f0", textDecoration: "none", fontSize: 13, fontWeight: 500,
+            padding: "6px 12px", border: "1px solid #7c3aed", borderRadius: 4,
+          }}
+        >
+          {link.label}
+        </a>
+      ))}
     </nav>
   );
 }

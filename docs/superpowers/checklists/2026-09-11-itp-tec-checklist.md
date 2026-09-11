@@ -51,19 +51,54 @@ os itens pendentes forem fechados.
 
 ---
 
+## ✅ Fechado por outra sessão em paralelo (2026-09-11, mesmo dia)
+
+Enquanto essa rodada acontecia, outra sessão fechou praticamente todas as
+pendências "difíceis" que estavam na lista:
+
+- [x] Grafana + Prometheus completo (node-exporter, cadvisor,
+      postgres-exporter, blackbox-exporter), exposto em
+      `grafana.itp.institutotiapretinha.org`, **SSO Microsoft já configurado**
+      (reaproveita o app registration do erp_itp — mesmo padrão que o
+      ITP_TEC ainda precisa)
+- [x] 5 alertas reais no Grafana, testados ponta a ponta, ponte de alerta
+      envia pra `monitoramento@institutotiapretinha.org`
+- [x] Dashboard de KPI de negócio (8 métricas)
+- [x] P1/P2 da auditoria de banco: 27 índices FK criados, CHECK/enum,
+      nomenclatura camelCase→snake_case
+- [x] Dívidas de código do erp_itp (ARCHITECTURE.md §7): rotas de chamada
+      duplicadas removidas, `relatorios/page.jsx` órfão removido,
+      `FuncionariosController` duplicado corrigido, `database.ts` vazio
+      removido, `auth`/`usuarios` extraídos pra módulos próprios
+- [x] Bug real no `REABRE_SEMPRE` do coletor — grafia antiga de categoria
+      (`codigo`/`seguranca`/`outros`) nunca batia com os valores reais do
+      classificador (`código`/`security`/`terceiros`), reincidência dessas
+      3 categorias nunca reabria item resolvido
+- [x] Suporte a `Aplicacao=SITE` no catálogo de erros, testado em produção
+- [x] Varredura de pontos cegos de crash client-side (frontend + backend)
+- [x] Infra da VM: swap criado, `/tmp` isolado (tmpfs, nosuid/nodev/noexec),
+      `installonly_limit` duplicado corrigido
+- [x] Decisões registradas: chamada duplicada, SSO do ITP_TEC, permissões
+
+**Conectado nesta rodada**: link direto pro Grafana na navegação do
+ITP_TEC + atalho "ver histórico completo" na página `/infra` (que hoje é
+só o retrato do momento via shell commands — Grafana tem o histórico de
+verdade via Prometheus).
+
 ## 🟡 Fáceis, sem dependência — próximas
 
 - [ ] Backfill retroativo revisado — conferir se `AprovadoEm` deveria ser
       preenchido também nos itens antigos (CAT-0006/7/8/9) que não têm
       (hoje ficaram com `TempoResolucaoHoras` em branco por falta de base
       confiável)
-- [ ] Dívidas de código do erp_itp (ARCHITECTURE.md §7): rotas de chamada
-      duplicadas, `relatorios/page.jsx` órfão, `FuncionariosController`
-      possivelmente 2x, `matriculas/database.ts` fora do padrão
+- [ ] Reaproveitar o mesmo padrão de SSO Microsoft já validado no Grafana
+      (`GF_AUTH_AZUREAD_*`) pro ITP_TEC — precedente já existe, reduz o
+      trabalho que faltava
 
 ## 🔴 Dependem de decisão/ação do usuário
 
 - [ ] SSO antes de expor o ITP_TEC em `tec.itp.institutotiapretinha.org`
+      (padrão já provado no Grafana, só replicar)
 - [ ] Checar data de expiração do client secret do app `Catalogo Erros - VM`
       manualmente no Entra (sem privilégio suficiente via API)
 - [ ] Power Automate: Flow B (relatório diário) e Flow C (alerta de
@@ -71,7 +106,6 @@ os itens pendentes forem fechados.
 - [ ] Decisão de ambiente de homologação/dev (opções documentadas, falta escolher)
 - [ ] Revisar regra de permissão manual das tarefas (hoje: admin pra
       backup/snapshot/aplicador, tec pro resto — decisão minha, ajustável)
-- [ ] P1/P2 da auditoria de banco (índices FK, CHECK/enum, nomenclatura)
 - [ ] Migração do aprxm_sys (2º sistema do parque, não iniciada)
 
 ## ⚫ Backlog — reavaliar depois, baixa prioridade agora

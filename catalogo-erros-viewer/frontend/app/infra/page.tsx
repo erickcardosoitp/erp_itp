@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { tabela, th, td, painel, Selo } from "../ui";
+import { tabela, th, td, painel, Selo, botao } from "../ui";
 
 type Infra = {
   cpu_ram: { load_1min: number | null; load_5min: number | null; load_15min: number | null; ram_total_mb: number | null; ram_disponivel_mb: number | null; ram_uso_pct: number | null };
@@ -64,9 +64,23 @@ export default function InfraPage() {
 
   return (
     <main>
-      <h1 style={{ fontSize: 16, fontWeight: 700, margin: "0 0 4px" }}>Infraestrutura — vm-itp-prod</h1>
-      <p style={{ color: "#5b6068", fontSize: 12.5, margin: "0 0 14px" }}>
-        Atualiza a cada 30s. Coletado em {new Date(dados.coletado_em).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}.
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div>
+          <h1 style={{ fontSize: 16, fontWeight: 700, margin: "0 0 4px" }}>Infraestrutura — vm-itp-prod</h1>
+          <p style={{ color: "#5b6068", fontSize: 12.5, margin: "0 0 14px" }}>
+            Visão rápida, atualiza a cada 30s. Coletado em {new Date(dados.coletado_em).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}.
+          </p>
+        </div>
+        <a
+          href="https://grafana.itp.institutotiapretinha.org"
+          target="_blank" rel="noopener noreferrer"
+          style={{ ...botao, background: "#4c1d95", color: "#fff", border: "none", textDecoration: "none" }}
+        >
+          📊 Ver histórico completo no Grafana ↗
+        </a>
+      </div>
+      <p style={{ fontSize: 11.5, color: "#8a8f98", margin: "-8px 0 14px" }}>
+        Grafana tem histórico, alertas e métricas de negócio (KPI) — essa página aqui é só o retrato do momento.
       </p>
 
       <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
