@@ -87,9 +87,20 @@ def main() -> None:
             atualizacao["Status"] = "aberto"
             log(f"  {cod_erro}: precisa de atenção humana — {resultado['resumo']}")
         elif resultado.get("sucesso"):
+            agora_resolucao = datetime.now(timezone.utc)
             atualizacao["Fase"] = "validando"
             atualizacao["Status"] = "resolvido"
-            atualizacao["ResolvidoEm"] = datetime.now(timezone.utc).isoformat()
+            atualizacao["ResolvidoEm"] = agora_resolucao.isoformat()
+            atualizacao["IAResolveu"] = True
+            primeira_vez = fields.get("PrimeiraVez")
+            if primeira_vez:
+                try:
+                    inicio = datetime.fromisoformat(primeira_vez.replace("Z", "+00:00"))
+                    atualizacao["TempoResolucaoHoras"] = round(
+                        (agora_resolucao - inicio).total_seconds() / 3600, 2
+                    )
+                except ValueError:
+                    pass
             log(f"  {cod_erro}: resolvido — {resultado['resumo']}")
         else:
             atualizacao["Fase"] = "escalado"
