@@ -164,7 +164,7 @@ export class AppModule implements OnModuleInit {
   private async runMigrations() {
     try {
       // ── Versão do schema — pula migrations se já rodaram neste banco ──────
-      const SCHEMA_VERSION = 24; // incrementar aqui ao adicionar novas migrations
+      const SCHEMA_VERSION = 25; // incrementar aqui ao adicionar novas migrations
       await this.dataSource.query(`
         CREATE TABLE IF NOT EXISTS _schema_version (
           id      INT PRIMARY KEY DEFAULT 1,
@@ -1710,6 +1710,26 @@ export class AppModule implements OnModuleInit {
         `);
       }
       this.logger.log('✅ v24: índices de FK ausentes + CHECK/enum (usuarios.role, movimentacoes_financeiras/boletos/chamados_academicos.status)');
+
+      // ── v25: updated_at/created_at faltando (auditoria de banco, P2,
+      // parte aditiva — não renomeia/remove nenhuma coluna existente,
+      // só adiciona o que faltava em 17 tabelas). ───────────────────────
+      const tabelasSemUpdatedAt = [
+        'chamados_acompanhamentos', 'chamados_filas', 'diario_academico',
+        'estoque_categorias', 'estoque_movimentos', 'gente_colaborador_codigos',
+        'gente_colaborador_locais', 'gente_feriados', 'gente_pagamentos_passagem',
+        'inscricao_anotacoes', 'inscricao_movimentacoes', 'pesquisas_respostas',
+        'presenca_sessoes', 'projeto_presencas', 'turma_alunos', 'turmas',
+      ];
+      for (const tabela of tabelasSemUpdatedAt) {
+        await this.dataSource.query(
+          `ALTER TABLE ${tabela} ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now()`,
+        );
+      }
+      await this.dataSource.query(
+        `ALTER TABLE config_listas ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now()`,
+      );
+      this.logger.log('✅ v25: updated_at em 16 tabelas + created_at em config_listas');
 
       // ── Marca schema como atualizado — próximos cold starts pulam tudo ────
       await this.dataSource.query(`UPDATE _schema_version SET version = $1, ran_at = now() WHERE id = 1`, [SCHEMA_VERSION]);
