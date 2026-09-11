@@ -120,7 +120,7 @@ Auditoria de banco completa em `docs/database-audit-2026-09-08.md` (repo `aprxm_
 **Achados de código (levantamento 2026-09-09, não corrigidos)**:
 
 1. **Rotas de chamada duplicadas no frontend** — `/chamada` + `/chamada-professor` (raiz) E `/academico/chamada` + `/academico/chamada-professor` são duas implementações completas e ativas do mesmo fluxo (chamada via QR/link), batendo nos mesmos endpoints. `LaunchPad.tsx` gera link pra uma versão, `PresencaTab.tsx` (dentro de `academico`) gera link pra outra. Não é código morto — duplicação funcional genuína, provável evolução paralela nunca consolidada.
-2. **`apps/frontend/src/app/relatorios/page.jsx` é arquivo órfão** — coexiste com `relatorios/page.tsx` (o real, 2183 linhas). O `.jsx` tem 35 linhas, dados mockados, provavelmente quebra o build ou é ignorado silenciosamente (dois `page.*` na mesma pasta do App Router colidem). Candidato a remoção.
+2. **✅ Resolvido (2026-09-11)** — `apps/frontend/src/app/relatorios/page.jsx` (arquivo órfão, 35 linhas, dados mockados, sem nenhuma referência externa) removido; `relatorios/page.tsx` (2183 linhas) é a única implementação real da rota.
 3. **`FuncionariosController` possivelmente registrado 2x** — aparece via `FuncionariosModule.controllers` E via `require()` dinâmico direto em `AppModule.controllers` (linha ~142). Vale investigar se causa rota duplicada ou é noop.
 4. **`matriculas/database.ts`** — nome/padrão fora do convencionado (`*.service.ts`/`*.entity.ts`) usado no resto do projeto. Verificar se é acesso cru ao banco paralelo ao TypeORM.
 5. **`auth` e `usuarios` sem `.module.ts` próprio** — registrados direto em `AppModule`, fora do padrão do resto do projeto (todo módulo de negócio tem seu module).
