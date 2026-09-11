@@ -237,11 +237,14 @@ não por prioridade de negócio. Ver também `2026-09-11-itp-tec-checklist.md`
       aprovação humana) — só depois do piloto de 1-2 semanas rodando só
       com aprovação manual.
 - [ ] Onde plugar APRXM e DW no catálogo de erros quando migrarem pra VM.
-- [ ] Regras de alerta de verdade no Grafana (thresholds → contact point
-      → o webhook `/api/metrics/alerta-grafana` que já existe) — hoje só
-      a ponte de recebimento está pronta e testável, mas nenhuma regra de
-      alerta foi criada ainda na UI do Grafana (ex: disco >90%, container
-      down, site fora do ar).
+- [x] Regras de alerta de verdade no Grafana — **concluído 2026-09-11**:
+      5 regras provisionadas via arquivo (site fora do ar, disco cheio,
+      memória crítica, container caído, taxa de erro 5xx alta), contact
+      point apontando pro webhook, email indo pra
+      `monitoramento@institutotiapretinha.org` (caixa criada pelo
+      usuário pra isso). Testado ponta a ponta 2x de verdade (parando
+      containers reais), incluindo um bug real de "stale metric" achado
+      e corrigido (`no_data_state`).
 
 ### ⚫ Backlog — baixa prioridade, reavaliar depois
 
