@@ -9,9 +9,7 @@ import { DataSource } from 'typeorm';
 // Core & Auth
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { AuthService } from './auth/auth.service';
-import { AuthController } from './auth/auth.controller';
-import { JwtStrategy } from './auth/jwt.strategy';
+import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
 
@@ -29,7 +27,7 @@ import { Turma } from './academico/entities/turma.entity';
 
 // Services / Controllers
 import { MatriculasModule } from './matriculas/matriculas.module';
-import { UsuariosController } from './usuarios/usuarios.controller'; 
+import { UsuariosModule } from './usuarios/usuarios.module';
 import { EmailModule } from './email.module';
 
 // Modules
@@ -116,7 +114,9 @@ import { SupabaseModule } from './modules/supabase/supabase.module';
     TypeOrmModule.forFeature([Usuario, Aluno, Grupo, DocumentoInscricao]),
     
     // 5. Módulos Encapsulados (Não adicione os services deles em providers!)
-    GruposModule, 
+    AuthModule,
+    UsuariosModule,
+    GruposModule,
     UsersModule,
     AcademicoModule,
     CadastroModule,
@@ -139,14 +139,10 @@ import { SupabaseModule } from './modules/supabase/supabase.module';
   ],
   controllers: [
     AppController,
-    AuthController,
-    UsuariosController,
   ],
   providers: [
     AppService,
-    AuthService,
     // O UsersService NÃO deve estar aqui, pois já está dentro do UsersModule
-    JwtStrategy,
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
   ],

@@ -37,18 +37,18 @@ pros detalhes completos de cada item.
 
 ## 🟡 Médio — precisa investigação antes de decidir a solução
 
-- [ ] Rotas de chamada duplicadas no frontend — `/chamada` +
-      `/chamada-professor` (raiz) **e** `/academico/chamada` +
-      `/academico/chamada-professor` são duas implementações completas e
-      ativas do mesmo fluxo (QR/link de presença), batendo nos mesmos
-      endpoints. `LaunchPad.tsx` linka pra uma versão, `PresencaTab.tsx`
-      pra outra. Não é código morto — decidir qual manter exige entender
-      se algum público específico depende de uma delas. (`ARCHITECTURE.md`
-      §7.1)
-- [ ] `auth` e `usuarios` sem `.module.ts` próprio — registrados direto em
-      `AppModule`, fora do padrão do resto do projeto. Refatorar exige
-      cuidado pra não quebrar guards globais que já dependem deles.
-      (`ARCHITECTURE.md` §7.5)
+- [x] Rotas de chamada duplicadas — investigado 2026-09-11: **não é bug**
+      (confirmado com o usuário: aluno nunca faz a própria chamada, ambas
+      as rotas exigem login corretamente). É duplicação de manutenção
+      real: `/chamada` (widget geral via QR) e `/academico/chamada`
+      (deep-link pré-preenchido) fazem a mesma coisa por dois caminhos de
+      código diferentes. Decisão de consolidar ou não fica pendente
+      (`ARCHITECTURE.md` §7.1). `/academico/chamada-professor` segue
+      candidato a órfão, não confirmado.
+- [x] `auth`/`usuarios` sem `.module.ts` próprio — resolvido 2026-09-11:
+      criados `AuthModule` (exporta `AuthService`) e `UsuariosModule`
+      (importa `AuthModule`). Build TypeScript validado; falta confirmar
+      boot real (DI) após deploy. (`ARCHITECTURE.md` §7.5)
 - [ ] P1 da auditoria de banco — índices em FK, CHECK/enum (P0 já foi
       feito: FK financeiro + soft delete). Ver
       `docs/database-audit-2026-09-08.md` no repo `aprxm_sass`.
@@ -61,6 +61,10 @@ pros detalhes completos de cada item.
 
 ## 🔴 Depende de decisão do usuário
 
+- [ ] Consolidar ou não as duas implementações ativas de chamada
+      (`/chamada` vs `/academico/chamada`) — investigação concluída
+      (não é bug, é duplicação de manutenção), falta decidir se vale a
+      pena unificar.
 - [ ] SSO obrigatório antes de expor o ITP_TEC publicamente em
       `tec.itp.institutotiapretinha.org` (hoje só localhost/VM).
 - [ ] Checar manualmente no Entra a data de expiração do client secret do
