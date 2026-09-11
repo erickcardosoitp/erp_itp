@@ -281,12 +281,24 @@ def tendencia(
 
 
 # --- Proxy pra API de tarefas agendadas (roda fora de container, ver acima) ---
-# TODO(seguranca): gate de SSO antes de expor esse backend fora da rede
-# interna da VM — hoje sem isso, qualquer requisicao aqui roda comando real
-# no host (crontab, scripts) ou cria tarefa nova.
+# Autenticacao/role vem do middleware.ts do Next.js (unico ponto publico -
+# esse backend nunca e' exposto direto, so 127.0.0.1 + rede docker interna).
+# O middleware injeta x-itp-tec-role depois de validar a sessao; se o
+# header nao vier, ou o Next.js caiu, ou alguem tentou pular o proxy —
+# nos dois casos, nega.
+
+def _exigir_role(request: Request, minima: str) -> None:
+    role = request.headers.get("x-itp-tec-role")
+    if not role:
+        raise HTTPException(401, "sessao nao encontrada (passe pelo ITP_TEC, nao direto)")
+    ordem = {"tec": 0, "admin": 1}
+    if ordem.get(role, -1) < ordem.get(minima, 99):
+        raise HTTPException(403, f"acao exige permissao '{minima}', sua sessao e' '{role}'")
+
 
 @app.get("/api/tarefas")
-def listar_tarefas():
+def listar_tarefas(request: Request):
+    _exigir_role(request, "tec")
     try:
         resp = httpx.get(f"{TAREFAS_API_URL}/tarefas", timeout=15)
         resp.raise_for_status()
@@ -297,6 +309,7 @@ def listar_tarefas():
 
 @app.post("/api/tarefas")
 async def criar_tarefa(request: Request):
+    _exigir_role(request, "admin")  # criar tarefa nova (agenda comando/script) e' sempre admin
     corpo = await request.json()
     try:
         resp = httpx.post(f"{TAREFAS_API_URL}/tarefas", json=corpo, timeout=15)
@@ -308,7 +321,17 @@ async def criar_tarefa(request: Request):
 
 
 @app.post("/api/tarefas/{tarefa_id}/executar")
-def executar_tarefa(tarefa_id: str):
+def executar_tarefa(tarefa_id: str, request: Request):
+    _exigir_role(request, "tec")  # checagem fina por tarefa abaixo
+    try:
+        info = httpx.get(f"{TAREFAS_API_URL}/tarefas", timeout=15).json()
+        tarefa = next((t for t in info.get("tarefas", []) if t["id"] == tarefa_id), None)
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"tarefas-api indisponivel: {exc}")
+    if not tarefa:
+        raise HTTPException(404, "tarefa nao encontrada")
+    _exigir_role(request, tarefa.get("permissao_minima", "admin"))
+
     try:
         resp = httpx.post(f"{TAREFAS_API_URL}/tarefas/{tarefa_id}/executar", timeout=620)
     except httpx.HTTPError as exc:
@@ -320,6 +343,7 @@ def executar_tarefa(tarefa_id: str):
 
 @app.patch("/api/tarefas/{tarefa_id}")
 async def atualizar_tarefa(tarefa_id: str, request: Request):
+    _exigir_role(request, "admin")  # mudar criticidade/permissao e' sempre admin
     corpo = await request.json()
     try:
         resp = httpx.patch(f"{TAREFAS_API_URL}/tarefas/{tarefa_id}", json=corpo, timeout=15)
@@ -331,7 +355,8 @@ async def atualizar_tarefa(tarefa_id: str, request: Request):
 
 
 @app.post("/api/tarefas/{tarefa_id}/analise-ia")
-def analisar_com_ia(tarefa_id: str):
+def analisar_com_ia(tarefa_id: str, request: Request):
+    _exigir_role(request, "tec")
     try:
         resp = httpx.post(f"{TAREFAS_API_URL}/tarefas/{tarefa_id}/analise-ia", timeout=70)
     except httpx.HTTPError as exc:
@@ -342,7 +367,8 @@ def analisar_com_ia(tarefa_id: str):
 
 
 @app.get("/api/tarefas/{tarefa_id}/log")
-def log_da_tarefa(tarefa_id: str, linhas: int = 200):
+def log_da_tarefa(tarefa_id: str, request: Request, linhas: int = 200):
+    _exigir_role(request, "tec")
     try:
         resp = httpx.get(f"{TAREFAS_API_URL}/tarefas/{tarefa_id}/log", params={"linhas": linhas}, timeout=15)
     except httpx.HTTPError as exc:
@@ -353,7 +379,8 @@ def log_da_tarefa(tarefa_id: str, linhas: int = 200):
 
 
 @app.get("/api/infra")
-def infra():
+def infra(request: Request):
+    _exigir_role(request, "tec")
     try:
         resp = httpx.get(f"{TAREFAS_API_URL}/infra", timeout=20)
         resp.raise_for_status()

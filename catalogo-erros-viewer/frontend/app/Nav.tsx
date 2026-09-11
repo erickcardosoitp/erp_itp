@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 
 const ITENS = [
   { href: "/", label: "Visão Geral" },
@@ -16,6 +17,14 @@ const LINKS_EXTERNOS = [
 
 export default function Nav() {
   const pathname = usePathname();
+  const [usuario, setUsuario] = useState<{ nome: string; role: string } | null>(null);
+
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && setUsuario({ nome: d.nome, role: d.role }));
+  }, []);
+
   return (
     <nav style={{
       background: "#4c1d95", borderBottom: "3px solid #f2b705",
@@ -63,6 +72,14 @@ export default function Nav() {
           {link.label}
         </a>
       ))}
+      {usuario && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: 12, paddingLeft: 12, borderLeft: "1px solid #7c3aed" }}>
+          <span style={{ color: "#fff", fontSize: 12.5 }}>
+            {usuario.nome} <span style={{ color: "#f2b705", fontSize: 10, textTransform: "uppercase" }}>({usuario.role})</span>
+          </span>
+          <a href="/api/auth/logout" style={{ color: "#d8c8f0", fontSize: 12, textDecoration: "underline" }}>sair</a>
+        </div>
+      )}
     </nav>
   );
 }
