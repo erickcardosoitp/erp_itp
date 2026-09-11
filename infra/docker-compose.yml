@@ -95,10 +95,15 @@ services:
       context: /home/itpadmin/erp_itp/catalogo-erros-viewer/backend
     container_name: catalogo_backend
     restart: unless-stopped
+    env_file:
+      - /home/itpadmin/itp-stack/catalogo_erros.env
     volumes:
       - /home/itpadmin/itp-stack/catalogo-erros-parquet:/root/itp-stack/catalogo-erros-parquet:ro
     environment:
       PARQUET_BASE_DIR: /root/itp-stack/catalogo-erros-parquet
+      TAREFAS_API_URL: http://host.docker.internal:8002
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "127.0.0.1:8001:8000"
 
@@ -116,7 +121,92 @@ services:
     ports:
       - "127.0.0.1:8080:3000"
 
+  # ── Monitoramento (2026-09-11) ──────────────────────────────────────
+  # Prometheus + Grafana + exporters, tudo restrito a localhost (mesmo
+  # padrão do pgAdmin/catálogo de erros — sem exposição pública sem SSO).
+  # Configs em ./monitoring/ (prometheus.yml, blackbox.yml, provisioning
+  # do Grafana com datasource + dashboards prontos da comunidade).
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: itp_node_exporter
+    restart: unless-stopped
+    command:
+      - '--path.rootfs=/host'
+    volumes:
+      - '/:/host:ro,rslave'
+    ports:
+      - "127.0.0.1:9100:9100"
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: itp_cadvisor
+    restart: unless-stopped
+    privileged: true
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    ports:
+      - "127.0.0.1:8082:8080"
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    container_name: itp_postgres_exporter
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_NAME: "postgresql://itp_admin:${POSTGRES_PASSWORD}@postgres:5432/erp_itp_db?sslmode=disable"
+    depends_on:
+      - postgres
+    ports:
+      - "127.0.0.1:9187:9187"
+
+  blackbox-exporter:
+    image: prom/blackbox-exporter:latest
+    container_name: itp_blackbox_exporter
+    restart: unless-stopped
+    volumes:
+      - ./monitoring/prometheus/blackbox.yml:/etc/blackbox_exporter/config.yml
+    ports:
+      - "127.0.0.1:9115:9115"
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: itp_prometheus
+    restart: unless-stopped
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.retention.time=30d'
+    ports:
+      # 9090 já ocupada por outro serviço do sistema na VM (systemd) —
+      # exposta em 9091 no host.
+      - "127.0.0.1:9091:9090"
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: itp_grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
+      - ./monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/grafana/dashboards-json:/etc/grafana/provisioning/dashboards-json
+    depends_on:
+      - prometheus
+    ports:
+      - "127.0.0.1:3030:3000"
+
 volumes:
   pg_data:
   pgadmin_data:
   traefik_letsencrypt:
+  prometheus_data:
+  grafana_data:

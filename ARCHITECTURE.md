@@ -26,7 +26,21 @@ Internet → Traefik (SSL Let's Encrypt, roteamento por domínio)
              └─ api.itp.institutotiapretinha.org   → erp_itp_backend  (NestJS, :3001)
 Postgres (itp_postgres, :5432) — só rede interna Docker
 pgAdmin4 (:5050) — só localhost da VM (acesso via X2Go/MATE)
+Grafana (:3030) + Prometheus (:9091) — só localhost da VM, ver seção 9
 ```
+
+**Monitoramento (Grafana + Prometheus, criado 2026-09-11)**: `node-exporter`
+(CPU/RAM/disco/rede da VM), `cAdvisor` (métricas por container),
+`postgres-exporter` (Postgres), `blackbox-exporter` (uptime/SSL dos 3
+domínios públicos via HTTP probe). Todos restritos a `127.0.0.1`, mesmo
+padrão de segurança do pgAdmin. Dashboards prontos da comunidade
+(Node Exporter Full, cAdvisor, PostgreSQL) provisionados automaticamente
+via arquivo (`infra/monitoring/grafana/`). Heartbeat externo via
+healthchecks.io (cron `*/5min` fazendo ping) — cobre o caso da própria VM
+cair por inteiro, quando o Grafana/Prometheus (rodando na mesma VM) não
+teriam como avisar ninguém. Ver seção 9 pro detalhamento completo e
+pendências (instrumentação de métricas de aplicação/API, RUM de
+frontend).
 
 **Swap**: 1GB via `/swapfile` (`/etc/fstab`), criado 2026-09-11 — a VM não
 tinha swap nenhum antes. RAM de 7.3Gi normalmente saudável (memória
@@ -145,7 +159,55 @@ Auditoria de banco completa em `docs/database-audit-2026-09-08.md` (repo `aprxm_
 
 ---
 
-## 8. Referências
+## 9. Monitoramento (Grafana + Prometheus, 2026-09-11)
+
+Pedido explícito do usuário: "painel completo de monitoramento das
+aplicações no ITP_TEC, como um Grafana". Decisão registrada: Grafana OSS
+real (não um painel customizado dentro do ITP_TEC) — ferramenta padrão
+de mercado pra stack containerizada, sem custo de licença, evita
+reinventar gráficos/histórico/alertas do zero.
+
+**Componentes** (todos em `infra/docker-compose.yml`, configs em
+`infra/monitoring/`):
+
+| Componente | Porta (só localhost) | Coleta |
+|---|---|---|
+| `node-exporter` | 9100 | CPU/RAM/disco/rede da VM (SO) |
+| `cAdvisor` | 8082 | CPU/memória por container Docker |
+| `postgres-exporter` | 9187 | Conexões, queries, tamanho do banco |
+| `blackbox-exporter` | 9115 | Uptime/SSL/HTTP dos 3 domínios públicos (probe ativo de fora pra dentro) |
+| `Prometheus` | 9091 (9090 já ocupada por outro serviço do SO) | Agrega tudo acima, retenção 30 dias |
+| `Grafana` | 3030 | Visualização — 3 dashboards prontos da comunidade (Node Exporter Full, cAdvisor, PostgreSQL), provisionados automaticamente via arquivo |
+
+**Heartbeat externo**: cron `*/5min` na VM faz ping em
+healthchecks.io. Resolve o problema do "vigia que precisa de outro
+vigia" — se o Grafana/Prometheus rodam na mesma VM que monitoram, uma
+queda total da VM não gera alerta nenhum (o próprio painel caiu junto).
+O heartbeat externo é o único sinal que sobrevive a esse cenário.
+
+**Credenciais**: `GRAFANA_ADMIN_PASSWORD` no `.env` da VM (não versionado,
+mesmo padrão de `POSTGRES_PASSWORD`/`PGADMIN_DEFAULT_PASSWORD`).
+
+**Fora do escopo desta rodada** (exige mais trabalho, registrado como
+pendência):
+- Métricas de aplicação/API (taxa de erro HTTP, latência p50/p95/p99,
+  Apdex) — exige instrumentar o NestJS (`prom-client`, endpoint
+  `/metrics`), não é só subir container.
+- RUM (Real User Monitoring) client-side — Web Vitals, cliques, funil de
+  conversão. O site institucional já tem Application Insights pra isso;
+  o `erp_itp` ainda não tem equivalente (só captura erro, não
+  performance/comportamento).
+- Métricas de negócio (matrículas/dia, chamados abertos, movimentações
+  financeiras) — technical health ≠ business health, mas exige definir
+  queries específicas e validar com o usuário.
+- Alertas do Grafana configurados pra reusar o mesmo canal de
+  email/Teams do catálogo de erros (Power Automate/Graph API) — Grafana
+  não usa SMTP nativo aqui (tenant bloqueia SMTP AUTH legado), precisa de
+  uma ponte via webhook.
+
+---
+
+## 10. Referências
 
 - Histórico completo da migração de infra (VM, SSO, storage, backups, incidentes e fixes): repo `aprxm_sass`, `docs/superpowers/plans/2026-09-06-migracao-vm-plan.md`.
 - Auditoria de banco de dados: repo `aprxm_sass`, `docs/database-audit-2026-09-08.md`.
