@@ -273,8 +273,12 @@ Vocabulário fechado de ações (grava em `AcaoExecutada`):
 - Threshold de "pico de frequência" pra categoria `integracao` (proposto: >5/1h).
 - Regras de auto-fix da v2 (quando liberar ações de baixo risco sem aprovação).
 - Onde plugar APRXM e DW quando migrarem.
-- Rotação do client secret do app `Catalogo Erros - VM` (anotar data de
-  expiração escolhida na criação, ainda não registrada aqui).
+- Rotação do client secret do app `Catalogo Erros - VM` — **não consegui
+  ler a data de expiração via API** (2026-09-11: `az ad app credential
+  list` retorna "Insufficient privileges" mesmo autenticado, precisa de
+  Global Admin/App Admin de verdade, não só o service principal). Pendente
+  o usuário checar manualmente em Entra ID → App registrations → Catalogo
+  Erros - VM → Certificates & secrets, e registrar a data aqui.
 - **Flow B (relatório diário por email) ainda não foi construído** — só
   Flow A (aprovação) existe hoje no Power Automate. Pendente.
 - **Notificação de escalonamento (novo requisito, 2026-09-11)**: usuário
