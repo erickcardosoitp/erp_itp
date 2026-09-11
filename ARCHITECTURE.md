@@ -18,7 +18,7 @@
 
 ## 2. Infraestrutura (produção)
 
-Tudo roda numa única VM Azure (`vm-itp-prod`, Oracle Linux 9, `20.114.240.177`), via Docker Compose. Decisão consciente de correlacionar falhas em troca de visibilidade/controle direto (ver histórico da migração em `docs/superpowers/` do repo `aprxm_sass`, arquivo `2026-09-06-migracao-vm-plan.md` — é o registro completo e cronológico de toda a migração Vercel→VM, SSO, storage, backups).
+Tudo roda numa única VM Azure (`vm-itp-prod`, Oracle Linux 9, `20.114.240.177`, usuário SSH `itpadmin`), via Docker Compose. Decisão consciente de correlacionar falhas em troca de visibilidade/controle direto (ver histórico da migração em `docs/superpowers/` do repo `aprxm_sass`, arquivo `2026-09-06-migracao-vm-plan.md` — é o registro completo e cronológico de toda a migração Vercel→VM, SSO, storage, backups).
 
 ```
 Internet → Traefik (SSL Let's Encrypt, roteamento por domínio)
