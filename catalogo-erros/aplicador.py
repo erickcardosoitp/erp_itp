@@ -104,10 +104,16 @@ def main() -> None:
             atualizacao["Status"] = "resolvido"
             atualizacao["ResolvidoEm"] = agora_resolucao.isoformat()
             atualizacao["IAResolveu"] = True
-            primeira_vez = fields.get("PrimeiraVez")
-            if primeira_vez:
+            # Base = AprovadoEm (inicio do CICLO atual), nunca PrimeiraVez:
+            # um erro pode reabrir varias vezes, e PrimeiraVez fica fixo na
+            # 1a ocorrencia de sempre — contaria tempo parado de ciclos
+            # anteriores junto com o tempo de execucao real (achado do
+            # usuario, 2026-09-11: "um erro pode acontecer mais de uma
+            # vez, ai ele vai ter um tempo enorme que nao faz sentido").
+            aprovado_em = fields.get("AprovadoEm")
+            if aprovado_em:
                 try:
-                    inicio = datetime.fromisoformat(primeira_vez.replace("Z", "+00:00"))
+                    inicio = datetime.fromisoformat(aprovado_em.replace("Z", "+00:00"))
                     atualizacao["TempoResolucaoHoras"] = round(
                         (agora_resolucao - inicio).total_seconds() / 3600, 2
                     )
