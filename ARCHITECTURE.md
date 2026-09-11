@@ -188,6 +188,16 @@ O heartbeat externo é o único sinal que sobrevive a esse cenário.
 **Credenciais**: `GRAFANA_ADMIN_PASSWORD` no `.env` da VM (não versionado,
 mesmo padrão de `POSTGRES_PASSWORD`/`PGADMIN_DEFAULT_PASSWORD`).
 
+**Acesso público + SSO (2026-09-11)**: exposto em
+`https://grafana.itp.institutotiapretinha.org` via Traefik/Let's
+Encrypt. Login via Microsoft (SSO) configurado reaproveitando o mesmo
+app registration do `erp_itp` (`MS_CLIENT_ID`/`MS_CLIENT_SECRET`/
+`MS_TENANT_ID` copiados de `erp_itp_backend.env` pro `.env` do
+`itp-stack`, pra ficarem disponíveis na interpolação do
+`docker-compose.yml`) — Redirect URI `/login/azuread` cadastrado como
+segunda plataforma Web no mesmo app. Login por senha (`admin`) continua
+disponível em paralelo, não foi removido.
+
 **Fora do escopo desta rodada** (exige mais trabalho, registrado como
 pendência):
 - Métricas de aplicação/API (taxa de erro HTTP, latência p50/p95/p99,
