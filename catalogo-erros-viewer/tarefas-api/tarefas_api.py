@@ -153,6 +153,8 @@ class NovaTarefa(BaseModel):
     # Um dos dois, dependendo do tipo:
     conteudo_script: Optional[str] = None  # texto do bash, se tipo=script
     endpoint_http: Optional[str] = None    # URL, se tipo=http
+    http_metodo: str = "GET"               # GET|POST, so usado se tipo=http
+    http_headers: Optional[dict] = None    # ex: {"x-cron-secret": "..."}
 
 
 @app.post("/tarefas")
@@ -210,6 +212,8 @@ def criar_tarefa(nova: NovaTarefa):
         "executavel_manualmente": nova.executavel_manualmente,
         "permissao_minima": nova.permissao_minima,
         "log_path": log_path,
+        "http_metodo": nova.http_metodo if nova.tipo == "http" else None,
+        "http_headers": nova.http_headers if nova.tipo == "http" else None,
     }
     registro.setdefault("tarefas", []).append(entrada)
     _salvar_registro(registro)
