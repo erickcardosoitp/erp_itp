@@ -8,6 +8,7 @@ Usa DuckDB embutido lendo o diretório de Parquet direto (sem servidor de
 banco) — mesmo motor recomendado no spec original.
 """
 import os
+import time
 from datetime import date
 from typing import Optional
 
@@ -19,6 +20,78 @@ from fastapi.middleware.cors import CORSMiddleware
 PARQUET_BASE_DIR = os.environ.get(
     "PARQUET_BASE_DIR", os.path.expanduser("~/itp-stack/catalogo-erros-parquet")
 )
+
+# --- Status ao vivo da SharePoint List (credenciais do app "Catalogo
+# Erros - VM", mesmas do coletor.py/aplicador.py, montadas via env_file no
+# docker-compose). O Parquet so grava o status NO MOMENTO da ocorrencia -
+# se um item e' aprovado/resolvido depois sem gerar ocorrencia nova, o
+# Parquet nunca saberia. Achado real, 2026-09-11: itens fechados na lista
+# ainda apareciam "aberto" no dashboard por causa disso + de any_value()
+# escolher um valor arbitrario do grupo em vez do mais recente.
+_MS_TENANT_ID = os.environ.get("MS_TENANT_ID")
+_MS_CLIENT_ID = os.environ.get("MS_CLIENT_ID")
+_MS_CLIENT_SECRET = os.environ.get("MS_CLIENT_SECRET")
+_SHAREPOINT_SITE_ID = os.environ.get("SHAREPOINT_SITE_ID")
+_SHAREPOINT_LIST_ID = os.environ.get("SHAREPOINT_LIST_ID")
+
+_cache_status_vivo: dict = {"dados": {}, "expira_em": 0.0}
+_CACHE_TTL_S = 30  # nao bate na Graph API a cada request de pagina
+
+
+def _token_graph() -> Optional[str]:
+    if not (_MS_TENANT_ID and _MS_CLIENT_ID and _MS_CLIENT_SECRET):
+        return None
+    try:
+        resp = httpx.post(
+            f"https://login.microsoftonline.com/{_MS_TENANT_ID}/oauth2/v2.0/token",
+            data={
+                "client_id": _MS_CLIENT_ID,
+                "client_secret": _MS_CLIENT_SECRET,
+                "scope": "https://graph.microsoft.com/.default",
+                "grant_type": "client_credentials",
+            },
+            timeout=15,
+        )
+        resp.raise_for_status()
+        return resp.json()["access_token"]
+    except httpx.HTTPError:
+        return None
+
+
+def _status_vivo_por_coderro() -> dict:
+    """CodErro -> {Status, Fase} direto da SharePoint List, cacheado por
+    _CACHE_TTL_S segundos. Falha silenciosa (retorna {}) se Graph
+    indisponivel/sem credencial - o dashboard cai de volta pro Parquet."""
+    agora = time.time()
+    if agora < _cache_status_vivo["expira_em"]:
+        return _cache_status_vivo["dados"]
+
+    if not (_SHAREPOINT_SITE_ID and _SHAREPOINT_LIST_ID):
+        return {}
+    token = _token_graph()
+    if not token:
+        return {}
+
+    try:
+        resp = httpx.get(
+            f"https://graph.microsoft.com/v1.0/sites/{_SHAREPOINT_SITE_ID}"
+            f"/lists/{_SHAREPOINT_LIST_ID}/items",
+            params={"$expand": "fields($select=CodErro,Status,Fase)", "$top": "200"},
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=20,
+        )
+        resp.raise_for_status()
+        dados = {}
+        for item in resp.json().get("value", []):
+            f = item.get("fields", {})
+            cod = f.get("CodErro")
+            if cod:
+                dados[cod] = {"Status": f.get("Status"), "Fase": f.get("Fase")}
+        _cache_status_vivo["dados"] = dados
+        _cache_status_vivo["expira_em"] = agora + _CACHE_TTL_S
+        return dados
+    except httpx.HTTPError:
+        return {}
 # Padrão Hive: app=X/data=Y/*.parquet — hive_partitioning reconstrói as
 # colunas Aplicacao/data a partir do caminho automaticamente.
 GLOB_PARQUET = os.path.join(PARQUET_BASE_DIR, "**", "*.parquet")
@@ -101,9 +174,9 @@ def listar_erros(
     if criticidade:
         condicoes.append("Criticidade = ?")
         parametros.append(criticidade)
-    if status:
-        condicoes.append("StatusNoMomento = ?")
-        parametros.append(status)
+    # status e' filtrado depois de agrupar (ver abaixo) - StatusNoMomento por
+    # OCORRENCIA nao reflete o status atual do item, so o status quando
+    # aquela linha foi gravada.
     if data_inicio:
         condicoes.append("CAST(data AS DATE) >= ?")
         parametros.append(data_inicio)
@@ -117,10 +190,10 @@ def listar_erros(
         SELECT
             CodErro,
             app AS Aplicacao,
-            any_value(Categoria) AS Categoria,
-            any_value(TipoErro) AS TipoErro,
-            any_value(Criticidade) AS Criticidade,
-            any_value(StatusNoMomento) AS UltimoStatusConhecido,
+            arg_max(Categoria, TimestampOcorrencia) AS Categoria,
+            arg_max(TipoErro, TimestampOcorrencia) AS TipoErro,
+            arg_max(Criticidade, TimestampOcorrencia) AS Criticidade,
+            arg_max(StatusNoMomento, TimestampOcorrencia) AS UltimoStatusConhecido,
             COUNT(*) AS OcorrenciasNoPeriodo,
             MIN(TimestampOcorrencia) AS PrimeiraNoPeriodo,
             MAX(TimestampOcorrencia) AS UltimaNoPeriodo
@@ -134,7 +207,25 @@ def listar_erros(
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
-    return {"itens": resultado.to_dict(orient="records")}
+    itens = resultado.to_dict(orient="records")
+
+    # Sobrescreve com o status AO VIVO da SharePoint List quando disponivel -
+    # arg_max acima so resolve o bug de escolher valor arbitrario, mas ainda
+    # e' o status na ULTIMA OCORRENCIA gravada no Parquet, que pode estar
+    # desatualizado se o item foi aprovado/resolvido depois sem nova ocorrencia.
+    status_vivo = _status_vivo_por_coderro()
+    for item in itens:
+        vivo = status_vivo.get(item["CodErro"])
+        if vivo and vivo.get("Status"):
+            item["UltimoStatusConhecido"] = vivo["Status"]
+            item["StatusAoVivo"] = True
+        else:
+            item["StatusAoVivo"] = False
+
+    if status:
+        itens = [i for i in itens if i["UltimoStatusConhecido"] == status]
+
+    return {"itens": itens}
 
 
 @app.get("/api/erros/{cod_erro}/historico")
