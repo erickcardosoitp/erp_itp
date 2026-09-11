@@ -20,6 +20,11 @@ export class MetricsService implements OnModuleInit {
   private readonly matriculasHoje: client.Gauge<string>;
   private readonly chamadosAbertos: client.Gauge<string>;
   private readonly movimentacoesHoje: client.Gauge<string>;
+  private readonly alunosAtivos: client.Gauge<string>;
+  private readonly boletosPendentes: client.Gauge<string>;
+  private readonly colaboradoresAtivos: client.Gauge<string>;
+  private readonly captacaoOportunidadesAtivas: client.Gauge<string>;
+  private readonly estoqueAbaixoMinimo: client.Gauge<string>;
 
   constructor(@InjectDataSource() private readonly dataSource: DataSource) {
     client.collectDefaultMetrics({ register: this.registry });
@@ -62,6 +67,31 @@ export class MetricsService implements OnModuleInit {
       help: 'Movimentações financeiras lançadas hoje',
       registers: [this.registry],
     });
+    this.alunosAtivos = new client.Gauge({
+      name: 'itp_alunos_ativos',
+      help: 'Total de alunos ativos (matriculados)',
+      registers: [this.registry],
+    });
+    this.boletosPendentes = new client.Gauge({
+      name: 'itp_boletos_pendentes',
+      help: 'Boletos com status Pendente (a receber)',
+      registers: [this.registry],
+    });
+    this.colaboradoresAtivos = new client.Gauge({
+      name: 'itp_colaboradores_ativos',
+      help: 'Colaboradores (RH) ativos',
+      registers: [this.registry],
+    });
+    this.captacaoOportunidadesAtivas = new client.Gauge({
+      name: 'itp_captacao_oportunidades_ativas',
+      help: 'Oportunidades de captação de recursos em andamento (não arquivadas/reprovadas)',
+      registers: [this.registry],
+    });
+    this.estoqueAbaixoMinimo = new client.Gauge({
+      name: 'itp_estoque_abaixo_minimo',
+      help: 'Produtos de estoque ativos com quantidade abaixo do mínimo',
+      registers: [this.registry],
+    });
   }
 
   onModuleInit() {
@@ -73,7 +103,10 @@ export class MetricsService implements OnModuleInit {
   }
 
   private async atualizarMetricasNegocio() {
-    const [[matriculas], [chamados], [movimentacoes]] = await Promise.all([
+    const [
+      [matriculas], [chamados], [movimentacoes],
+      [alunos], [boletos], [colaboradores], [captacao], [estoque],
+    ] = await Promise.all([
       this.dataSource.query(
         `SELECT count(*)::int AS c FROM inscricoes WHERE status_matricula = 'Matriculado' AND created_at::date = CURRENT_DATE`,
       ),
@@ -83,9 +116,23 @@ export class MetricsService implements OnModuleInit {
       this.dataSource.query(
         `SELECT count(*)::int AS c FROM movimentacoes_financeiras WHERE data = CURRENT_DATE`,
       ),
+      this.dataSource.query(`SELECT count(*)::int AS c FROM alunos WHERE ativo IS NOT FALSE`),
+      this.dataSource.query(`SELECT count(*)::int AS c FROM boletos WHERE status = 'Pendente'`),
+      this.dataSource.query(`SELECT count(*)::int AS c FROM gente_colaboradores WHERE ativo = true`),
+      this.dataSource.query(
+        `SELECT count(*)::int AS c FROM captacao_opportunities WHERE status NOT IN ('reprovado', 'archived') AND deleted_at IS NULL`,
+      ),
+      this.dataSource.query(
+        `SELECT count(*)::int AS c FROM estoque_produtos WHERE quantidade_atual < estoque_minimo AND ativo = true`,
+      ),
     ]);
     this.matriculasHoje.set(matriculas?.c ?? 0);
     this.chamadosAbertos.set(chamados?.c ?? 0);
     this.movimentacoesHoje.set(movimentacoes?.c ?? 0);
+    this.alunosAtivos.set(alunos?.c ?? 0);
+    this.boletosPendentes.set(boletos?.c ?? 0);
+    this.colaboradoresAtivos.set(colaboradores?.c ?? 0);
+    this.captacaoOportunidadesAtivas.set(captacao?.c ?? 0);
+    this.estoqueAbaixoMinimo.set(estoque?.c ?? 0);
   }
 }
