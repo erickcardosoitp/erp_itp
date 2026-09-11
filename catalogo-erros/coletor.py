@@ -28,8 +28,13 @@ from graph_client import GraphClient
 
 CAMPOS_SHORTLIST = ["CodErro", "TipoErro", "Assinatura", "Categoria"]
 
-# Categorias cuja reincidência reabre sempre um item resolvido (spec seção 9/10).
-REABRE_SEMPRE = {"banco", "codigo", "infra", "seguranca", "outros"}
+# Categorias cuja reincidência reabre sempre um item resolvido (spec seção
+# 9/10). Precisa bater exatamente com CATEGORIAS_VALIDAS de claude_client.py
+# (achado real 2026-09-11: grafia antiga "codigo"/"seguranca"/"outros" nunca
+# batia com os valores reais "código"/"security"/"terceiros" que o
+# classificador de fato atribui — reincidência dessas 3 categorias nunca
+# reabria um item já resolvido).
+REABRE_SEMPRE = {"banco", "código", "infra", "security", "terceiros"}
 LIMITE_PICO_INTEGRACAO = 5  # ocorrências no mesmo lote pra considerar "pico"
 
 
