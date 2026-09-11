@@ -50,6 +50,17 @@ não por prioridade de negócio. Ver também `2026-09-11-itp-tec-checklist.md`
   Validado em produção: build TypeScript limpo, boot sem erro de DI,
   rotas `/api/auth/*` e `/api/usuarios/*` mapeadas sem duplicação, login
   testado via curl.
+- Threshold de "pico de frequência" da categoria `integracao` (>5
+  ocorrências/lote) — não dava pra validar contra volume real ainda, mas
+  ao tentar cobrir isso com teste, achado um **bug real**: `REABRE_SEMPRE`
+  usava grafia antiga (`codigo`/`seguranca`/`outros`) que nunca batia com
+  as categorias reais do classificador (`código`/`security`/`terceiros`)
+  — reincidência de erro de **código** (a categoria mais comum) nunca
+  reabria um item já resolvido, silenciosamente. Corrigido, e criado
+  `catalogo-erros/test_reincidencia.py` (7 testes, stdlib `unittest`, sem
+  dependência nova) cobrindo a matriz inteira — inclusive um teste de
+  regressão que trava esse bug específico se ele voltar. Rodado e
+  validado na VM.
 - Rotas de chamada duplicadas (`/chamada` vs `/academico/chamada`) —
   investigado a fundo, inclusive testando o redirect real em produção.
   **Não é bug de segurança** (confirmado com o usuário: aluno nunca faz
@@ -63,9 +74,7 @@ não por prioridade de negócio. Ver também `2026-09-11-itp-tec-checklist.md`
 
 ### 🟢 Fácil — sem decisão pendente, só executar
 
-- [ ] Threshold de "pico de frequência" da categoria `integracao`
-      (>5 ocorrências/1h) — não dá pra validar sem volume real de erro
-      dessa categoria ainda; fica em observação.
+*(nenhum item fácil pendente no momento)*
 
 ### 🟡 Médio — precisa investigação antes de decidir a solução
 

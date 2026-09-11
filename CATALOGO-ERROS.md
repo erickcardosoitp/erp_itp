@@ -391,7 +391,7 @@ achados só lendo o código):
 - `LinkCommit` sem formato de escrita funcional via Graph API (400 em toda
   tentativa, isolado em try/except pra não bloquear o resultado principal
   — ver seção 9). Sem solução real ainda.
-- Threshold de "pico de frequência" pra categoria `integracao` (proposto: >5/1h) — em uso em `aplicar_matriz_reincidencia()`, mas não validado com volume real ainda.
+- ~~Threshold de "pico de frequência" pra categoria `integracao`~~ — resolvido indiretamente 2026-09-11: ao escrever testes pra `aplicar_matriz_reincidencia()`, achado bug real em `REABRE_SEMPRE` (grafia divergente de `CATEGORIAS_VALIDAS`, reincidência de `código`/`security`/`terceiros` nunca reabria). Corrigido + `test_reincidencia.py` criado. O número em si (5/lote) segue sem validação de volume real, mas não é mais o item crítico.
 - Regras de auto-fix da v2 (quando liberar ações de baixo risco sem aprovação) — não antes do piloto de 1-2 semanas.
 - Data de expiração do client secret do app `Catalogo Erros - VM` (anotar quando disponível, pra não pegar de surpresa a rotação).
 - Data de expiração/rotação da deploy key SSH usada pro push autônomo do `aplicador.py`.
