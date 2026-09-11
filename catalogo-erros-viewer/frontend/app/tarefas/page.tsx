@@ -80,8 +80,11 @@ export default function TarefasPage() {
                   <th style={th}>Aplicação</th>
                   <th style={th}>Criticidade</th>
                   <th style={th}>Intervalo</th>
+                  <th style={th}>Schedule</th>
                   <th style={th}>Criador</th>
                   <th style={th}>Crontab</th>
+                  <th style={th}>Permissão</th>
+                  <th style={th}>Última execução</th>
                   <th style={th}></th>
                 </tr>
               </thead>
@@ -100,8 +103,15 @@ export default function TarefasPage() {
                     <td style={td}>{t.aplicacao}</td>
                     <td style={td}><Selo texto={t.criticidade} cor={CORES_CRITICIDADE[t.criticidade]} /></td>
                     <td style={td}>{t.intervalo_legivel}</td>
+                    <td style={{ ...td, fontFamily: "monospace", fontSize: 11 }}>{t.schedule}</td>
                     <td style={td}>{t.criador}</td>
                     <td style={td}>{t.presente_no_crontab ? "sim" : "NÃO"}</td>
+                    <td style={td}>{t.permissao_minima}</td>
+                    <td style={{ ...td, fontFamily: "monospace", fontSize: 11 }}>
+                      {t.ultima_execucao_ultimo_timestamp
+                        ? t.ultima_execucao_ultimo_timestamp.replace("T", " ").slice(0, 19)
+                        : "—"}
+                    </td>
                     <td style={td}>
                       {t.executavel_manualmente && (
                         <button onClick={(e) => executar(t.id, e)} disabled={executando === t.id} style={{ ...botao, opacity: executando === t.id ? 0.6 : 1 }}>
