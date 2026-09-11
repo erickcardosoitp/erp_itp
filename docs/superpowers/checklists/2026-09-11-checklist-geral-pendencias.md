@@ -152,11 +152,16 @@ não por prioridade de negócio. Ver também `2026-09-11-itp-tec-checklist.md`
 
 ### 🔴 Depende de decisão do usuário
 
-- [ ] Consolidar ou não as duas implementações ativas de chamada
-      (`/chamada` vs `/academico/chamada`) — investigação concluída, só
-      falta decidir se vale a pena unificar.
-- [ ] SSO obrigatório antes de expor o ITP_TEC publicamente em
-      `tec.itp.institutotiapretinha.org` (hoje só localhost/VM).
+- [x] Consolidar as 2 implementações de chamada — **decisão: não
+      consolidar**. Verificado a fundo (2026-09-11): não são duplicatas
+      de verdade, batem em endpoints de backend diferentes e
+      `/academico/chamada` tem cadastro rápido de aluno que o outro fluxo
+      não tem. Ver `ARCHITECTURE.md` §7.1.
+- [ ] **Decisão tomada**: SSO é obrigatório antes de expor o ITP_TEC
+      publicamente em `tec.itp.institutotiapretinha.org` (hoje só
+      localhost/VM). Falta implementar (reusar o SSO Microsoft já
+      existente no `erp_itp`) — não é urgente enquanto continuar só
+      localhost.
 - [ ] Checar manualmente no Entra a data de expiração do client secret do
       app `Catalogo Erros - VM` (sem privilégio suficiente pra checar via
       API).
@@ -166,12 +171,14 @@ não por prioridade de negócio. Ver também `2026-09-11-itp-tec-checklist.md`
       consolidado) e **Flow C** (notificação de resultado/escalonamento
       após `aplicador.py` rodar) — só desenhados no design doc, Flow A é
       o único construído e testado até agora.
-- [ ] Decisão de ambiente de homologação/dev (opções já documentadas em
-      `docs/superpowers/plans/2026-09-11-homologacao-dev-plan.md`, repo
-      `aprxm_sass` — falta escolher).
-- [ ] Revisar regra de permissão manual das tarefas do ITP_TEC (hoje:
-      `admin` pra backup/snapshot/aplicador, `tec` pro resto — decisão
-      provisória, ajustável).
+- [ ] Decisão de ambiente de homologação/dev — **referência antiga
+      quebrada** (2026-09-11): o doc `docs/superpowers/plans/2026-09-11-
+      homologacao-dev-plan.md` no repo `aprxm_sass` não foi encontrado
+      (nem o repo existe no disco desta máquina, só `aprxm_sys`, que
+      parece ser outro projeto). Adiado por decisão do usuário — revisar
+      de onde veio essa referência antes de continuar.
+- [x] Permissão manual das tarefas do ITP_TEC — **decisão: manter como
+      está** (`admin` pra backup/snapshot/aplicador, `tec` pro resto).
 - [ ] P2 da auditoria de banco (nomenclatura) — mexe em nomes já em uso,
       exige decidir janela de deploy/migração.
 - [ ] Migração do `aprxm_sys` (2º sistema do parque) — não iniciada.
