@@ -68,12 +68,32 @@ não por prioridade de negócio. Ver também `2026-09-11-itp-tec-checklist.md`
   dependência nova) cobrindo a matriz inteira — inclusive um teste de
   regressão que trava esse bug específico se ele voltar. Rodado e
   validado na VM.
-- Varredura de pontos cegos client-side concluída: `global-error.tsx`
-  criado (cobria falha no `layout.tsx` raiz, não coberto pelo `error.tsx`
-  normal) + `window.onerror`/`unhandledrejection` em `ClientShell.tsx`
-  agora reportam qualquer erro pro backend, não só `ChunkLoadError` —
-  cobre handler de evento/`setTimeout`/promise sem `.catch`, que nenhum
-  Error Boundary React alcança. Validado em produção.
+- Varredura de pontos cegos client-side concluída, expandida além do
+  `erp_itp` a pedido do usuário ("repensar e revisar toda a arquitetura
+  do ITP e do site institucional"): `global-error.tsx` criado (cobria
+  falha no `layout.tsx` raiz, não coberto pelo `error.tsx` normal) +
+  `window.onerror`/`unhandledrejection` em `ClientShell.tsx` agora
+  reportam qualquer erro pro backend, não só `ChunkLoadError` — cobre
+  handler de evento/`setTimeout`/promise sem `.catch`, que nenhum Error
+  Boundary React alcança. Validado em produção.
+- **Site institucional** (repo separado `website_tia_pretinha`, SPA
+  Vite+React sem backend próprio, Azure Static Web Apps): não tinha
+  nenhum Error Boundary — tela ficava em branco se `App.jsx` quebrasse
+  durante o render. Adicionado `ErrorBoundary.jsx` + listeners globais de
+  `window`, reportando pro mesmo `/frontend-logs` do `erp_itp` (CORS/CSP
+  já liberavam esse domínio, sem mudança de config extra) — unifica com
+  o catálogo de erros da VM em vez de ficar isolado só no Application
+  Insights que o site já tinha. Testado ponta a ponta via curl com CORS
+  real, log aparece prefixado `[site-institucional]` no `docker logs`.
+  Deployado via push (GitHub Actions da Azure Static Web Apps).
+- **Backend do `erp_itp`**: não tinha handler de
+  `uncaughtException`/`unhandledRejection` no processo Node — erro fora
+  do ciclo de request derrubava o processo com só stack cru no stdout.
+  Adicionado em `main.ts`, loga estruturado via `Logger` do Nest antes de
+  sair. Validado: boot limpo em produção.
+- `Aplicacao` do catálogo de erros ainda só tem ITP/APRXM/DW/BD — erros
+  do site institucional caem em `erp_itp_backend` mas sem uma categoria
+  própria ainda (decisão pendente, ver 🔴 abaixo).
 - `/academico/chamada-professor` removido — confirmado órfão de verdade
   (rascunho de 331 linhas, sem nenhuma referência em código, superado
   pela versão da raiz com 700 linhas e mais funcionalidades).
@@ -128,6 +148,13 @@ não por prioridade de negócio. Ver também `2026-09-11-itp-tec-checklist.md`
       aprovação humana) — só depois do piloto de 1-2 semanas rodando só
       com aprovação manual.
 - [ ] Onde plugar APRXM e DW no catálogo de erros quando migrarem pra VM.
+- [ ] Adicionar `SITE` (ou nome equivalente) como novo valor de
+      `Aplicacao` na SharePoint List, pra distinguir erros do site
+      institucional dos erros do próprio ERP — hoje os dois caem juntos
+      como `ITP` porque chegam pelo mesmo `erp_itp_backend`. Exige criar
+      a opção manualmente na lista (Graph API não cria estrutura, só
+      itens) e ajustar `config.py`/`coletor.py` pra reconhecer o prefixo
+      `[site-institucional]` no log.
 
 ### ⚫ Backlog — baixa prioridade, reavaliar depois
 
