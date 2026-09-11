@@ -79,6 +79,18 @@ não por prioridade de negócio. Ver também `2026-09-11-itp-tec-checklist.md`
   dependência nova) cobrindo a matriz inteira — inclusive um teste de
   regressão que trava esse bug específico se ele voltar. Rodado e
   validado na VM.
+- Métricas de aplicação/API concluídas: `MetricsModule` no NestJS
+  (`prom-client`), interceptor global medindo toda requisição
+  (histograma de duração — base do Apdex), `/api/metrics` exposto pro
+  Prometheus. RUM (Web Vitals — LCP/INP/CLS) via lib `web-vitals` no
+  frontend, reportando pro `/api/metrics/rum`. Métricas de negócio
+  (matrículas/dia, chamados abertos, movimentações/dia) como gauges.
+  Ponte de alerta do Grafana pro email (reaproveitando `EmailService`/
+  Graph API) em `/api/metrics/alerta-grafana`. Grafana exposto
+  publicamente em `grafana.itp.institutotiapretinha.org` (Traefik+SSL),
+  protegido por senha forte. Dashboard customizado "ITP — Visão Geral"
+  em português com painéis grandes tipo stat — corrigido bug real de
+  duplicata na barra de memória por container (faltava `sum by (name)`).
 - Varredura de pontos cegos client-side concluída, expandida além do
   `erp_itp` a pedido do usuário ("repensar e revisar toda a arquitetura
   do ITP e do site institucional"): `global-error.tsx` criado (cobria

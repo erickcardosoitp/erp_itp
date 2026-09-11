@@ -1,0 +1,72 @@
+{
+  "title": "ITP — Containers (detalhado)",
+  "uid": "itp-containers",
+  "editable": true,
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "tags": ["itp"],
+  "panels": [
+    {
+      "id": 1, "type": "stat", "title": "Serviços rodando agora",
+      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [{ "expr": "count(count by (name) (container_last_seen{name!=\"\"}))", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "none",
+        "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
+        "textMode": "value", "colorMode": "background", "graphMode": "none",
+        "text": { "valueSize": 42, "titleSize": 16 } }
+    },
+
+    {
+      "id": 2, "type": "timeseries", "title": "CPU por serviço ao longo do tempo (%)",
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 6 },
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [{ "expr": "sum by (name) (rate(container_cpu_usage_seconds_total{name!=\"\"}[5m])) * 100", "refId": "A", "legendFormat": "{{name}}" }],
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0,
+        "custom": { "lineWidth": 2, "fillOpacity": 8 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "id": 3, "type": "timeseries", "title": "Memória por serviço ao longo do tempo (MB)",
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 6 },
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [{ "expr": "sum by (name) (container_memory_usage_bytes{name!=\"\"}) / 1024 / 1024", "refId": "A", "legendFormat": "{{name}}" }],
+      "fieldConfig": { "defaults": { "unit": "decmbytes", "min": 0,
+        "custom": { "lineWidth": 2, "fillOpacity": 8 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    },
+
+    {
+      "id": 4, "type": "timeseries", "title": "Rede por serviço — recebido (bytes/s)",
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 15 },
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [{ "expr": "sum by (name) (rate(container_network_receive_bytes_total{name!=\"\"}[5m]))", "refId": "A", "legendFormat": "{{name}}" }],
+      "fieldConfig": { "defaults": { "unit": "Bps", "min": 0,
+        "custom": { "lineWidth": 2, "fillOpacity": 8 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "id": 5, "type": "timeseries", "title": "Rede por serviço — enviado (bytes/s)",
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 15 },
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [{ "expr": "sum by (name) (rate(container_network_transmit_bytes_total{name!=\"\"}[5m]))", "refId": "A", "legendFormat": "{{name}}" }],
+      "fieldConfig": { "defaults": { "unit": "Bps", "min": 0,
+        "custom": { "lineWidth": 2, "fillOpacity": 8 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    },
+
+    {
+      "id": 6, "type": "bargauge", "title": "Tempo rodando sem reiniciar (horas)",
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 24 },
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [{ "expr": "(time() - container_start_time_seconds{name!=\"\"}) / 3600", "refId": "A", "legendFormat": "{{name}}" }],
+      "fieldConfig": { "defaults": { "unit": "none", "min": 0,
+        "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "horizontal",
+        "displayMode": "gradient", "showUnfilled": true, "text": { "valueSize": 14 } }
+    }
+  ]
+}
