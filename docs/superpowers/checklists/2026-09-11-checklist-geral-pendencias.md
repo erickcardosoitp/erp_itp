@@ -68,6 +68,9 @@ não por prioridade de negócio. Ver também `2026-09-11-itp-tec-checklist.md`
   dependência nova) cobrindo a matriz inteira — inclusive um teste de
   regressão que trava esse bug específico se ele voltar. Rodado e
   validado na VM.
+- `/academico/chamada-professor` removido — confirmado órfão de verdade
+  (rascunho de 331 linhas, sem nenhuma referência em código, superado
+  pela versão da raiz com 700 linhas e mais funcionalidades).
 - Rotas de chamada duplicadas (`/chamada` vs `/academico/chamada`) —
   investigado a fundo, inclusive testando o redirect real em produção.
   **Não é bug de segurança** (confirmado com o usuário: aluno nunca faz
@@ -93,9 +96,6 @@ não por prioridade de negócio. Ver também `2026-09-11-itp-tec-checklist.md`
       `error.tsx`/`PageErrorBoundary` já cobertos — pedido explícito do
       usuário, adiado deliberadamente ("o certo depois é fazer uma
       varredura desses tipos de erros que não chegam até nós").
-- [ ] `/academico/chamada-professor` — candidato a rota órfã (nenhuma
-      referência encontrada no código), não confirmado com a mesma
-      profundidade que os outros 3 endpoints de chamada.
 
 ### 🔴 Depende de decisão do usuário
 

@@ -157,7 +157,7 @@ Guards verificam se `roleLevel >= nivelMínimo`. Usar `@Roles('drt')` para prote
 
 ```
 /academico/chamada          # Chamada com token (projetor/tablet)
-/academico/chamada-professor # Chamada por CPF do professor
+/chamada-professor          # Chamada por CPF do professor (raiz, não /academico — ver ARCHITECTURE.md §7.1)
 /captacao/buscar            # Busca com IA (Gemini + Tavily)
 /captacao/pipeline          # Kanban de oportunidades (drag-and-drop)
 /captacao/insights          # Análises e dados
