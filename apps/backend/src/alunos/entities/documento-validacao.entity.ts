@@ -64,9 +64,9 @@ export class DocumentoValidacao {
   @Column({ type: 'timestamptz', nullable: true })
   validado_em: Date | null;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 }

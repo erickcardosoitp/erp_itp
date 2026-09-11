@@ -45,9 +45,9 @@ export class Curso {
   @Column({ type: 'decimal', precision: 5, scale: 2, default: 0 })
   progresso: number;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 }

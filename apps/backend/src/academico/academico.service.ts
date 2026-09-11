@@ -512,7 +512,7 @@ export class AcademicoService {
         (numero_matricula, nome_completo, cpf, email, celular, data_nascimento,
          sexo, turno_escolar, cidade, bairro, nome_responsavel,
          maior_18_anos, ativo, data_matricula, lgpd_aceito, autoriza_imagem,
-         cursos_matriculados, "createdAt", "updatedAt")
+         cursos_matriculados, created_at, updated_at)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,true,NOW(),false,false,$13,NOW(),NOW())
        RETURNING *`,
       [
@@ -1292,7 +1292,7 @@ export class AcademicoService {
       this.dataSource.query(`
         SELECT cpf,
                json_agg(json_build_object('id', id, 'nome', nome_completo, 'matricula', numero_matricula,
-                 'ativo', ativo, 'created_at', "createdAt"::text) ORDER BY "createdAt") AS alunos
+                 'ativo', ativo, 'created_at', created_at::text) ORDER BY created_at) AS alunos
         FROM alunos
         WHERE cpf IS NOT NULL AND cpf <> ''
         GROUP BY cpf HAVING COUNT(*) > 1
@@ -1302,7 +1302,7 @@ export class AcademicoService {
         SELECT LOWER(TRIM(nome_completo)) AS nome_chave,
                data_nascimento::text AS data_nascimento,
                json_agg(json_build_object('id', id, 'nome', nome_completo, 'matricula', numero_matricula,
-                 'ativo', ativo, 'cpf', cpf, 'created_at', "createdAt"::text) ORDER BY "createdAt") AS alunos
+                 'ativo', ativo, 'cpf', cpf, 'created_at', created_at::text) ORDER BY created_at) AS alunos
         FROM alunos
         WHERE data_nascimento IS NOT NULL
         GROUP BY LOWER(TRIM(nome_completo)), data_nascimento HAVING COUNT(*) > 1
@@ -1371,11 +1371,11 @@ export class AcademicoService {
     return this.dataSource.query(`
       SELECT DISTINCT a.id, a.nome_completo, a.numero_matricula,
              a.celular, a.data_nascimento, a.nome_responsavel,
-             a."createdAt" AS criado_em
+             a.created_at AS criado_em
       FROM alunos a
       INNER JOIN turma_alunos ta ON ta.aluno_id::text = a.id::text AND ta.status = 'backlog'
       WHERE (a.ativo IS NOT FALSE)
-      ORDER BY a."createdAt" DESC
+      ORDER BY a.created_at DESC
       LIMIT 60
     `);
   }

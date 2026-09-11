@@ -164,7 +164,7 @@ export class AppModule implements OnModuleInit {
   private async runMigrations() {
     try {
       // ── Versão do schema — pula migrations se já rodaram neste banco ──────
-      const SCHEMA_VERSION = 25; // incrementar aqui ao adicionar novas migrations
+      const SCHEMA_VERSION = 26; // incrementar aqui ao adicionar novas migrations
       await this.dataSource.query(`
         CREATE TABLE IF NOT EXISTS _schema_version (
           id      INT PRIMARY KEY DEFAULT 1,
@@ -410,8 +410,8 @@ export class AppModule implements OnModuleInit {
           quantidade_atual NUMERIC(12,3) NOT NULL DEFAULT 0,
           estoque_minimo NUMERIC(12,3) NOT NULL DEFAULT 0,
           ativo BOOLEAN NOT NULL DEFAULT true,
-          "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
-          "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
         )
       `);
       await this.dataSource.query(`
@@ -583,7 +583,7 @@ export class AppModule implements OnModuleInit {
 
       // Auto-atribuir matrícula a usuários existentes que não possuem
       const semMatricula: { id: string; role: string; createdAt: Date }[] = await this.dataSource.query(
-        `SELECT id, role, "createdAt" FROM usuarios WHERE matricula IS NULL ORDER BY "createdAt" ASC`
+        `SELECT id, role, created_at AS "createdAt" FROM usuarios WHERE matricula IS NULL ORDER BY created_at ASC`
       );
       if (semMatricula.length > 0) {
         this.logger.log(`🔄 Atribuindo matrícula a ${semMatricula.length} usuário(s) sem matrícula...`);
@@ -997,8 +997,8 @@ export class AppModule implements OnModuleInit {
           conta_corrente   VARCHAR,
           conta_digito     VARCHAR,
           tipo_conta       VARCHAR,
-          "createdAt"      TIMESTAMPTZ NOT NULL DEFAULT now(),
-          "updatedAt"      TIMESTAMPTZ NOT NULL DEFAULT now()
+          created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+          updated_at       TIMESTAMPTZ NOT NULL DEFAULT now()
         )
       `);
       await this.dataSource.query(`
@@ -1012,8 +1012,8 @@ export class AppModule implements OnModuleInit {
           validado_por_id   TEXT,
           validado_por_nome VARCHAR,
           validado_em       TIMESTAMPTZ,
-          "createdAt"       TIMESTAMPTZ NOT NULL DEFAULT now(),
-          "updatedAt"       TIMESTAMPTZ NOT NULL DEFAULT now(),
+          created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+          updated_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
           UNIQUE (aluno_id, tipo)
         )
       `);
@@ -1730,6 +1730,36 @@ export class AppModule implements OnModuleInit {
         `ALTER TABLE config_listas ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now()`,
       );
       this.logger.log('✅ v25: updated_at em 16 tabelas + created_at em config_listas');
+
+      // ── v26: unifica nomenclatura camelCase → snake_case em 5 tabelas
+      // (auditoria de banco, P2) — alunos, alunos_complemento, materias,
+      // estoque_produtos, documentos_validacao usavam "createdAt"/
+      // "updatedAt" (camelCase, colunas quotadas) enquanto o resto do
+      // schema usa created_at/updated_at. Entities atualizadas junto
+      // (@CreateDateColumn({ name: 'created_at' }) etc.) e toda query SQL
+      // crua que referenciava essas colunas nessas 5 tabelas também foi
+      // corrigida (academico.service.ts). RENAME COLUMN não tem IF NOT
+      // EXISTS nativo no Postgres — guard manual via information_schema.
+      const renomeacoesV26: [string, string, string][] = [
+        ['alunos', 'createdAt', 'created_at'], ['alunos', 'updatedAt', 'updated_at'],
+        ['alunos_complemento', 'createdAt', 'created_at'], ['alunos_complemento', 'updatedAt', 'updated_at'],
+        ['materias', 'createdAt', 'created_at'], ['materias', 'updatedAt', 'updated_at'],
+        ['estoque_produtos', 'createdAt', 'created_at'], ['estoque_produtos', 'updatedAt', 'updated_at'],
+        ['documentos_validacao', 'createdAt', 'created_at'], ['documentos_validacao', 'updatedAt', 'updated_at'],
+      ];
+      for (const [tabela, de, para] of renomeacoesV26) {
+        await this.dataSource.query(`
+          DO $$ BEGIN
+            IF EXISTS (
+              SELECT 1 FROM information_schema.columns
+              WHERE table_name = '${tabela}' AND column_name = '${de}'
+            ) THEN
+              EXECUTE 'ALTER TABLE ${tabela} RENAME COLUMN "${de}" TO ${para}';
+            END IF;
+          END $$;
+        `);
+      }
+      this.logger.log('✅ v26: nomenclatura unificada pra snake_case em alunos/alunos_complemento/materias/estoque_produtos/documentos_validacao');
 
       // ── Marca schema como atualizado — próximos cold starts pulam tudo ────
       await this.dataSource.query(`UPDATE _schema_version SET version = $1, ran_at = now() WHERE id = 1`, [SCHEMA_VERSION]);

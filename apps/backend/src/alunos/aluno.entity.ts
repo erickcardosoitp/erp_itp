@@ -140,10 +140,10 @@ export class Aluno {
   @JoinColumn({ name: 'usuario_id' })
   usuario: Usuario;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 
   /** Soft delete — auditoria de banco 2026-09-08 (P0 #4). NULL = ativo. */
