@@ -60,7 +60,11 @@ def logs_do_container(nome: str, desde_iso: str) -> str:
 
 def extrair_erros(texto_log: str) -> list[str]:
     linhas = texto_log.splitlines()
-    return [l for l in linhas if normalizador.contem_erro(l, config.PADRAO_ERRO)]
+    return [
+        l for l in linhas
+        if normalizador.contem_erro(l, config.PADRAO_ERRO)
+        and not normalizador.eh_access_log_ok(l)
+    ]
 
 
 def gerar_cod_erro() -> str:

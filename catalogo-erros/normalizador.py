@@ -47,6 +47,20 @@ def contem_erro(linha: str, padrao) -> bool:
     return bool(re.search(padrao, linha, re.IGNORECASE))
 
 
+# Access log do Traefik: IP - - [timestamp] "METODO /path HTTP/x.x" STATUS ...
+# Achado real (CAT-0010/CAT-0013): a palavra "error" aparece só no nome de um
+# asset estático (ex: /_next/static/chunks/app/error-<hash>.js), sem relação
+# com falha — o request teve status 2xx/3xx. Isso não é log de app, é acesso
+# ok, então nunca deveria ter caído no PADRAO_ERRO em primeiro lugar.
+_ACCESS_LOG_OK = re.compile(
+    r'"\s*(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+\S+\s+HTTP/[\d.]+"\s+([23]\d{2})\b'
+)
+
+
+def eh_access_log_ok(linha: str) -> bool:
+    return bool(_ACCESS_LOG_OK.search(linha))
+
+
 def extrair_timestamp(linha: str):
     """Tenta achar um timestamp real na linha (formato Postgres/ISO, ex:
     '2026-09-09 11:27:07.759 UTC'). Devolve datetime UTC, ou None se a
