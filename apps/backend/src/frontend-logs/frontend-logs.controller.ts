@@ -14,9 +14,14 @@ export class FrontendLogsController {
 
   @Public()
   @Post()
-  registrar(@Body() body: { message?: string; stack?: string; pathname?: string }) {
+  registrar(@Body() body: { message?: string; stack?: string; pathname?: string; origem?: string }) {
+    // origem distingue quem mandou o crash (ex: 'site-institucional', SPA
+    // separada sem backend próprio, reportando aqui pra unificar no mesmo
+    // catálogo de erros em vez de ficar isolado só no Application Insights
+    // dela). Sem origem = erp_itp (comportamento anterior, default).
+    const prefixo = body.origem ? `[${body.origem}] ` : '';
     this.logger.error(
-      `Crash de UI em ${body.pathname ?? '(rota desconhecida)'}: ${body.message ?? '(sem mensagem)'}\n${body.stack ?? ''}`,
+      `${prefixo}Crash de UI em ${body.pathname ?? '(rota desconhecida)'}: ${body.message ?? '(sem mensagem)'}\n${body.stack ?? ''}`,
     );
     return { ok: true };
   }

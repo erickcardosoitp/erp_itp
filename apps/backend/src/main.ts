@@ -11,6 +11,23 @@ import * as cookieParser from 'cookie-parser';
 
 const logger = new Logger('Bootstrap');
 
+// Sem isso, um erro que escape de todo try/catch fora do ciclo de
+// request (ex: código fora de um controller/service, rodando em
+// background) derruba o processo com só um stack trace cru no stdout —
+// sem passar pelo Logger do Nest, sem contexto estruturado. Loga
+// explicitamente antes de sair (Node exige process.exit após
+// uncaughtException — o processo fica em estado indefinido depois
+// disso). Docker reinicia o container sozinho (unless-stopped).
+// Achado na varredura de pontos cegos de erro, 2026-09-11.
+process.on('uncaughtException', (err) => {
+  logger.error(`💥 uncaughtException: ${err.message}`, err.stack);
+  process.exit(1);
+});
+process.on('unhandledRejection', (reason: any) => {
+  logger.error(`💥 unhandledRejection: ${reason?.message ?? reason}`, reason?.stack);
+  process.exit(1);
+});
+
 // 1. Função de Configuração Compartilhada
 export const setupApp = async (app: NestExpressApplication) => {
   // ✅ Forma correta de usar o middleware em ambientes híbridos
