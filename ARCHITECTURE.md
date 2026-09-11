@@ -71,7 +71,7 @@ Guards globais (`APP_GUARD`): `JwtAuthGuard` + `RolesGuard` em toda a app; rotas
 - Gated por tabela `_schema_version` (coluna `version`), constante `SCHEMA_VERSION` no topo da função.
 - Idempotente (`ADD COLUMN IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`) — **todo bloco reexecuta caso a versão local seja menor que `SCHEMA_VERSION`**, então todo bloco precisa ser replay-safe.
 - Roda em `onModuleInit` via `setImmediate` (fire-and-forget, não trava o cold start).
-- Versão atual: **v23** (2026-09-10) — v21 adicionou FK do financeiro, v22 adicionou soft delete, v23 adicionou colunas de alergia/medicamento.
+- Versão atual: **v26** (2026-09-11) — v21 adicionou FK do financeiro, v22 adicionou soft delete, v23 adicionou colunas de alergia/medicamento, v24 índices de FK + CHECK/enum, v25 `updated_at`/`created_at` faltando, v26 unificou nomenclatura camelCase→snake_case em 5 tabelas (P2 da auditoria de banco).
 
 **Dívida registrada 2026-09-11**: os 27 índices de FK e os 4 `CHECK` constraints criados na auditoria de banco (seção 7) foram aplicados **direto via `psql`**, fora do `runMigrations()`. Funciona no banco atual, mas **não seria recriado automaticamente** num banco novo/restaurado do zero (ex: ambiente de homologação futuro, ou um restore de disaster recovery) — precisa ser promovido pra dentro de um bloco versionado de `runMigrations()` numa próxima limpeza, ou documentado como setup manual obrigatório pós-restore.
 

@@ -179,8 +179,19 @@ não por prioridade de negócio. Ver também `2026-09-11-itp-tec-checklist.md`
       de onde veio essa referência antes de continuar.
 - [x] Permissão manual das tarefas do ITP_TEC — **decisão: manter como
       está** (`admin` pra backup/snapshot/aplicador, `tec` pro resto).
-- [ ] P2 da auditoria de banco (nomenclatura) — mexe em nomes já em uso,
-      exige decidir janela de deploy/migração.
+- [x] P2 da auditoria de banco (nomenclatura) — **concluído 2026-09-11**.
+      Parte aditiva (v25): `updated_at`/`created_at` faltando em 17
+      tabelas. Parte de rename (v26): unificado camelCase→snake_case em
+      5 tabelas (`alunos`, `alunos_complemento`, `materias`,
+      `estoque_produtos`, `documentos_validacao`) — entities + 4 queries
+      SQL cruas + bootstraps de `CREATE TABLE` corrigidos juntos.
+      `usuarios.createdAt` (coluna duplicada nunca lida pelo ORM, com 1
+      linha de valor histórico divergente — a data real de criação da
+      conta do próprio usuário) renomeada pra `created_at_legado` em vez
+      de descartada. Achado de quebra: `app.module.ts:586` tinha query
+      hardcoded que quebraria na próxima migration se não corrigida
+      junto. Migrations v25/v26 testadas idempotentes em produção,
+      colunas confirmadas via `information_schema`, zero erro nos logs.
 - [ ] Migração do `aprxm_sys` (2º sistema do parque) — não iniciada.
 - [ ] Regras de auto-fix v2 (quando liberar ações de baixo risco sem
       aprovação humana) — só depois do piloto de 1-2 semanas rodando só
