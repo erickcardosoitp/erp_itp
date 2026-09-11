@@ -46,20 +46,48 @@ def _crontab_atual() -> str:
     return resultado.stdout if resultado.returncode == 0 else ""
 
 
-def _ultima_execucao(log_path: Optional[str]) -> Optional[str]:
-    """Le a ultima linha com timestamp reconhecivel do log da tarefa."""
+_PADRAO_TIMESTAMP_LINHA = re.compile(r"^\[?(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})")
+_PALAVRAS_ERRO = re.compile(r"\b(erro|error|fatal|exception|traceback|falhou|failed)\b", re.IGNORECASE)
+
+
+def _tail(log_path: Optional[str], max_bytes: int = 4000) -> list[str]:
     if not log_path or not os.path.exists(log_path):
-        return None
+        return []
     try:
         with open(log_path, "rb") as f:
             f.seek(0, os.SEEK_END)
             tamanho = f.tell()
-            f.seek(max(0, tamanho - 4000))
+            f.seek(max(0, tamanho - max_bytes))
             cauda = f.read().decode("utf-8", errors="ignore")
-        linhas = [l for l in cauda.splitlines() if l.strip()]
-        return linhas[-1][:200] if linhas else None
+        return [l for l in cauda.splitlines() if l.strip()]
     except OSError:
-        return None
+        return []
+
+
+def _status_execucao(log_path: Optional[str]) -> dict:
+    """Classifica a ultima execucao pelo log: ok/atencao/nunca_rodou.
+    Heuristica (nao ha marcador estruturado de sucesso pra todo script) -
+    procura palavra de erro nas ultimas linhas relevantes."""
+    linhas = _tail(log_path)
+    if not linhas:
+        return {"status": "nunca_rodou", "ultimo_timestamp": None, "resumo": None}
+
+    # Acha o inicio do bloco da execucao mais recente (ultima linha com
+    # timestamp reconhecivel), pra nao julgar por uma execucao antiga.
+    bloco = linhas
+    for i in range(len(linhas) - 1, -1, -1):
+        if _PADRAO_TIMESTAMP_LINHA.match(linhas[i]):
+            bloco = linhas[i:]
+            break
+
+    texto_bloco = "\n".join(bloco)
+    status = "erro" if _PALAVRAS_ERRO.search(texto_bloco) else "ok"
+    m = _PADRAO_TIMESTAMP_LINHA.match(bloco[0]) if bloco else None
+    return {
+        "status": status,
+        "ultimo_timestamp": m.group(1) if m else None,
+        "resumo": bloco[-1][:200] if bloco else None,
+    }
 
 
 @app.get("/tarefas")
@@ -75,9 +103,19 @@ def listar_tarefas():
         tarefas.append({
             **t,
             "presente_no_crontab": no_crontab,
-            "ultima_execucao_log": _ultima_execucao(t.get("log_path")),
+            **{f"ultima_execucao_{k}": v for k, v in _status_execucao(t.get("log_path")).items()},
         })
     return {"tarefas": tarefas}
+
+
+@app.get("/tarefas/{tarefa_id}/log")
+def log_da_tarefa(tarefa_id: str, linhas: int = 200):
+    registro = _carregar_registro()
+    tarefa = next((t for t in registro.get("tarefas", []) if t["id"] == tarefa_id), None)
+    if not tarefa:
+        raise HTTPException(404, "tarefa nao encontrada")
+    texto = _tail(tarefa.get("log_path"), max_bytes=60_000)
+    return {"tarefa_id": tarefa_id, "log_path": tarefa.get("log_path"), "linhas": texto[-linhas:]}
 
 
 class NovaTarefa(BaseModel):
@@ -182,6 +220,50 @@ def executar_tarefa(tarefa_id: str):
         "stdout": resultado.stdout[-4000:],
         "stderr": resultado.stderr[-2000:],
         "executado_em": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+CATALOGO_LOGS = [
+    Path.home() / "itp-stack" / "catalogo-erros-cron.log",
+    Path.home() / "itp-stack" / "catalogo-erros-aplicador.log",
+]
+_PADRAO_CUSTO = re.compile(
+    r"^\[(\d{4}-\d{2}-\d{2})T[^\]]*\].*?\$(\d+\.\d+)", re.IGNORECASE
+)
+
+
+@app.get("/custos")
+def custos_claude():
+    """Agrega o \\$custo_usd que coletor.py/aplicador.py ja logam em texto -
+    nao existe (ainda) persistencia estruturada, so o log bruto. Ver
+    pendencia registrada no spec (2026-09-11): persistir isso de verdade
+    no Parquet/SharePoint e o caminho certo pra frente, isso aqui e' um
+    jeito rapido de dar visibilidade sem esperar por aquilo."""
+    por_dia: dict[str, float] = {}
+    eventos: list[dict] = []
+    for log_path in CATALOGO_LOGS:
+        if not log_path.exists():
+            continue
+        try:
+            texto = log_path.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+        for linha in texto.splitlines():
+            if "custo" not in linha.lower():
+                continue
+            m = _PADRAO_CUSTO.match(linha)
+            if not m:
+                continue
+            dia, valor_str = m.group(1), m.group(2)
+            valor = float(valor_str)
+            por_dia[dia] = por_dia.get(dia, 0.0) + valor
+            eventos.append({"dia": dia, "valor_usd": valor, "linha": linha.strip()[:200]})
+
+    eventos.sort(key=lambda e: e["dia"], reverse=True)
+    return {
+        "total_usd": round(sum(por_dia.values()), 4),
+        "por_dia": [{"dia": d, "total_usd": round(v, 4)} for d, v in sorted(por_dia.items(), reverse=True)],
+        "eventos_recentes": eventos[:50],
     }
 
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { CORES_CRITICIDADE, CORES_STATUS, Selo, tabela, th, td, botao, botaoPrimario, input as inputStyle, painel } from "../ui";
 
 type Tarefa = {
   id: string;
@@ -18,38 +19,17 @@ type Tarefa = {
   permissao_minima: string;
   log_path: string | null;
   presente_no_crontab: boolean;
-  ultima_execucao_log: string | null;
+  ultima_execucao_status: "ok" | "erro" | "nunca_rodou";
+  ultima_execucao_ultimo_timestamp: string | null;
+  ultima_execucao_resumo: string | null;
 };
-
-const CORES_CRITICIDADE: Record<string, string> = {
-  baixa: "#16a34a",
-  media: "#ca8a04",
-  alta: "#ea580c",
-  critica: "#dc2626",
-};
-
-const selectStyle: React.CSSProperties = {
-  padding: "6px 10px", borderRadius: 6, border: "1px solid #cbd5e1", fontSize: 13,
-};
-
-function Pill({ texto, cor }: { texto: string; cor?: string }) {
-  return (
-    <span style={{
-      display: "inline-block", padding: "2px 10px", borderRadius: 999,
-      fontSize: 12, fontWeight: 600, color: cor ? "#fff" : "#334155",
-      background: cor || "#e2e8f0",
-    }}>
-      {texto}
-    </span>
-  );
-}
 
 export default function TarefasPage() {
   const [tarefas, setTarefas] = useState<Tarefa[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [executando, setExecutando] = useState<string | null>(null);
-  const [resultado, setResultado] = useState<{ id: string; texto: string } | null>(null);
   const [mostrarForm, setMostrarForm] = useState(false);
+  const [detalhe, setDetalhe] = useState<Tarefa | null>(null);
 
   const carregar = () => {
     setCarregando(true);
@@ -61,21 +41,12 @@ export default function TarefasPage() {
 
   useEffect(carregar, []);
 
-  const executar = async (id: string) => {
+  const executar = async (id: string, ev: React.MouseEvent) => {
+    ev.stopPropagation();
     if (!confirm(`Rodar a tarefa "${id}" agora, manualmente?`)) return;
     setExecutando(id);
-    setResultado(null);
     try {
-      const r = await fetch(`/backend-api/api/tarefas/${id}/executar`, { method: "POST" });
-      const data = await r.json();
-      setResultado({
-        id,
-        texto: data.ok
-          ? `OK (exit ${data.returncode})\n${data.stdout || "(sem saida)"}`
-          : `FALHOU (exit ${data.returncode})\n${data.stderr || data.stdout || "(sem saida)"}`,
-      });
-    } catch (e) {
-      setResultado({ id, texto: String(e) });
+      await fetch(`/backend-api/api/tarefas/${id}/executar`, { method: "POST" });
     } finally {
       setExecutando(null);
       carregar();
@@ -83,76 +54,120 @@ export default function TarefasPage() {
   };
 
   return (
-    <main style={{ padding: "20px 24px", maxWidth: 1100, margin: "0 auto" }}>
+    <main>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-        <h1 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>ITP_TEC — Tarefas Agendadas</h1>
-        <button
-          onClick={() => setMostrarForm((v) => !v)}
-          style={{ ...selectStyle, background: "#1e293b", color: "#fff", fontWeight: 600, border: "none", cursor: "pointer" }}
-        >
+        <h1 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>Tarefas Agendadas</h1>
+        <button onClick={() => setMostrarForm((v) => !v)} style={botaoPrimario}>
           {mostrarForm ? "Cancelar" : "+ Nova tarefa"}
         </button>
       </div>
-      <p style={{ color: "#64748b", fontSize: 13, margin: "2px 0 16px" }}>
+      <p style={{ color: "#5b6068", fontSize: 12.5, margin: "2px 0 14px" }}>
         Monitoramento e execução manual das tarefas agendadas do vm-itp-prod.
       </p>
 
       {mostrarForm && <NovaTarefaForm onCriada={() => { setMostrarForm(false); carregar(); }} />}
 
-      {carregando ? (
-        <p>Carregando...</p>
-      ) : (
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-          <thead>
-            <tr style={{ textAlign: "left", borderBottom: "2px solid #e2e8f0", color: "#64748b" }}>
-              <th style={{ padding: 8 }}>Tarefa</th>
-              <th style={{ padding: 8 }}>Aplicação</th>
-              <th style={{ padding: 8 }}>Criticidade</th>
-              <th style={{ padding: 8 }}>Intervalo</th>
-              <th style={{ padding: 8 }}>Criador</th>
-              <th style={{ padding: 8 }}>No crontab?</th>
-              <th style={{ padding: 8 }}>Última execução (log)</th>
-              <th style={{ padding: 8 }}></th>
-            </tr>
-          </thead>
-          <tbody>
-            {tarefas.map((t) => (
-              <tr key={t.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                <td style={{ padding: 8 }}>
-                  <div style={{ fontWeight: 600 }}>{t.nome}</div>
-                  <div style={{ color: "#94a3b8", fontSize: 11 }}>{t.descricao}</div>
-                </td>
-                <td style={{ padding: 8 }}>{t.aplicacao}</td>
-                <td style={{ padding: 8 }}><Pill texto={t.criticidade} cor={CORES_CRITICIDADE[t.criticidade]} /></td>
-                <td style={{ padding: 8 }}>{t.intervalo_legivel}</td>
-                <td style={{ padding: 8 }}>{t.criador}</td>
-                <td style={{ padding: 8 }}>{t.presente_no_crontab ? "✅" : "⚠️ não"}</td>
-                <td style={{ padding: 8, fontFamily: "monospace", fontSize: 11, maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {t.ultima_execucao_log || "—"}
-                </td>
-                <td style={{ padding: 8 }}>
-                  {t.executavel_manualmente && (
-                    <button
-                      onClick={() => executar(t.id)}
-                      disabled={executando === t.id}
-                      style={{ ...selectStyle, cursor: "pointer", opacity: executando === t.id ? 0.6 : 1 }}
-                    >
-                      {executando === t.id ? "Rodando..." : "▶ Rodar agora"}
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-
-      {resultado && (
-        <div style={{ marginTop: 16, padding: 12, background: "#0f172a", color: "#e2e8f0", borderRadius: 8, fontFamily: "monospace", fontSize: 12, whiteSpace: "pre-wrap" }}>
-          <strong>{resultado.id}:</strong>{"\n"}{resultado.texto}
+      <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
+        <div style={{ flex: detalhe ? "0 0 62%" : "1 1 auto", border: "1px solid #c9ccd1", overflow: "auto" }}>
+          {carregando ? (
+            <p style={{ padding: 16 }}>Carregando...</p>
+          ) : (
+            <table style={tabela}>
+              <thead>
+                <tr>
+                  <th style={th}>Status</th>
+                  <th style={th}>Tarefa</th>
+                  <th style={th}>Aplicação</th>
+                  <th style={th}>Criticidade</th>
+                  <th style={th}>Intervalo</th>
+                  <th style={th}>Criador</th>
+                  <th style={th}>Crontab</th>
+                  <th style={th}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {tarefas.map((t) => (
+                  <tr
+                    key={t.id}
+                    onClick={() => setDetalhe(t)}
+                    style={{ cursor: "pointer", background: detalhe?.id === t.id ? "#ede4fb" : undefined }}
+                  >
+                    <td style={td}><Selo texto={CORES_STATUS[t.ultima_execucao_status].label} cor={CORES_STATUS[t.ultima_execucao_status]} /></td>
+                    <td style={td}>
+                      <div style={{ fontWeight: 600 }}>{t.nome}</div>
+                      <div style={{ color: "#8a8f98", fontSize: 11 }}>{t.id}</div>
+                    </td>
+                    <td style={td}>{t.aplicacao}</td>
+                    <td style={td}><Selo texto={t.criticidade} cor={CORES_CRITICIDADE[t.criticidade]} /></td>
+                    <td style={td}>{t.intervalo_legivel}</td>
+                    <td style={td}>{t.criador}</td>
+                    <td style={td}>{t.presente_no_crontab ? "sim" : "NÃO"}</td>
+                    <td style={td}>
+                      {t.executavel_manualmente && (
+                        <button onClick={(e) => executar(t.id, e)} disabled={executando === t.id} style={{ ...botao, opacity: executando === t.id ? 0.6 : 1 }}>
+                          {executando === t.id ? "Rodando..." : "▶ Rodar"}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
-      )}
+
+        {detalhe && <DetalheTarefa tarefa={detalhe} onFechar={() => setDetalhe(null)} />}
+      </div>
     </main>
+  );
+}
+
+function DetalheTarefa({ tarefa, onFechar }: { tarefa: Tarefa; onFechar: () => void }) {
+  const [log, setLog] = useState<string[] | null>(null);
+
+  useEffect(() => {
+    setLog(null);
+    fetch(`/backend-api/api/tarefas/${tarefa.id}/log?linhas=150`)
+      .then((r) => r.json())
+      .then((data) => setLog(data.linhas || []));
+  }, [tarefa.id]);
+
+  return (
+    <div style={{ ...painel, flex: 1, padding: 14, position: "sticky", top: 60 }}>
+      <div style={{ display: "flex", justifyContent: "space-between" }}>
+        <h3 style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 700, textTransform: "uppercase" }}>{tarefa.nome}</h3>
+        <button onClick={onFechar} style={{ ...botao, padding: "2px 8px" }}>✕</button>
+      </div>
+      <table style={{ width: "100%", fontSize: 12.5, marginBottom: 12 }}>
+        <tbody>
+          <LinhaDetalhe rotulo="Descrição" valor={tarefa.descricao} />
+          <LinhaDetalhe rotulo="Tipo" valor={tarefa.tipo} />
+          <LinhaDetalhe rotulo="Comando/Endpoint" valor={<code style={{ fontSize: 11 }}>{tarefa.caminho}</code>} />
+          <LinhaDetalhe rotulo="Schedule" valor={<code>{tarefa.schedule}</code>} />
+          <LinhaDetalhe rotulo="Permissão mínima" valor={tarefa.permissao_minima} />
+          <LinhaDetalhe rotulo="Criado em" valor={tarefa.criado_em} />
+          <LinhaDetalhe rotulo="Log" valor={tarefa.log_path || "—"} />
+          <LinhaDetalhe rotulo="Último timestamp" valor={tarefa.ultima_execucao_ultimo_timestamp || "—"} />
+        </tbody>
+      </table>
+
+      <h4 style={{ margin: "0 0 6px", fontSize: 12, fontWeight: 700, color: "#5b6068" }}>Log recente</h4>
+      <div style={{
+        background: "#1a1d21", color: "#d8dbe0", fontFamily: "monospace", fontSize: 11,
+        padding: 10, maxHeight: 360, overflow: "auto", whiteSpace: "pre-wrap", borderRadius: 3,
+      }}>
+        {log === null ? "carregando..." : log.length === 0 ? "(sem log ainda)" : log.join("\n")}
+      </div>
+    </div>
+  );
+}
+
+function LinhaDetalhe({ rotulo, valor }: { rotulo: string; valor: React.ReactNode }) {
+  return (
+    <tr style={{ borderTop: "1px solid #e4e6ea" }}>
+      <td style={{ padding: "5px 6px", color: "#5b6068", width: 150, verticalAlign: "top" }}>{rotulo}</td>
+      <td style={{ padding: "5px 6px", wordBreak: "break-word" }}>{valor}</td>
+    </tr>
   );
 }
 
@@ -195,17 +210,17 @@ function NovaTarefaForm({ onCriada }: { onCriada: () => void }) {
   };
 
   return (
-    <div style={{ border: "1px solid #e2e8f0", borderRadius: 8, padding: 16, marginBottom: 20, background: "#f8fafc" }}>
+    <div style={{ ...painel, padding: 16, marginBottom: 14 }}>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-        <label>ID (slug) <input placeholder="minha-tarefa" style={{ ...selectStyle, width: "100%" }} {...campo("id")} /></label>
-        <label>Nome <input style={{ ...selectStyle, width: "100%" }} {...campo("nome")} /></label>
-        <label>Aplicação <input style={{ ...selectStyle, width: "100%" }} {...campo("aplicacao")} /></label>
-        <label>Criador <input style={{ ...selectStyle, width: "100%" }} {...campo("criador")} /></label>
-        <label>Schedule (cron) <input placeholder="0 */6 * * *" style={{ ...selectStyle, width: "100%" }} {...campo("schedule")} /></label>
-        <label>Intervalo legível <input placeholder="a cada 6 horas" style={{ ...selectStyle, width: "100%" }} {...campo("intervalo_legivel")} /></label>
+        <label>ID (slug) <input placeholder="minha-tarefa" style={{ ...inputStyle, width: "100%" }} {...campo("id")} /></label>
+        <label>Nome <input style={{ ...inputStyle, width: "100%" }} {...campo("nome")} /></label>
+        <label>Aplicação <input style={{ ...inputStyle, width: "100%" }} {...campo("aplicacao")} /></label>
+        <label>Criador <input style={{ ...inputStyle, width: "100%" }} {...campo("criador")} /></label>
+        <label>Schedule (cron) <input placeholder="0 */6 * * *" style={{ ...inputStyle, width: "100%" }} {...campo("schedule")} /></label>
+        <label>Intervalo legível <input placeholder="a cada 6 horas" style={{ ...inputStyle, width: "100%" }} {...campo("intervalo_legivel")} /></label>
         <label>
           Criticidade
-          <select style={{ ...selectStyle, width: "100%" }} {...campo("criticidade")}>
+          <select style={{ ...inputStyle, width: "100%" }} {...campo("criticidade")}>
             <option value="baixa">baixa</option>
             <option value="media">media</option>
             <option value="alta">alta</option>
@@ -214,17 +229,17 @@ function NovaTarefaForm({ onCriada }: { onCriada: () => void }) {
         </label>
         <label>
           Permissão mínima p/ rodar manualmente
-          <select style={{ ...selectStyle, width: "100%" }} {...campo("permissao_minima")}>
+          <select style={{ ...inputStyle, width: "100%" }} {...campo("permissao_minima")}>
             <option value="tec">tec</option>
             <option value="admin">admin</option>
           </select>
         </label>
         <label style={{ gridColumn: "span 2" }}>
-          Descrição <input style={{ ...selectStyle, width: "100%" }} {...campo("descricao")} />
+          Descrição <input style={{ ...inputStyle, width: "100%" }} {...campo("descricao")} />
         </label>
         <label>
           Tipo
-          <select style={{ ...selectStyle, width: "100%" }} value={tipo} onChange={(e) => setTipo(e.target.value as "script" | "http")}>
+          <select style={{ ...inputStyle, width: "100%" }} value={tipo} onChange={(e) => setTipo(e.target.value as "script" | "http")}>
             <option value="script">script (bash)</option>
             <option value="http">http (endpoint existente)</option>
           </select>
@@ -234,25 +249,18 @@ function NovaTarefaForm({ onCriada }: { onCriada: () => void }) {
       {tipo === "script" ? (
         <label style={{ display: "block", marginTop: 10 }}>
           Conteúdo do script (.sh)
-          <textarea
-            style={{ ...selectStyle, width: "100%", height: 160, fontFamily: "monospace", marginTop: 4 }}
-            {...campo("conteudo_script")}
-          />
+          <textarea style={{ ...inputStyle, width: "100%", height: 160, fontFamily: "monospace", marginTop: 4 }} {...campo("conteudo_script")} />
         </label>
       ) : (
         <label style={{ display: "block", marginTop: 10 }}>
           URL do endpoint
-          <input style={{ ...selectStyle, width: "100%", marginTop: 4 }} placeholder="http://localhost:3001/api/..." {...campo("endpoint_http")} />
+          <input style={{ ...inputStyle, width: "100%", marginTop: 4 }} placeholder="http://localhost:3001/api/..." {...campo("endpoint_http")} />
         </label>
       )}
 
-      {erro && <p style={{ color: "#dc2626", fontSize: 13 }}>{erro}</p>}
+      {erro && <p style={{ color: "#8f1620", fontSize: 13 }}>{erro}</p>}
 
-      <button
-        onClick={enviar}
-        disabled={enviando || !form.id || !form.nome || !form.schedule}
-        style={{ ...selectStyle, marginTop: 12, background: "#1e293b", color: "#fff", fontWeight: 600, border: "none", cursor: "pointer", opacity: enviando ? 0.6 : 1 }}
-      >
+      <button onClick={enviar} disabled={enviando || !form.id || !form.nome || !form.schedule} style={{ ...botaoPrimario, marginTop: 12, opacity: enviando ? 0.6 : 1 }}>
         {enviando ? "Criando..." : "Criar tarefa"}
       </button>
     </div>

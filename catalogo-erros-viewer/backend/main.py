@@ -225,3 +225,24 @@ def executar_tarefa(tarefa_id: str):
     if resp.status_code >= 400:
         raise HTTPException(status_code=resp.status_code, detail=resp.json().get("detail"))
     return resp.json()
+
+
+@app.get("/api/tarefas/{tarefa_id}/log")
+def log_da_tarefa(tarefa_id: str, linhas: int = 200):
+    try:
+        resp = httpx.get(f"{TAREFAS_API_URL}/tarefas/{tarefa_id}/log", params={"linhas": linhas}, timeout=15)
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"tarefas-api indisponivel: {exc}")
+    if resp.status_code >= 400:
+        raise HTTPException(status_code=resp.status_code, detail=resp.json().get("detail"))
+    return resp.json()
+
+
+@app.get("/api/custos")
+def custos_claude():
+    try:
+        resp = httpx.get(f"{TAREFAS_API_URL}/custos", timeout=15)
+        resp.raise_for_status()
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"tarefas-api indisponivel: {exc}")
+    return resp.json()
