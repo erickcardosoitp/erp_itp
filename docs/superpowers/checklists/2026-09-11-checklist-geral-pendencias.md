@@ -87,6 +87,15 @@ detalhes completos de cada item.
   (`no_data_state: Alerting`).
 - Ícone do atalho trocado pra logo oficial do Grafana, área de trabalho
   da VM reorganizada.
+- Dashboard **"KPI BUSINESS - ITP"**: 8 métricas de negócio reais
+  (alunos ativos, matrículas hoje, chamados abertos, boletos pendentes,
+  movimentações financeiras hoje, oportunidades de captação ativas,
+  colaboradores ativos, estoque abaixo do mínimo) — todas verificadas
+  contra o banco antes de virar painel.
+- Achado e corrigido bug real: o job de scrape do `erp_itp_backend` no
+  Prometheus só existia no repo, nunca tinha sido copiado pro arquivo
+  de verdade na VM — as métricas de API/RUM/negócio nunca estavam sendo
+  coletadas de fato até agora, mesmo com o endpoint funcionando.
 
 ---
 
@@ -94,11 +103,7 @@ detalhes completos de cada item.
 
 ### 🟡 Médio — precisa investigação antes de decidir a solução
 
-- [ ] Painel de métricas de negócio no dashboard "ITP — Visão Geral"
-      (matrículas/dia, chamados abertos, movimentações/dia) — os gauges
-      já existem no backend (`/api/metrics`), só falta adicionar os
-      painéis no Grafana e validar com o usuário se são as métricas
-      certas.
+*(nenhum item médio pendente no momento)*
 
 ### 🔴 Depende de decisão/ação do usuário
 
