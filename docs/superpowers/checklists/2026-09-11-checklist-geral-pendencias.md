@@ -50,6 +50,9 @@ não por prioridade de negócio. Ver também `2026-09-11-itp-tec-checklist.md`
   Validado em produção: build TypeScript limpo, boot sem erro de DI,
   rotas `/api/auth/*` e `/api/usuarios/*` mapeadas sem duplicação, login
   testado via curl.
+- `installonly_limit` duplicado em `/etc/dnf/dnf.conf` (`/etc/yum.conf` é
+  symlink do mesmo arquivo) — removida a linha duplicada, mantido o valor
+  que já prevalecia na prática (`=2`), backup salvo antes de editar.
 - Threshold de "pico de frequência" da categoria `integracao` (>5
   ocorrências/lote) — não dava pra validar contra volume real ainda, mas
   ao tentar cobrir isso com teste, achado um **bug real**: `REABRE_SEMPRE`
@@ -74,11 +77,6 @@ não por prioridade de negócio. Ver também `2026-09-11-itp-tec-checklist.md`
 
 ### 🟢 Fácil — sem decisão pendente, só executar
 
-- [ ] `installonly_limit` duplicado e inconsistente em `/etc/yum.conf` /
-      `/etc/dnf/dnf.conf` (mesmo arquivo via symlink) — chave definida 2x
-      (=3 e =2), resíduo de automação antiga. Comportamento indefinido em
-      INI (na prática a última prevalece), mas vale limpar pra ficar
-      explícito. Achado 2026-09-11, na VM `vm-itp-prod`.
 - [ ] Isolar `/tmp` da VM via tmpfs (`/etc/fstab`:
       `tmpfs /tmp tmpfs defaults,nosuid,nodev,noexec 0 0`) — hoje `/tmp` é
       só um diretório dentro de `/`, sem isolamento; qualquer processo
