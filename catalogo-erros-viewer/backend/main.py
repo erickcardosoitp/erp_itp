@@ -227,6 +227,29 @@ def executar_tarefa(tarefa_id: str):
     return resp.json()
 
 
+@app.patch("/api/tarefas/{tarefa_id}")
+async def atualizar_tarefa(tarefa_id: str, request: Request):
+    corpo = await request.json()
+    try:
+        resp = httpx.patch(f"{TAREFAS_API_URL}/tarefas/{tarefa_id}", json=corpo, timeout=15)
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"tarefas-api indisponivel: {exc}")
+    if resp.status_code >= 400:
+        raise HTTPException(status_code=resp.status_code, detail=resp.json().get("detail"))
+    return resp.json()
+
+
+@app.post("/api/tarefas/{tarefa_id}/analise-ia")
+def analisar_com_ia(tarefa_id: str):
+    try:
+        resp = httpx.post(f"{TAREFAS_API_URL}/tarefas/{tarefa_id}/analise-ia", timeout=70)
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"tarefas-api indisponivel: {exc}")
+    if resp.status_code >= 400:
+        raise HTTPException(status_code=resp.status_code, detail=resp.json().get("detail"))
+    return resp.json()
+
+
 @app.get("/api/tarefas/{tarefa_id}/log")
 def log_da_tarefa(tarefa_id: str, linhas: int = 200):
     try:

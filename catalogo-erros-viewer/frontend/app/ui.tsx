@@ -95,6 +95,11 @@ export const input: CSSProperties = {
   fontSize: 12.5,
 };
 
+export function formatarDataBR(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
+}
+
 export function Selo({ texto, cor }: { texto: string; cor: { bg: string; fg: string } }) {
   return (
     <span
