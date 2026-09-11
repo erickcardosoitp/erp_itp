@@ -44,5 +44,5 @@ escopo já aprovado por humano, valida, e grava resultado
 - Não aplica nenhuma correção sozinho na fase de coleta — só classifica e propõe (decisão de design, não limitação técnica)
 - Item aprovado com `PromptExecucao` vazio (aprovador não preencheu "Ação do catálogo"/"Instrução adicional") fica parado pra sempre, sem escalonar — gap conhecido, não corrigido de propósito por ora (ver spec, seção 12)
 - `claude_client.executar()` não re-checa impacto colateral no momento da execução, só a classificação inicial faz isso
-- Coluna `LinkCommit` não é gravada com sucesso (PATCH isolado falha sempre — schema/type facet da SharePoint)
+- Coluna `LinkCommit` (Hyperlink) nunca aceitou escrita via Graph API (schema/type facet da SharePoint sem formato compatível) — não é mais retentada; o link do commit fica embutido direto no texto de `ResultadoExecucao`
 - Assume que o timestamp da linha de log está em UTC sem indicação explícita de fuso
