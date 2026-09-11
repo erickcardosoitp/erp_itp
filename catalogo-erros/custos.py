@@ -2,6 +2,8 @@
 antes só existia em texto de log (grep frágil). Um evento por chamada,
 JSONL append-only, mesmo padrão do Parquet (nunca reescreve, só adiciona).
 """
+from __future__ import annotations  # PEP 604 (X | None) — VM roda Python 3.9
+
 import json
 import os
 from datetime import datetime, timezone
