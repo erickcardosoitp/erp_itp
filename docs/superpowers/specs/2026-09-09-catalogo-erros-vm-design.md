@@ -292,6 +292,17 @@ Vocabulário fechado de ações (grava em `AcaoExecutada`):
 - **Bug confirmado, não corrigido**: coluna `LinkCommit` nunca é gravada
   com sucesso (PATCH isolado sempre falha, 100% dos itens testados vazios)
   — ver `aplicador.py` linhas 107-112, e achado de 2026-09-11.
+- **Camadas de dedup/análise adicionais (avaliar depois, 2026-09-11)**: hoje
+  só há 3 camadas de dedup (exata, semântica via IA, criação de item novo).
+  Ideias levantadas pra depois, quando o volume de erros justificar (ainda
+  falta subir a aplicação mais importante do parque — volume real de erro
+  vai crescer bastante depois disso):
+  - Correlação temporal entre containers (ex: Postgres cai → backend não
+    conecta no mesmo minuto — hoje viram 2 itens desconectados).
+  - Sub-agentes/skills especializados por categoria (schema de banco,
+    infra/Traefik) em vez de um prompt genérico único — só vale o custo
+    extra se o volume justificar.
+  - Reavaliar viabilidade só depois que o volume real de erro aumentar.
 - **Lacuna confirmada, não corrigida**: `claude_client.executar()` não
   re-verifica impacto colateral no momento da execução (só a classificação
   inicial faz isso) — se o código mudar entre a proposta e a aprovação, a
