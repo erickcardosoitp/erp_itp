@@ -65,5 +65,8 @@ itp_frontend/out/
 # Produção
 build/
 itp_frontend/build/
+
+# Arquivos de env do Vercel CLI (contêm DATABASE_URL, JWT_SECRET, SUPABASE_SERVICE_KEY etc.)
+.env.vercel*
 .vercel
 .env*.local
