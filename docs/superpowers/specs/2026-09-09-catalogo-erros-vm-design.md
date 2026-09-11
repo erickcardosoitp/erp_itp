@@ -275,3 +275,24 @@ Vocabulário fechado de ações (grava em `AcaoExecutada`):
 - Onde plugar APRXM e DW quando migrarem.
 - Rotação do client secret do app `Catalogo Erros - VM` (anotar data de
   expiração escolhida na criação, ainda não registrada aqui).
+- **Flow B (relatório diário por email) ainda não foi construído** — só
+  Flow A (aprovação) existe hoje no Power Automate. Pendente.
+- **Notificação de escalonamento (novo requisito, 2026-09-11)**: usuário
+  precisa ser avisado no momento em que um item cai em `Fase=escalado`,
+  já com um relatório completo do que aconteceu (diagnóstico, tentativas,
+  resultado de cada execução) — hoje não existe esse alerta, só descobre
+  entrando manualmente na lista. Candidato a um 3º flow (trigger em
+  mudança de `Fase` pra `escalado` → montar resumo com os campos
+  Diagnostico/ResultadoExecucao/TentativasResolucao → notificar por
+  email/Teams).
+- **AI Builder**: usuário quer avaliar uso do AI Builder em algum ponto do
+  fluxo do Power Automate — ainda sem escopo definido, precisa de definição
+  de onde encaixaria (hoje toda a parte de IA já é feita fora do Power
+  Automate, via Claude Code CLI na VM).
+- **Bug confirmado, não corrigido**: coluna `LinkCommit` nunca é gravada
+  com sucesso (PATCH isolado sempre falha, 100% dos itens testados vazios)
+  — ver `aplicador.py` linhas 107-112, e achado de 2026-09-11.
+- **Lacuna confirmada, não corrigida**: `claude_client.executar()` não
+  re-verifica impacto colateral no momento da execução (só a classificação
+  inicial faz isso) — se o código mudar entre a proposta e a aprovação, a
+  execução não percebe.
