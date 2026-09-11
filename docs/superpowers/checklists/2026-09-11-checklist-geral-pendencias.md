@@ -117,9 +117,17 @@ não por prioridade de negócio. Ver também `2026-09-11-itp-tec-checklist.md`
 
 ### 🟡 Médio — precisa investigação antes de decidir a solução
 
-- [ ] P1 da auditoria de banco — índices em FK, CHECK/enum (P0 já feito:
-      FK financeiro + soft delete). Ver `docs/database-audit-2026-09-08.md`
-      no repo `aprxm_sass`.
+- [x] Índices em FK (parte do P1 da auditoria de banco) — resolvido
+      2026-09-11: 27 de 44 FKs reais não tinham índice (query rigorosa via
+      `pg_constraint`/`pg_index`, cruzando FK com a primeira coluna de
+      qualquer índice existente). Criados via `CREATE INDEX CONCURRENTLY`
+      (não bloqueante), um por vez pra evitar o Postgres agrupar em
+      transação implícita. Todos válidos (`indisvalid=true`), containers
+      saudáveis, endpoints reais testados após a mudança. Ficou de fora
+      `neon_auth.invitation.inviterId` (schema gerenciado por lib externa
+      de auth, não é nossa entidade TypeORM). Falta ainda a parte de
+      CHECK/enum do P1 (ver `docs/database-audit-2026-09-08.md`, repo
+      `aprxm_sass`).
 - [ ] Popular o catálogo de ações/playbooks do catálogo de erros além dos
       9 exemplos atuais (`CATALOGO-ERROS.md` seção 7).
 
