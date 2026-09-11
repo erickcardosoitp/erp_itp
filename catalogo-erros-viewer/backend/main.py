@@ -12,7 +12,8 @@ from datetime import date
 from typing import Optional
 
 import duckdb
-from fastapi import FastAPI, HTTPException, Query
+import httpx
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 PARQUET_BASE_DIR = os.environ.get(
@@ -22,12 +23,19 @@ PARQUET_BASE_DIR = os.environ.get(
 # colunas Aplicacao/data a partir do caminho automaticamente.
 GLOB_PARQUET = os.path.join(PARQUET_BASE_DIR, "**", "*.parquet")
 
+# Serviço de tarefas roda fora de container, direto no host (unico jeito de
+# mexer no crontab real sem hack de UID/permissao) — ver catalogo-erros-viewer/
+# tarefas-api/tarefas_api.py. host.docker.internal aponta pro host da VM
+# (extra_hosts no docker-compose). SEM AUTENTICACAO AINDA — pendente SSO
+# antes de expor esse backend fora de 127.0.0.1/rede interna.
+TAREFAS_API_URL = os.environ.get("TAREFAS_API_URL", "http://host.docker.internal:8002")
+
 app = FastAPI(title="Catálogo de Erros — Visualização")
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # app interna, sem dado sensível de credencial — ok pra v1
-    allow_methods=["GET"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
@@ -179,3 +187,41 @@ def tendencia(
     """
     resultado = con.execute(sql, parametros).fetchdf()
     return {"pontos": resultado.to_dict(orient="records")}
+
+
+# --- Proxy pra API de tarefas agendadas (roda fora de container, ver acima) ---
+# TODO(seguranca): gate de SSO antes de expor esse backend fora da rede
+# interna da VM — hoje sem isso, qualquer requisicao aqui roda comando real
+# no host (crontab, scripts) ou cria tarefa nova.
+
+@app.get("/api/tarefas")
+def listar_tarefas():
+    try:
+        resp = httpx.get(f"{TAREFAS_API_URL}/tarefas", timeout=15)
+        resp.raise_for_status()
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"tarefas-api indisponivel: {exc}")
+    return resp.json()
+
+
+@app.post("/api/tarefas")
+async def criar_tarefa(request: Request):
+    corpo = await request.json()
+    try:
+        resp = httpx.post(f"{TAREFAS_API_URL}/tarefas", json=corpo, timeout=15)
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"tarefas-api indisponivel: {exc}")
+    if resp.status_code >= 400:
+        raise HTTPException(status_code=resp.status_code, detail=resp.json().get("detail"))
+    return resp.json()
+
+
+@app.post("/api/tarefas/{tarefa_id}/executar")
+def executar_tarefa(tarefa_id: str):
+    try:
+        resp = httpx.post(f"{TAREFAS_API_URL}/tarefas/{tarefa_id}/executar", timeout=620)
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"tarefas-api indisponivel: {exc}")
+    if resp.status_code >= 400:
+        raise HTTPException(status_code=resp.status_code, detail=resp.json().get("detail"))
+    return resp.json()
