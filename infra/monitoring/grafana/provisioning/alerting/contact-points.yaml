@@ -1,0 +1,11 @@
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: webhook-erp-itp
+    receivers:
+      - uid: webhook-erp-itp-1
+        type: webhook
+        settings:
+          url: http://erp_itp_backend:3001/api/metrics/alerta-grafana
+          httpMethod: POST

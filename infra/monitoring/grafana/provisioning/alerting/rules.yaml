@@ -1,0 +1,167 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: itp-alertas-criticos
+    folder: ITP
+    interval: 1m
+    rules:
+      - uid: itp-alerta-site-fora-do-ar
+        title: Site ou API fora do ar
+        condition: C
+        for: 2m
+        no_data_state: Alerting
+        exec_err_state: Alerting
+        labels:
+          severity: critical
+        annotations:
+          summary: "Um dos domínios públicos (site, API ou sistema ITP) parou de responder."
+        data:
+          - refId: A
+            datasourceUid: prometheus_itp
+            relativeTimeRange: { from: 300, to: 0 }
+            model:
+              editorMode: code
+              expr: probe_success
+              instant: true
+              range: false
+              refId: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: lt, params: [1] }
+                  operator: { type: and }
+                  query: { params: [C] }
+                  reducer: { type: last, params: [] }
+              refId: C
+
+      - uid: itp-alerta-disco-cheio
+        title: Disco quase cheio (acima de 90%)
+        condition: C
+        for: 5m
+        no_data_state: Alerting
+        exec_err_state: Alerting
+        labels:
+          severity: critical
+        annotations:
+          summary: "O disco principal da VM está acima de 90% de uso — risco de parada por falta de espaço."
+        data:
+          - refId: A
+            datasourceUid: prometheus_itp
+            relativeTimeRange: { from: 300, to: 0 }
+            model:
+              editorMode: code
+              expr: 100 - ((node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100)
+              instant: true
+              range: false
+              refId: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [90] }
+                  operator: { type: and }
+                  query: { params: [C] }
+                  reducer: { type: last, params: [] }
+              refId: C
+
+      - uid: itp-alerta-memoria-critica
+        title: Memória disponível crítica (abaixo de 10%)
+        condition: C
+        for: 5m
+        no_data_state: Alerting
+        exec_err_state: Alerting
+        labels:
+          severity: critical
+        annotations:
+          summary: "Memória disponível da VM está abaixo de 10% — risco real de o sistema matar processos (OOM killer)."
+        data:
+          - refId: A
+            datasourceUid: prometheus_itp
+            relativeTimeRange: { from: 300, to: 0 }
+            model:
+              editorMode: code
+              expr: (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100
+              instant: true
+              range: false
+              refId: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: lt, params: [10] }
+                  operator: { type: and }
+                  query: { params: [C] }
+                  reducer: { type: last, params: [] }
+              refId: C
+
+      - uid: itp-alerta-container-caido
+        title: Um serviço (container) parou de responder
+        condition: C
+        for: 2m
+        no_data_state: Alerting
+        exec_err_state: Alerting
+        labels:
+          severity: critical
+        annotations:
+          summary: "Um dos serviços Docker parou de reportar métricas há mais de 2 minutos — provavelmente caiu ou está reiniciando em loop."
+        data:
+          - refId: A
+            datasourceUid: prometheus_itp
+            relativeTimeRange: { from: 300, to: 0 }
+            model:
+              editorMode: code
+              expr: max by (name) (time() - container_last_seen{name!=""})
+              instant: true
+              range: false
+              refId: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [120] }
+                  operator: { type: and }
+                  query: { params: [C] }
+                  reducer: { type: last, params: [] }
+              refId: C
+
+      - uid: itp-alerta-taxa-erro-http
+        title: Muitos erros de usuário em pouco tempo (5xx)
+        condition: C
+        for: 3m
+        no_data_state: Alerting
+        exec_err_state: Alerting
+        labels:
+          severity: warning
+        annotations:
+          summary: "Mais de 20% das requisições HTTP nos últimos 5 minutos estão retornando erro de servidor (5xx)."
+        data:
+          - refId: A
+            datasourceUid: prometheus_itp
+            relativeTimeRange: { from: 300, to: 0 }
+            model:
+              editorMode: code
+              expr: (sum(rate(http_requests_total{status_code=~"5.."}[5m])) or vector(0)) / (sum(rate(http_requests_total[5m])) or vector(1)) * 100
+              instant: true
+              range: false
+              refId: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [20] }
+                  operator: { type: and }
+                  query: { params: [C] }
+                  reducer: { type: last, params: [] }
+              refId: C
