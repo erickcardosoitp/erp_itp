@@ -39,6 +39,13 @@ const FUNDO_LINHA_CRITICIDADE: Record<string, string> = {
 
 // Cor da contagem de ocorrências por volume — não é sobre gravidade do
 // erro, é sobre "isso está acontecendo demais" independente da criticidade.
+function formatarDataBR(iso: string): string {
+  // Parquet grava timestamp UTC-aware; sem timeZone explícito, o browser
+  // usa o fuso do próprio SO de quem acessa (não o do Brasil), causando
+  // exibição errada quando a máquina/servidor está em UTC.
+  return new Date(iso).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
+}
+
 function corPorOcorrencias(qtd: number): string {
   if (qtd >= 10) return "#dc2626";
   if (qtd >= 4) return "#ea580c";
@@ -232,7 +239,7 @@ export default function Home() {
                   <td style={{ ...tdStyle, fontWeight: 700, color: corPorOcorrencias(item.OcorrenciasNoPeriodo) }}>
                     {item.OcorrenciasNoPeriodo}
                   </td>
-                  <td style={tdStyle}>{new Date(item.UltimaNoPeriodo).toLocaleString("pt-BR")}</td>
+                  <td style={tdStyle}>{formatarDataBR(item.UltimaNoPeriodo)}</td>
                 </tr>
               ))}
               {itensFiltrados.length === 0 && !carregando && (
@@ -269,8 +276,8 @@ export default function Home() {
                     </span>
                   }
                 />
-                <LinhaContexto nome="Primeira ocorrência" valor={new Date(selecionado.PrimeiraNoPeriodo).toLocaleString("pt-BR")} />
-                <LinhaContexto nome="Última ocorrência" valor={new Date(selecionado.UltimaNoPeriodo).toLocaleString("pt-BR")} />
+                <LinhaContexto nome="Primeira ocorrência" valor={formatarDataBR(selecionado.PrimeiraNoPeriodo)} />
+                <LinhaContexto nome="Última ocorrência" valor={formatarDataBR(selecionado.UltimaNoPeriodo)} />
               </tbody>
             </table>
 
@@ -282,7 +289,7 @@ export default function Home() {
                 {historico.map((h, i) => (
                   <LinhaContexto
                     key={i}
-                    nome={new Date(h.TimestampOcorrencia).toLocaleString("pt-BR")}
+                    nome={formatarDataBR(h.TimestampOcorrencia)}
                     valor={h.MensagemNormalizada}
                   />
                 ))}
