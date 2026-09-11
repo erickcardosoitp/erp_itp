@@ -117,12 +117,12 @@ não por prioridade de negócio. Ver também `2026-09-11-itp-tec-checklist.md`
 
 ### 🟡 Médio — precisa investigação antes de decidir a solução
 
-- [ ] Promover os 27 índices de FK e os 4 `CHECK` constraints (criados
-      direto via `psql` em 2026-09-11) pra dentro de um bloco versionado
-      de `runMigrations()` (`app.module.ts`, próximo `SCHEMA_VERSION`) —
-      hoje funcionam no banco atual, mas não seriam recriados num banco
-      novo/restaurado do zero (homologação futura, disaster recovery).
-      Ver `ARCHITECTURE.md` seção 4.
+- [x] Promover os 27 índices de FK e os 4 `CHECK` constraints pro
+      `runMigrations()` — feito 2026-09-11 (`SCHEMA_VERSION` v23→v24).
+      Testado contra o banco de produção, que já tinha tudo criado
+      manualmente: rodou idempotente, sem erro (`CREATE INDEX IF NOT
+      EXISTS` + `DO` block com `EXCEPTION WHEN duplicate_object` pros
+      `CHECK`, que não tem `IF NOT EXISTS` nativo no Postgres).
 
 - [x] Índices em FK (parte do P1 da auditoria de banco) — resolvido
       2026-09-11: 27 de 44 FKs reais não tinham índice (query rigorosa via
