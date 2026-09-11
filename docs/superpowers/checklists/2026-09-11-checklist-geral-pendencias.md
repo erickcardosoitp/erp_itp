@@ -41,8 +41,9 @@ não por prioridade de negócio. Ver também `2026-09-11-itp-tec-checklist.md`
   `data-source.ts` de CLI configurado) — `CLAUDE.md` corrigido pra não
   documentar comando que não funciona. Arquivo órfão
   `src/migrations/1740000000000-AddEmailResponsavelFields.ts` nunca é
-  executado pelo mecanismo real (`runMigrations()`) — mesma situação,
-  candidato a remoção manual.
+  executado pelo mecanismo real (`runMigrations()`) — removido, junto com
+  `matriculas/database.ts` (também vazio, sem nenhum import); build
+  validado nos dois casos.
 - `auth`/`usuarios` sem `.module.ts` próprio — **refatorado**: criados
   `AuthModule` (exporta `AuthService`, `JwtStrategy`) e `UsuariosModule`
   (importa `AuthModule`). Baixo acoplamento confirmado antes de mexer.
@@ -62,11 +63,6 @@ não por prioridade de negócio. Ver também `2026-09-11-itp-tec-checklist.md`
 
 ### 🟢 Fácil — sem decisão pendente, só executar
 
-- [ ] Remover `matriculas/database.ts` (vazio) e
-      `src/migrations/1740000000000-AddEmailResponsavelFields.ts` (órfão,
-      nunca executado) — exclusão de arquivo ficou bloqueada pelo
-      classificador desta sessão, precisa ser feita manualmente ou numa
-      sessão sem essa restrição.
 - [ ] Threshold de "pico de frequência" da categoria `integracao`
       (>5 ocorrências/1h) — não dá pra validar sem volume real de erro
       dessa categoria ainda; fica em observação.
