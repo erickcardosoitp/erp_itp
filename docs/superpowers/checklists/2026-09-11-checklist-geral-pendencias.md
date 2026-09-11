@@ -10,6 +10,17 @@ não por prioridade de negócio. Ver também `2026-09-11-itp-tec-checklist.md`
 
 ## ✅ Feito nesta rodada (2026-09-11)
 
+**Monitoramento (Grafana + Prometheus)**
+- Pedido urgente do usuário: painel completo de monitoramento "como um
+  Grafana". Subido Grafana + Prometheus + node-exporter + cAdvisor +
+  postgres-exporter + blackbox-exporter, tudo restrito a localhost.
+  3 dashboards prontos da comunidade provisionados automaticamente.
+  Heartbeat externo via healthchecks.io (cron `*/5min`) — cobre o caso
+  da VM inteira cair, quando o próprio Grafana não tem como avisar
+  ninguém. Testado e validado: 7/7 targets do Prometheus up, 3
+  dashboards carregados, atalho de desktop criado. Ver `ARCHITECTURE.md`
+  seção 9 pro detalhamento completo.
+
 **Catálogo de erros / documentação**
 - `relatorios/page.jsx` órfão removido (dado mockado, sem uso).
 - `LinkCommit` do catálogo de erros — causa raiz confirmada (limitação
@@ -116,6 +127,23 @@ não por prioridade de negócio. Ver também `2026-09-11-itp-tec-checklist.md`
 
 
 ### 🟡 Médio — precisa investigação antes de decidir a solução
+
+- [ ] Instrumentar o NestJS com métricas de aplicação (`prom-client`,
+      endpoint `/metrics`) — taxa de erro HTTP 5xx por endpoint, latência
+      p50/p95/p99, Apdex. Segunda etapa do monitoramento (Grafana já
+      pronto pra consumir assim que existir).
+- [ ] Ponte de alerta do Grafana pro mesmo canal email/Teams do catálogo
+      de erros — Grafana não tem SMTP nativo funcionando aqui (tenant
+      bloqueia SMTP AUTH legado), precisa de um webhook reaproveitando o
+      `EmailService`/Graph API já existente no `erp_itp`.
+- [ ] RUM (Real User Monitoring) no `erp_itp` — Web Vitals, cliques,
+      funil de conversão. O site institucional já tem via Application
+      Insights; o ITP ainda só captura erro (não performance/
+      comportamento).
+- [ ] Métricas de negócio no dashboard (matrículas/dia, chamados
+      abertos/resolvidos, movimentações financeiras) — exige definir as
+      queries certas e validar com o usuário se são as métricas que
+      importam de verdade.
 
 - [x] Promover os 27 índices de FK e os 4 `CHECK` constraints pro
       `runMigrations()` — feito 2026-09-11 (`SCHEMA_VERSION` v23→v24).
