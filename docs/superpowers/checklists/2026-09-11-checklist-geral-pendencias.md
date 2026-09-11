@@ -68,6 +68,12 @@ não por prioridade de negócio. Ver também `2026-09-11-itp-tec-checklist.md`
   dependência nova) cobrindo a matriz inteira — inclusive um teste de
   regressão que trava esse bug específico se ele voltar. Rodado e
   validado na VM.
+- Varredura de pontos cegos client-side concluída: `global-error.tsx`
+  criado (cobria falha no `layout.tsx` raiz, não coberto pelo `error.tsx`
+  normal) + `window.onerror`/`unhandledrejection` em `ClientShell.tsx`
+  agora reportam qualquer erro pro backend, não só `ChunkLoadError` —
+  cobre handler de evento/`setTimeout`/promise sem `.catch`, que nenhum
+  Error Boundary React alcança. Validado em produção.
 - `/academico/chamada-professor` removido — confirmado órfão de verdade
   (rascunho de 331 linhas, sem nenhuma referência em código, superado
   pela versão da raiz com 700 linhas e mais funcionalidades).
@@ -92,10 +98,6 @@ não por prioridade de negócio. Ver também `2026-09-11-itp-tec-checklist.md`
       no repo `aprxm_sass`.
 - [ ] Popular o catálogo de ações/playbooks do catálogo de erros além dos
       9 exemplos atuais (`CATALOGO-ERROS.md` seção 7).
-- [ ] Varredura mais ampla de pontos cegos de erro client-side além dos 2
-      `error.tsx`/`PageErrorBoundary` já cobertos — pedido explícito do
-      usuário, adiado deliberadamente ("o certo depois é fazer uma
-      varredura desses tipos de erros que não chegam até nós").
 
 ### 🔴 Depende de decisão do usuário
 
