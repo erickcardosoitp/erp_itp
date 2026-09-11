@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { criarCookieSessao, determinarRole, SESSION_COOKIE } from "../../../lib/session";
 
+export const dynamic = "force-dynamic";
+
 // Troca o code pelo token direto com o Microsoft (server-to-server, TLS +
 // client_secret) - o id_token que volta ja e' confiavel sem precisar
 // verificar assinatura JWS/JWKS (diferente do implicit flow, onde o token
