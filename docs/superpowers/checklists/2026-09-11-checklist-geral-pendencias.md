@@ -237,6 +237,11 @@ não por prioridade de negócio. Ver também `2026-09-11-itp-tec-checklist.md`
       aprovação humana) — só depois do piloto de 1-2 semanas rodando só
       com aprovação manual.
 - [ ] Onde plugar APRXM e DW no catálogo de erros quando migrarem pra VM.
+- [ ] Regras de alerta de verdade no Grafana (thresholds → contact point
+      → o webhook `/api/metrics/alerta-grafana` que já existe) — hoje só
+      a ponte de recebimento está pronta e testável, mas nenhuma regra de
+      alerta foi criada ainda na UI do Grafana (ex: disco >90%, container
+      down, site fora do ar).
 
 ### ⚫ Backlog — baixa prioridade, reavaliar depois
 
