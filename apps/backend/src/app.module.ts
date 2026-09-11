@@ -164,7 +164,7 @@ export class AppModule implements OnModuleInit {
   private async runMigrations() {
     try {
       // ── Versão do schema — pula migrations se já rodaram neste banco ──────
-      const SCHEMA_VERSION = 23; // incrementar aqui ao adicionar novas migrations
+      const SCHEMA_VERSION = 24; // incrementar aqui ao adicionar novas migrations
       await this.dataSource.query(`
         CREATE TABLE IF NOT EXISTS _schema_version (
           id      INT PRIMARY KEY DEFAULT 1,
@@ -1664,6 +1664,52 @@ export class AppModule implements OnModuleInit {
       await this.dataSource.query(`ALTER TABLE inscricoes ADD COLUMN IF NOT EXISTS alergias_descricao TEXT`);
       await this.dataSource.query(`ALTER TABLE inscricoes ADD COLUMN IF NOT EXISTS medicamentos_descricao TEXT`);
       this.logger.log('✅ v23: alergias_descricao/medicamentos_descricao em alunos/inscricoes');
+
+      // ── v24: índices de FK ausentes + CHECK/enum (auditoria de banco,
+      // P1) — aplicados direto via psql em produção em 2026-09-11, mas
+      // isso não seria recriado num banco novo/restaurado do zero
+      // (homologação futura, disaster recovery). Promovido pra cá pra
+      // fechar essa dívida. Enums derivados do código-fonte real (não só
+      // dos dados vistos em produção), pra não bloquear valor válido
+      // ainda sem uso (ex: role=cozinha existe no ROLE_LEVEL do backend
+      // mas não tinha nenhum usuário com esse role em produção). ───────
+      const fksParaIndexar: [string, string][] = [
+        ['alunos', 'inscricao_id'], ['boleto_parcelas', 'boleto_id'],
+        ['diario_academico', 'aluno_id'], ['diario_academico', 'turma_id'],
+        ['diario_academico', 'usuario_id'], ['inscricoes', 'aluno_id'],
+        ['projeto_inscricoes', 'equipe_id'], ['projeto_inscricoes', 'projeto_id'],
+        ['projeto_inscricoes', 'responsavel_id'], ['estoque_movimentos', 'produto_id'],
+        ['gente_colaborador_codigos', 'codigo_id'], ['gente_colaborador_locais', 'colaborador_id'],
+        ['gente_folga_solicitacoes', 'colaborador_id'], ['gente_recibos', 'movimentacao_id'],
+        ['gente_trabalho_externo', 'colaborador_id'], ['grade_horaria', 'materia_id'],
+        ['inscricao_anotacoes', 'inscricao_id'], ['inscricao_movimentacoes', 'inscricao_id'],
+        ['materias', 'professor_id'], ['movimentacoes_financeiras', 'doador_id'],
+        ['pesquisas_respostas', 'pesquisa_id'], ['projeto_equipes', 'projeto_id'],
+        ['projeto_presencas', 'equipe_id'], ['projeto_presencas', 'projeto_id'],
+        ['turma_alunos', 'turma_id'], ['turmas', 'curso_id'], ['usuarios', 'grupo_id'],
+      ];
+      for (const [tabela, coluna] of fksParaIndexar) {
+        await this.dataSource.query(
+          `CREATE INDEX IF NOT EXISTS idx_${tabela}_${coluna} ON ${tabela}(${coluna})`,
+        );
+      }
+      const checksParaCriar: [string, string, string][] = [
+        ['usuarios', 'chk_usuarios_role',
+          `role IN ('user','cozinha','assist','monitor','prof','adjunto','drt','vp','prt','admin')`],
+        ['movimentacoes_financeiras', 'chk_movfin_status',
+          `status IN ('Pendente','Pago','Confirmado','Cancelado','Concluído')`],
+        ['boletos', 'chk_boletos_status', `status IN ('Pendente','Pago')`],
+        ['chamados_academicos', 'chk_chamados_status', `status IN ('aberto','em_andamento','resolvido')`],
+      ];
+      for (const [tabela, nome, condicao] of checksParaCriar) {
+        await this.dataSource.query(`
+          DO $$ BEGIN
+            ALTER TABLE ${tabela} ADD CONSTRAINT ${nome} CHECK (${condicao});
+          EXCEPTION WHEN duplicate_object THEN NULL;
+          END $$;
+        `);
+      }
+      this.logger.log('✅ v24: índices de FK ausentes + CHECK/enum (usuarios.role, movimentacoes_financeiras/boletos/chamados_academicos.status)');
 
       // ── Marca schema como atualizado — próximos cold starts pulam tudo ────
       await this.dataSource.query(`UPDATE _schema_version SET version = $1, ran_at = now() WHERE id = 1`, [SCHEMA_VERSION]);

@@ -117,6 +117,13 @@ não por prioridade de negócio. Ver também `2026-09-11-itp-tec-checklist.md`
 
 ### 🟡 Médio — precisa investigação antes de decidir a solução
 
+- [ ] Promover os 27 índices de FK e os 4 `CHECK` constraints (criados
+      direto via `psql` em 2026-09-11) pra dentro de um bloco versionado
+      de `runMigrations()` (`app.module.ts`, próximo `SCHEMA_VERSION`) —
+      hoje funcionam no banco atual, mas não seriam recriados num banco
+      novo/restaurado do zero (homologação futura, disaster recovery).
+      Ver `ARCHITECTURE.md` seção 4.
+
 - [x] Índices em FK (parte do P1 da auditoria de banco) — resolvido
       2026-09-11: 27 de 44 FKs reais não tinham índice (query rigorosa via
       `pg_constraint`/`pg_index`, cruzando FK com a primeira coluna de
@@ -125,9 +132,16 @@ não por prioridade de negócio. Ver também `2026-09-11-itp-tec-checklist.md`
       transação implícita. Todos válidos (`indisvalid=true`), containers
       saudáveis, endpoints reais testados após a mudança. Ficou de fora
       `neon_auth.invitation.inviterId` (schema gerenciado por lib externa
-      de auth, não é nossa entidade TypeORM). Falta ainda a parte de
-      CHECK/enum do P1 (ver `docs/database-audit-2026-09-08.md`, repo
-      `aprxm_sass`).
+      de auth, não é nossa entidade TypeORM).
+- [x] CHECK/enum (resto do P1) — resolvido 2026-09-11: enums completos
+      derivados do código-fonte real (não só dos dados atuais, pra não
+      bloquear valor válido ainda sem uso — ex: `role=cozinha` existe no
+      `ROLE_LEVEL` do backend mas não tinha nenhum usuário com esse role
+      ainda). 4 `CHECK` criados: `usuarios.role` (10 valores),
+      `movimentacoes_financeiras.status` (5, incluindo `Concluído` que
+      não aparece no dropdown do frontend mas existe em 17 linhas reais),
+      `boletos.status` (2), `chamados_academicos.status` (3). **P1 da
+      auditoria de banco concluído.**
 - [ ] Popular o catálogo de ações/playbooks do catálogo de erros além dos
       9 exemplos atuais (`CATALOGO-ERROS.md` seção 7).
 
