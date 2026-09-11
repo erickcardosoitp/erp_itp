@@ -20,15 +20,7 @@ class PageErrorBoundary extends Component<{ children: ReactNode }, { error: Erro
     // chega no docker logs, nunca é visto pelo catálogo de erros
     // (achado em teste real, 2026-09-10). Best-effort: se o próprio
     // fetch falhar, não faz nada, não deixa o app mais quebrado ainda.
-    fetch('/backend-api/frontend-logs', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        message: error.message,
-        stack: error.stack,
-        pathname: typeof window !== 'undefined' ? window.location.pathname : undefined,
-      }),
-    }).catch(() => {});
+    reportarErroFrontend(error.message, error.stack);
   }
   render() {
     if (this.state.error) {
@@ -46,6 +38,25 @@ class PageErrorBoundary extends Component<{ children: ReactNode }, { error: Erro
     }
     return this.props.children;
   }
+}
+
+// Único ponto de report pro backend — reusado pelo error boundary React
+// (componentDidCatch) e pelos listeners globais de window abaixo, que
+// cobrem o que boundary NENHUM alcança: erro em handler de evento,
+// setTimeout/setInterval, promise rejeitada sem .catch (React Error
+// Boundary só pega erro durante render/lifecycle da árvore, nunca esses
+// casos — limitação conhecida do React, achado na varredura de
+// 2026-09-11).
+function reportarErroFrontend(message: string, stack?: string) {
+  fetch('/backend-api/frontend-logs', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      message,
+      stack,
+      pathname: typeof window !== 'undefined' ? window.location.pathname : undefined,
+    }),
+  }).catch(() => {});
 }
 
 function isChunkError(msg: string): boolean {
@@ -74,14 +85,20 @@ export default function ClientShell({ children }: { children: React.ReactNode })
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
 
-  // Detecta ChunkLoadError causado por novo deploy e recarrega a página
+  // Detecta ChunkLoadError causado por novo deploy e recarrega a página.
+  // Qualquer outro erro que passe por aqui (fora do chunk error) é o que
+  // NENHUM error boundary React alcança — reporta pro backend também,
+  // senão fica invisível pro catálogo de erros (achado 2026-09-11).
   useEffect(() => {
     const handleError = (e: ErrorEvent) => {
-      if (isChunkError(e.message || '')) window.location.reload();
+      const msg = e.message || '';
+      if (isChunkError(msg)) { window.location.reload(); return; }
+      reportarErroFrontend(msg, e.error?.stack);
     };
     const handleRejection = (e: PromiseRejectionEvent) => {
       const msg = e.reason?.message || String(e.reason || '');
-      if (isChunkError(msg)) window.location.reload();
+      if (isChunkError(msg)) { window.location.reload(); return; }
+      reportarErroFrontend(`Promise rejeitada sem catch: ${msg}`, e.reason?.stack);
     };
     window.addEventListener('error', handleError);
     window.addEventListener('unhandledrejection', handleRejection);
