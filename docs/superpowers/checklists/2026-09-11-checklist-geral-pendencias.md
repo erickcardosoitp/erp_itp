@@ -53,6 +53,10 @@ não por prioridade de negócio. Ver também `2026-09-11-itp-tec-checklist.md`
 - `installonly_limit` duplicado em `/etc/dnf/dnf.conf` (`/etc/yum.conf` é
   symlink do mesmo arquivo) — removida a linha duplicada, mantido o valor
   que já prevalecia na prática (`=2`), backup salvo antes de editar.
+- `/tmp` isolado via tmpfs (`nosuid,nodev,noexec`, 3.7G, backed por
+  RAM/swap) — antes era só um diretório dentro de `/`, sem isolamento
+  nenhum. Validado: containers seguem saudáveis, `/tmp` gravável
+  normalmente após a mudança.
 - Threshold de "pico de frequência" da categoria `integracao` (>5
   ocorrências/lote) — não dava pra validar contra volume real ainda, mas
   ao tentar cobrir isso com teste, achado um **bug real**: `REABRE_SEMPRE`
@@ -77,12 +81,6 @@ não por prioridade de negócio. Ver também `2026-09-11-itp-tec-checklist.md`
 
 ### 🟢 Fácil — sem decisão pendente, só executar
 
-- [ ] Isolar `/tmp` da VM via tmpfs (`/etc/fstab`:
-      `tmpfs /tmp tmpfs defaults,nosuid,nodev,noexec 0 0`) — hoje `/tmp` é
-      só um diretório dentro de `/`, sem isolamento; qualquer processo
-      pode encher o disco root por ali, e binários podem ser executados
-      de lá. Não exige espaço adicional no VG (usa RAM/swap). Achado
-      2026-09-11.
 
 ### 🟡 Médio — precisa investigação antes de decidir a solução
 

@@ -32,12 +32,14 @@ pgAdmin4 (:5050) — só localhost da VM (acesso via X2Go/MATE)
 tinha swap nenhum antes. RAM de 7.3Gi normalmente saudável (memória
 "available" reclamável via cache confirmada real, não falso positivo),
 mas sem swap um pico de memória anônima aciona o OOM killer sem margem.
-Achados relacionados ainda não corrigidos (VM Oracle Linux 9,
-`vm-itp-prod`): `/tmp` não é partição/tmpfs isolada (sem `nosuid,nodev,noexec`
-— qualquer processo pode encher `/` por ali e executar binários de lá);
-`installonly_limit` duplicado e inconsistente em `/etc/yum.conf`/`/etc/dnf/dnf.conf`
-(=3 e =2, resíduo de alguma automação); VG `rootvg` 100% alocado (`VFree=0`)
-— não dá pra separar `/var/log` do root sem expandir disco primeiro.
+Outros achados de infra da mesma auditoria (VM Oracle Linux 9,
+`vm-itp-prod`), já corrigidos 2026-09-11: `/tmp` isolado via tmpfs
+(`nosuid,nodev,noexec`, backed por RAM/swap — antes era só um diretório
+dentro de `/`); `installonly_limit` duplicado em `/etc/yum.conf`/`/etc/dnf/dnf.conf`
+(mesmo arquivo via symlink, =3 e =2) limpo pra valor único. Ainda em
+aberto: VG `rootvg` 100% alocado (`VFree=0`) — não dá pra separar
+`/var/log` do root sem expandir disco primeiro (não urgente, `/` tem 28G
+livres dentro do já alocado).
 
 **Backup em 2 camadas** (cron na própria VM, sem depender de serviço externo pago):
 | Camada | O quê | Frequência | Onde |
