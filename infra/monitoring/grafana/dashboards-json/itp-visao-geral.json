@@ -1,0 +1,203 @@
+{
+  "title": "ITP — Visão Geral",
+  "uid": "itp-visao-geral",
+  "editable": true,
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "tags": ["itp"],
+  "panels": [
+    { "id": 100, "type": "row", "title": "🖥️ Saúde da VM", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 }, "collapsed": false },
+
+    {
+      "id": 1, "type": "stat", "title": "CPU em uso",
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [{ "expr": "100 - (avg(rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100,
+        "thresholds": { "mode": "absolute", "steps": [
+          { "color": "green", "value": null }, { "color": "orange", "value": 70 }, { "color": "red", "value": 90 }
+        ] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
+        "textMode": "value", "colorMode": "background", "graphMode": "none",
+        "text": { "valueSize": 42, "titleSize": 16 } }
+    },
+    {
+      "id": 2, "type": "stat", "title": "Memória em uso",
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [{ "expr": "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100,
+        "thresholds": { "mode": "absolute", "steps": [
+          { "color": "green", "value": null }, { "color": "orange", "value": 75 }, { "color": "red", "value": 90 }
+        ] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
+        "textMode": "value", "colorMode": "background", "graphMode": "none",
+        "text": { "valueSize": 42, "titleSize": 16 } }
+    },
+    {
+      "id": 3, "type": "stat", "title": "Disco em uso (/)",
+      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [{ "expr": "100 - ((node_filesystem_avail_bytes{mountpoint=\"/\"} / node_filesystem_size_bytes{mountpoint=\"/\"}) * 100)", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100,
+        "thresholds": { "mode": "absolute", "steps": [
+          { "color": "green", "value": null }, { "color": "orange", "value": 75 }, { "color": "red", "value": 90 }
+        ] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
+        "textMode": "value", "colorMode": "background", "graphMode": "none",
+        "text": { "valueSize": 42, "titleSize": 16 } }
+    },
+    {
+      "id": 4, "type": "stat", "title": "Swap em uso",
+      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [{ "expr": "(1 - (node_memory_SwapFree_bytes / node_memory_SwapTotal_bytes)) * 100", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100,
+        "thresholds": { "mode": "absolute", "steps": [
+          { "color": "green", "value": null }, { "color": "orange", "value": 50 }, { "color": "red", "value": 80 }
+        ] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
+        "textMode": "value", "colorMode": "background", "graphMode": "none",
+        "text": { "valueSize": 42, "titleSize": 16 } }
+    },
+
+    { "id": 101, "type": "row", "title": "🌐 Sites no ar", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 7 }, "collapsed": false },
+
+    {
+      "id": 10, "type": "stat", "title": "Sistema ITP (itp.institutotiapretinha.org)",
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [{ "expr": "probe_success{instance=\"https://itp.institutotiapretinha.org\"}", "refId": "A" }],
+      "fieldConfig": { "defaults": {
+        "mappings": [{ "type": "value", "options": {
+          "0": { "text": "FORA DO AR", "color": "red" }, "1": { "text": "NO AR", "color": "green" }
+        } }],
+        "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
+        "textMode": "value", "colorMode": "background", "graphMode": "none",
+        "text": { "valueSize": 32, "titleSize": 16 } }
+    },
+    {
+      "id": 11, "type": "stat", "title": "API ITP (api.itp.institutotiapretinha.org)",
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [{ "expr": "probe_success{instance=\"https://api.itp.institutotiapretinha.org/api\"}", "refId": "A" }],
+      "fieldConfig": { "defaults": {
+        "mappings": [{ "type": "value", "options": {
+          "0": { "text": "FORA DO AR", "color": "red" }, "1": { "text": "NO AR", "color": "green" }
+        } }],
+        "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
+        "textMode": "value", "colorMode": "background", "graphMode": "none",
+        "text": { "valueSize": 32, "titleSize": 16 } }
+    },
+    {
+      "id": 12, "type": "stat", "title": "Site Institucional (institutotiapretinha.org)",
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [{ "expr": "probe_success{instance=\"https://institutotiapretinha.org\"}", "refId": "A" }],
+      "fieldConfig": { "defaults": {
+        "mappings": [{ "type": "value", "options": {
+          "0": { "text": "FORA DO AR", "color": "red" }, "1": { "text": "NO AR", "color": "green" }
+        } }],
+        "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
+        "textMode": "value", "colorMode": "background", "graphMode": "none",
+        "text": { "valueSize": 32, "titleSize": 16 } }
+    },
+
+    { "id": 102, "type": "row", "title": "📦 Containers", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 }, "collapsed": false },
+
+    {
+      "id": 20, "type": "bargauge", "title": "CPU por serviço (%)",
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 15 },
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [{ "expr": "sum by (name) (rate(container_cpu_usage_seconds_total{name!=\"\"}[5m])) * 100", "refId": "A", "legendFormat": "{{name}}" }],
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0,
+        "thresholds": { "mode": "absolute", "steps": [
+          { "color": "green", "value": null }, { "color": "orange", "value": 50 }, { "color": "red", "value": 80 }
+        ] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "horizontal",
+        "displayMode": "gradient", "showUnfilled": true, "text": { "valueSize": 16 } }
+    },
+    {
+      "id": 21, "type": "bargauge", "title": "Memória por serviço (MB)",
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 15 },
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [{ "expr": "sum by (name) (container_memory_usage_bytes{name!=\"\"}) / 1024 / 1024", "refId": "A", "legendFormat": "{{name}}" }],
+      "fieldConfig": { "defaults": { "unit": "decmbytes", "min": 0 }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "horizontal",
+        "displayMode": "gradient", "showUnfilled": true, "text": { "valueSize": 16 } }
+    },
+
+    { "id": 103, "type": "row", "title": "🗄️ Banco de dados", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 24 }, "collapsed": false },
+
+    {
+      "id": 30, "type": "stat", "title": "Conexões ativas (limite: 100)",
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 25 },
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [{ "expr": "sum(pg_stat_database_numbackends)", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "none", "min": 0, "max": 100,
+        "thresholds": { "mode": "absolute", "steps": [
+          { "color": "green", "value": null }, { "color": "orange", "value": 70 }, { "color": "red", "value": 90 }
+        ] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
+        "textMode": "value", "colorMode": "background", "graphMode": "none",
+        "text": { "valueSize": 42, "titleSize": 16 } }
+    },
+    {
+      "id": 31, "type": "stat", "title": "Tamanho do banco",
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 25 },
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [{ "expr": "pg_database_size_bytes{datname=\"erp_itp_db\"}", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "decbytes",
+        "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
+        "textMode": "value", "colorMode": "background", "graphMode": "none",
+        "text": { "valueSize": 36, "titleSize": 16 } }
+    },
+    {
+      "id": 32, "type": "stat", "title": "Certificado SSL — dias até expirar",
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 25 },
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [{ "expr": "(probe_ssl_earliest_cert_expiry{instance=\"https://itp.institutotiapretinha.org\"} - time()) / 86400", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "none",
+        "thresholds": { "mode": "absolute", "steps": [
+          { "color": "red", "value": null }, { "color": "orange", "value": 15 }, { "color": "green", "value": 30 }
+        ] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
+        "textMode": "value", "colorMode": "background", "graphMode": "none",
+        "text": { "valueSize": 36, "titleSize": 16 } }
+    },
+
+    { "id": 104, "type": "row", "title": "📈 Tendência (últimas horas)", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 31 }, "collapsed": false },
+
+    {
+      "id": 40, "type": "timeseries", "title": "CPU e memória ao longo do tempo",
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 32 },
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [
+        { "expr": "100 - (avg(rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)", "refId": "A", "legendFormat": "CPU %" },
+        { "expr": "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100", "refId": "B", "legendFormat": "Memória %" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100,
+        "custom": { "lineWidth": 2, "fillOpacity": 15, "pointSize": 5 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "id": 41, "type": "timeseries", "title": "Tempo de resposta dos sites (segundos)",
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 32 },
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [
+        { "expr": "probe_duration_seconds{instance=\"https://itp.institutotiapretinha.org\"}", "refId": "A", "legendFormat": "Sistema ITP" },
+        { "expr": "probe_duration_seconds{instance=\"https://api.itp.institutotiapretinha.org/api\"}", "refId": "B", "legendFormat": "API ITP" },
+        { "expr": "probe_duration_seconds{instance=\"https://institutotiapretinha.org\"}", "refId": "C", "legendFormat": "Site Institucional" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s", "min": 0,
+        "custom": { "lineWidth": 2, "fillOpacity": 10, "pointSize": 5 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    }
+  ]
+}

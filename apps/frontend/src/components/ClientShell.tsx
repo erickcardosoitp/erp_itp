@@ -10,6 +10,7 @@ import { Toaster } from '@/components/ui/sonner';
 import PwaInstall from './PwaInstall';
 import SettingsApplier from './SettingsApplier';
 import LaunchPad from './LaunchPad';
+import WebVitalsReporter from './WebVitalsReporter';
 import { Menu, RefreshCw } from 'lucide-react';
 
 class PageErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
@@ -186,6 +187,7 @@ export default function ClientShell({ children }: { children: React.ReactNode })
         />
         <PwaInstall />
         <SettingsApplier />
+        <WebVitalsReporter />
       </ThemeProvider>
     </AuthProvider>
   );

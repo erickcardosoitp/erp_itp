@@ -49,6 +49,7 @@ import { CaptacaoModule } from './captacao/captacao.module';
 import { FrontendLogsModule } from './frontend-logs/frontend-logs.module';
 import { ResponsaveisModule } from './responsaveis/responsaveis.module';
 import { SupabaseModule } from './modules/supabase/supabase.module';
+import { MetricsModule } from './metrics/metrics.module';
 
 @Module({
   imports: [
@@ -136,6 +137,7 @@ import { SupabaseModule } from './modules/supabase/supabase.module';
     FrontendLogsModule,
     ResponsaveisModule,
     SupabaseModule,
+    MetricsModule,
   ],
   controllers: [
     AppController,

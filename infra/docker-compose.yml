@@ -121,11 +121,6 @@ services:
     ports:
       - "127.0.0.1:8080:3000"
 
-  # ── Monitoramento (2026-09-11) ──────────────────────────────────────
-  # Prometheus + Grafana + exporters, tudo restrito a localhost (mesmo
-  # padrão do pgAdmin/catálogo de erros — sem exposição pública sem SSO).
-  # Configs em ./monitoring/ (prometheus.yml, blackbox.yml, provisioning
-  # do Grafana com datasource + dashboards prontos da comunidade).
 
   node-exporter:
     image: prom/node-exporter:latest
@@ -183,8 +178,6 @@ services:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.retention.time=30d'
     ports:
-      # 9090 já ocupada por outro serviço do sistema na VM (systemd) —
-      # exposta em 9091 no host.
       - "127.0.0.1:9091:9090"
 
   grafana:
@@ -194,6 +187,7 @@ services:
     environment:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
       GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ROOT_URL: https://grafana.itp.institutotiapretinha.org
     volumes:
       - grafana_data:/var/lib/grafana
       - ./monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
@@ -203,6 +197,12 @@ services:
       - prometheus
     ports:
       - "127.0.0.1:3030:3000"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.grafana.rule=Host(`grafana.itp.institutotiapretinha.org`)"
+      - "traefik.http.routers.grafana.entrypoints=websecure"
+      - "traefik.http.routers.grafana.tls.certresolver=leresolver"
+      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
 
 volumes:
   pg_data:
