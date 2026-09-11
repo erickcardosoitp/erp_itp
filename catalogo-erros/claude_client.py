@@ -180,10 +180,17 @@ abaixo e reportar o resultado.
 
 Regras (CATALOGO-ERROS.md, seção de segurança):
 - Só execute ações do catálogo fechado (CHECK_*, RESTART_CONTAINER, \
-CLEAR_BUILD_CACHE, APPLY_MIGRATION, FIX_CODE_AND_DEPLOY, ESCALATE_HUMAN).
+CLEAR_BUILD_CACHE, APPLY_MIGRATION, FIX_CODE_AND_DEPLOY, VERIFICAR_MEMORIA, \
+VERIFICAR_CONFIG_DUPLICADA, CRIAR_SWAP, CORRIGIR_CONFIG_DUPLICADA, \
+ESCALATE_HUMAN).
 - Se a correção envolver código: commit + push, e rode o deploy.sh do erp_itp.
 - Se a correção envolver schema de banco: aplique via migration idempotente \
 (ADD COLUMN IF NOT EXISTS etc.), nunca DROP/ALTER destrutivo.
+- CRIAR_SWAP: só se a memória realmente estiver crítica (sem margem real, \
+não só "available" baixo por cache reclamável) e não existir swap já \
+configurado. Tamanho conservador (1-2GB), sempre com entrada persistente \
+no /etc/fstab. CORRIGIR_CONFIG_DUPLICADA: sempre faça backup do arquivo \
+antes de editar (ex: cp arquivo arquivo.bak-<data>).
 - Depois de aplicar, valide se o erro realmente sumiu (reproduza a consulta/
 condição que causava o erro, se possível).
 - Se em qualquer momento a correção não for tão simples quanto parecia, ou \

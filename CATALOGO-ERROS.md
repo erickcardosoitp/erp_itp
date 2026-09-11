@@ -266,7 +266,18 @@ sistema.
 | `CLEAR_BUILD_CACHE` | resolução | `docker builder prune --keep-storage 5GB` | baixo | não |
 | `APPLY_MIGRATION` | resolução | ALTER TABLE idempotente via `app.module.ts` | alto | sim |
 | `FIX_CODE_AND_DEPLOY` | resolução | commit + push + `deploy.sh` | alto | sim |
+| `VERIFICAR_MEMORIA` | verificação | `free -h` | baixo | não |
+| `VERIFICAR_CONFIG_DUPLICADA` | verificação | grep por chave repetida em arquivo de config do SO (ex: `/etc/dnf.conf`) | baixo | não |
+| `CRIAR_SWAP` | resolução | `fallocate` + `mkswap` + `swapon` + entrada persistente no `/etc/fstab` | médio | sim |
+| `CORRIGIR_CONFIG_DUPLICADA` | resolução | remove linha duplicada de config do SO, com backup automático antes | baixo | sim |
 | `ESCALATE_HUMAN` | resolução | encerra como escalado, notifica | — | — |
+
+**Adicionadas 2026-09-11**, motivadas por ações reais feitas manualmente
+nesta sessão (criação de swap, correção do `installonly_limit`
+duplicado) que não tinham ação catalogada correspondente — a IA não
+tinha autorização pra propor isso sozinha. `CRIAR_SWAP` exige aprovação
+por alterar estado persistente da VM (mesmo sendo reversível); as 2
+verificações não.
 
 Investigação segue sempre a ordem: `log_app` → `schema_banco` →
 `infra_vm` → `integracao_externa` (só avança se a camada anterior não
