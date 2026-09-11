@@ -37,9 +37,11 @@ npm run start           # Inicia backend em produção
 npm run start:dev                          # NestJS watch mode
 npm run build                              # Compila TypeScript
 npm run start:prod                         # Servidor de produção
-npm run typeorm:migration:generate         # Gera migrations
-npm run typeorm:migration:run              # Executa migrations
-npm run typeorm:migration:revert           # Reverte migrations
+# npm run typeorm:migration:* — NÃO FUNCIONAM: sem data-source.ts de CLI
+# configurado, o TypeORM CLI não acha a conexão (confirmado 2026-09-11).
+# O mecanismo real de migration é runMigrations() em app.module.ts,
+# gated por SCHEMA_VERSION/_schema_version, roda sozinho no boot da app.
+# Ver ARCHITECTURE.md seção 4.
 npm run test                               # Testes unitários (Jest)
 npm run test:e2e                           # Testes e2e
 ```

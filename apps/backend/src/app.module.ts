@@ -141,7 +141,6 @@ import { SupabaseModule } from './modules/supabase/supabase.module';
     AppController,
     AuthController,
     UsuariosController,
-    require('./funcionarios/funcionarios.controller').FuncionariosController
   ],
   providers: [
     AppService,

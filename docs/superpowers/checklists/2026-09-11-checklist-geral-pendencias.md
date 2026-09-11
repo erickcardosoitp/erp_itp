@@ -12,24 +12,28 @@ pros detalhes completos de cada item.
 
 ## 🟢 Fácil — sem decisão pendente, só executar
 
-- [ ] `FuncionariosController` possivelmente registrado 2x — verificar se
-      está mesmo duplicado (`FuncionariosModule.controllers` + `require()`
-      direto em `AppModule` linha ~142) e se causa rota duplicada ou é
-      noop. (`ARCHITECTURE.md` §7.3)
-- [ ] `matriculas/database.ts` — investigar se é acesso cru ao banco em
-      paralelo ao TypeORM, fora do padrão `*.service.ts`/`*.entity.ts` do
-      resto do projeto. (`ARCHITECTURE.md` §7.4)
-- [ ] Confirmar se os comandos `typeorm:migration:*` documentados no
-      `CLAUDE.md` realmente funcionam ou são vestígio de tentativa
-      anterior — o mecanismo real é `runMigrations()` em `app.module.ts`.
-      (`ARCHITECTURE.md` §7.8)
-- [ ] Backfill retroativo revisado — conferir se `AprovadoEm` deveria ser
-      preenchido também nos itens antigos do catálogo de erros
-      (CAT-0006/7/8/9), que ficaram com `TempoResolucaoHoras` em branco
-      por falta de base confiável.
+- [x] `FuncionariosController` registrado 2x — confirmado e corrigido
+      2026-09-11: removido o `require()` redundante em `AppModule`, só
+      `FuncionariosModule` registra agora.
+- [x] `matriculas/database.ts` — confirmado 2026-09-11: arquivo **vazio**,
+      sem nenhum import, morto há vários commits. Não é acesso cru ao
+      banco. **Não removido ainda** — exclusão de arquivo bloqueada pelo
+      classificador de segurança da sessão; candidato a remoção manual.
+- [x] Comandos `typeorm:migration:*` — confirmado 2026-09-11: não
+      funcionam (sem `data-source.ts` de CLI configurado). `CLAUDE.md`
+      corrigido pra não documentar comando quebrado. Arquivo órfão
+      `src/migrations/1740000000000-AddEmailResponsavelFields.ts` nunca é
+      executado pelo mecanismo real — mesma situação do item anterior
+      (candidato a remoção manual).
+- [x] Backfill retroativo de `AprovadoEm` — investigado 2026-09-11:
+      CAT-0006/7/8/9 foram corrigidos manualmente em 2026-09-09, **antes**
+      do pipeline de aprovação existir — não há timestamp de aprovação
+      real pra recuperar. Decisão: deixar em branco (não inventar dado) e
+      documentar o motivo direto no campo `Diagnostico` de cada item.
 - [ ] Threshold de "pico de frequência" da categoria `integracao`
       (>5 ocorrências/1h, em uso em `aplicar_matriz_reincidencia()`) —
-      ainda não validado contra volume real de erro.
+      **não é possível validar sem volume real** de erro dessa categoria
+      ainda; segue em observação, não é algo pra "resolver" agora.
 
 ## 🟡 Médio — precisa investigação antes de decidir a solução
 
