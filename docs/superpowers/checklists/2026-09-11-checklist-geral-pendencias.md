@@ -142,8 +142,13 @@ não por prioridade de negócio. Ver também `2026-09-11-itp-tec-checklist.md`
       não aparece no dropdown do frontend mas existe em 17 linhas reais),
       `boletos.status` (2), `chamados_academicos.status` (3). **P1 da
       auditoria de banco concluído.**
-- [ ] Popular o catálogo de ações/playbooks do catálogo de erros além dos
-      9 exemplos atuais (`CATALOGO-ERROS.md` seção 7).
+- [x] Popular o catálogo de ações/playbooks — resolvido 2026-09-11: 4
+      ações novas (nomes em português), motivadas pelas ações manuais
+      reais desta sessão (swap, config duplicada): `VERIFICAR_MEMORIA`,
+      `VERIFICAR_CONFIG_DUPLICADA` (verificação, sem aprovação),
+      `CRIAR_SWAP`, `CORRIGIR_CONFIG_DUPLICADA` (resolução, com
+      aprovação). Atualizado tanto o doc (`CATALOGO-ERROS.md` §7) quanto
+      o prompt real que restringe a IA na execução (`claude_client.py`).
 
 ### 🔴 Depende de decisão do usuário
 
