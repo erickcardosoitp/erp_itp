@@ -282,10 +282,18 @@ def main() -> None:
             ts_grupo = sorted(timestamps_por_grupo[msg_normalizada])
             primeiro_ts, ultimo_ts = ts_grupo[0], ts_grupo[-1]
 
+            # O site institucional (repo separado, SPA sem backend próprio)
+            # reporta erro pro /frontend-logs do erp_itp, então cai junto
+            # nos logs do erp_itp_backend — sem essa checagem, seria
+            # classificado como Aplicacao=ITP por engano (achado 2026-09-11).
+            aplicacao_do_grupo = (
+                "SITE" if "[site-institucional]" in msg_normalizada else aplicacao_sugerida
+            )
+
             resultado = processar_grupo(
                 client=client,
                 container=nome,
-                aplicacao_sugerida=aplicacao_sugerida,
+                aplicacao_sugerida=aplicacao_do_grupo,
                 msg_normalizada=msg_normalizada,
                 exemplos_brutos=exemplos,
                 primeiro_timestamp=primeiro_ts,

@@ -34,7 +34,9 @@ sem markdown, sem texto antes ou depois.
 
 Container/origem: {container}
 Aplicação sugerida (você pode confirmar ou trocar por "BD" se for erro do \
-motor do banco em si, não de uma app específica): {aplicacao_sugerida}
+motor do banco em si, não de uma app específica; "SITE" já vem pré-detectado \
+quando a mensagem tem o prefixo [site-institucional], mantenha como está \
+nesse caso): {aplicacao_sugerida}
 Mensagem normalizada (timestamps/IDs/UUIDs já removidos): {mensagem_normalizada}
 Mensagem bruta de exemplo: {mensagem_bruta}
 
@@ -83,7 +85,7 @@ nota de confiança (rubrica acima), nunca ficar escondido.
 {{
   "eh_reincidencia_de": "<CodErro do shortlist acima, se for essencialmente \
 o mesmo problema com confiança alta, ou null se for genuinamente novo>",
-  "aplicacao": "<ITP, APRXM, DW ou BD>",
+  "aplicacao": "<ITP, APRXM, DW, BD ou SITE>",
   "categoria": "<uma de: banco, código, infra, security, integracao, usuario, terceiros>",
   "tipo_erro": "<rótulo curto e específico, texto livre, ex: 'Divergência de tipo UUID/varchar em FK'>",
   "descricao_resumida": "<UMA frase curta (máximo ~15 palavras), português \

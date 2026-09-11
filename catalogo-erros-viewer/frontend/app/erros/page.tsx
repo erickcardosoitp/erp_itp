@@ -131,6 +131,7 @@ export default function Home() {
         <select value={filtroAplicacao} onChange={(e) => setFiltroAplicacao(e.target.value)} style={inputStyle}>
           <option value="">Aplicação: todas</option>
           <option value="ITP">ITP</option>
+          <option value="SITE">SITE</option>
           <option value="APRXM">APRXM</option>
           <option value="DW">DW</option>
           <option value="BD">BD</option>
