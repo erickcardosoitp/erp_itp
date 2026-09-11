@@ -74,7 +74,17 @@ não por prioridade de negócio. Ver também `2026-09-11-itp-tec-checklist.md`
 
 ### 🟢 Fácil — sem decisão pendente, só executar
 
-*(nenhum item fácil pendente no momento)*
+- [ ] `installonly_limit` duplicado e inconsistente em `/etc/yum.conf` /
+      `/etc/dnf/dnf.conf` (mesmo arquivo via symlink) — chave definida 2x
+      (=3 e =2), resíduo de automação antiga. Comportamento indefinido em
+      INI (na prática a última prevalece), mas vale limpar pra ficar
+      explícito. Achado 2026-09-11, na VM `vm-itp-prod`.
+- [ ] Isolar `/tmp` da VM via tmpfs (`/etc/fstab`:
+      `tmpfs /tmp tmpfs defaults,nosuid,nodev,noexec 0 0`) — hoje `/tmp` é
+      só um diretório dentro de `/`, sem isolamento; qualquer processo
+      pode encher o disco root por ali, e binários podem ser executados
+      de lá. Não exige espaço adicional no VG (usa RAM/swap). Achado
+      2026-09-11.
 
 ### 🟡 Médio — precisa investigação antes de decidir a solução
 

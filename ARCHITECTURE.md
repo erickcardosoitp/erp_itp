@@ -28,6 +28,17 @@ Postgres (itp_postgres, :5432) — só rede interna Docker
 pgAdmin4 (:5050) — só localhost da VM (acesso via X2Go/MATE)
 ```
 
+**Swap**: 1GB via `/swapfile` (`/etc/fstab`), criado 2026-09-11 — a VM não
+tinha swap nenhum antes. RAM de 7.3Gi normalmente saudável (memória
+"available" reclamável via cache confirmada real, não falso positivo),
+mas sem swap um pico de memória anônima aciona o OOM killer sem margem.
+Achados relacionados ainda não corrigidos (VM Oracle Linux 9,
+`vm-itp-prod`): `/tmp` não é partição/tmpfs isolada (sem `nosuid,nodev,noexec`
+— qualquer processo pode encher `/` por ali e executar binários de lá);
+`installonly_limit` duplicado e inconsistente em `/etc/yum.conf`/`/etc/dnf/dnf.conf`
+(=3 e =2, resíduo de alguma automação); VG `rootvg` 100% alocado (`VFree=0`)
+— não dá pra separar `/var/log` do root sem expandir disco primeiro.
+
 **Backup em 2 camadas** (cron na própria VM, sem depender de serviço externo pago):
 | Camada | O quê | Frequência | Onde |
 |---|---|---|---|
