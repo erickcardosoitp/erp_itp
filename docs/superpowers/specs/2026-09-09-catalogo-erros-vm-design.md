@@ -280,6 +280,15 @@ Vocabulário fechado de ações (grava em `AcaoExecutada`):
   antecedência (ex: lembrete pra agosto/2027).
 - **Flow B (relatório diário por email) ainda não foi construído** — só
   Flow A (aprovação) existe hoje no Power Automate. Pendente.
+- ✅ **Bug real do Flow A corrigido (2026-09-12)**: o email "Novo incidente"
+  disparava em **toda atualização** de item (trigger "Quando um item é
+  criado ou modificado"), não só criação — as 3 ações de notificação
+  (Atualizar item/ResumoNotificacao/Enviar email) rodavam fora de
+  qualquer condição, incondicionalmente. Corrigido: movidas pro ramo
+  "Verdadeiro" de uma condição (`Condição 2`) que só passa se
+  `Criticidade` = alta/critica OU `IAPodeResolver` = mediano/alto risco.
+  Reduz bastante o volume de "incidente" que ofuscava os emails de
+  aprovação de verdade.
 - **Notificação de escalonamento (novo requisito, 2026-09-11)**: usuário
   precisa ser avisado no momento em que um item cai em `Fase=escalado`,
   já com um relatório completo do que aconteceu (diagnóstico, tentativas,
