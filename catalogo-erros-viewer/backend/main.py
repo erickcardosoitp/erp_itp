@@ -378,17 +378,6 @@ def log_da_tarefa(tarefa_id: str, request: Request, linhas: int = 200):
     return resp.json()
 
 
-@app.get("/api/infra")
-def infra(request: Request):
-    _exigir_role(request, "tec")
-    try:
-        resp = httpx.get(f"{TAREFAS_API_URL}/infra", timeout=20)
-        resp.raise_for_status()
-    except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"tarefas-api indisponivel: {exc}")
-    return resp.json()
-
-
 @app.get("/api/custos")
 def custos_claude():
     try:

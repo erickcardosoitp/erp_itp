@@ -7,7 +7,6 @@ const ITENS = [
   { href: "/", label: "Visão Geral" },
   { href: "/erros", label: "Catálogo de Erros" },
   { href: "/tarefas", label: "Tarefas Agendadas" },
-  { href: "/infra", label: "Infraestrutura" },
   { href: "/custos", label: "Custos IA (Claude)" },
 ];
 
