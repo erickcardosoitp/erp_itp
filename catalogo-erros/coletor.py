@@ -11,6 +11,7 @@ Pensado pra rodar via cron. Idempotente na medida do possível: cada
 execução só processa logs desde a última execução (arquivo de state).
 """
 import argparse
+import fcntl
 import json
 import os
 import subprocess
@@ -236,10 +237,28 @@ def processar_grupo(
     }
 
 
+LOCK_FILE = os.path.expanduser("~/itp-stack/catalogo-erros-coletor.lock")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--desde", default=None, help="Ex: 24h, 1h — ignora o state salvo")
     args = parser.parse_args()
+
+    # Trava de execucao unica: sem isso, duas execucoes concorrentes do
+    # coletor (ex: rodada manual + cron, ou duas sessoes ao mesmo tempo)
+    # podem ler o mesmo log ANTES de qualquer uma escrever na SharePoint
+    # List — a Camada 2 (busca exata) nao acha nada em nenhuma das duas,
+    # e as duas criam item novo pro MESMO erro. Achado real (2026-09-11):
+    # 1 ocorrencia virou 4 itens duplicados na lista (CAT-0016/18/20/23),
+    # outra virou 2 (CAT-0017/22), mesmo timestamp/PID exatos no log.
+    os.makedirs(os.path.dirname(LOCK_FILE), exist_ok=True)
+    lock_fd = open(LOCK_FILE, "w")
+    try:
+        fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        log("outra execução do coletor já está rodando — saindo sem fazer nada")
+        return
 
     cfg = config.carregar_env()
     client = GraphClient(cfg)
