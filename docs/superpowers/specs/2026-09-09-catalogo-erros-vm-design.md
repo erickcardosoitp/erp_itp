@@ -278,8 +278,17 @@ Vocabulário fechado de ações (grava em `AcaoExecutada`):
   segue sem privilégio suficiente pra ler isso, `Insufficient privileges`
   mesmo com os service principals disponíveis). Agendar rotação com
   antecedência (ex: lembrete pra agosto/2027).
-- **Flow B (relatório diário por email) ainda não foi construído** — só
-  Flow A (aprovação) existe hoje no Power Automate. Pendente.
+- ✅ **Relatório periódico consolidado (2026-09-12)**: em vez de Flow B
+  no Power Automate, construído como script próprio (`relatorio-grafana/`,
+  repo erp_itp) — renderiza os 5 dashboards do Grafana (grafana-image-renderer)
+  e manda 1 email consolidado a cada 3 dias via Graph API. Achados na
+  configuração do renderer: (1) precisa de `GF_RENDERING_RENDERER_TOKEN`
+  não-default em produção; (2) o env var do lado do renderer é `AUTH_TOKEN`,
+  não `RENDERING_TOKEN` (nome incorreto não documentado claramente, causa
+  401 silencioso). Registrado como tarefa no ITP_TEC (`relatorio-grafana`).
+- **Flow B (relatório diário por email) do Power Automate**: não construído,
+  substituído pela solução acima. Só ainda faz sentido se quiser recorrência
+  diária de verdade (o script atual é a cada 3 dias).
 - ✅ **Bug real do Flow A corrigido (2026-09-12)**: o email "Novo incidente"
   disparava em **toda atualização** de item (trigger "Quando um item é
   criado ou modificado"), não só criação — as 3 ações de notificação
