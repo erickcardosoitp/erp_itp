@@ -33,7 +33,7 @@
       "id": 3, "type": "timeseries", "title": "Memória ao longo do tempo (MB)",
       "gridPos": { "h": 9, "w": 12, "x": 12, "y": 6 },
       "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
-      "targets": [{ "expr": "container_memory_usage_bytes{name=\"aprxm_backend\"} / 1024 / 1024", "refId": "A", "legendFormat": "aprxm_backend" }],
+      "targets": [{ "expr": "sum(container_memory_usage_bytes{name=\"aprxm_backend\"}) / 1024 / 1024", "refId": "A", "legendFormat": "aprxm_backend" }],
       "fieldConfig": { "defaults": { "unit": "decmbytes", "min": 0,
         "custom": { "lineWidth": 2, "fillOpacity": 8 } }, "overrides": [] },
       "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
@@ -62,7 +62,7 @@
       "id": 6, "type": "bargauge", "title": "Tempo rodando sem reiniciar (horas)",
       "gridPos": { "h": 6, "w": 24, "x": 0, "y": 24 }, "timeFrom": "5m",
       "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
-      "targets": [{ "expr": "(time() - container_start_time_seconds{name=\"aprxm_backend\"}) / 3600", "refId": "A", "legendFormat": "aprxm_backend" }],
+      "targets": [{ "expr": "(time() - max(container_start_time_seconds{name=\"aprxm_backend\"})) / 3600", "refId": "A", "legendFormat": "aprxm_backend" }],
       "fieldConfig": { "defaults": { "unit": "none", "min": 0,
         "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] } }, "overrides": [] },
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "horizontal",

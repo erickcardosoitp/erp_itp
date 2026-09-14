@@ -70,7 +70,7 @@
       "id": 5, "type": "stat", "title": "Memória em uso agora (MB)",
       "gridPos": { "h": 6, "w": 8, "x": 8, "y": 8 }, "timeFrom": "5m",
       "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
-      "targets": [{ "expr": "container_memory_usage_bytes{name=\"aprxm_backend\"} / 1024 / 1024", "refId": "A" }],
+      "targets": [{ "expr": "sum(container_memory_usage_bytes{name=\"aprxm_backend\"}) / 1024 / 1024", "refId": "A" }],
       "fieldConfig": { "defaults": { "unit": "decmbytes", "min": 0,
         "thresholds": { "mode": "absolute", "steps": [
           { "color": "green", "value": null }, { "color": "orange", "value": 1400 }, { "color": "red", "value": 1800 }
@@ -83,7 +83,7 @@
       "id": 6, "type": "stat", "title": "Rodando sem reiniciar (horas)",
       "gridPos": { "h": 6, "w": 8, "x": 16, "y": 8 }, "timeFrom": "5m",
       "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
-      "targets": [{ "expr": "(time() - container_start_time_seconds{name=\"aprxm_backend\"}) / 3600", "refId": "A" }],
+      "targets": [{ "expr": "(time() - max(container_start_time_seconds{name=\"aprxm_backend\"})) / 3600", "refId": "A" }],
       "fieldConfig": { "defaults": { "unit": "none", "min": 0,
         "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] } }, "overrides": [] },
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
@@ -99,7 +99,7 @@
       "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
       "targets": [
         { "expr": "sum(rate(container_cpu_usage_seconds_total{name=\"aprxm_backend\"}[5m])) * 100", "refId": "A", "legendFormat": "CPU (%)" },
-        { "expr": "container_memory_usage_bytes{name=\"aprxm_backend\"} / 1024 / 1024", "refId": "B", "legendFormat": "Memória (MB)" }
+        { "expr": "sum(container_memory_usage_bytes{name=\"aprxm_backend\"}) / 1024 / 1024", "refId": "B", "legendFormat": "Memória (MB)" }
       ],
       "fieldConfig": { "defaults": { "unit": "none", "min": 0,
         "custom": { "lineWidth": 2, "fillOpacity": 8 } }, "overrides": [] },
