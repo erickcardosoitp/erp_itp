@@ -1,7 +1,7 @@
 apiVersion: 1
 
 providers:
-  - name: 'default'
+  - name: 'itp'
     orgId: 1
     folder: 'ITP'
     type: file
@@ -9,4 +9,14 @@ providers:
     updateIntervalSeconds: 30
     allowUiUpdates: true
     options:
-      path: /etc/grafana/provisioning/dashboards-json
+      path: /etc/grafana/provisioning/dashboards-json/itp
+
+  - name: 'aprxm'
+    orgId: 1
+    folder: 'APRXM'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards-json/aprxm
