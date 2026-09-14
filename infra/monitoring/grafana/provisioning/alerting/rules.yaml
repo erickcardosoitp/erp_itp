@@ -111,7 +111,7 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: "Um dos serviços Docker parou de reportar métricas há mais de 2 minutos — provavelmente caiu ou está reiniciando em loop."
+          summary: "Um dos serviços Docker parou de reportar métricas há mais de 5 minutos — provavelmente caiu ou está reiniciando em loop."
         data:
           - refId: A
             datasourceUid: prometheus_itp
@@ -128,7 +128,16 @@ groups:
               type: threshold
               expression: A
               conditions:
-                - evaluator: { type: gt, params: [120] }
+                # Achado real 2026-09-14: threshold de 120s + "for: 2m" (total
+                # ~4min) disparava em TODO redeploy normal (docker compose build
+                # + up -d --force-recreate) de qualquer app, gerando 8+ emails
+                # de falso alarme num unico dia de trabalho -- container_last_seen
+                # do cAdvisor demora mais que 2min pra "esquecer" um container
+                # recriado em alguns casos (rebuild de imagem incluido). Subido
+                # pra 300s (~7min total com o "for") -- ainda rapido o bastante
+                # pra pegar crash-loop/queda real, mas tolera deploy manual sem
+                # spam.
+                - evaluator: { type: gt, params: [300] }
                   operator: { type: and }
                   query: { params: [C] }
                   reducer: { type: last, params: [] }
