@@ -136,6 +136,106 @@ def _extrair_json(texto: str) -> dict:
     return json.loads(texto)
 
 
+def _mensagem_erro(resultado) -> str:
+    """O claude CLI (-p --output-format json) reporta erros de API (ex:
+    rate limit) dentro do JSON no STDOUT (campo "result"), nao no stderr --
+    achado real em 2026-09-14: coletor ficou ~4h reportando mensagem de erro
+    vazia (so olhava stderr) enquanto o motivo real (limite semanal
+    estourado, HTTP 429) ficava escondido no stdout."""
+    stderr = (resultado.stderr or "").strip()
+    try:
+        envelope = json.loads(resultado.stdout)
+        if envelope.get("is_error"):
+            motivo = envelope.get("result") or str(envelope)
+            return f"{motivo} (stderr: {stderr[:200]})" if stderr else motivo
+    except Exception:
+        pass
+    return stderr or (resultado.stdout or "")[:500] or "(sem stdout nem stderr)"
+
+
+CLAUDE_CONFIG_DIR_B = os.path.expanduser("~/.claude-account-b")
+
+
+def _e_rate_limit(resultado) -> bool:
+    """Detecta o 429 real (autoritativo) reportado pelo claude CLI --
+    diferente de qualquer estimativa de uso, este e o sinal oficial da API."""
+    try:
+        envelope = json.loads(resultado.stdout)
+        return envelope.get("api_error_status") == 429 or envelope.get("is_error") and "limit" in str(envelope.get("result", "")).lower()
+    except Exception:
+        return False
+
+
+def _notificar_troca_de_conta(motivo: str) -> None:
+    """Avisa por email (mesmo Graph API do relatorio-grafana) quando a
+    conta principal do claude CLI bate o limite e o sistema troca sozinho
+    pra conta B. Falha silenciosamente se o email nao sair -- notificar
+    nao pode derrubar o coletor."""
+    try:
+        import requests
+        env_path = os.path.expanduser("~/itp-stack/relatorio_grafana.env")
+        cfg = {}
+        with open(env_path, "r", encoding="utf-8") as f:
+            for linha in f:
+                linha = linha.strip()
+                if not linha or linha.startswith("#") or "=" not in linha:
+                    continue
+                k, v = linha.split("=", 1)
+                cfg[k.strip()] = v.strip()
+        token_resp = requests.post(
+            f"https://login.microsoftonline.com/{cfg['MS_TENANT_ID']}/oauth2/v2.0/token",
+            data={
+                "client_id": cfg["MS_CLIENT_ID"],
+                "client_secret": cfg["MS_CLIENT_SECRET"],
+                "scope": "https://graph.microsoft.com/.default",
+                "grant_type": "client_credentials",
+            },
+            timeout=30,
+        )
+        token_resp.raise_for_status()
+        token = token_resp.json()["access_token"]
+        mensagem = {
+            "message": {
+                "subject": "[Catalogo de Erros] Conta do Claude CLI trocada automaticamente",
+                "body": {
+                    "contentType": "HTML",
+                    "content": f"<p>A conta principal do Claude CLI bateu o limite de uso e o sistema trocou automaticamente para a conta secundaria.</p><p>Motivo: {motivo}</p>",
+                },
+                "toRecipients": [{"emailAddress": {"address": "monitoramento@institutotiapretinha.org"}}],
+            },
+            "saveToSentItems": "false",
+        }
+        requests.post(
+            "https://graph.microsoft.com/v1.0/users/projetos@institutotiapretinha.org/sendMail",
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            json=mensagem,
+            timeout=30,
+        )
+    except Exception:
+        pass
+
+
+def _rodar_com_failover(args: list[str], timeout_s: int):
+    """Roda o claude CLI; se bater rate limit (429 real, autoritativo) e
+    existir uma 2a conta configurada (~/.claude-account-b), tenta de novo
+    com ela automaticamente e notifica por email."""
+    resultado = subprocess.run(
+        args, capture_output=True, text=True, timeout=timeout_s, cwd=DIRETORIO_REPO,
+    )
+    if resultado.returncode == 0 or not _e_rate_limit(resultado):
+        return resultado
+
+    if not os.path.isdir(CLAUDE_CONFIG_DIR_B):
+        return resultado  # sem conta B configurada -- comportamento antigo
+
+    env_b = {**os.environ, "CLAUDE_CONFIG_DIR": CLAUDE_CONFIG_DIR_B}
+    resultado_b = subprocess.run(
+        args, capture_output=True, text=True, timeout=timeout_s, cwd=DIRETORIO_REPO, env=env_b,
+    )
+    _notificar_troca_de_conta(_mensagem_erro(resultado))
+    return resultado_b
+
+
 def classificar(
     container: str,
     aplicacao_sugerida: str,
@@ -151,15 +251,11 @@ def classificar(
         shortlist_formatada=_formatar_shortlist(shortlist),
     )
 
-    resultado = subprocess.run(
-        ["claude", "-p", prompt, "--output-format", "json"],
-        capture_output=True,
-        text=True,
-        timeout=120,
-        cwd=DIRETORIO_REPO,
+    resultado = _rodar_com_failover(
+        ["claude", "-p", prompt, "--output-format", "json"], timeout_s=120,
     )
     if resultado.returncode != 0:
-        raise RuntimeError(f"claude CLI falhou: {resultado.stderr[:500]}")
+        raise RuntimeError(f"claude CLI falhou: {_mensagem_erro(resultado)[:500]}")
 
     envelope = json.loads(resultado.stdout)
     custo_usd = envelope.get("total_cost_usd")
@@ -220,7 +316,7 @@ def executar(prompt_execucao: str) -> dict:
     já aprovado por humano (nunca decide sozinho o que fazer)."""
     prompt = PROMPT_EXECUCAO_WRAPPER.format(prompt_execucao=prompt_execucao)
 
-    resultado = subprocess.run(
+    resultado = _rodar_com_failover(
         # --allowedTools: só aqui, nunca em classificar(). A aprovação
         # humana já aconteceu (Power Automate) antes de chegar neste ponto
         # — é o que substitui a confirmação interativa que o Claude Code
@@ -231,13 +327,10 @@ def executar(prompt_execucao: str) -> dict:
         # mesmo com diagnóstico e correção corretos.
         ["claude", "-p", prompt, "--output-format", "json",
          "--allowedTools", "Edit,Write,Bash"],
-        capture_output=True,
-        text=True,
-        timeout=600,  # execução real (commit/deploy) demora mais que classificação
-        cwd=DIRETORIO_REPO,
+        timeout_s=600,  # execução real (commit/deploy) demora mais que classificação
     )
     if resultado.returncode != 0:
-        raise RuntimeError(f"claude CLI falhou na execução: {resultado.stderr[:500]}")
+        raise RuntimeError(f"claude CLI falhou na execução: {_mensagem_erro(resultado)[:500]}")
 
     envelope = json.loads(resultado.stdout)
     custo_usd = envelope.get("total_cost_usd")
