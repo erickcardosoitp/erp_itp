@@ -73,6 +73,7 @@ def extrair_erros(texto_log: str) -> list[str]:
         l for l in linhas
         if normalizador.contem_erro(l, config.PADRAO_ERRO)
         and not normalizador.eh_access_log_ok(l)
+        and not normalizador.eh_nivel_nao_erro(l)
     ]
 
 

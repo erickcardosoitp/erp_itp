@@ -61,6 +61,21 @@ def eh_access_log_ok(linha: str) -> bool:
     return bool(_ACCESS_LOG_OK.search(linha))
 
 
+# Grafana (e outros apps com logger estruturado no estilo logfmt) marca o
+# nivel explicitamente: level=info/warn/error/debug. Achado real 2026-09-14
+# (CAT-0040): "logger=plugins.update.checker level=info msg=\"flag evaluation
+# succeeded\" ... ErrorCode: ErrorMessage: ..." casava com PADRAO_ERRO so
+# porque o struct tem campos vazios chamados ErrorCode/ErrorMessage -- 144
+# linhas identicas, 100% ruido, level=info o tempo todo (nunca virou erro
+# de verdade). Se o proprio logger da app diz que e level=info, nao e erro,
+# ponto final -- não precisa nem chamar a IA pra descartar.
+_NIVEL_LOGFMT_NAO_ERRO = re.compile(r'\blevel=(info|debug)\b', re.IGNORECASE)
+
+
+def eh_nivel_nao_erro(linha: str) -> bool:
+    return bool(_NIVEL_LOGFMT_NAO_ERRO.search(linha))
+
+
 def extrair_timestamp(linha: str):
     """Tenta achar um timestamp real na linha (formato Postgres/ISO, ex:
     '2026-09-09 11:27:07.759 UTC'). Devolve datetime UTC, ou None se a
