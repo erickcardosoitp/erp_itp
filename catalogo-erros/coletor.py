@@ -338,12 +338,17 @@ def main() -> None:
         timestamps_por_grupo: dict[str, list] = defaultdict(list)
         for linha in linhas_erro:
             # Trunca já aqui, na origem — a coluna Assinatura da SharePoint
-            # List tem limite de 500 caracteres. Se truncássemos só na hora
-            # de gravar (e não na comparação de dedup), uma mensagem longa
-            # nunca seria reconhecida como reincidência (bug real, achado
-            # em revisão 2026-09-09): a busca compararia a string inteira
-            # contra o que foi salvo truncado, nunca batendo.
-            assinatura = normalizador.normalizar(linha)[:500]
+            # List tem limite real de 255 caracteres (confirmado via Graph
+            # API columns em 2026-09-14 -- o comentario original dizia 500,
+            # errado). Se truncássemos só na hora de gravar (e não na
+            # comparação de dedup), uma mensagem longa nunca seria
+            # reconhecida como reincidência (bug real, achado em revisão
+            # 2026-09-09): a busca compararia a string inteira contra o que
+            # foi salvo truncado, nunca batendo. Corrigido pra 255 em
+            # 2026-09-14 -- com 500 aqui e 255 na gravacao real, o mesmo
+            # problema podia se repetir (grupo de dedup diferente do que
+            # foi persistido).
+            assinatura = normalizador.normalizar(linha)[:255]
             grupos[assinatura].append(linha)
             ts = normalizador.extrair_timestamp(linha) or agora
             timestamps_por_grupo[assinatura].append(ts)
