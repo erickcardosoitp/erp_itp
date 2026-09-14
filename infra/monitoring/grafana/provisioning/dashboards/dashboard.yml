@@ -20,3 +20,23 @@ providers:
     allowUiUpdates: true
     options:
       path: /etc/grafana/provisioning/dashboards-json/aprxm
+
+  - name: 'vm'
+    orgId: 1
+    folder: 'VM'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards-json/vm
+
+  - name: 'geral'
+    orgId: 1
+    folder: 'Sistemas e Aplicações'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards-json/geral
