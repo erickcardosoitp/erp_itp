@@ -174,3 +174,35 @@ groups:
                   query: { params: [C] }
                   reducer: { type: last, params: [] }
               refId: C
+
+      - uid: itp-alerta-coletor-erros-parado
+        title: Coletor de erros (catálogo) sem execução recente
+        condition: C
+        for: 1m
+        no_data_state: Alerting
+        exec_err_state: Alerting
+        labels:
+          severity: warning
+        annotations:
+          summary: "O coletor de erros (catalogo-erros-coletor, cron de 5 em 5 min) não teve nenhuma execução registrada há mais de 15 minutos — pode estar travando antes de gravar o heartbeat, ou o cron parou de disparar. Achado real 2026-09-14: até esta métrica existir, o único jeito de saber que o coletor tinha travado (40 falhas seguidas) era ele mesmo se auto-diagnosticar numa execução futura bem-sucedida — sem heartbeat externo, uma falha permanente passaria despercebida."
+        data:
+          - refId: A
+            datasourceUid: prometheus_itp
+            relativeTimeRange: { from: 300, to: 0 }
+            model:
+              editorMode: code
+              expr: time() - tarefa_ultima_execucao_timestamp_seconds{tarefa="catalogo-erros-coletor"}
+              instant: true
+              range: false
+              refId: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [900] }
+                  operator: { type: and }
+                  query: { params: [C] }
+                  reducer: { type: last, params: [] }
+              refId: C

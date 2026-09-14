@@ -24,10 +24,21 @@ _UUID = re.compile(
 # Números soltos (posição de caractere, IDs numéricos, PIDs sem colchete).
 # Não mexe em números colados a letra (ex: "v23", "erp_itp_backend").
 _NUMERO_SOLTO = re.compile(r"(?<![a-zA-Z_])\d+(?![a-zA-Z_])")
-# Códigos de cor ANSI (comum em logs de app tipo Nest Logger). Sem isso,
-# caracteres de controle (ESC etc.) quebram a query OData pro Graph API
-# (achado em teste real, 2026-09-10: 400 Bad Request no $filter).
-_ANSI = re.compile(r"\x1b\[[0-9;]*m")
+# Sequências CSI completas (ECMA-48), não só código de cor terminado em 'm'
+# (comum em logs de app tipo Nest Logger). O padrão antigo (\x1b\[[0-9;]*m)
+# só cobria cor -- achado real 2026-09-14: um ESC de outro tipo de sequência
+# CSI (ex: \x1b[?...) passava intacto, quebrando a query OData pro Graph API
+# (400 Bad Request no $filter, coletor.py crashava com exit_code=1, 40
+# ocorrencias entre 2026-09-13 23:45 e 2026-09-14 03:15 -- ver CAT do
+# catalogo, achado pelo proprio coletor via Fonte 2/tarefa). Forma geral de
+# sequência CSI: ESC '[' bytes-de-parametro(0x30-0x3F) bytes-intermediarios
+# (0x20-0x2F) byte-final(0x40-0x7E).
+_ANSI = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
+# Defesa em profundidade: qualquer caractere de controle C0 remanescente
+# (fora do intervalo visível), exceto espaço/tab -- nunca faz parte do
+# conteudo semantico de uma mensagem de erro, entao remover nao corre risco
+# de fundir erros diferentes (principio do docstring acima).
+_CONTROLE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
 
 def normalizar(mensagem: str) -> str:
@@ -35,6 +46,7 @@ def normalizar(mensagem: str) -> str:
     número solto, senão o regex de número já teria comido os dígitos)."""
     m = mensagem.strip()
     m = _ANSI.sub("", m)
+    m = _CONTROLE.sub("", m)
     m = _TIMESTAMP.sub("<timestamp>", m)
     m = _UUID.sub("<uuid>", m)
     m = _PID.sub("[N]", m)
