@@ -126,7 +126,7 @@ def processar_grupo(
         atualizacao = {
             "Ocorrencias": fields.get("Ocorrencias", 0) + qtd,
             "UltimaVez": ultimo_timestamp.isoformat(),
-            "MensagemExemplo": exemplos_brutos[-1][:5000],
+            "MensagemExemplo": exemplos_brutos[-1][:255],  # coluna SharePoint single-line, maxLength real e 255
         }
         status_atualizado = atualizacao.get("Status") or fields.get("Status")
         atualizacao.update(aplicar_matriz_reincidencia(fields, fields.get("Categoria"), qtd))
@@ -203,9 +203,9 @@ def processar_grupo(
         "Descri_x00e7__x00e3_oResumida": classificacao["descricao_resumida"].strip()[:150],
         "Categoria": classificacao["categoria"],
         "TipoErro": classificacao["tipo_erro"],
-        "Assinatura": msg_normalizada[:500],
+        "Assinatura": msg_normalizada[:255],  # coluna SharePoint single-line, maxLength real e 255 (achado 2026-09-14)
         "CodErro": cod_erro,
-        "MensagemExemplo": exemplos_brutos[0][:5000],
+        "MensagemExemplo": exemplos_brutos[0][:255],  # coluna SharePoint single-line, maxLength real e 255
         "Ocorrencias": qtd,
         "PrimeiraVez": primeiro_timestamp.isoformat(),
         "UltimaVez": ultimo_timestamp.isoformat(),

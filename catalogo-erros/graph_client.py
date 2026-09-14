@@ -101,7 +101,12 @@ class GraphClient:
         resp = requests.post(
             self._items_url(), headers=self._headers(), json={"fields": fields}, timeout=30
         )
-        resp.raise_for_status()
+        if resp.status_code >= 300:
+            # achado real 2026-09-14: raise_for_status() sozinho so mostra o
+            # status HTTP, nao o corpo -- o Graph API sempre traz o motivo
+            # real (campo/coluna invalida, tamanho, etc.) em resp.text, e sem
+            # isso fica impossivel diagnosticar sem binary-search manual.
+            raise RuntimeError(f"Graph API {resp.status_code} ao criar item: {resp.text[:1000]}")
         return resp.json()
 
     def atualizar_item(self, item_id: str, fields: dict) -> None:
@@ -111,4 +116,5 @@ class GraphClient:
             json=fields,
             timeout=30,
         )
-        resp.raise_for_status()
+        if resp.status_code >= 300:
+            raise RuntimeError(f"Graph API {resp.status_code} ao atualizar item {item_id}: {resp.text[:1000]}")

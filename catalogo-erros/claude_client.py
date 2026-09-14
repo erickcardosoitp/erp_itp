@@ -12,6 +12,7 @@ import json
 import os
 import re
 import subprocess
+import time
 
 # Diretório de trabalho pro Claude Code CLI — precisa ser a raiz do repo,
 # não a subpasta catalogo-erros/. Achado em teste real (2026-09-10): rodando
@@ -128,12 +129,23 @@ def _formatar_shortlist(shortlist: list[dict]) -> str:
 
 
 def _extrair_json(texto: str) -> dict:
-    """O Claude às vezes envolve a resposta em ```json ... ``` mesmo quando
-    pedimos JSON puro — remove isso antes de fazer o parse."""
+    """O Claude as vezes envolve a resposta em ```json ... ``` mesmo quando
+    pedimos JSON puro -- as vezes ate com prosa ANTES do bloco (achado real
+    2026-09-14: "Unico uso confirmado... \n\n```json\n{...}"), entao um
+    regex ancorado em ^ nao pega. Busca o bloco em qualquer posicao; se nao
+    achar bloco cercado, cai pro primeiro '{' ate o ultimo '}' do texto."""
     texto = texto.strip()
-    texto = re.sub(r"^```(json)?\s*", "", texto)
-    texto = re.sub(r"\s*```$", "", texto)
-    return json.loads(texto)
+
+    m = re.search(r"```(?:json)?\s*(\{.*\})\s*```", texto, re.DOTALL)
+    if m:
+        return json.loads(m.group(1))
+
+    inicio = texto.find("{")
+    fim = texto.rfind("}")
+    if inicio != -1 and fim != -1 and fim > inicio:
+        return json.loads(texto[inicio:fim + 1])
+
+    return json.loads(texto)  # deixa o JSONDecodeError original aparecer
 
 
 def _mensagem_erro(resultado) -> str:
@@ -166,11 +178,36 @@ def _e_rate_limit(resultado) -> bool:
         return False
 
 
+_THROTTLE_FILE = os.path.expanduser("~/itp-stack/claude-failover-notificado.json")
+_THROTTLE_SEGUNDOS = 6 * 3600  # 1 email a cada 6h no maximo, nao a cada execucao (5 em 5 min)
+
+
+def _deve_notificar_agora() -> bool:
+    """Sem isso, cada execucao do coletor (5 em 5 min) que bate rate-limit
+    manda um email novo -- achado real 2026-09-14: usuario recebeu varios
+    emails em sequencia enquanto a conta principal ficou exaurida por
+    horas. So notifica de novo depois de _THROTTLE_SEGUNDOS."""
+    agora = time.time()
+    try:
+        ultimo = json.load(open(_THROTTLE_FILE, encoding="utf-8")).get("ultimo_epoch", 0)
+    except Exception:
+        ultimo = 0
+    if agora - ultimo < _THROTTLE_SEGUNDOS:
+        return False
+    try:
+        json.dump({"ultimo_epoch": agora}, open(_THROTTLE_FILE, "w", encoding="utf-8"))
+    except Exception:
+        pass
+    return True
+
+
 def _notificar_troca_de_conta(motivo: str) -> None:
     """Avisa por email (mesmo Graph API do relatorio-grafana) quando a
     conta principal do claude CLI bate o limite e o sistema troca sozinho
     pra conta B. Falha silenciosamente se o email nao sair -- notificar
-    nao pode derrubar o coletor."""
+    nao pode derrubar o coletor. Throttled -- ver _deve_notificar_agora."""
+    if not _deve_notificar_agora():
+        return
     try:
         import requests
         env_path = os.path.expanduser("~/itp-stack/relatorio_grafana.env")
