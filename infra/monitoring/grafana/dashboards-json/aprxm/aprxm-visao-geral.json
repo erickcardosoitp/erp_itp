@@ -1,0 +1,118 @@
+{
+  "title": "APRXM — Visão Geral",
+  "uid": "aprxm-visao-geral",
+  "editable": true,
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "tags": ["aprxm"],
+  "panels": [
+    { "id": 100, "type": "row", "title": "🌐 API", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 }, "collapsed": false },
+
+    {
+      "id": 1, "type": "stat", "title": "API APRXM (api-aprxm.institutotiapretinha.org)",
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 1 }, "timeFrom": "5m",
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [{ "expr": "probe_success{instance=\"https://api-aprxm.institutotiapretinha.org\"}", "refId": "A" }],
+      "fieldConfig": { "defaults": {
+        "mappings": [{ "type": "value", "options": {
+          "0": { "text": "FORA DO AR", "color": "red" }, "1": { "text": "NO AR", "color": "green" }
+        } }],
+        "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
+        "textMode": "value", "colorMode": "background", "graphMode": "none",
+        "text": { "valueSize": 32, "titleSize": 16 } }
+    },
+    {
+      "id": 2, "type": "stat", "title": "Certificado SSL — dias até expirar",
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 1 }, "timeFrom": "5m",
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [{ "expr": "(probe_ssl_earliest_cert_expiry{instance=\"https://api-aprxm.institutotiapretinha.org\"} - time()) / 86400", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "none",
+        "thresholds": { "mode": "absolute", "steps": [
+          { "color": "red", "value": null }, { "color": "orange", "value": 14 }, { "color": "green", "value": 30 }
+        ] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
+        "textMode": "value", "colorMode": "background", "graphMode": "none",
+        "text": { "valueSize": 36, "titleSize": 16 } }
+    },
+    {
+      "id": 3, "type": "stat", "title": "Tempo de resposta agora (segundos)",
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 1 }, "timeFrom": "5m",
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [{ "expr": "probe_duration_seconds{instance=\"https://api-aprxm.institutotiapretinha.org\"}", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "s",
+        "thresholds": { "mode": "absolute", "steps": [
+          { "color": "green", "value": null }, { "color": "orange", "value": 1 }, { "color": "red", "value": 3 }
+        ] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
+        "textMode": "value", "colorMode": "background", "graphMode": "none",
+        "text": { "valueSize": 36, "titleSize": 16 } }
+    },
+
+    { "id": 101, "type": "row", "title": "📦 Container aprxm_backend", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 7 }, "collapsed": false },
+
+    {
+      "id": 4, "type": "stat", "title": "CPU em uso agora (%)",
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 8 }, "timeFrom": "5m",
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [{ "expr": "sum(rate(container_cpu_usage_seconds_total{name=\"aprxm_backend\"}[5m])) * 100", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0,
+        "thresholds": { "mode": "absolute", "steps": [
+          { "color": "green", "value": null }, { "color": "orange", "value": 70 }, { "color": "red", "value": 90 }
+        ] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
+        "textMode": "value", "colorMode": "background", "graphMode": "none",
+        "text": { "valueSize": 36, "titleSize": 16 } }
+    },
+    {
+      "id": 5, "type": "stat", "title": "Memória em uso agora (MB)",
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 8 }, "timeFrom": "5m",
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [{ "expr": "container_memory_usage_bytes{name=\"aprxm_backend\"} / 1024 / 1024", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "decmbytes", "min": 0,
+        "thresholds": { "mode": "absolute", "steps": [
+          { "color": "green", "value": null }, { "color": "orange", "value": 1400 }, { "color": "red", "value": 1800 }
+        ] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
+        "textMode": "value", "colorMode": "background", "graphMode": "none",
+        "text": { "valueSize": 36, "titleSize": 16 } }
+    },
+    {
+      "id": 6, "type": "stat", "title": "Rodando sem reiniciar (horas)",
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 8 }, "timeFrom": "5m",
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [{ "expr": "(time() - container_start_time_seconds{name=\"aprxm_backend\"}) / 3600", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "none", "min": 0,
+        "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
+        "textMode": "value", "colorMode": "background", "graphMode": "none",
+        "text": { "valueSize": 36, "titleSize": 16 } }
+    },
+
+    { "id": 102, "type": "row", "title": "📈 Tendência (últimas horas)", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 }, "collapsed": false },
+
+    {
+      "id": 7, "type": "timeseries", "title": "CPU e memória ao longo do tempo",
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 15 },
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [
+        { "expr": "sum(rate(container_cpu_usage_seconds_total{name=\"aprxm_backend\"}[5m])) * 100", "refId": "A", "legendFormat": "CPU (%)" },
+        { "expr": "container_memory_usage_bytes{name=\"aprxm_backend\"} / 1024 / 1024", "refId": "B", "legendFormat": "Memória (MB)" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "none", "min": 0,
+        "custom": { "lineWidth": 2, "fillOpacity": 8 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "id": 8, "type": "timeseries", "title": "Tempo de resposta da API (segundos)",
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 15 },
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [{ "expr": "probe_duration_seconds{instance=\"https://api-aprxm.institutotiapretinha.org\"}", "refId": "A", "legendFormat": "API APRXM" }],
+      "fieldConfig": { "defaults": { "unit": "s", "min": 0,
+        "custom": { "lineWidth": 2, "fillOpacity": 15 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    }
+  ]
+}

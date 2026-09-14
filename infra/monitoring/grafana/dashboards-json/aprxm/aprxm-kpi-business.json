@@ -3,7 +3,7 @@
   "uid": "aprxm-kpi-business",
   "editable": true,
   "schemaVersion": 39,
-  "version": 4,
+  "version": 5,
   "refresh": "1m",
   "time": { "from": "now-24h", "to": "now" },
   "tags": ["aprxm"],
@@ -180,6 +180,68 @@
       "fieldConfig": { "defaults": { "unit": "currencyBRL", "min": 0,
         "custom": { "lineWidth": 2, "fillOpacity": 15 } }, "overrides": [] },
       "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    },
+
+    { "id": 104, "type": "row", "title": "🎯 Experiência do usuário e operação", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 28 }, "collapsed": false },
+
+    {
+      "id": 15, "type": "stat", "title": "Operadores ativos (login nos últimos 7 dias)",
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 29 }, "timeFrom": "5m",
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [{ "expr": "aprxm_operadores_ativos_7d", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "none",
+        "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
+        "textMode": "value", "colorMode": "background", "graphMode": "none",
+        "text": { "valueSize": 40, "titleSize": 16 } }
+    },
+    {
+      "id": 16, "type": "stat", "title": "Tempo médio de entrega de encomenda (últimos 30 dias)",
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 29 }, "timeFrom": "5m",
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [{ "expr": "aprxm_tempo_medio_entrega_horas", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "h",
+        "thresholds": { "mode": "absolute", "steps": [
+          { "color": "green", "value": null }, { "color": "orange", "value": 48 }, { "color": "red", "value": 120 }
+        ] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
+        "textMode": "value", "colorMode": "background", "graphMode": "none",
+        "text": { "valueSize": 36, "titleSize": 16 } }
+    },
+    {
+      "id": 17, "type": "stat", "title": "Tempo médio de resolução de O.S. (últimos 30 dias)",
+      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 29 }, "timeFrom": "5m",
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [{ "expr": "aprxm_tempo_medio_resolucao_os_horas", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "h",
+        "thresholds": { "mode": "absolute", "steps": [
+          { "color": "green", "value": null }, { "color": "orange", "value": 72 }, { "color": "red", "value": 168 }
+        ] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
+        "textMode": "value", "colorMode": "background", "graphMode": "none",
+        "text": { "valueSize": 36, "titleSize": 16 } }
+    },
+    {
+      "id": 18, "type": "stat", "title": "Encomendas entregues (no período selecionado)",
+      "gridPos": { "h": 6, "w": 3, "x": 18, "y": 29 },
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [{ "expr": "increase(aprxm_encomendas_entregues_total[$__range])", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "none",
+        "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
+        "textMode": "value", "colorMode": "background", "graphMode": "none",
+        "text": { "valueSize": 30, "titleSize": 14 } }
+    },
+    {
+      "id": 19, "type": "stat", "title": "O.S. resolvidas (no período selecionado)",
+      "gridPos": { "h": 6, "w": 3, "x": 21, "y": 29 },
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [{ "expr": "increase(aprxm_os_resolvidas_total[$__range])", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "none",
+        "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
+        "textMode": "value", "colorMode": "background", "graphMode": "none",
+        "text": { "valueSize": 30, "titleSize": 14 } }
     }
   ]
 }
