@@ -19,6 +19,12 @@ CONTAINERS = [
     {"nome": "itp_grafana", "aplicacao_sugerida": "ITP"},
     {"nome": "itp_prometheus", "aplicacao_sugerida": "ITP"},
     {"nome": "catalogo_backend", "aplicacao_sugerida": "ITP"},
+    # APRXM migrou pra vm-itp-prod em 2026-09-12/14 (backend/crons/dominio/
+    # storage -- banco continua no Neon). Ate 2026-09-14 esse container nao
+    # era monitorado: os 500 reais de producao achados nessa data (login por
+    # search_path do pooler Neon, /openapi.json) so foram vistos por
+    # investigacao manual, nunca teriam entrado no catalogo.
+    {"nome": "aprxm_backend", "aplicacao_sugerida": "APRXM"},
 ]
 
 STATE_FILE = os.path.expanduser("~/itp-stack/catalogo-erros-state.json")
