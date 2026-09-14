@@ -3,16 +3,71 @@
   "uid": "aprxm-kpi-business",
   "editable": true,
   "schemaVersion": 39,
-  "version": 1,
+  "version": 2,
   "refresh": "1m",
   "time": { "from": "now-24h", "to": "now" },
   "tags": ["aprxm"],
   "panels": [
-    { "id": 100, "type": "row", "title": "🏘️ Comunidade", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 }, "collapsed": false },
+    { "id": 100, "type": "row", "title": "🚨 Indicadores críticos", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 }, "collapsed": false },
 
     {
-      "id": 1, "type": "stat", "title": "Associações ativas",
+      "id": 1, "type": "stat", "title": "Mensalidades vencidas",
       "gridPos": { "h": 6, "w": 6, "x": 0, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [{ "expr": "aprxm_mensalidades_vencidas", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "none",
+        "thresholds": { "mode": "absolute", "steps": [
+          { "color": "green", "value": null }, { "color": "orange", "value": 20 }, { "color": "red", "value": 60 }
+        ] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
+        "textMode": "value", "colorMode": "background", "graphMode": "none",
+        "text": { "valueSize": 40, "titleSize": 16 } }
+    },
+    {
+      "id": 2, "type": "stat", "title": "Encomendas paradas há mais de 15 dias",
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [{ "expr": "aprxm_encomendas_paradas_15d", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "none",
+        "thresholds": { "mode": "absolute", "steps": [
+          { "color": "green", "value": null }, { "color": "orange", "value": 30 }, { "color": "red", "value": 100 }
+        ] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
+        "textMode": "value", "colorMode": "background", "graphMode": "none",
+        "text": { "valueSize": 40, "titleSize": 16 } }
+    },
+    {
+      "id": 3, "type": "stat", "title": "Caixas abertos (sessões não fechadas)",
+      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [{ "expr": "aprxm_caixas_abertas", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "none",
+        "thresholds": { "mode": "absolute", "steps": [
+          { "color": "green", "value": null }, { "color": "orange", "value": 3 }, { "color": "red", "value": 8 }
+        ] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
+        "textMode": "value", "colorMode": "background", "graphMode": "none",
+        "text": { "valueSize": 40, "titleSize": 16 } }
+    },
+    {
+      "id": 4, "type": "stat", "title": "Moradores suspensos",
+      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [{ "expr": "aprxm_moradores_suspensos", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "none",
+        "thresholds": { "mode": "absolute", "steps": [
+          { "color": "green", "value": null }, { "color": "orange", "value": 15 }, { "color": "red", "value": 40 }
+        ] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
+        "textMode": "value", "colorMode": "background", "graphMode": "none",
+        "text": { "valueSize": 40, "titleSize": 16 } }
+    },
+
+    { "id": 101, "type": "row", "title": "🏘️ Comunidade", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 7 }, "collapsed": false },
+
+    {
+      "id": 5, "type": "stat", "title": "Associações ativas",
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
       "targets": [{ "expr": "aprxm_associacoes_ativas", "refId": "A" }],
       "fieldConfig": { "defaults": { "unit": "none",
@@ -22,8 +77,8 @@
         "text": { "valueSize": 40, "titleSize": 16 } }
     },
     {
-      "id": 2, "type": "stat", "title": "Moradores ativos",
-      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 1 },
+      "id": 6, "type": "stat", "title": "Moradores ativos",
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
       "targets": [{ "expr": "aprxm_moradores_ativos", "refId": "A" }],
       "fieldConfig": { "defaults": { "unit": "none",
@@ -33,10 +88,10 @@
         "text": { "valueSize": 40, "titleSize": 16 } }
     },
     {
-      "id": 3, "type": "stat", "title": "Moradores cadastrados hoje",
-      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 1 },
+      "id": 7, "type": "stat", "title": "Moradores cadastrados (no período selecionado)",
+      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
-      "targets": [{ "expr": "aprxm_moradores_cadastrados_hoje", "refId": "A" }],
+      "targets": [{ "expr": "increase(aprxm_moradores_cadastrados_total[$__range])", "refId": "A" }],
       "fieldConfig": { "defaults": { "unit": "none",
         "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] } }, "overrides": [] },
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
@@ -44,22 +99,22 @@
         "text": { "valueSize": 40, "titleSize": 16 } }
     },
     {
-      "id": 4, "type": "timeseries", "title": "Moradores cadastrados — últimas 24h",
-      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 1 },
+      "id": 8, "type": "timeseries", "title": "Moradores cadastrados",
+      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
-      "targets": [{ "expr": "aprxm_moradores_cadastrados_hoje", "refId": "A", "legendFormat": "Cadastros" }],
+      "targets": [{ "expr": "increase(aprxm_moradores_cadastrados_total[1h])", "refId": "A", "legendFormat": "Cadastros/hora" }],
       "fieldConfig": { "defaults": { "unit": "none", "min": 0,
         "custom": { "lineWidth": 2, "fillOpacity": 15 } }, "overrides": [] },
       "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
     },
 
-    { "id": 101, "type": "row", "title": "📦 Encomendas e Ordens de Serviço", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 7 }, "collapsed": false },
+    { "id": 102, "type": "row", "title": "📦 Encomendas e Ordens de Serviço", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 }, "collapsed": false },
 
     {
-      "id": 5, "type": "stat", "title": "Encomendas recebidas hoje",
-      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 8 },
+      "id": 9, "type": "stat", "title": "Encomendas recebidas (no período selecionado)",
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 15 },
       "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
-      "targets": [{ "expr": "aprxm_encomendas_hoje", "refId": "A" }],
+      "targets": [{ "expr": "increase(aprxm_encomendas_recebidas_total[$__range])", "refId": "A" }],
       "fieldConfig": { "defaults": { "unit": "none",
         "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] } }, "overrides": [] },
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
@@ -67,8 +122,8 @@
         "text": { "valueSize": 40, "titleSize": 16 } }
     },
     {
-      "id": 6, "type": "stat", "title": "Encomendas aguardando retirada",
-      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 8 },
+      "id": 10, "type": "stat", "title": "Encomendas aguardando retirada",
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 15 },
       "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
       "targets": [{ "expr": "aprxm_encomendas_pendentes", "refId": "A" }],
       "fieldConfig": { "defaults": { "unit": "none",
@@ -80,8 +135,8 @@
         "text": { "valueSize": 40, "titleSize": 16 } }
     },
     {
-      "id": 7, "type": "stat", "title": "O.S. abertas (pendente/andamento)",
-      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 8 },
+      "id": 11, "type": "stat", "title": "O.S. abertas (pendente/andamento)",
+      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 15 },
       "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
       "targets": [{ "expr": "aprxm_os_abertas", "refId": "A" }],
       "fieldConfig": { "defaults": { "unit": "none",
@@ -93,10 +148,10 @@
         "text": { "valueSize": 40, "titleSize": 16 } }
     },
     {
-      "id": 8, "type": "stat", "title": "O.S. criadas hoje",
-      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 8 },
+      "id": 12, "type": "stat", "title": "O.S. criadas (no período selecionado)",
+      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 15 },
       "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
-      "targets": [{ "expr": "aprxm_os_criadas_hoje", "refId": "A" }],
+      "targets": [{ "expr": "increase(aprxm_os_criadas_total[$__range])", "refId": "A" }],
       "fieldConfig": { "defaults": { "unit": "none",
         "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] } }, "overrides": [] },
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
@@ -104,13 +159,13 @@
         "text": { "valueSize": 40, "titleSize": 16 } }
     },
 
-    { "id": 102, "type": "row", "title": "💰 Financeiro", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 }, "collapsed": false },
+    { "id": 103, "type": "row", "title": "💰 Financeiro", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 21 }, "collapsed": false },
 
     {
-      "id": 9, "type": "stat", "title": "Receita lançada hoje (R$)",
-      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 15 },
+      "id": 13, "type": "stat", "title": "Receita (no período selecionado)",
+      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 22 },
       "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
-      "targets": [{ "expr": "aprxm_receita_hoje_reais", "refId": "A" }],
+      "targets": [{ "expr": "increase(aprxm_receita_reais_total[$__range])", "refId": "A" }],
       "fieldConfig": { "defaults": { "unit": "currencyBRL",
         "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] } }, "overrides": [] },
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
@@ -118,10 +173,10 @@
         "text": { "valueSize": 40, "titleSize": 16 } }
     },
     {
-      "id": 10, "type": "timeseries", "title": "Receita — últimas 24h",
-      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 15 },
+      "id": 14, "type": "timeseries", "title": "Receita por hora",
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 22 },
       "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
-      "targets": [{ "expr": "aprxm_receita_hoje_reais", "refId": "A", "legendFormat": "Receita" }],
+      "targets": [{ "expr": "increase(aprxm_receita_reais_total[1h])", "refId": "A", "legendFormat": "Receita" }],
       "fieldConfig": { "defaults": { "unit": "currencyBRL", "min": 0,
         "custom": { "lineWidth": 2, "fillOpacity": 15 } }, "overrides": [] },
       "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
