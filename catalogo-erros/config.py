@@ -16,6 +16,9 @@ CONTAINERS = [
     {"nome": "itp_postgres", "aplicacao_sugerida": "ITP"},
     {"nome": "itp_traefik", "aplicacao_sugerida": "ITP"},
     {"nome": "itp_pgadmin", "aplicacao_sugerida": "ITP"},
+    {"nome": "itp_grafana", "aplicacao_sugerida": "ITP"},
+    {"nome": "itp_prometheus", "aplicacao_sugerida": "ITP"},
+    {"nome": "catalogo_backend", "aplicacao_sugerida": "ITP"},
 ]
 
 STATE_FILE = os.path.expanduser("~/itp-stack/catalogo-erros-state.json")
