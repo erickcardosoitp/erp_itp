@@ -3,7 +3,7 @@
   "uid": "aprxm-kpi-business",
   "editable": true,
   "schemaVersion": 39,
-  "version": 5,
+  "version": 6,
   "refresh": "1m",
   "time": { "from": "now-24h", "to": "now" },
   "tags": ["aprxm"],
@@ -242,6 +242,248 @@
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
         "textMode": "value", "colorMode": "background", "graphMode": "none",
         "text": { "valueSize": 30, "titleSize": 14 } }
+    },
+
+    { "id": 105, "type": "row", "title": "💰 Financeiro avançado", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 35 }, "collapsed": false },
+
+    {
+      "id": 20, "type": "stat", "title": "Taxa de inadimplência (%)",
+      "gridPos": { "h": 6, "w": 4, "x": 0, "y": 36 }, "timeFrom": "5m",
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [{ "expr": "aprxm_taxa_inadimplencia_pct", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "percent", "decimals": 1,
+        "thresholds": { "mode": "absolute", "steps": [
+          { "color": "green", "value": null }, { "color": "orange", "value": 10 }, { "color": "red", "value": 25 }
+        ] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
+        "textMode": "value", "colorMode": "background", "graphMode": "none", "text": { "valueSize": 28, "titleSize": 13 } }
+    },
+    {
+      "id": 21, "type": "stat", "title": "Ticket médio por transação (30d)",
+      "gridPos": { "h": 6, "w": 4, "x": 4, "y": 36 }, "timeFrom": "5m",
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [{ "expr": "aprxm_ticket_medio_reais", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "currencyBRL",
+        "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
+        "textMode": "value", "colorMode": "background", "graphMode": "none", "text": { "valueSize": 28, "titleSize": 13 } }
+    },
+    {
+      "id": 22, "type": "stat", "title": "Sangrias — valor (30d)",
+      "gridPos": { "h": 6, "w": 4, "x": 8, "y": 36 }, "timeFrom": "5m",
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [{ "expr": "aprxm_sangrias_valor_30d_reais", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "currencyBRL",
+        "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
+        "textMode": "value", "colorMode": "background", "graphMode": "none", "text": { "valueSize": 28, "titleSize": 13 } }
+    },
+    {
+      "id": 23, "type": "stat", "title": "Sangrias — quantidade (30d)",
+      "gridPos": { "h": 6, "w": 4, "x": 12, "y": 36 }, "timeFrom": "5m",
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [{ "expr": "aprxm_sangrias_qtd_30d", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "none",
+        "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
+        "textMode": "value", "colorMode": "background", "graphMode": "none", "text": { "valueSize": 28, "titleSize": 13 } }
+    },
+    {
+      "id": 24, "type": "stat", "title": "Quebra de caixa média (30d)",
+      "gridPos": { "h": 6, "w": 4, "x": 16, "y": 36 }, "timeFrom": "5m",
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [{ "expr": "aprxm_quebras_caixa_media_30d_reais", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "currencyBRL",
+        "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
+        "textMode": "value", "colorMode": "background", "graphMode": "none", "text": { "valueSize": 28, "titleSize": 13 } }
+    },
+    {
+      "id": 25, "type": "stat", "title": "Tempo médio de sessão de caixa (30d)",
+      "gridPos": { "h": 6, "w": 4, "x": 20, "y": 36 }, "timeFrom": "5m",
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [{ "expr": "aprxm_tempo_medio_sessao_caixa_horas", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "h",
+        "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
+        "textMode": "value", "colorMode": "background", "graphMode": "none", "text": { "valueSize": 28, "titleSize": 13 } }
+    },
+    {
+      "id": 26, "type": "stat", "title": "% de entregas com cobrança de taxa (30d)",
+      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 42 }, "timeFrom": "5m",
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [{ "expr": "aprxm_taxa_entrega_cobrada_pct", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "percent", "decimals": 1,
+        "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
+        "textMode": "value", "colorMode": "background", "graphMode": "none", "text": { "valueSize": 32, "titleSize": 14 } }
+    },
+
+    { "id": 106, "type": "row", "title": "🏘️ Comunidade avançado", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 48 }, "collapsed": false },
+
+    {
+      "id": 27, "type": "stat", "title": "Moradores convidados (guest)",
+      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 49 }, "timeFrom": "5m",
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [{ "expr": "aprxm_moradores_convidados", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "none",
+        "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
+        "textMode": "value", "colorMode": "background", "graphMode": "none", "text": { "valueSize": 36, "titleSize": 15 } }
+    },
+    {
+      "id": 28, "type": "stat", "title": "Solicitações de atualização cadastral pendentes",
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 49 }, "timeFrom": "5m",
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [{ "expr": "aprxm_solicitacoes_cadastro_pendentes", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "none",
+        "thresholds": { "mode": "absolute", "steps": [
+          { "color": "green", "value": null }, { "color": "orange", "value": 10 }, { "color": "red", "value": 30 }
+        ] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
+        "textMode": "value", "colorMode": "background", "graphMode": "none", "text": { "valueSize": 36, "titleSize": 15 } }
+    },
+
+    { "id": 107, "type": "row", "title": "🔒 Segurança e Integrações", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 55 }, "collapsed": false },
+
+    {
+      "id": 29, "type": "stat", "title": "Dispositivos WebAuthn cadastrados",
+      "gridPos": { "h": 6, "w": 4, "x": 0, "y": 56 }, "timeFrom": "5m",
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [{ "expr": "aprxm_webauthn_dispositivos", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "none",
+        "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
+        "textMode": "value", "colorMode": "background", "graphMode": "none", "text": { "valueSize": 26, "titleSize": 12 } }
+    },
+    {
+      "id": 30, "type": "stat", "title": "Falhas WebAuthn (período)",
+      "gridPos": { "h": 6, "w": 4, "x": 4, "y": 56 },
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [{ "expr": "increase(aprxm_webauthn_falhas_total[$__range])", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "none",
+        "thresholds": { "mode": "absolute", "steps": [
+          { "color": "green", "value": null }, { "color": "orange", "value": 5 }, { "color": "red", "value": 20 }
+        ] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
+        "textMode": "value", "colorMode": "background", "graphMode": "none", "text": { "valueSize": 26, "titleSize": 12 } }
+    },
+    {
+      "id": 31, "type": "stat", "title": "Dispositivos com push habilitado",
+      "gridPos": { "h": 6, "w": 4, "x": 8, "y": 56 }, "timeFrom": "5m",
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [{ "expr": "aprxm_push_dispositivos", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "none",
+        "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
+        "textMode": "value", "colorMode": "background", "graphMode": "none", "text": { "valueSize": 26, "titleSize": 12 } }
+    },
+    {
+      "id": 32, "type": "stat", "title": "Push enviados (período)",
+      "gridPos": { "h": 6, "w": 4, "x": 12, "y": 56 },
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [{ "expr": "increase(aprxm_push_enviados_total[$__range])", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "none",
+        "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
+        "textMode": "value", "colorMode": "background", "graphMode": "none", "text": { "valueSize": 26, "titleSize": 12 } }
+    },
+    {
+      "id": 33, "type": "stat", "title": "Push com falha (período)",
+      "gridPos": { "h": 6, "w": 4, "x": 16, "y": 56 },
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [{ "expr": "increase(aprxm_push_falhas_total[$__range])", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "none",
+        "thresholds": { "mode": "absolute", "steps": [
+          { "color": "green", "value": null }, { "color": "orange", "value": 5 }, { "color": "red", "value": 20 }
+        ] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
+        "textMode": "value", "colorMode": "background", "graphMode": "none", "text": { "valueSize": 26, "titleSize": 12 } }
+    },
+    {
+      "id": 34, "type": "stat", "title": "PIX não conciliados",
+      "gridPos": { "h": 6, "w": 4, "x": 20, "y": 56 }, "timeFrom": "5m",
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [{ "expr": "aprxm_pix_nao_conciliados", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "none",
+        "thresholds": { "mode": "absolute", "steps": [
+          { "color": "green", "value": null }, { "color": "orange", "value": 100 }, { "color": "red", "value": 500 }
+        ] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
+        "textMode": "value", "colorMode": "background", "graphMode": "none", "text": { "valueSize": 26, "titleSize": 12 } }
+    },
+    {
+      "id": 35, "type": "stat", "title": "Interações Simplifica (período)",
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 62 },
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [{ "expr": "increase(aprxm_simplifica_interacoes_total[$__range])", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "none",
+        "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
+        "textMode": "value", "colorMode": "background", "graphMode": "none", "text": { "valueSize": 30, "titleSize": 14 } }
+    },
+    {
+      "id": 36, "type": "stat", "title": "Fallback do Groq — IA indisponível (período)",
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 62 },
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [{ "expr": "increase(aprxm_groq_fallback_total[$__range])", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "none",
+        "thresholds": { "mode": "absolute", "steps": [
+          { "color": "green", "value": null }, { "color": "orange", "value": 5 }, { "color": "red", "value": 20 }
+        ] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
+        "textMode": "value", "colorMode": "background", "graphMode": "none", "text": { "valueSize": 30, "titleSize": 14 } }
+    },
+    {
+      "id": 37, "type": "stat", "title": "Tokens de isenção inválidos (período)",
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 62 },
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [{ "expr": "increase(aprxm_tokens_isencao_invalidos_total[$__range])", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "none",
+        "thresholds": { "mode": "absolute", "steps": [
+          { "color": "green", "value": null }, { "color": "orange", "value": 5 }, { "color": "red", "value": 20 }
+        ] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
+        "textMode": "value", "colorMode": "background", "graphMode": "none", "text": { "valueSize": 30, "titleSize": 14 } }
+    },
+
+    { "id": 108, "type": "row", "title": "📋 Operação avançada", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 68 }, "collapsed": false },
+
+    {
+      "id": 38, "type": "stat", "title": "O.S. prioridade alta/crítica abertas",
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 69 }, "timeFrom": "5m",
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [{ "expr": "aprxm_os_urgentes_abertas", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "none",
+        "thresholds": { "mode": "absolute", "steps": [
+          { "color": "green", "value": null }, { "color": "orange", "value": 3 }, { "color": "red", "value": 8 }
+        ] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
+        "textMode": "value", "colorMode": "background", "graphMode": "none", "text": { "valueSize": 34, "titleSize": 14 } }
+    },
+    {
+      "id": 39, "type": "stat", "title": "Tempo médio até 1ª resposta em O.S. (30d)",
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 69 }, "timeFrom": "5m",
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [{ "expr": "aprxm_tempo_medio_primeira_resposta_os_horas", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "h",
+        "thresholds": { "mode": "absolute", "steps": [
+          { "color": "green", "value": null }, { "color": "orange", "value": 24 }, { "color": "red", "value": 72 }
+        ] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
+        "textMode": "value", "colorMode": "background", "graphMode": "none", "text": { "valueSize": 34, "titleSize": 14 } }
+    },
+    {
+      "id": 40, "type": "stat", "title": "Duração da última execução do ETL",
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 69 }, "timeFrom": "5m",
+      "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
+      "targets": [{ "expr": "aprxm_etl_ultima_duracao_segundos", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "s",
+        "thresholds": { "mode": "absolute", "steps": [
+          { "color": "green", "value": null }, { "color": "orange", "value": 60 }, { "color": "red", "value": 180 }
+        ] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
+        "textMode": "value", "colorMode": "background", "graphMode": "none", "text": { "valueSize": 34, "titleSize": 14 } }
     }
   ]
 }
