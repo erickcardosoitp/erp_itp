@@ -22,6 +22,14 @@ CONTAINERS = [
 ]
 
 STATE_FILE = os.path.expanduser("~/itp-stack/catalogo-erros-state.json")
+
+# Falhas de cron/tarefa (tarefas-timing/*.jsonl, escrito pelo tarefas_runner.py
+# do ITP_TEC) -- ate 2026-09-14 essas falhas nao entravam no catalogo de erros,
+# ficavam so no jsonl estruturado sem classificacao de IA nem visibilidade no
+# SharePoint. exit_code != 0 e o proprio sinal de erro aqui, sem precisar de
+# grep por palavra-chave como nos containers.
+TAREFAS_REGISTRO_PATH = os.path.expanduser("~/itp-stack/tarefas-registro.json")
+TAREFAS_TIMING_DIR = os.path.expanduser("~/itp-stack/tarefas-timing")
 PARQUET_BASE_DIR = os.path.expanduser("~/itp-stack/catalogo-erros-parquet")
 
 # Só chama o Claude se essas palavras aparecerem na linha (case-insensitive).

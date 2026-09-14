@@ -10,6 +10,8 @@ Uso:
 Pensado pra rodar via cron. Idempotente na medida do possível: cada
 execução só processa logs desde a última execução (arquivo de state).
 """
+from __future__ import annotations  # PEP 604 (X | None) -- VM roda Python 3.9
+
 import argparse
 import fcntl
 import json
@@ -18,7 +20,7 @@ import subprocess
 import sys
 import uuid
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import config
 import custos
@@ -72,6 +74,54 @@ def extrair_erros(texto_log: str) -> list[str]:
         if normalizador.contem_erro(l, config.PADRAO_ERRO)
         and not normalizador.eh_access_log_ok(l)
     ]
+
+
+def _desde_para_datetime(desde: str):
+    """Aceita tanto duracao simples ("24h") quanto ISO datetime, mesmo
+    padrao aceito pelo --since do docker logs (mas aqui sem shell out)."""
+    if desde.endswith("h") and desde[:-1].isdigit():
+        return datetime.now(timezone.utc) - timedelta(hours=int(desde[:-1]))
+    return datetime.fromisoformat(desde.replace("Z", "+00:00"))
+
+
+def carregar_registro_tarefas() -> list[dict]:
+    if not os.path.exists(config.TAREFAS_REGISTRO_PATH):
+        return []
+    return json.load(open(config.TAREFAS_REGISTRO_PATH, encoding="utf-8")).get("tarefas", [])
+
+
+def falhas_da_tarefa(task_id: str, log_path: str | None, desde_iso: str) -> list[dict]:
+    """Le tarefas-timing/<id>.jsonl e devolve as execucoes com exit_code != 0
+    desde desde_iso. Cada item ja vem com um trecho do log real (log_path)
+    pra dar contexto pra IA -- sem isso a classificacao teria so o exit_code,
+    sem saber o motivo."""
+    arquivo = os.path.join(config.TAREFAS_TIMING_DIR, f"{task_id}.jsonl")
+    if not os.path.exists(arquivo):
+        return []
+    corte = _desde_para_datetime(desde_iso)
+    falhas = []
+    for linha in open(arquivo, encoding="utf-8"):
+        linha = linha.strip()
+        if not linha:
+            continue
+        registro = json.loads(linha)
+        if registro.get("exit_code", 0) == 0:
+            continue
+        inicio = datetime.fromisoformat(registro["inicio"])
+        if inicio <= corte:
+            continue
+        registro["_trecho_log"] = ""
+        if log_path and os.path.exists(log_path):
+            try:
+                with open(log_path, encoding="utf-8", errors="replace") as lf:
+                    lf.seek(0, os.SEEK_END)
+                    tamanho = lf.tell()
+                    lf.seek(max(0, tamanho - 3000))
+                    registro["_trecho_log"] = lf.read()
+            except OSError:
+                pass
+        falhas.append(registro)
+    return falhas
 
 
 def gerar_cod_erro() -> str:
@@ -333,6 +383,53 @@ def main() -> None:
                 })
 
         state[nome] = agora.isoformat()
+
+    # Fonte 2: falhas de cron/tarefa (tarefas-timing/*.jsonl) -- mesmo
+    # pipeline de classificacao+SharePoint dos containers, achado real
+    # 2026-09-14: essas falhas nunca tinham visibilidade nenhuma fora do
+    # jsonl bruto.
+    for tarefa_cfg in carregar_registro_tarefas():
+        task_id = tarefa_cfg["id"]
+        state_key = f"tarefa:{task_id}"
+        desde_iso = args.desde or state.get(state_key, "24h")
+        log(f"Lendo falhas da tarefa {task_id} desde {desde_iso}...")
+        falhas = falhas_da_tarefa(task_id, tarefa_cfg.get("log_path"), desde_iso)
+        log(f"  {len(falhas)} execucao(oes) com falha")
+
+        aplicacao_sugerida = "APRXM" if task_id.startswith("aprxm-") else "ITP"
+        # Uma assinatura por tarefa (nao por execucao) -- falhas repetidas da
+        # MESMA tarefa devem se agrupar/reincidir, nao virar item novo cada vez.
+        msg_normalizada = f"Tarefa agendada '{task_id}' falhando (exit_code != 0)"
+        exemplos = [
+            f"tarefa={task_id} exit_code={f['exit_code']} inicio={f['inicio']} "
+            f"duracao_s={f.get('duracao_s')}\n--- trecho do log ---\n{f['_trecho_log'][-1500:]}"
+            for f in falhas
+        ]
+        if exemplos:
+            timestamps = sorted(datetime.fromisoformat(f["inicio"]) for f in falhas)
+            resultado = processar_grupo(
+                client=client,
+                container=task_id,
+                aplicacao_sugerida=aplicacao_sugerida,
+                msg_normalizada=msg_normalizada,
+                exemplos_brutos=exemplos,
+                primeiro_timestamp=timestamps[0],
+                ultimo_timestamp=timestamps[-1],
+                custo_acumulado=custo_acumulado,
+            )
+            for ts_ocorrencia in timestamps:
+                linhas_parquet.append({
+                    "CodErro": resultado["cod_erro"],
+                    "Aplicacao": resultado["aplicacao"],
+                    "Categoria": resultado["categoria"],
+                    "TipoErro": resultado["tipo_erro"],
+                    "MensagemNormalizada": msg_normalizada,
+                    "Criticidade": resultado["criticidade"],
+                    "StatusNoMomento": resultado["status"],
+                    "TimestampOcorrencia": ts_ocorrencia,
+                    "FoiAutoCorrigido": False,
+                })
+        state[state_key] = agora.isoformat()
 
     if linhas_parquet:
         arquivos = parquet_writer.agrupar_e_gravar(config.PARQUET_BASE_DIR, linhas_parquet)
