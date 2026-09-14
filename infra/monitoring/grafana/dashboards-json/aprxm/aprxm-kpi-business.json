@@ -3,7 +3,7 @@
   "uid": "aprxm-kpi-business",
   "editable": true,
   "schemaVersion": 39,
-  "version": 3,
+  "version": 4,
   "refresh": "1m",
   "time": { "from": "now-24h", "to": "now" },
   "tags": ["aprxm"],
@@ -12,9 +12,9 @@
 
     {
       "id": 1, "type": "stat", "title": "Mensalidades vencidas",
-      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 1 },
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 1 }, "timeFrom": "5m",
       "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
-      "targets": [{ "expr": "aprxm_mensalidades_vencidas", "refId": "A", "instant": true }],
+      "targets": [{ "expr": "aprxm_mensalidades_vencidas", "refId": "A" }],
       "fieldConfig": { "defaults": { "unit": "none",
         "thresholds": { "mode": "absolute", "steps": [
           { "color": "green", "value": null }, { "color": "orange", "value": 20 }, { "color": "red", "value": 60 }
@@ -25,9 +25,9 @@
     },
     {
       "id": 2, "type": "stat", "title": "Encomendas paradas há mais de 15 dias",
-      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 1 },
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 1 }, "timeFrom": "5m",
       "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
-      "targets": [{ "expr": "aprxm_encomendas_paradas_15d", "refId": "A", "instant": true }],
+      "targets": [{ "expr": "aprxm_encomendas_paradas_15d", "refId": "A" }],
       "fieldConfig": { "defaults": { "unit": "none",
         "thresholds": { "mode": "absolute", "steps": [
           { "color": "green", "value": null }, { "color": "orange", "value": 30 }, { "color": "red", "value": 100 }
@@ -38,9 +38,9 @@
     },
     {
       "id": 3, "type": "stat", "title": "Caixas abertos (sessões não fechadas)",
-      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 1 },
+      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 1 }, "timeFrom": "5m",
       "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
-      "targets": [{ "expr": "aprxm_caixas_abertas", "refId": "A", "instant": true }],
+      "targets": [{ "expr": "aprxm_caixas_abertas", "refId": "A" }],
       "fieldConfig": { "defaults": { "unit": "none",
         "thresholds": { "mode": "absolute", "steps": [
           { "color": "green", "value": null }, { "color": "orange", "value": 3 }, { "color": "red", "value": 8 }
@@ -51,9 +51,9 @@
     },
     {
       "id": 4, "type": "stat", "title": "Moradores suspensos",
-      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 1 },
+      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 1 }, "timeFrom": "5m",
       "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
-      "targets": [{ "expr": "aprxm_moradores_suspensos", "refId": "A", "instant": true }],
+      "targets": [{ "expr": "aprxm_moradores_suspensos", "refId": "A" }],
       "fieldConfig": { "defaults": { "unit": "none",
         "thresholds": { "mode": "absolute", "steps": [
           { "color": "green", "value": null }, { "color": "orange", "value": 15 }, { "color": "red", "value": 40 }
@@ -67,9 +67,9 @@
 
     {
       "id": 5, "type": "stat", "title": "Associações ativas",
-      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 8 },
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 8 }, "timeFrom": "5m",
       "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
-      "targets": [{ "expr": "aprxm_associacoes_ativas", "refId": "A", "instant": true }],
+      "targets": [{ "expr": "aprxm_associacoes_ativas", "refId": "A" }],
       "fieldConfig": { "defaults": { "unit": "none",
         "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] } }, "overrides": [] },
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
@@ -78,9 +78,9 @@
     },
     {
       "id": 6, "type": "stat", "title": "Moradores ativos",
-      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 8 },
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 8 }, "timeFrom": "5m",
       "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
-      "targets": [{ "expr": "aprxm_moradores_ativos", "refId": "A", "instant": true }],
+      "targets": [{ "expr": "aprxm_moradores_ativos", "refId": "A" }],
       "fieldConfig": { "defaults": { "unit": "none",
         "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] } }, "overrides": [] },
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
@@ -123,9 +123,9 @@
     },
     {
       "id": 10, "type": "stat", "title": "Encomendas aguardando retirada",
-      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 15 },
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 15 }, "timeFrom": "5m",
       "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
-      "targets": [{ "expr": "aprxm_encomendas_pendentes", "refId": "A", "instant": true }],
+      "targets": [{ "expr": "aprxm_encomendas_pendentes", "refId": "A" }],
       "fieldConfig": { "defaults": { "unit": "none",
         "thresholds": { "mode": "absolute", "steps": [
           { "color": "green", "value": null }, { "color": "orange", "value": 50 }, { "color": "red", "value": 150 }
@@ -136,9 +136,9 @@
     },
     {
       "id": 11, "type": "stat", "title": "O.S. abertas (pendente/andamento)",
-      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 15 },
+      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 15 }, "timeFrom": "5m",
       "datasource": { "type": "prometheus", "uid": "prometheus_itp" },
-      "targets": [{ "expr": "aprxm_os_abertas", "refId": "A", "instant": true }],
+      "targets": [{ "expr": "aprxm_os_abertas", "refId": "A" }],
       "fieldConfig": { "defaults": { "unit": "none",
         "thresholds": { "mode": "absolute", "steps": [
           { "color": "green", "value": null }, { "color": "orange", "value": 10 }, { "color": "red", "value": 25 }
