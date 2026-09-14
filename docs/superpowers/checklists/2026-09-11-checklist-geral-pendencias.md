@@ -96,6 +96,11 @@ detalhes completos de cada item.
   Prometheus só existia no repo, nunca tinha sido copiado pro arquivo
   de verdade na VM — as métricas de API/RUM/negócio nunca estavam sendo
   coletadas de fato até agora, mesmo com o endpoint funcionando.
+- **2026-09-14:** `https://api-aprxm.institutotiapretinha.org`
+  adicionado ao job `blackbox-http` do Prometheus (probe de
+  disponibilidade) — domínio do backend migrado do APRXM não estava
+  monitorado até então. Sem regra de alerta nova necessária (a regra
+  "Site ou API fora do ar" já existente não filtra por `instance`).
 
 ---
 
@@ -124,11 +129,28 @@ detalhes completos de cada item.
       antigo está quebrada (repo `aprxm_sass` não existe no disco desta
       máquina). Precisa reconstruir a decisão do zero ou localizar o
       documento certo.
-- [ ] Migração do `aprxm_sys` (2º sistema do parque) — não iniciada.
+- [x] ~~Migração do `aprxm_sys` (2º sistema do parque) — não iniciada.~~
+      **Atualização 2026-09-14:** migração de backend/crons/domínio/
+      storage pra `vm-itp-prod` concluída em sessão separada
+      (2026-09-12 a 2026-09-14) — detalhes completos em
+      `aprxm_sys/docs/superpowers/plans/2026-09-12-migracao-aprxm-execucao.md`.
+      O banco continua no Neon (só o compute migrou). Durante revisão
+      operacional pós-migração (2026-09-14) foram achados e corrigidos
+      dois bugs reais de produção: login/queries autenticadas
+      retornando 500 (PgBouncer do Neon não propagava `search_path` —
+      resolvido trocando o `DATABASE_URL` pro endpoint direto, sem
+      `-pooler`) e `/openapi.json` 500 (forward-ref não resolvido em
+      `admin.py`). `api-aprxm.institutotiapretinha.org` adicionado ao
+      Prometheus/blackbox (ver seção de monitoramento acima). Ainda em
+      aberto: backup real do Neon de produção do APRXM (não existe),
+      `DATAWAREHOUSE_APRXM_DATABASE_URL` ainda no endpoint pooled (não
+      testado), e os testes funcionais de escrita (morador/encomenda/
+      O.S.) pedidos pelo usuário ainda não executados.
 - [ ] Regras de auto-fix v2 (liberar ação sem aprovação humana) — só
       depois do piloto de 1-2 semanas rodando só com aprovação manual.
-- [ ] Onde plugar APRXM e DW no catálogo de erros quando migrarem pra
-      VM.
+- [x] ~~Onde plugar APRXM e DW no catálogo de erros quando migrarem pra
+      VM.~~ APRXM já migrou (ver item acima) — plugar no catálogo de
+      erros do `erp_itp` continua pendente, não foi feito nesta rodada.
 
 ### ⚫ Backlog — baixa prioridade, reavaliar depois
 
