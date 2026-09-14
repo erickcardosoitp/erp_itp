@@ -104,6 +104,46 @@ detalhes completos de cada item.
 
 ---
 
+## ✅ Feito (2026-09-14, sessão de revisão operacional do APRXM)
+
+Detalhe completo em `aprxm_sys/docs/superpowers/plans/2026-09-12-migracao-aprxm-execucao.md`
+(Fase H em diante) — resumo aqui só pra manter este checklist geral
+atualizado:
+
+- **4 bugs reais de produção corrigidos**: login/queries 500
+  (search_path do pooler Neon), `/openapi.json` 500 (forward-ref),
+  `bulk-deliver` de encomendas 500 (import local sombreando
+  `HTTPException`), `POST /finance/transactions` 500 pra mensalidade
+  nova (`ON CONFLICT` não batia com a constraint real da tabela —
+  drift entre model SQLModel e schema de produção).
+- **APRXM conectado de vez ao catálogo de erros compartilhado**:
+  `aprxm_backend` adicionado à lista de containers monitorados
+  (`catalogo-erros/config.py`), endpoint `/frontend-logs` novo nos 3
+  frontends, handler global de exceção corrigido, WebAuthn/Groq/push
+  instrumentados. Item de pendência antigo (linha abaixo) fechado.
+- **Bug real no próprio coletor de erros**: crash (`exit_code=1`, 40
+  vezes) por um caractere de controle ESC não coberto pela regex de
+  ANSI — corrigido em `normalizador.py`. Nenhum heartbeat externo
+  existia pra detectar isso antes (o vigia dependia de si mesmo se
+  auto-diagnosticar) — criado heartbeat via textfile collector do
+  node_exporter, cobrindo as 9 tarefas agendadas, não só o coletor.
+  Nova regra de alerta "Coletor de erros sem execução recente".
+- **Catálogo de erros revisado por completo** (18 itens): 8 fechados
+  (2 bugs antigos de banco documentados retroativamente, 3 DNS/ACME do
+  APRXM confirmados resolvidos, 1 o crash do coletor), 2 marcados
+  `conhecido` (ruído de scanner externo, não é bug nosso), 1 deixado
+  aberto de propósito por falta de evidência de correção
+  (`ERR-6df1ae0ad9`, Traefik/Docker provider race).
+- **Grafana — APRXM ganhou paridade com o ITP** (containers,
+  visão geral, KPI business com 37 painéis, dashboard novo de
+  Apdex/latência — nem o ITP tinha esse) + 2 pastas novas:
+  **VM** (visão consolidada só de infraestrutura, host-wide) e
+  **Sistemas e Aplicações** (KPIs de ITP e APRXM lado a lado).
+- Alerta de "container caído" recalibrado (threshold 120s→300s) depois
+  de gerar falso alarme em todo redeploy manual feito hoje.
+
+---
+
 ## ⏳ Falta
 
 ### 🟡 Médio — precisa investigação antes de decidir a solução
@@ -130,27 +170,33 @@ detalhes completos de cada item.
       máquina). Precisa reconstruir a decisão do zero ou localizar o
       documento certo.
 - [x] ~~Migração do `aprxm_sys` (2º sistema do parque) — não iniciada.~~
-      **Atualização 2026-09-14:** migração de backend/crons/domínio/
-      storage pra `vm-itp-prod` concluída em sessão separada
-      (2026-09-12 a 2026-09-14) — detalhes completos em
+      Migração de backend/crons/domínio/storage pra `vm-itp-prod`
+      concluída (2026-09-12 a 2026-09-14) — detalhes completos em
       `aprxm_sys/docs/superpowers/plans/2026-09-12-migracao-aprxm-execucao.md`.
-      O banco continua no Neon (só o compute migrou). Durante revisão
-      operacional pós-migração (2026-09-14) foram achados e corrigidos
-      dois bugs reais de produção: login/queries autenticadas
-      retornando 500 (PgBouncer do Neon não propagava `search_path` —
-      resolvido trocando o `DATABASE_URL` pro endpoint direto, sem
-      `-pooler`) e `/openapi.json` 500 (forward-ref não resolvido em
-      `admin.py`). `api-aprxm.institutotiapretinha.org` adicionado ao
-      Prometheus/blackbox (ver seção de monitoramento acima). Ainda em
-      aberto: backup real do Neon de produção do APRXM (não existe),
-      `DATAWAREHOUSE_APRXM_DATABASE_URL` ainda no endpoint pooled (não
-      testado), e os testes funcionais de escrita (morador/encomenda/
-      O.S.) pedidos pelo usuário ainda não executados.
+      O banco continua no Neon (só o compute migrou).
+- [ ] **Backup real de produção do Neon do APRXM não existe.**
+      Adiado a pedido do usuário (2026-09-14) — "vamos fazer isso mais
+      tarde em relação ao aprxm". Tentativa anterior mirou o próprio
+      banco de produção por engano (revertida sem dano, ver Fase H do
+      doc de migração). Precisa de um destino de backup genuinamente
+      separado (outro projeto/branch Neon, ou snapshot automático do
+      próprio Neon) — decisão e connection string corretos ainda
+      pendentes do usuário.
+- [ ] **Corte da Fase I do APRXM** (desligar de vez a function
+      serverless do backend na Vercel) — adiado junto com o item acima.
+      Já não recebe tráfego normal, só falta decidir quando desligar.
+- [ ] Confirmar visualmente o painel de presidência do APRXM com login
+      real (a conexão do datawarehouse já foi corrigida e testada por
+      baixo — ETL manual rodando com sucesso — só falta confirmação
+      visual). Adiado junto com os itens acima.
 - [ ] Regras de auto-fix v2 (liberar ação sem aprovação humana) — só
       depois do piloto de 1-2 semanas rodando só com aprovação manual.
 - [x] ~~Onde plugar APRXM e DW no catálogo de erros quando migrarem pra
-      VM.~~ APRXM já migrou (ver item acima) — plugar no catálogo de
-      erros do `erp_itp` continua pendente, não foi feito nesta rodada.
+      VM.~~ Feito 2026-09-14: `aprxm_backend` adicionado à lista de
+      containers monitorados do coletor, `/frontend-logs` novo nos 3
+      frontends, handler global corrigido, WebAuthn/Groq/push
+      instrumentados. Ver Fase H do doc de migração pro detalhe
+      completo.
 
 ### ⚫ Backlog — baixa prioridade, reavaliar depois
 
@@ -162,3 +208,22 @@ detalhes completos de cada item.
 - [ ] Camadas extra de dedup/análise no catálogo de erros (correlação
       temporal, sub-agentes por categoria) — só depois que o volume real
       de erro aumentar.
+- [ ] **`ERR-6df1ae0ad9`** (Traefik perde a rota do Grafana por corrida
+      com o provider Docker, 40 ocorrências) — sem evidência de que foi
+      corrigido, deixado aberto de propósito (2026-09-14) em vez de
+      fechar por suposição. Investigar se voltar a ocorrer.
+- [ ] **Vários arquivos de infra na VM são cópias manuais, não
+      symlinks nem lidos direto do git**: `~/itp-stack/docker-compose.yml`,
+      `~/itp-stack/monitoring/prometheus/prometheus.yml`, e todo
+      `~/itp-stack/monitoring/grafana/dashboards-json/` e
+      `provisioning/`. Achado repetidamente em 2026-09-14: um
+      `git pull` no checkout do `erp_itp` **não** aplica a mudança
+      sozinho, precisa de `cp` manual pro caminho que o docker-compose
+      de fato monta — gerou pelo menos 4 incidentes de "achei que
+      tinha deployado mas não tinha" na mesma sessão. Vale trocar por
+      symlink (ou o compose apontar direto pro checkout do repo) numa
+      próxima rodada, pra eliminar essa classe de erro de vez.
+      `~/itp-stack/docker-compose.yml` também está **desatualizado**
+      em relação a `erp_itp/infra/docker-compose.yml` (faltam o serviço
+      `aprxm_backend`, vars `MS_TENANT_ID`/etc., vars do
+      `grafana_renderer`) — nunca foi sincronizado de volta pro repo.
