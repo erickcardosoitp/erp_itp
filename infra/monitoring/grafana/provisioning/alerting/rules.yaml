@@ -206,3 +206,67 @@ groups:
                   query: { params: [C] }
                   reducer: { type: last, params: [] }
               refId: C
+
+      - uid: itp-alerta-catalogo-teto-classificacoes
+        title: Catálogo de erros — teto de classificações atingido repetidamente
+        condition: C
+        for: 30m
+        no_data_state: OK
+        exec_err_state: Alerting
+        labels:
+          severity: warning
+        annotations:
+          summary: "O coletor de erros vem batendo no teto de 5 classificações por rodada há mais de 30min seguidos — sinal de backlog real se acumulando (não apenas um pico pontual). Decisão 2026-09-15: o teto existe pra evitar estourar a sessão do Claude CLI de novo (incidente do dia), mas um backlog persistente merece atenção humana, não só ficar sendo adiado pra sempre."
+        data:
+          - refId: A
+            datasourceUid: prometheus_itp
+            relativeTimeRange: { from: 300, to: 0 }
+            model:
+              editorMode: code
+              expr: catalogo_erros_teto_atingido
+              instant: true
+              range: false
+              refId: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+                  operator: { type: and }
+                  query: { params: [C] }
+                  reducer: { type: last, params: [] }
+              refId: C
+
+      - uid: itp-alerta-catalogo-escalonamento
+        title: Catálogo de erros — tarefa escalada pra revisão humana
+        condition: C
+        for: 0m
+        no_data_state: OK
+        exec_err_state: Alerting
+        labels:
+          severity: warning
+        annotations:
+          summary: "Uma tarefa do coletor/aplicador de erros foi interrompida (timeout de 5min ou rate-limit da conta do Claude CLI) e precisa de revisão manual — ver ~/itp-stack/catalogo-erros-escalonamentos.jsonl na VM pro diagnóstico completo. Decisão 2026-09-15: sem failover automático de conta, então rate-limit agora escala em vez de trocar de conta sozinho."
+        data:
+          - refId: A
+            datasourceUid: prometheus_itp
+            relativeTimeRange: { from: 900, to: 0 }
+            model:
+              editorMode: code
+              expr: increase(catalogo_erros_escalonamentos_total[15m])
+              instant: true
+              range: false
+              refId: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+                  operator: { type: and }
+                  query: { params: [C] }
+                  reducer: { type: last, params: [] }
+              refId: C
