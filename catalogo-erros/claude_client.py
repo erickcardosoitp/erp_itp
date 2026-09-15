@@ -393,6 +393,126 @@ def _rodar_uma_vez(args: list[str], timeout_s: int, prompt: str, env=None):
             ) from exc
 
 
+# Teto de 20% da sessão de 5h por conta (decisão 2026-09-15, a pedido do
+# analista, pós-incidente de estouro de sessão). O Claude Code CLI não
+# expõe % de uso da sessão -- só o sinal binário de rate-limit (429) com
+# uma mensagem tipo "resets 8pm (UTC)". Sem um teto em dólar oficial pro
+# plano (nonprofit standard), a alternativa honesta é AUTOCALIBRAR: toda
+# vez que uma conta bate 429 de verdade, registra quanto foi gasto
+# (total_cost_usd acumulado) até aquele ponto na janela como o teto real
+# observado, e usa 20% disso como limite preventivo dali pra frente --
+# nunca um número inventado. Antes da primeira calibração real de uma
+# conta, não há teto conhecido, então não bloqueia (só passa a bloquear
+# depois que existir pelo menos 1 evento real de rate-limit calibrando).
+TETO_SESSAO_PATH = os.path.expanduser("~/itp-stack/claude-sessao-teto.json")
+FRACAO_MAXIMA_SESSAO = 0.20
+JANELA_SESSAO_S = 5 * 3600
+
+
+def _ler_teto_sessao() -> dict:
+    try:
+        return json.load(open(TETO_SESSAO_PATH, encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def _salvar_teto_sessao(dados: dict) -> None:
+    try:
+        os.makedirs(os.path.dirname(TETO_SESSAO_PATH), exist_ok=True)
+        tmp = TETO_SESSAO_PATH + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(dados, f, ensure_ascii=False, indent=2)
+        os.replace(tmp, TETO_SESSAO_PATH)
+    except OSError:
+        pass
+
+
+def _janela_atual(conta: str, dados: dict) -> dict:
+    """Devolve o estado da janela de 5h corrente pra conta, criando uma
+    nova (custo zerado) se a anterior já expirou."""
+    agora = datetime.now(timezone.utc).timestamp()
+    info = dados.get(conta, {})
+    if agora >= info.get("janela_fim", 0):
+        info = {
+            "janela_inicio": agora,
+            "janela_fim": agora + JANELA_SESSAO_S,
+            "custo_acumulado_usd": 0.0,
+            "teto_calibrado_usd": info.get("teto_calibrado_usd"),  # preserva calibração entre janelas
+        }
+    return info
+
+
+def _pode_gastar(conta: str) -> tuple[bool, str]:
+    dados = _ler_teto_sessao()
+    info = _janela_atual(conta, dados)
+    teto = info.get("teto_calibrado_usd")
+    if not teto:
+        return True, ""  # sem calibração real ainda -- não bloqueia
+    limite = teto * FRACAO_MAXIMA_SESSAO
+    custo_atual = info.get("custo_acumulado_usd", 0.0)
+    if custo_atual >= limite:
+        return False, (
+            f"conta {conta} já gastou ${custo_atual:.4f} na janela de 5h atual, "
+            f"acima do teto preventivo de 20% (${limite:.4f} de um teto calibrado "
+            f"de ${teto:.2f} observado no último rate-limit real desta conta)"
+        )
+    return True, ""
+
+
+def _registrar_custo_sessao(conta: str, valor_usd: float) -> None:
+    if not valor_usd:
+        return
+    dados = _ler_teto_sessao()
+    info = _janela_atual(conta, dados)
+    info["custo_acumulado_usd"] = info.get("custo_acumulado_usd", 0.0) + valor_usd
+    dados[conta] = info
+    _salvar_teto_sessao(dados)
+
+
+def _registrar_custo_se_sucesso(conta: str, resultado) -> None:
+    try:
+        envelope = json.loads(resultado.stdout)
+        custo = envelope.get("total_cost_usd")
+        if custo:
+            _registrar_custo_sessao(conta, custo)
+    except Exception:
+        pass
+
+
+def _parse_reset_epoch(mensagem: str) -> float | None:
+    """Extrai o horário de reset de mensagens tipo 'resets 8pm (UTC)' pra
+    fechar a janela calibrada no momento certo, não só daqui a 5h fixas."""
+    m = re.search(r"resets (\d{1,2})\s*(am|pm)\s*\(UTC\)", mensagem, re.IGNORECASE)
+    if not m:
+        return None
+    hora = int(m.group(1)) % 12 + (12 if m.group(2).lower() == "pm" else 0)
+    agora = datetime.now(timezone.utc)
+    candidato = agora.replace(hour=hora, minute=0, second=0, microsecond=0)
+    if candidato <= agora:
+        candidato += timedelta(days=1)
+    return candidato.timestamp()
+
+
+def _calibrar_teto(conta: str, mensagem_erro: str) -> None:
+    """Chamado quando uma conta bate 429 de verdade -- usa o próprio gasto
+    acumulado até aqui, nesta janela, como o teto real observado (nunca um
+    número inventado). Mantém o maior teto já observado, pra não afrouxar
+    o limite por uma calibração de janela anormalmente curta/barata."""
+    dados = _ler_teto_sessao()
+    info = _janela_atual(conta, dados)
+    custo_ate_aqui = info.get("custo_acumulado_usd", 0.0)
+    if custo_ate_aqui <= 0:
+        return  # nada gasto nesta janela ainda -- não há o que calibrar
+    novo_teto = max(custo_ate_aqui, info.get("teto_calibrado_usd") or 0)
+    reset_epoch = _parse_reset_epoch(mensagem_erro)
+    info["teto_calibrado_usd"] = round(novo_teto, 4)
+    info["calibrado_em"] = datetime.now(timezone.utc).isoformat()
+    if reset_epoch:
+        info["janela_fim"] = reset_epoch
+    dados[conta] = info
+    _salvar_teto_sessao(dados)
+
+
 def _rodar(args: list[str], timeout_s: int, prompt: str):
     """Roda o claude CLI com failover entre 2 contas dedicadas (decisão
     2026-09-15, revisada): nenhuma das duas é usada por humano em uso
@@ -401,16 +521,27 @@ def _rodar(args: list[str], timeout_s: int, prompt: str):
     (throttled). O teto de chamadas por rodada (coletor.py/aplicador.py)
     já limita o total combinado das duas contas -- o failover só evita
     que 1 conta rate-limitada pare a automação toda quando a outra ainda
-    tem cota livre.
+    tem cota livre. Adicionalmente, cada conta tem um teto preventivo de
+    20% do seu último teto calibrado por janela de 5h (ver _pode_gastar).
 
     Timeout de TIMEOUT_MAXIMO_S por tentativa (cada tentativa é uma
     chamada separada, então no pior caso -- rate-limit seguido de timeout
     na conta B -- uma única classificação pode levar até 2x isso)."""
     timeout_s = min(timeout_s, TIMEOUT_MAXIMO_S)
 
+    pode, motivo_bloqueio = _pode_gastar("principal")
+    if not pode:
+        raise TarefaEscalada(
+            motivo=f"teto de 20% da sessão atingido (conta principal): {motivo_bloqueio}",
+            diagnostico=f"Chamada bloqueada preventivamente, sem gastar nada. Prompt (início): {prompt[:800]}",
+        )
+
     resultado = _rodar_uma_vez(args, timeout_s, prompt)
+    _registrar_custo_se_sucesso("principal", resultado)
     if resultado.returncode == 0 or not _e_rate_limit(resultado):
         return resultado
+
+    _calibrar_teto("principal", _mensagem_erro(resultado))
 
     if not os.path.isdir(CLAUDE_CONFIG_DIR_B):
         diagnostico = (
@@ -420,8 +551,16 @@ def _rodar(args: list[str], timeout_s: int, prompt: str):
         )
         raise TarefaEscalada(motivo="rate limit da conta (sem conta B disponível)", diagnostico=diagnostico)
 
+    pode_b, motivo_bloqueio_b = _pode_gastar("secundaria")
+    if not pode_b:
+        raise TarefaEscalada(
+            motivo=f"teto de 20% da sessão atingido (conta secundária): {motivo_bloqueio_b}",
+            diagnostico=f"Conta principal em rate-limit e conta secundária também no teto preventivo. Prompt (início): {prompt[:800]}",
+        )
+
     env_b = {**os.environ, "CLAUDE_CONFIG_DIR": CLAUDE_CONFIG_DIR_B}
     resultado_b = _rodar_uma_vez(args, timeout_s, prompt, env=env_b)
+    _registrar_custo_se_sucesso("secundaria", resultado_b)
     _notificar_troca_de_conta(_mensagem_erro(resultado))
 
     if resultado_b.returncode != 0 and _e_rate_limit(resultado_b):
