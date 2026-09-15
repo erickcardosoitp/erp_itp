@@ -19,6 +19,7 @@ de TIMEOUT_MAXIMO_S (5min) por chamada — se estourar ou se as 2 contas
 baterem rate-limit, a tarefa é escalada pra revisão humana via
 TarefaEscalada em vez de ficar presa ou continuar tentando sozinha.
 """
+import fcntl
 import json
 import os
 import re
@@ -319,28 +320,42 @@ def _notificar_troca_de_conta(motivo: str) -> None:
         pass
 
 
+GLOBAL_LOCK_FILE = os.path.expanduser("~/itp-stack/claude-cli-global.lock")
+
+
 def _rodar_uma_vez(args: list[str], timeout_s: int, prompt: str, env=None):
     """Roda o claude CLI uma unica vez, com um env opcional (pra apontar
     CLAUDE_CONFIG_DIR pra outra conta). Timeout tratado explicitamente:
     se estourar TIMEOUT_MAXIMO_S, levanta TarefaEscalada documentando tudo
-    que deu pra capturar antes do kill."""
-    try:
-        return subprocess.run(
-            args, capture_output=True, text=True, timeout=timeout_s, cwd=DIRETORIO_REPO, env=env,
-        )
-    except subprocess.TimeoutExpired as exc:
-        parcial_out = (exc.stdout or "")[:1000] if isinstance(exc.stdout, str) else ""
-        parcial_err = (exc.stderr or "")[:500] if isinstance(exc.stderr, str) else ""
-        diagnostico = (
-            f"[TIMEOUT {timeout_s}s] A tarefa foi interrompida por exceder o "
-            f"tempo maximo permitido e precisa de revisao humana.\n\n"
-            f"Prompt enviado (inicio):\n{prompt[:1500]}\n\n"
-            f"Stdout parcial capturado antes do kill:\n{parcial_out or '(nenhum)'}\n\n"
-            f"Stderr parcial capturado antes do kill:\n{parcial_err or '(nenhum)'}"
-        )
-        raise TarefaEscalada(
-            motivo=f"estourou o tempo maximo de {timeout_s}s", diagnostico=diagnostico,
-        ) from exc
+    que deu pra capturar antes do kill.
+
+    Trava global bloqueante (decisao 2026-09-15): nunca roda mais de um
+    processo `claude` ao mesmo tempo no servidor inteiro, seja coletor.py,
+    aplicador.py ou qualquer script futuro -- 2 chamadas simultaneas nao
+    aceleram nada (o teto de 5/rodada e' por execucao, nao por tempo) e so
+    aumentam o risco de estourar limite de conta mais rapido. Bloqueante
+    (LOCK_EX sem NB) de proposito: a segunda chamada espera a vez em vez
+    de falhar."""
+    os.makedirs(os.path.dirname(GLOBAL_LOCK_FILE), exist_ok=True)
+    with open(GLOBAL_LOCK_FILE, "w") as lock_fd:
+        fcntl.flock(lock_fd, fcntl.LOCK_EX)
+        try:
+            return subprocess.run(
+                args, capture_output=True, text=True, timeout=timeout_s, cwd=DIRETORIO_REPO, env=env,
+            )
+        except subprocess.TimeoutExpired as exc:
+            parcial_out = (exc.stdout or "")[:1000] if isinstance(exc.stdout, str) else ""
+            parcial_err = (exc.stderr or "")[:500] if isinstance(exc.stderr, str) else ""
+            diagnostico = (
+                f"[TIMEOUT {timeout_s}s] A tarefa foi interrompida por exceder o "
+                f"tempo maximo permitido e precisa de revisao humana.\n\n"
+                f"Prompt enviado (inicio):\n{prompt[:1500]}\n\n"
+                f"Stdout parcial capturado antes do kill:\n{parcial_out or '(nenhum)'}\n\n"
+                f"Stderr parcial capturado antes do kill:\n{parcial_err or '(nenhum)'}"
+            )
+            raise TarefaEscalada(
+                motivo=f"estourou o tempo maximo de {timeout_s}s", diagnostico=diagnostico,
+            ) from exc
 
 
 def _rodar(args: list[str], timeout_s: int, prompt: str):

@@ -169,6 +169,14 @@ def aplicar_matriz_reincidencia(item_fields: dict, categoria_do_item: str, qtd_n
     if status_atual != "resolvido":
         return {}  # só reincidência de item resolvido dispara essa lógica
 
+    # Item auto-resolvido por ser "sem risco" (ver _criar_item_novo) nunca
+    # reabre sozinho, mesmo em categoria de REABRE_SEMPRE -- reincidir não
+    # muda o fato de que a classificação já disse que não há ação/risco
+    # nenhum a avaliar. Sem essa checagem, ruído de DDL idempotente (banco)
+    # reabriria a cada reincidência, anulando a auto-resolução.
+    if item_fields.get("IAPodeResolver") == "sem risco":
+        return {}
+
     if categoria_do_item == "integracao":
         if qtd_no_lote > LIMITE_PICO_INTEGRACAO:
             return {"Status": "reaberto", "Fase": "detectado", "Reincidente": True}
@@ -373,8 +381,17 @@ def _criar_item_novo(
         ),
         "CorrecaoProposta": classificacao["correcao_proposta"],
         "Criticidade": classificacao["criticidade"],
-        "Fase": "diagnosticado",
-        "Status": "aberto",
+        # Auto-resolução sem passar por aprovação humana (decisão 2026-09-15,
+        # a pedido do analista): "sem risco" no vocabulário do prompt já
+        # significa "não há ação/risco nenhum a avaliar" (ruído, não é bug de
+        # verdade) -- exigir aprovação humana pra fechar algo que a própria
+        # classificação diz não precisar de ação nenhuma só represa a fila
+        # de revisão com itens que nunca deveriam ter chegado nela. Qualquer
+        # outro grau de risco (seguro/mediano/alto risco) continua indo pro
+        # fluxo normal de aprovação -- essa auto-resolução é só pro caso em
+        # que não existe ação nenhuma proposta.
+        "Fase": "resolvido" if classificacao["ia_pode_resolver"] == "sem risco" else "diagnosticado",
+        "Status": "resolvido" if classificacao["ia_pode_resolver"] == "sem risco" else "aberto",
         "IAPodeResolver": classificacao["ia_pode_resolver"],
         "Confianca": classificacao["confianca"],
         "CamadaInvestigacao": classificacao["camada_investigacao"],
