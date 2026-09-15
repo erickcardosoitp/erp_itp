@@ -396,6 +396,20 @@ def _criar_item_novo(
         "Confianca": classificacao["confianca"],
         "CamadaInvestigacao": classificacao["camada_investigacao"],
         "Reincidente": False,
+        # Pré-preenchido já na criação (decisão 2026-09-15, a pedido do
+        # analista): itens de criticidade baixa/média não disparam mais
+        # aprovação em tempo real (vão pro resumo diário), então a
+        # aprovação deles vira só trocar Status pra "aprovado" direto na
+        # lista do SharePoint -- sem isso, PromptExecucao ficaria vazio e
+        # o aplicador.py nunca teria o que executar (README, gap
+        # conhecido). Pro fluxo de alta/crítica isso continua sendo
+        # sobrescrito pelo PromptFinal do Power Automate se o aprovador
+        # digitar uma instrução adicional -- este valor aqui é só o
+        # padrão de partida.
+        "PromptExecucao": (
+            f"Diagnóstico: {classificacao['diagnostico']}\n\n"
+            f"Correção proposta: {classificacao['correcao_proposta']}"
+        ),
     })
     cod_cat = gerar_cod_cat(novo_item["id"])
     client.atualizar_item(novo_item["id"], {"CodCat": cod_cat})
