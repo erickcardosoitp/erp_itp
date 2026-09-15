@@ -226,6 +226,42 @@ def processar_grupo(
             "status": status_atualizado or "",
         }
 
+    # Camada 2.5 (decisão 2026-09-15, pós-incidente de represamento de
+    # backlog): ruído de DDL idempotente conhecido (relation/constraint/
+    # type/... already exists) nunca é bug real -- classifica direto, sem
+    # gastar chamada de IA nem entrar na fila do teto da Camada 3. Isso é
+    # exatamente o padrão que causou o backlog de ontem (494 variações de
+    # "already exists" de uma restauração de schema mal feita).
+    if normalizador.eh_ruido_ddl_idempotente(exemplos_brutos[0]):
+        log(f"  ruído de DDL idempotente (sem custo de IA): '{msg_normalizada[:80]}'")
+        classificacao = {
+            "eh_reincidencia_de": None,
+            "aplicacao": aplicacao_sugerida,
+            "categoria": "banco",
+            "tipo_erro": "Ruído de DDL idempotente (objeto já existe)",
+            "descricao_resumida": "Um script tentou recriar algo no banco que já existia — sem impacto real.",
+            "criticidade": "baixa",
+            "camada_investigacao": "schema_banco",
+            "confianca": 8,
+            "ia_pode_resolver": "sem risco",
+            "diagnostico": (
+                "Classificado automaticamente (sem chamada de IA) por regra "
+                "determinística: mensagem bate com padrão conhecido de erro de "
+                "DDL idempotente do Postgres (\"já existe\"), que só ocorre quando "
+                "um script de criação de schema roda de novo sobre algo que já "
+                "existe (falta de IF NOT EXISTS). Nunca representa perda de dados "
+                "ou bug de aplicação — confiança 8 porque o padrão é inequívoco, "
+                "não 9-10 porque nenhuma IA/humano confirmou o caso específico."
+            ),
+            "impacto_avaliado": "Não se aplica — não há correção de código a avaliar.",
+            "correcao_proposta": (
+                "Nenhuma ação necessária. Se esse padrão se repetir com frequência, "
+                "vale adicionar IF NOT EXISTS / IF EXISTS ao script que gera esse DDL."
+            ),
+        }
+        aplicacao_final = classificacao["aplicacao"]
+        return _criar_item_novo(client, aplicacao_final, msg_normalizada, exemplos_brutos, qtd, primeiro_timestamp, ultimo_timestamp, classificacao)
+
     # Camada 3: sem match exato — classifica e checa semelhança semântica.
     if len(contador_classificacoes) >= LIMITE_CLASSIFICACOES_POR_RODADA:
         log(f"  teto de {LIMITE_CLASSIFICACOES_POR_RODADA} classificações da rodada "
@@ -293,6 +329,26 @@ def processar_grupo(
             f"reencontrado — criando novo por segurança")
 
     # Item genuinamente novo.
+    return _criar_item_novo(
+        client, aplicacao_final, msg_normalizada, exemplos_brutos, qtd,
+        primeiro_timestamp, ultimo_timestamp, classificacao,
+    )
+
+
+def _criar_item_novo(
+    client: GraphClient,
+    aplicacao_final: str,
+    msg_normalizada: str,
+    exemplos_brutos: list[str],
+    qtd: int,
+    primeiro_timestamp: datetime,
+    ultimo_timestamp: datetime,
+    classificacao: dict,
+) -> dict:
+    """Cria o item novo na SharePoint List a partir de uma classificação já
+    pronta -- usada tanto pelo resultado real da IA (Camada 3) quanto pela
+    classificação determinística de ruído de DDL idempotente (Camada 2.5,
+    sem custo de IA)."""
     cod_erro = gerar_cod_erro()
     novo_item = client.criar_item({
         "Title": classificacao["tipo_erro"][:255],
