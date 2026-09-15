@@ -248,7 +248,7 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "Uma tarefa do coletor/aplicador de erros foi interrompida (timeout de 5min ou rate-limit da conta do Claude CLI) e precisa de revisão manual — ver ~/itp-stack/catalogo-erros-escalonamentos.jsonl na VM pro diagnóstico completo. Decisão 2026-09-15: sem failover automático de conta, então rate-limit agora escala em vez de trocar de conta sozinho."
+          summary: "Uma tarefa do coletor/aplicador de erros foi interrompida (timeout de 5min, ou rate-limit nas 2 contas do Claude CLI, ou teto preventivo de 20% da sessão atingido) e precisa de revisão manual — ver ~/itp-stack/catalogo-erros-escalonamentos.jsonl na VM pro diagnóstico completo. Decisão 2026-09-15 (revisada no mesmo dia): há failover automático entre 2 contas, mas com teto de 5 classificações/execuções por rodada e teto preventivo de 20% da sessão por conta — quando ambas as contas ficam indisponíveis (rate-limit ou teto), a tarefa escala em vez de ficar tentando sozinha."
         data:
           - refId: A
             datasourceUid: prometheus_itp
