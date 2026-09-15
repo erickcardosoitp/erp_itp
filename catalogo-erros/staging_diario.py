@@ -40,13 +40,23 @@ def _salvar(dados: dict) -> None:
     os.replace(tmp, STAGING_PATH)  # atômico, mesmo padrão do resto do projeto
 
 
-def buscar(aplicacao: str, msg_normalizada: str) -> dict | None:
-    return _ler().get(_chave(aplicacao, msg_normalizada))
+def buscar(chave_app: str, msg_normalizada: str) -> dict | None:
+    """chave_app deve ser sempre a aplicação SUGERIDA pelo container (ex:
+    config.CONTAINERS[...]['aplicacao_sugerida']), nunca a decidida pela IA
+    (classificacao['aplicacao']) -- achado real 2026-09-15: itp_postgres
+    sugere 'ITP', mas a IA pode classificar um erro como 'BD' (erro do
+    motor do banco em si). Se a chave de busca usasse o valor final da IA,
+    a mesma mensagem nunca seria reencontrada no staging (chave gravada
+    != chave buscada), reclassificando pela IA de novo a cada rodada até
+    esbarrar no teto de 5/rodada e ficar 'adiada' pra sempre. A aplicação
+    final da IA continua guardada dentro de classificacao['aplicacao'],
+    só não é usada como parte da chave."""
+    return _ler().get(_chave(chave_app, msg_normalizada))
 
 
-def atualizar_existente(aplicacao: str, msg_normalizada: str, qtd: int, ultimo_timestamp_iso: str, exemplo: str) -> None:
+def atualizar_existente(chave_app: str, msg_normalizada: str, qtd: int, ultimo_timestamp_iso: str, exemplo: str) -> None:
     dados = _ler()
-    chave = _chave(aplicacao, msg_normalizada)
+    chave = _chave(chave_app, msg_normalizada)
     entrada = dados.get(chave)
     if not entrada:
         return  # defesa: se sumiu entre o buscar() e aqui, não quebra
@@ -58,12 +68,14 @@ def atualizar_existente(aplicacao: str, msg_normalizada: str, qtd: int, ultimo_t
 
 
 def criar(
-    aplicacao: str, msg_normalizada: str, classificacao: dict, cod_erro: str,
+    chave_app: str, msg_normalizada: str, classificacao: dict, cod_erro: str,
     qtd: int, primeiro_timestamp_iso: str, ultimo_timestamp_iso: str, exemplo: str,
 ) -> None:
+    """chave_app: ver nota em buscar() -- sempre a aplicação sugerida pelo
+    container, não a decidida pela IA. A aplicação real pra criar o item
+    de verdade na consolidação vem de classificacao['aplicacao']."""
     dados = _ler()
-    dados[_chave(aplicacao, msg_normalizada)] = {
-        "aplicacao": aplicacao,
+    dados[_chave(chave_app, msg_normalizada)] = {
         "msg_normalizada": msg_normalizada,
         "classificacao": classificacao,
         "cod_erro": cod_erro,

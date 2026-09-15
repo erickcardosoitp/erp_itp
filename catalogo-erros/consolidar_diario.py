@@ -52,7 +52,7 @@ def main() -> None:
         ultimo_ts = datetime.fromisoformat(entrada["ultimo_timestamp"])
         _criar_item_novo(
             client,
-            entrada["aplicacao"],
+            classificacao["aplicacao"],
             entrada["msg_normalizada"],
             [entrada["exemplo"]],
             entrada["qtd"],
