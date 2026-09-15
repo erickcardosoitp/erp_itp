@@ -9,12 +9,15 @@ mesmo problema de algo já no shortlist. Nunca escolhe/executa ação
 etapa posterior, separada, só depois de aprovação humana.
 
 Política de conta e timeout (decisão 2026-09-15, pós-incidente de estouro
-de sessão): a automação roda sob uma única conta dedicada do Claude CLI,
-nunca compartilhada com uso interativo humano — sem failover automático
-para uma 2a conta (isso só espalhava o mesmo problema pra outra conta).
-Toda chamada tem teto de TIMEOUT_MAXIMO_S (5min); se estourar ou bater
-rate-limit, a tarefa é interrompida e escalada pra revisão humana via
-TarefaEscalada, nunca fica presa nem tenta contornar sozinha.
+de sessão — revisada no mesmo dia após 2 tentativas de conta única
+esbarrarem em contas que também têm uso interativo humano): a automação
+usa 2 contas em failover (primária + ~/.claude-account-b), aceitando o
+compartilhamento com uso humano, mas com dois limites que reduzem
+drasticamente o pior caso: teto de 5 classificações/execuções por rodada
+(coletor.py/aplicador.py, vale pro total das 2 contas somadas) e timeout
+de TIMEOUT_MAXIMO_S (5min) por chamada — se estourar ou se as 2 contas
+baterem rate-limit, a tarefa é escalada pra revisão humana via
+TarefaEscalada em vez de ficar presa ou continuar tentando sozinha.
 """
 import json
 import os
@@ -242,19 +245,88 @@ class TarefaEscalada(Exception):
         self.diagnostico = diagnostico
 
 
-def _rodar(args: list[str], timeout_s: int, prompt: str):
-    """Roda o claude CLI uma unica vez (sem failover de conta -- decisao
-    2026-09-15: a automacao usa uma unica conta dedicada, nunca compartilhada
-    com uso interativo; se essa conta bater rate-limit, e' pra parar e
-    escalar, nao trocar de conta sozinha).
+CLAUDE_CONFIG_DIR_B = os.path.expanduser("~/.claude-account-b")
 
-    Timeout tratado explicitamente: se estourar TIMEOUT_MAXIMO_S, levanta
-    TarefaEscalada com o que for possivel documentar (a excecao do Python
-    carrega stdout/stderr parciais capturados ate o kill do processo)."""
-    timeout_s = min(timeout_s, TIMEOUT_MAXIMO_S)
+_THROTTLE_FILE = os.path.expanduser("~/itp-stack/claude-failover-notificado.json")
+_THROTTLE_SEGUNDOS = 6 * 3600  # 1 email a cada 6h no maximo, nao a cada rodada (5 em 5 min)
+
+
+def _deve_notificar_agora() -> bool:
+    """Sem isso, cada rodada que bate rate-limit manda um email novo --
+    achado real 2026-09-14. So notifica de novo depois de _THROTTLE_SEGUNDOS."""
+    import time
+    agora = time.time()
     try:
-        resultado = subprocess.run(
-            args, capture_output=True, text=True, timeout=timeout_s, cwd=DIRETORIO_REPO,
+        ultimo = json.load(open(_THROTTLE_FILE, encoding="utf-8")).get("ultimo_epoch", 0)
+    except Exception:
+        ultimo = 0
+    if agora - ultimo < _THROTTLE_SEGUNDOS:
+        return False
+    try:
+        json.dump({"ultimo_epoch": agora}, open(_THROTTLE_FILE, "w", encoding="utf-8"))
+    except Exception:
+        pass
+    return True
+
+
+def _notificar_troca_de_conta(motivo: str) -> None:
+    """Avisa por email (Graph API do relatorio-grafana) quando a conta
+    principal do claude CLI bate o limite e o sistema troca pra conta B.
+    Falha silenciosamente se o email nao sair. Throttled -- ver acima."""
+    if not _deve_notificar_agora():
+        return
+    try:
+        import requests
+        env_path = os.path.expanduser("~/itp-stack/relatorio_grafana.env")
+        cfg = {}
+        with open(env_path, "r", encoding="utf-8") as f:
+            for linha in f:
+                linha = linha.strip()
+                if not linha or linha.startswith("#") or "=" not in linha:
+                    continue
+                k, v = linha.split("=", 1)
+                cfg[k.strip()] = v.strip()
+        token_resp = requests.post(
+            f"https://login.microsoftonline.com/{cfg['MS_TENANT_ID']}/oauth2/v2.0/token",
+            data={
+                "client_id": cfg["MS_CLIENT_ID"],
+                "client_secret": cfg["MS_CLIENT_SECRET"],
+                "scope": "https://graph.microsoft.com/.default",
+                "grant_type": "client_credentials",
+            },
+            timeout=30,
+        )
+        token_resp.raise_for_status()
+        token = token_resp.json()["access_token"]
+        mensagem = {
+            "message": {
+                "subject": "[Catalogo de Erros] Conta do Claude CLI trocada automaticamente",
+                "body": {
+                    "contentType": "HTML",
+                    "content": f"<p>A conta principal do Claude CLI bateu o limite de uso e o sistema trocou automaticamente para a conta secundaria.</p><p>Motivo: {motivo}</p>",
+                },
+                "toRecipients": [{"emailAddress": {"address": "monitoramento@institutotiapretinha.org"}}],
+            },
+            "saveToSentItems": "false",
+        }
+        requests.post(
+            "https://graph.microsoft.com/v1.0/users/projetos@institutotiapretinha.org/sendMail",
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            json=mensagem,
+            timeout=30,
+        )
+    except Exception:
+        pass
+
+
+def _rodar_uma_vez(args: list[str], timeout_s: int, prompt: str, env=None):
+    """Roda o claude CLI uma unica vez, com um env opcional (pra apontar
+    CLAUDE_CONFIG_DIR pra outra conta). Timeout tratado explicitamente:
+    se estourar TIMEOUT_MAXIMO_S, levanta TarefaEscalada documentando tudo
+    que deu pra capturar antes do kill."""
+    try:
+        return subprocess.run(
+            args, capture_output=True, text=True, timeout=timeout_s, cwd=DIRETORIO_REPO, env=env,
         )
     except subprocess.TimeoutExpired as exc:
         parcial_out = (exc.stdout or "")[:1000] if isinstance(exc.stdout, str) else ""
@@ -270,15 +342,47 @@ def _rodar(args: list[str], timeout_s: int, prompt: str):
             motivo=f"estourou o tempo maximo de {timeout_s}s", diagnostico=diagnostico,
         ) from exc
 
-    if resultado.returncode != 0 and _e_rate_limit(resultado):
-        diagnostico = (
-            f"[RATE LIMIT] A conta do Claude CLI bateu o limite de uso e a "
-            f"tarefa foi interrompida (sem failover de conta -- decisao "
-            f"2026-09-15). Detalhe: {_mensagem_erro(resultado)[:500]}"
-        )
-        raise TarefaEscalada(motivo="rate limit da conta", diagnostico=diagnostico)
 
-    return resultado
+def _rodar(args: list[str], timeout_s: int, prompt: str):
+    """Roda o claude CLI com failover entre 2 contas dedicadas (decisão
+    2026-09-15, revisada): nenhuma das duas é usada por humano em uso
+    interativo -- ver checklist. Se a conta primária bater rate-limit,
+    tenta a secundária (~/.claude-account-b) e notifica por email
+    (throttled). O teto de chamadas por rodada (coletor.py/aplicador.py)
+    já limita o total combinado das duas contas -- o failover só evita
+    que 1 conta rate-limitada pare a automação toda quando a outra ainda
+    tem cota livre.
+
+    Timeout de TIMEOUT_MAXIMO_S por tentativa (cada tentativa é uma
+    chamada separada, então no pior caso -- rate-limit seguido de timeout
+    na conta B -- uma única classificação pode levar até 2x isso)."""
+    timeout_s = min(timeout_s, TIMEOUT_MAXIMO_S)
+
+    resultado = _rodar_uma_vez(args, timeout_s, prompt)
+    if resultado.returncode == 0 or not _e_rate_limit(resultado):
+        return resultado
+
+    if not os.path.isdir(CLAUDE_CONFIG_DIR_B):
+        diagnostico = (
+            f"[RATE LIMIT] A conta principal bateu o limite de uso e não há "
+            f"conta secundária configurada ({CLAUDE_CONFIG_DIR_B} não existe). "
+            f"Detalhe: {_mensagem_erro(resultado)[:500]}"
+        )
+        raise TarefaEscalada(motivo="rate limit da conta (sem conta B disponível)", diagnostico=diagnostico)
+
+    env_b = {**os.environ, "CLAUDE_CONFIG_DIR": CLAUDE_CONFIG_DIR_B}
+    resultado_b = _rodar_uma_vez(args, timeout_s, prompt, env=env_b)
+    _notificar_troca_de_conta(_mensagem_erro(resultado))
+
+    if resultado_b.returncode != 0 and _e_rate_limit(resultado_b):
+        diagnostico = (
+            f"[RATE LIMIT] Tanto a conta principal quanto a secundária bateram "
+            f"o limite de uso. Detalhe (principal): {_mensagem_erro(resultado)[:300]} "
+            f"| Detalhe (secundária): {_mensagem_erro(resultado_b)[:300]}"
+        )
+        raise TarefaEscalada(motivo="rate limit em ambas as contas", diagnostico=diagnostico)
+
+    return resultado_b
 
 
 def classificar(
