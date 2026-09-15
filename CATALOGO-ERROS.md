@@ -4,7 +4,8 @@
 > `vm-itp-prod`. Para o design técnico detalhado e o histórico de decisões,
 > ver `docs/superpowers/specs/2026-09-09-catalogo-erros-vm-design.md`
 > (v4). Este arquivo é o resumo executivo + estado atual.
-> Última atualização: 2026-09-10.
+> Última atualização: 2026-09-15 (ver seção 12 — incidente de estouro de
+> sessão e evolução de arquitetura do mesmo dia).
 
 ---
 
@@ -437,3 +438,208 @@ manual do JSONL ou da métrica continua possível a qualquer momento.
 (Alerting → Alert rules → New), não por arquivo de provisionamento —
 esse Grafana especificamente não reconcilia bem o campo `noDataState`
 via arquivo depois que a regra já existe uma vez.
+
+### 11.2 Checklist de pendências e verificações — 2026-09-15
+
+**Pendente de decisão/ação do analista:**
+
+- [ ] **CAT-0089, CAT-0090, CAT-0180** (bugs reais de validação de tenant
+  na APRXM) ficaram `Status=aprovado` mas travados pelo teto de 20% da
+  sessão — decisão explícita foi revisar manualmente na lista em vez de
+  destravar o teto. Ainda aguardando essa revisão.
+- [ ] **CAT-0179** ficou com diagnóstico desatualizado/errado — foi
+  classificado antes da correção do acesso ao repositório APRXM
+  (`--add-dir`, ver seção 12.3), com o repositório errado, e marcado
+  `resolvido`/`sem risco` incorretamente. A tentativa de reclassificar
+  de novo bateu timeout e nunca foi refeita. Precisa reclassificação
+  manual.
+- [ ] **Achado de segurança represado** (`ERR-14368ed7c8`, criticidade
+  média): porta 5432 do `itp_postgres` exposta sem restrição de IP
+  (`5432:5432` em vez de `127.0.0.1:5432:5432`, diferente dos outros
+  serviços do mesmo `docker-compose.yml`). Vai aparecer no resumo diário
+  de consolidação — decisão de hardening de infra pendente.
+- [ ] **2 commits reais em produção no `aprxm_sys`** (`6d59459`,
+  `2ca1a11`, ver seção 12.2) foram aplicados durante o incidente do
+  volume de aprovações, com aprovação feita sob pressão (não deliberada)
+  — decisão foi confiar no diagnóstico sem revisão formal de código.
+  Registrado que segue sem revisão humana de código, só validação de
+  saúde do container (`aprxm_backend` healthy).
+
+**Precisa verificação (ainda não confirmado ao vivo):**
+
+- [ ] **Consolidação diária das 20h BRT (23h UTC)** — `consolidar_diario.py`
+  nunca rodou de verdade em produção ainda (só testado isoladamente).
+  Primeira execução real será hoje à noite.
+- [ ] **Comportamento de falha da consolidação** — se `consolidar_diario.py`
+  quebrar no meio da execução (ex: falha de rede no Graph API), não há
+  `TarefaEscalada`/escalonamento associado a esse script — falha ficaria
+  silenciosa, visível só no log
+  (`~/itp-stack/catalogo-erros-consolidacao.log`). Não implementado.
+- [ ] **Alerta `catalogo_erros_teto_atingido`** (Grafana, separado do que
+  foi excluído em 11.1) — não verificado se tem o mesmo drift de
+  `noDataState`.
+
+**Conhecido, fora de escopo por decisão explícita:**
+
+- `PROMPT_EXECUCAO_WRAPPER` (`claude_client.py`) menciona só "deploy.sh
+  do erp_itp" — não generalizado pra APRXM (que usa GitHub Actions, não
+  `deploy.sh`). A IA se adaptou sozinha na prática (ver commits da seção
+  12.2), mas o texto do prompt não reflete isso.
+- Camada 2 real (busca exata no SharePoint, `buscar_por_assinatura`)
+  usa `aplicacao_sugerida` como parte da chave de busca — mesmo padrão
+  de risco do bug corrigido no staging (seção 12.4), mas essa parte já
+  era assim desde antes de 2026-09-15. Não é regressão de hoje, não foi
+  alterada, mas é uma fragilidade estrutural que existe.
+
+---
+
+## 12. Incidente de 2026-09-15 e evolução de arquitetura
+
+Dia de trabalho único que começou como resposta a incidente (as duas
+contas do Claude CLI usadas pela automação da VM estouraram a sessão de
+5h) e terminou em várias mudanças estruturais de arquitetura, feitas com
+o pipeline pausado e cada mudança validada antes de religar. Resumo
+cronológico das decisões e correções reais (PRs #48 a #62 do `erp_itp`).
+
+### 12.1 Causa raiz do estouro de sessão e contenção
+
+- **Causa disparadora**: nenhum bug de código — as duas contas do Claude
+  CLI usadas pela automação (`erickcardoso@...`, `dev.itp@...`) também
+  são usadas por humanos em sessões interativas normais, e nunca houve
+  uma conta dedicada só pra automação. Compartilhamento de conta com uso
+  humano é um risco aceito, não eliminado.
+- **Contenção implementada em `claude_client.py`**:
+  - `TIMEOUT_MAXIMO_S = 300` — nenhuma chamada ao Claude CLI roda mais
+    que 5min; ao estourar, levanta `TarefaEscalada` com diagnóstico
+    completo em vez de ficar presa.
+  - Failover entre conta principal e secundária (`~/.claude-account-b`)
+    em rate-limit real (HTTP 429), com notificação por email throttled
+    (1/6h).
+  - Trava global bloqueante (`flock`) em volta de toda chamada real ao
+    `claude -p` — nunca roda mais de um processo `claude` ao mesmo tempo
+    no servidor inteiro (`coletor.py`, `aplicador.py` ou script futuro
+    disputavam a mesma conta sem essa trava).
+  - **Teto preventivo de 20% da sessão por conta**, autocalibrado: como
+    o Claude Code CLI não expõe % de uso da sessão via API (só o sinal
+    binário de 429), o sistema usa o `total_cost_usd` acumulado no
+    momento de cada rate-limit real como "teto calibrado" daquela conta,
+    e bloqueia preventivamente (sem gastar nada) ao passar de 20% disso
+    na janela de 5h atual. Decisão explícita do analista de manter esse
+    teto mesmo sabendo que fica restritivo na prática (a 1ª calibração
+    do dia saiu em ~$0,78, então 20% é só ~$0,155 — menos que 1
+    classificação típica) — ver seção 11.2.
+- `registrar_escalonamento()` (novo, compartilhado entre coletor e
+  aplicador): grava todo evento de escalada em
+  `~/itp-stack/catalogo-erros-escalonamentos.jsonl` + métrica Prometheus
+  `catalogo_erros_escalonamentos_total`.
+
+### 12.2 Falha no Fluxo A do Power Automate (aprovação)
+
+Três bugs reais achados e corrigidos no fluxo `915f14b9-...` (o mesmo
+"Fluxo A" da seção 5.1), todos do mesmo padrão: uma ação lia
+`outputs('Atualizar_item')?['body/CAMPO']` — o corpo de resposta de uma
+ação de **atualização** (`PatchItem`), que o conector do SharePoint
+sempre devolve vazio — em vez de `triggerBody()?['CAMPO']` (o item que
+disparou o fluxo, sempre populado):
+
+1. **Condição** (`greater(Confianca, 6)`) quebrava com `Null` — corrigido
+   pra ler `triggerBody()?['Confianca']`.
+2. **`Atualizar item 2`** (ação final, seta `Status=aprovado`) quebrava
+   porque o parâmetro `id` vinha do mesmo padrão errado — corrigido pra
+   `triggerBody()?['ID']`.
+3. **`ResumoNotificacao`** (o corpo do email/card de aprovação) chegava
+   sempre vazio pelo mesmo motivo em todos os campos — corrigido pra
+   `triggerBody()?[...]` em cada um.
+4. **Condição de Disparo do gatilho** ajustada (pelo analista, na UI) pra
+   exigir `Criticidade` em alta/crítica além de `Fase` — ver 12.3.
+
+Durante o pico de reclassificações do backlog (ver 12.4), o volume de
+aprovações geradas em rajada (itens legítimos e distintos, não um loop
+de re-disparo — hipótese de loop investigada e descartada) levou o
+analista a aprovar vários itens rapidamente. Duas dessas aprovações
+resultaram em **execução real de correção em produção no `aprxm_sys`**
+(commits `6d59459` e `2ca1a11`, `aprxm_backend` redeployado via GitHub
+Actions, container confirmado saudável) — decisão do analista foi
+confiar no diagnóstico em vez de reverter, ver 11.2.
+
+### 12.3 Acesso da IA ao código da APRXM
+
+Achado: o container `itp_postgres` hospeda os bancos **das duas**
+aplicações (`erp_itp_db` e `aprxm_db`) no mesmo processo Postgres, mas
+`claude_client.py` restringia o diretório de trabalho da investigação só
+a `~/erp_itp` — todo erro de origem APRXM (ex: triggers de integridade
+referencial `packages`/`residents`/`association_id`, confirmadas reais
+no banco) era investigado sem acesso ao código certo, virando "sem
+origem localizada no código do ERP ITP" por falta de onde procurar.
+
+Primeira tentativa de correção (symlink `~/itp-stack/catalogo-erros-workspace/{erp_itp,aprxm_sys}`
+como diretório de trabalho) **não funcionou**: o Claude Code CLI recusa
+symlink que resolve pra fora do diretório de trabalho permitido
+(sandbox). Corrigido de verdade com a flag oficial `--add-dir
+~/aprxm_sys`, mantendo `cwd` em `~/erp_itp` como sempre foi. Prompt
+atualizado pra IA saber que os dois repositórios existem e escolher
+pela origem real do erro, não pelo container de onde veio.
+
+Backlog de 56 itens classificados antes dessa correção foi reprocessado:
+48 confirmados ruído de DDL (fechados de graça, sem IA), 2 sobre
+`pg_session_jwt` (causa já conhecida, resolvidos manualmente), 6
+triggers reais da APRXM reclassificados com o acesso correto — um deles
+(CAT-0179) ficou pendente por timeout na reclassificação, ver 11.2.
+
+### 12.4 Roteamento por criticidade e consolidação diária
+
+A pedido do analista, pra reduzir volume de notificação em tempo real e
+dar mais controle de como erros chegam à IA e ao analista — implementa
+o "Fluxo B" já previsto no design original (seção 2/10) e nunca
+construído, mas via código em vez de Power Automate:
+
+- **`coletor.py`**: só criticidade alta/crítica cria item na hora no
+  SharePoint (dispara aprovação em tempo real, como sempre foi).
+  Baixa/média (incluindo o ruído de DDL da Camada 2.5) vai pro **staging
+  diário** (`staging_diario.py`, JSON local na VM) em vez do SharePoint.
+- **Por que precisa de staging e não só o Parquet**: sem uma "memória do
+  dia" fora do SharePoint, o mesmo erro baixo/médio recorrendo várias
+  vezes no mesmo dia seria reclassificado pela IA a cada ocorrência (a
+  Camada 2 real só vê o que já está no SharePoint).
+- **Bug real achado e corrigido no mesmo dia**: a chave de dedup do
+  staging usava a aplicação **decidida pela IA** (`classificacao['aplicacao']`)
+  em vez da **sugerida pelo container** (`aplicacao_sugerida`) — quando
+  as duas divergem (ex: um erro do `itp_postgres` que a IA classifica
+  como `Aplicacao=BD`), a mesma mensagem nunca era reencontrada no
+  staging, caía de novo na Camada 3 a cada rodada, e ficava
+  perpetuamente adiada assim que o teto de 5/rodada fosse atingido por
+  outros grupos — sem gerar linha no Parquet, sem crescer a contagem
+  real, silenciosamente. Corrigido: a chave é sempre `aplicacao_sugerida`;
+  a aplicação real da IA fica só dentro da classificação guardada,
+  usada na hora de criar o item de verdade.
+- **`consolidar_diario.py`** (novo, substitui a ideia original de
+  `relatorio_diario.py` de mais cedo no mesmo dia, que só lia itens já
+  existentes): roda 1x/dia às 23h UTC (20h BRT), cria de verdade na
+  SharePoint List todos os itens represados no staging, zera o staging,
+  e manda **1 único email-resumo terso** com a contagem por criticidade
+  (ex: "48 erro(s) de criticidade baixa") + link da lista — sem detalhar
+  item por item.
+- **Aprovação de itens represados**: `PromptExecucao` já sai
+  pré-preenchido (`Diagnostico` + `CorrecaoProposta`) na criação do
+  item, mesmo pros represados — aprovar um item da consolidação diária é
+  só trocar `Status` pra `aprovado` direto na lista, sem depender de
+  nenhum fluxo do Power Automate pra esse caminho.
+- **Bônus**: como baixa/média nunca chega a existir no SharePoint em
+  tempo real, o fluxo do Power Automate simplesmente nunca é acionado
+  pra esses itens — mesmo quando a consolidação noturna os cria em lote,
+  a Condição de Disparo (12.2, item 4) barra qualquer aprovação
+  disparada por esse lote.
+
+### 12.5 Outras correções do mesmo dia
+
+- **Hotfix de compatibilidade Python 3.9**: `claude_client.py` usou
+  anotação de tipo `float | None` (PEP 604, Python 3.10+) sem `from
+  __future__ import annotations` — quebrava a importação do módulo em
+  produção (VM roda Python 3.9). Corrigido; validação de mudanças neste
+  diretório passou a incluir importar o módulo de verdade no Python 3.9
+  da VM antes de considerar deployado, não só `ast.parse` local (que não
+  pega esse tipo de incompatibilidade de versão).
+- **Backfill de `Confianca`**: investigado como possível causa raiz de
+  um bug no Fluxo A — descartado, os 430 itens da lista já tinham esse
+  campo preenchido. A causa real foi a encadeada em 12.2.
+- **Alerta de escalonamento excluído do Grafana** — ver seção 11.1.
