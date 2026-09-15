@@ -70,3 +70,5 @@ itp_frontend/build/
 .env.vercel*
 .vercel
 .env*.local
+__pycache__/
+*.pyc
