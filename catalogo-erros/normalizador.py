@@ -88,6 +88,26 @@ def eh_nivel_nao_erro(linha: str) -> bool:
     return bool(_NIVEL_LOGFMT_NAO_ERRO.search(linha))
 
 
+# Camada 2.5 (decisão 2026-09-15, pós-incidente de represamento de backlog):
+# ruído de DDL idempotente do Postgres -- "já existe" nunca é bug real, é
+# sempre sintoma de um script de criação de schema rodando de novo sobre um
+# schema que já tem aquele objeto (idempotência mal feita, sem IF NOT
+# EXISTS). Restrito a "already exists"/"multiple primary keys ... not
+# allowed", que são inequivocamente seguros -- "does not exist" fica de
+# fora de propósito, porque isso PODE ser um bug real (algo que deveria
+# existir e não existe), não dá pra descartar sem investigar.
+_DDL_RUIDO_IDEMPOTENTE = re.compile(
+    r'\b(relation|constraint|type|schema|extension|index|trigger|sequence|'
+    r'view|function|column|table|role|database)\b[^\n]{0,120}already exists'
+    r'|multiple primary keys for table [^\n]{0,80} are not allowed',
+    re.IGNORECASE,
+)
+
+
+def eh_ruido_ddl_idempotente(linha: str) -> bool:
+    return bool(_DDL_RUIDO_IDEMPOTENTE.search(linha))
+
+
 def extrair_timestamp(linha: str):
     """Tenta achar um timestamp real na linha (formato Postgres/ISO, ex:
     '2026-09-09 11:27:07.759 UTC'). Devolve datetime UTC, ou None se a
