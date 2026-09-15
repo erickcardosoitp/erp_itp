@@ -19,12 +19,14 @@ de TIMEOUT_MAXIMO_S (5min) por chamada — se estourar ou se as 2 contas
 baterem rate-limit, a tarefa é escalada pra revisão humana via
 TarefaEscalada em vez de ficar presa ou continuar tentando sozinha.
 """
+from __future__ import annotations  # PEP 604 (X | None) -- VM roda Python 3.9
+
 import fcntl
 import json
 import os
 import re
 import subprocess
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 ESCALONAMENTOS_LOG = os.path.expanduser("~/itp-stack/catalogo-erros-escalonamentos.jsonl")
 METRICA_ESCALONAMENTOS_PATH = os.path.expanduser(
