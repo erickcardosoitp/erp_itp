@@ -81,11 +81,17 @@ def registrar_escalonamento(origem: str, contexto: str, motivo: str, diagnostico
 # (ex: triggers de integridade referencial de packages/residents/
 # association_id) -- todo item assim virava "sem origem localizada no
 # código do ERP ITP" por não ter onde procurar, não porque não era bug de
-# verdade. Correção: cwd aponta pra um workspace com symlink pros dois
-# repositórios (nunca pra ~ /itp-stack inteiro, que tem credenciais/.env) --
-# a IA decide qual dos dois é relevante pelo campo "aplicacao" que ela
-# mesma atribui.
-DIRETORIO_REPO = os.path.expanduser("~/itp-stack/catalogo-erros-workspace")
+# verdade.
+#
+# Primeira tentativa de correção (workspace com symlink pros dois repos)
+# NÃO funcionou -- achado real na mesma investigação: o Claude Code CLI
+# recusa symlink que resolve pra fora do diretório de trabalho permitido
+# (proteção de sandbox contra escape de diretório), então a IA continuava
+# sem conseguir ler aprxm_sys mesmo com o symlink no lugar. Correção real:
+# manter cwd em ~/erp_itp e liberar ~/aprxm_sys via --add-dir (flag oficial
+# do CLI pra isso, ver classificar()) -- sem symlink, sem mexer no cwd.
+DIRETORIO_REPO = os.path.expanduser("~/erp_itp")
+DIRETORIO_APRXM = os.path.expanduser("~/aprxm_sys")
 
 CATEGORIAS_VALIDAS = {"banco", "código", "infra", "security", "integracao", "usuario", "terceiros"}
 CRITICIDADES_VALIDAS = {"baixa", "media", "alta", "critica"}
@@ -99,15 +105,17 @@ sem markdown, sem texto antes ou depois.
 
 ## Repositórios disponíveis pra investigação
 
-Você tem acesso de leitura a DOIS repositórios diferentes, como subpastas \
-do seu diretório atual: `erp_itp/` (código do sistema ITP) e `aprxm_sys/` \
-(código do sistema APRXM). O container `itp_postgres` hospeda os bancos \
-DAS DUAS aplicações no mesmo processo Postgres (databases `erp_itp_db` e \
-`aprxm_db`), então um erro vindo desse container pode pertencer a qualquer \
-um dos dois — nunca assuma que é do ERP ITP só porque veio desse container. \
-Investigue primeiro qual repositório tem o código/tabela/trigger relacionado \
-à mensagem de erro (ex: nomes de tabela, coluna, endpoint) antes de escolher \
-o campo "aplicacao" da resposta.
+Você tem acesso de leitura a DOIS repositórios diferentes: o diretório \
+atual (código do sistema ITP, repositório erp_itp) e adicionalmente \
+`~/aprxm_sys` (código do sistema APRXM, liberado via --add-dir — use \
+caminho absoluto pra acessá-lo, ex: `ls ~/aprxm_sys`). O container \
+`itp_postgres` hospeda os bancos DAS DUAS aplicações no mesmo processo \
+Postgres (databases `erp_itp_db` e `aprxm_db`), então um erro vindo desse \
+container pode pertencer a qualquer um dos dois — nunca assuma que é do \
+ERP ITP só porque veio desse container. Investigue primeiro qual \
+repositório tem o código/tabela/trigger relacionado à mensagem de erro \
+(ex: nomes de tabela, coluna, endpoint) antes de escolher o campo \
+"aplicacao" da resposta.
 
 ## Contexto do erro
 
@@ -147,9 +155,10 @@ porquê) — isso é validado depois por revisão humana.
 
 ## Análise de impacto — obrigatória antes de propor a correção
 
-Você está rodando com acesso de leitura aos repositórios inteiros (não só à \
-mensagem de erro) — use o de `erp_itp/` ou `aprxm_sys/` conforme a origem \
-real do erro (ver seção acima). Antes de finalizar "correcao_proposta":
+Você está rodando com acesso de leitura aos dois repositórios inteiros (não \
+só à mensagem de erro) — use o diretório atual (erp_itp) ou `~/aprxm_sys` \
+conforme a origem real do erro (ver seção acima). Antes de finalizar \
+"correcao_proposta":
 
 1. Leia o código-fonte real relacionado ao erro — não infira só pela \
 mensagem de log. Abra o arquivo/função/entidade que o erro aponta.
@@ -442,7 +451,8 @@ def classificar(
     )
 
     resultado = _rodar(
-        ["claude", "-p", prompt, "--output-format", "json"], timeout_s=120, prompt=prompt,
+        ["claude", "-p", prompt, "--output-format", "json", "--add-dir", DIRETORIO_APRXM],
+        timeout_s=120, prompt=prompt,
     )
     if resultado.returncode != 0:
         raise RuntimeError(f"claude CLI falhou: {_mensagem_erro(resultado)[:500]}")
