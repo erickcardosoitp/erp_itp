@@ -239,3 +239,34 @@ groups:
                   reducer: { type: last, params: [] }
               refId: C
 
+      - uid: itp-alerta-catalogo-escalonamento
+        title: Catálogo de erros — tarefa escalada pra revisão humana
+        condition: C
+        for: 0m
+        no_data_state: OK
+        exec_err_state: Alerting
+        labels:
+          severity: warning
+        annotations:
+          summary: "Uma tarefa do coletor/aplicador de erros foi interrompida (timeout de 5min, ou rate-limit nas 2 contas do Claude CLI, ou teto preventivo de 20% da sessão atingido) e precisa de revisão manual — ver ~/itp-stack/catalogo-erros-escalonamentos.jsonl na VM pro diagnóstico completo. Decisão 2026-09-15 (revisada no mesmo dia): há failover automático entre 2 contas, mas com teto de 5 classificações/execuções por rodada e teto preventivo de 20% da sessão por conta — quando ambas as contas ficam indisponíveis (rate-limit ou teto), a tarefa escala em vez de ficar tentando sozinha."
+        data:
+          - refId: A
+            datasourceUid: prometheus_itp
+            relativeTimeRange: { from: 900, to: 0 }
+            model:
+              editorMode: code
+              expr: increase(catalogo_erros_escalonamentos_total[15m])
+              instant: true
+              range: false
+              refId: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+                  operator: { type: and }
+                  query: { params: [C] }
+                  reducer: { type: last, params: [] }
+              refId: C
