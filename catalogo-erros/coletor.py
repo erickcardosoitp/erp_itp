@@ -26,7 +26,7 @@ import config
 import custos
 import normalizador
 import parquet_writer
-from claude_client import classificar
+from claude_client import TarefaEscalada, classificar, registrar_escalonamento
 from graph_client import GraphClient
 
 CAMPOS_SHORTLIST = ["CodErro", "TipoErro", "Assinatura", "Categoria"]
@@ -39,6 +39,35 @@ CAMPOS_SHORTLIST = ["CodErro", "TipoErro", "Assinatura", "Categoria"]
 # reabria um item já resolvido).
 REABRE_SEMPRE = {"banco", "código", "infra", "security", "terceiros"}
 LIMITE_PICO_INTEGRACAO = 5  # ocorrências no mesmo lote pra considerar "pico"
+
+# Circuit breaker (decisão 2026-09-15, pós-incidente de estouro de sessão):
+# no máximo N classificações de IA por execução do coletor. O que sobrar
+# fica pendente pro próximo lote (o state daquele container/tarefa não
+# avança), em vez de drenar o backlog inteiro de uma vez -- foi exatamente
+# isso que consumiu ~92% da janela de sessão de 5h em minutos no incidente.
+LIMITE_CLASSIFICACOES_POR_RODADA = 5
+
+METRICA_TETO_PATH = os.path.expanduser("~/itp-stack/textfile-metrics/catalogo-erros-teto.prom")
+
+
+def _escrever_metrica_teto(atingido: bool) -> None:
+    """Flag pro Grafana: 1 se esta rodada bateu no teto de classificações
+    (sinal de backlog se acumulando, mesmo sem nenhum erro/exceção) --
+    complementa o heartbeat existente (que só detecta ausência de execução,
+    não uma execução "viva" mas sempre no limite)."""
+    try:
+        os.makedirs(os.path.dirname(METRICA_TETO_PATH), exist_ok=True)
+        tmp = METRICA_TETO_PATH + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write(
+                "# HELP catalogo_erros_teto_atingido 1 se a última execução do "
+                "coletor bateu no teto de classificações por rodada.\n"
+                "# TYPE catalogo_erros_teto_atingido gauge\n"
+                f"catalogo_erros_teto_atingido {1 if atingido else 0}\n"
+            )
+        os.replace(tmp, METRICA_TETO_PATH)
+    except OSError:
+        pass
 
 
 def log(msg: str) -> None:
@@ -152,6 +181,9 @@ def aplicar_matriz_reincidencia(item_fields: dict, categoria_do_item: str, qtd_n
     return {}
 
 
+GRUPO_ADIADO = None  # sentinela: teto da rodada atingido ou tarefa escalada -- vai pro próximo lote
+
+
 def processar_grupo(
     client: GraphClient,
     container: str,
@@ -161,7 +193,8 @@ def processar_grupo(
     primeiro_timestamp: datetime,
     ultimo_timestamp: datetime,
     custo_acumulado: list,
-) -> dict:
+    contador_classificacoes: list,
+) -> dict | None:
     """Processa um grupo (mesma assinatura normalizada) visto neste lote.
     Devolve os campos usados pra gravar as linhas do Parquet — inclui
     Categoria/TipoErro/Criticidade/Status reais, não só CodErro/Aplicacao
@@ -194,14 +227,31 @@ def processar_grupo(
         }
 
     # Camada 3: sem match exato — classifica e checa semelhança semântica.
+    if len(contador_classificacoes) >= LIMITE_CLASSIFICACOES_POR_RODADA:
+        log(f"  teto de {LIMITE_CLASSIFICACOES_POR_RODADA} classificações da rodada "
+            f"atingido — adiando '{msg_normalizada[:80]}' pro próximo lote")
+        return GRUPO_ADIADO
+
     shortlist = client.listar_shortlist(aplicacao_sugerida)
-    classificacao = classificar(
-        container=container,
-        aplicacao_sugerida=aplicacao_sugerida,
-        mensagem_normalizada=msg_normalizada,
-        mensagem_bruta=exemplos_brutos[0],
-        shortlist=shortlist,
-    )
+    contador_classificacoes.append(1)
+    try:
+        classificacao = classificar(
+            container=container,
+            aplicacao_sugerida=aplicacao_sugerida,
+            mensagem_normalizada=msg_normalizada,
+            mensagem_bruta=exemplos_brutos[0],
+            shortlist=shortlist,
+        )
+    except TarefaEscalada as exc:
+        log(f"  ESCALADO: '{msg_normalizada[:80]}' — {exc.motivo}")
+        registrar_escalonamento("coletor", msg_normalizada, exc.motivo, exc.diagnostico)
+        if "rate limit" in exc.motivo:
+            # Se bateu rate-limit, todas as próximas chamadas desta rodada
+            # vão falhar do mesmo jeito -- para de tentar classificar coisa
+            # nova agora em vez de bater na parede repetidas vezes.
+            contador_classificacoes.extend([1] * LIMITE_CLASSIFICACOES_POR_RODADA)
+        return GRUPO_ADIADO
+
     if classificacao.get("_custo_usd"):
         custo_acumulado.append(classificacao["_custo_usd"])
         custos.registrar("coletor", classificacao["_custo_usd"])
@@ -316,6 +366,7 @@ def main() -> None:
     state = carregar_state()
     agora = parquet_writer.agora_utc()
     custo_acumulado: list = []
+    contador_classificacoes: list = []
     linhas_parquet: list[dict] = []
 
     for container_cfg in config.CONTAINERS:
@@ -353,6 +404,7 @@ def main() -> None:
             ts = normalizador.extrair_timestamp(linha) or agora
             timestamps_por_grupo[assinatura].append(ts)
 
+        houve_adiamento = False
         for msg_normalizada, exemplos in grupos.items():
             ts_grupo = sorted(timestamps_por_grupo[msg_normalizada])
             primeiro_ts, ultimo_ts = ts_grupo[0], ts_grupo[-1]
@@ -374,7 +426,14 @@ def main() -> None:
                 primeiro_timestamp=primeiro_ts,
                 ultimo_timestamp=ultimo_ts,
                 custo_acumulado=custo_acumulado,
+                contador_classificacoes=contador_classificacoes,
             )
+            if resultado is GRUPO_ADIADO:
+                # Fica pendente pro próximo lote -- não avança o state deste
+                # container, senão essas linhas de log somem sem nunca terem
+                # sido processadas (docker logs --since não devolve o passado).
+                houve_adiamento = True
+                continue
             for ts_ocorrencia in ts_grupo:
                 linhas_parquet.append({
                     "CodErro": resultado["cod_erro"],
@@ -388,7 +447,10 @@ def main() -> None:
                     "FoiAutoCorrigido": False,
                 })
 
-        state[nome] = agora.isoformat()
+        if not houve_adiamento:
+            state[nome] = agora.isoformat()
+        else:
+            log(f"  {nome}: state não avançado (há grupo(s) adiado(s) pro próximo lote)")
 
     # Fonte 2: falhas de cron/tarefa (tarefas-timing/*.jsonl) -- mesmo
     # pipeline de classificacao+SharePoint dos containers, achado real
@@ -411,6 +473,7 @@ def main() -> None:
             f"duracao_s={f.get('duracao_s')}\n--- trecho do log ---\n{f['_trecho_log'][-1500:]}"
             for f in falhas
         ]
+        adiado = False
         if exemplos:
             timestamps = sorted(datetime.fromisoformat(f["inicio"]) for f in falhas)
             resultado = processar_grupo(
@@ -422,20 +485,27 @@ def main() -> None:
                 primeiro_timestamp=timestamps[0],
                 ultimo_timestamp=timestamps[-1],
                 custo_acumulado=custo_acumulado,
+                contador_classificacoes=contador_classificacoes,
             )
-            for ts_ocorrencia in timestamps:
-                linhas_parquet.append({
-                    "CodErro": resultado["cod_erro"],
-                    "Aplicacao": resultado["aplicacao"],
-                    "Categoria": resultado["categoria"],
-                    "TipoErro": resultado["tipo_erro"],
-                    "MensagemNormalizada": msg_normalizada,
-                    "Criticidade": resultado["criticidade"],
-                    "StatusNoMomento": resultado["status"],
-                    "TimestampOcorrencia": ts_ocorrencia,
-                    "FoiAutoCorrigido": False,
-                })
-        state[state_key] = agora.isoformat()
+            if resultado is GRUPO_ADIADO:
+                adiado = True
+            else:
+                for ts_ocorrencia in timestamps:
+                    linhas_parquet.append({
+                        "CodErro": resultado["cod_erro"],
+                        "Aplicacao": resultado["aplicacao"],
+                        "Categoria": resultado["categoria"],
+                        "TipoErro": resultado["tipo_erro"],
+                        "MensagemNormalizada": msg_normalizada,
+                        "Criticidade": resultado["criticidade"],
+                        "StatusNoMomento": resultado["status"],
+                        "TimestampOcorrencia": ts_ocorrencia,
+                        "FoiAutoCorrigido": False,
+                    })
+        if not adiado:
+            state[state_key] = agora.isoformat()
+        else:
+            log(f"  tarefa {task_id}: state não avançado (adiado pro próximo lote)")
 
     if linhas_parquet:
         arquivos = parquet_writer.agrupar_e_gravar(config.PARQUET_BASE_DIR, linhas_parquet)
@@ -446,6 +516,10 @@ def main() -> None:
     if custo_acumulado:
         log(f"Custo estimado de IA nesta execução: ${sum(custo_acumulado):.4f} "
             f"({len(custo_acumulado)} chamada(s) ao Claude)")
+    teto_atingido = len(contador_classificacoes) >= LIMITE_CLASSIFICACOES_POR_RODADA
+    log(f"Classificações desta rodada: {min(len(contador_classificacoes), LIMITE_CLASSIFICACOES_POR_RODADA)}"
+        f"/{LIMITE_CLASSIFICACOES_POR_RODADA}")
+    _escrever_metrica_teto(teto_atingido)
     log("Coleta concluída.")
 
 

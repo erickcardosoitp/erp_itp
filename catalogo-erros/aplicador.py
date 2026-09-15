@@ -20,10 +20,16 @@ from datetime import datetime, timezone
 
 import config
 import custos
-from claude_client import executar
+from claude_client import TarefaEscalada, executar, registrar_escalonamento
 from graph_client import GraphClient
 
 LIMITE_TENTATIVAS = 2  # spec seção 11 — evita loop de retry infinito
+
+# Circuit breaker (decisão 2026-09-15, pós-incidente de estouro de sessão):
+# mesma lógica do coletor.py -- no máximo N execuções de correção por rodada.
+# Cada executar() já é mais caro que uma classificação (roda Edit/Write/Bash
+# de verdade, até 5min cada), então o mesmo teto é ainda mais importante aqui.
+LIMITE_EXECUCOES_POR_RODADA = 5
 
 
 def log(msg: str) -> None:
@@ -36,6 +42,8 @@ def main() -> None:
 
     itens = client.buscar_aprovados_pendentes()
     log(f"{len(itens)} item(ns) aprovado(s) aguardando execução")
+
+    execucoes_nesta_rodada = 0
 
     for item in itens:
         fields = item["fields"]
@@ -60,11 +68,30 @@ def main() -> None:
             })
             continue
 
+        if execucoes_nesta_rodada >= LIMITE_EXECUCOES_POR_RODADA:
+            log(f"  {cod_erro}: teto de {LIMITE_EXECUCOES_POR_RODADA} execuções da rodada "
+                f"atingido — adiando pra próxima rodada (não conta como tentativa)")
+            continue  # item continua "aprovado", pego de novo na próxima rodada
+
         log(f"  executando {cod_erro}...")
         client.atualizar_item(item["id"], {"Fase": "aplicando"})
+        execucoes_nesta_rodada += 1
 
         try:
             resultado = executar(prompt_execucao)
+        except TarefaEscalada as exc:
+            log(f"  {cod_erro}: ESCALADO — {exc.motivo}")
+            registrar_escalonamento("aplicador", cod_erro, exc.motivo, exc.diagnostico)
+            client.atualizar_item(item["id"], {
+                "Fase": "escalado",
+                "Status": "aberto",
+                "ResultadoExecucao": exc.diagnostico[:1500],
+            })
+            if "rate limit" in exc.motivo:
+                # Próximas execuções desta rodada vão bater na mesma parede
+                # -- para de tentar em vez de escalar item por item à toa.
+                execucoes_nesta_rodada = LIMITE_EXECUCOES_POR_RODADA
+            continue
         except Exception as exc:
             log(f"  {cod_erro}: ERRO ao executar — {exc}")
             client.atualizar_item(item["id"], {

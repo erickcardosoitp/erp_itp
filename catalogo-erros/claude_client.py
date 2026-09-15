@@ -7,12 +7,61 @@ Responsabilidade única do Claude aqui: classificar + decidir se é o
 mesmo problema de algo já no shortlist. Nunca escolhe/executa ação
 (catálogo fechado, seção 7 do spec) — isso é responsabilidade de uma
 etapa posterior, separada, só depois de aprovação humana.
+
+Política de conta e timeout (decisão 2026-09-15, pós-incidente de estouro
+de sessão): a automação roda sob uma única conta dedicada do Claude CLI,
+nunca compartilhada com uso interativo humano — sem failover automático
+para uma 2a conta (isso só espalhava o mesmo problema pra outra conta).
+Toda chamada tem teto de TIMEOUT_MAXIMO_S (5min); se estourar ou bater
+rate-limit, a tarefa é interrompida e escalada pra revisão humana via
+TarefaEscalada, nunca fica presa nem tenta contornar sozinha.
 """
 import json
 import os
 import re
 import subprocess
-import time
+from datetime import datetime, timezone
+
+ESCALONAMENTOS_LOG = os.path.expanduser("~/itp-stack/catalogo-erros-escalonamentos.jsonl")
+METRICA_ESCALONAMENTOS_PATH = os.path.expanduser(
+    "~/itp-stack/textfile-metrics/catalogo-erros-escalonamentos.prom"
+)
+
+
+def registrar_escalonamento(origem: str, contexto: str, motivo: str, diagnostico: str) -> None:
+    """Grava um registro estruturado (jsonl) de toda vez que uma tarefa do
+    Claude CLI e' escalada pra revisao humana (timeout ou rate-limit) --
+    complementar ao log de texto corrido do coletor/aplicador, pra dar pra
+    filtrar/consultar depois e alimentar o alerta do Grafana (métrica
+    textfile abaixo). Compartilhado entre coletor.py e aplicador.py."""
+    registro = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "origem": origem,  # "coletor" ou "aplicador"
+        "contexto": contexto,  # mensagem normalizada ou CodErro
+        "motivo": motivo,
+        "diagnostico": diagnostico,
+    }
+    try:
+        os.makedirs(os.path.dirname(ESCALONAMENTOS_LOG), exist_ok=True)
+        with open(ESCALONAMENTOS_LOG, "a", encoding="utf-8") as f:
+            f.write(json.dumps(registro, ensure_ascii=False) + "\n")
+    except OSError:
+        pass
+
+    try:
+        total = sum(1 for _ in open(ESCALONAMENTOS_LOG, encoding="utf-8"))
+        os.makedirs(os.path.dirname(METRICA_ESCALONAMENTOS_PATH), exist_ok=True)
+        tmp = METRICA_ESCALONAMENTOS_PATH + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write(
+                "# HELP catalogo_erros_escalonamentos_total Total acumulado de tarefas "
+                "do catalogo de erros escaladas pra revisao humana (timeout ou rate-limit).\n"
+                "# TYPE catalogo_erros_escalonamentos_total counter\n"
+                f"catalogo_erros_escalonamentos_total {total}\n"
+            )
+        os.replace(tmp, METRICA_ESCALONAMENTOS_PATH)  # write atômico (mesmo padrão do tarefas_runner.py)
+    except OSError:
+        pass
 
 # Diretório de trabalho pro Claude Code CLI — precisa ser a raiz do repo,
 # não a subpasta catalogo-erros/. Achado em teste real (2026-09-10): rodando
@@ -165,9 +214,6 @@ def _mensagem_erro(resultado) -> str:
     return stderr or (resultado.stdout or "")[:500] or "(sem stdout nem stderr)"
 
 
-CLAUDE_CONFIG_DIR_B = os.path.expanduser("~/.claude-account-b")
-
-
 def _e_rate_limit(resultado) -> bool:
     """Detecta o 429 real (autoritativo) reportado pelo claude CLI --
     diferente de qualquer estimativa de uso, este e o sinal oficial da API."""
@@ -178,99 +224,61 @@ def _e_rate_limit(resultado) -> bool:
         return False
 
 
-_THROTTLE_FILE = os.path.expanduser("~/itp-stack/claude-failover-notificado.json")
-_THROTTLE_SEGUNDOS = 6 * 3600  # 1 email a cada 6h no maximo, nao a cada execucao (5 em 5 min)
+TIMEOUT_MAXIMO_S = 300  # teto de 5min por tarefa (decisao 2026-09-15, pos-incidente
+# de estouro de sessao) -- nenhuma chamada ao Claude CLI deve rodar mais que isso.
+# Ao estourar, a tarefa e' interrompida e escalada pra revisao humana em vez de
+# ficar presa ou consumir a janela de sessao indefinidamente.
 
 
-def _deve_notificar_agora() -> bool:
-    """Sem isso, cada execucao do coletor (5 em 5 min) que bate rate-limit
-    manda um email novo -- achado real 2026-09-14: usuario recebeu varios
-    emails em sequencia enquanto a conta principal ficou exaurida por
-    horas. So notifica de novo depois de _THROTTLE_SEGUNDOS."""
-    agora = time.time()
+class TarefaEscalada(Exception):
+    """Levantada quando uma chamada ao Claude CLI precisa ser escalada pra um
+    humano em vez de repassar um erro generico -- carrega o motivo e um
+    diagnostico com tudo que se sabe ate o momento da interrupcao, pra quem
+    for revisar entender o que aconteceu sem precisar reproduzir."""
+
+    def __init__(self, motivo: str, diagnostico: str):
+        super().__init__(motivo)
+        self.motivo = motivo
+        self.diagnostico = diagnostico
+
+
+def _rodar(args: list[str], timeout_s: int, prompt: str):
+    """Roda o claude CLI uma unica vez (sem failover de conta -- decisao
+    2026-09-15: a automacao usa uma unica conta dedicada, nunca compartilhada
+    com uso interativo; se essa conta bater rate-limit, e' pra parar e
+    escalar, nao trocar de conta sozinha).
+
+    Timeout tratado explicitamente: se estourar TIMEOUT_MAXIMO_S, levanta
+    TarefaEscalada com o que for possivel documentar (a excecao do Python
+    carrega stdout/stderr parciais capturados ate o kill do processo)."""
+    timeout_s = min(timeout_s, TIMEOUT_MAXIMO_S)
     try:
-        ultimo = json.load(open(_THROTTLE_FILE, encoding="utf-8")).get("ultimo_epoch", 0)
-    except Exception:
-        ultimo = 0
-    if agora - ultimo < _THROTTLE_SEGUNDOS:
-        return False
-    try:
-        json.dump({"ultimo_epoch": agora}, open(_THROTTLE_FILE, "w", encoding="utf-8"))
-    except Exception:
-        pass
-    return True
-
-
-def _notificar_troca_de_conta(motivo: str) -> None:
-    """Avisa por email (mesmo Graph API do relatorio-grafana) quando a
-    conta principal do claude CLI bate o limite e o sistema troca sozinho
-    pra conta B. Falha silenciosamente se o email nao sair -- notificar
-    nao pode derrubar o coletor. Throttled -- ver _deve_notificar_agora."""
-    if not _deve_notificar_agora():
-        return
-    try:
-        import requests
-        env_path = os.path.expanduser("~/itp-stack/relatorio_grafana.env")
-        cfg = {}
-        with open(env_path, "r", encoding="utf-8") as f:
-            for linha in f:
-                linha = linha.strip()
-                if not linha or linha.startswith("#") or "=" not in linha:
-                    continue
-                k, v = linha.split("=", 1)
-                cfg[k.strip()] = v.strip()
-        token_resp = requests.post(
-            f"https://login.microsoftonline.com/{cfg['MS_TENANT_ID']}/oauth2/v2.0/token",
-            data={
-                "client_id": cfg["MS_CLIENT_ID"],
-                "client_secret": cfg["MS_CLIENT_SECRET"],
-                "scope": "https://graph.microsoft.com/.default",
-                "grant_type": "client_credentials",
-            },
-            timeout=30,
+        resultado = subprocess.run(
+            args, capture_output=True, text=True, timeout=timeout_s, cwd=DIRETORIO_REPO,
         )
-        token_resp.raise_for_status()
-        token = token_resp.json()["access_token"]
-        mensagem = {
-            "message": {
-                "subject": "[Catalogo de Erros] Conta do Claude CLI trocada automaticamente",
-                "body": {
-                    "contentType": "HTML",
-                    "content": f"<p>A conta principal do Claude CLI bateu o limite de uso e o sistema trocou automaticamente para a conta secundaria.</p><p>Motivo: {motivo}</p>",
-                },
-                "toRecipients": [{"emailAddress": {"address": "monitoramento@institutotiapretinha.org"}}],
-            },
-            "saveToSentItems": "false",
-        }
-        requests.post(
-            "https://graph.microsoft.com/v1.0/users/projetos@institutotiapretinha.org/sendMail",
-            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-            json=mensagem,
-            timeout=30,
+    except subprocess.TimeoutExpired as exc:
+        parcial_out = (exc.stdout or "")[:1000] if isinstance(exc.stdout, str) else ""
+        parcial_err = (exc.stderr or "")[:500] if isinstance(exc.stderr, str) else ""
+        diagnostico = (
+            f"[TIMEOUT {timeout_s}s] A tarefa foi interrompida por exceder o "
+            f"tempo maximo permitido e precisa de revisao humana.\n\n"
+            f"Prompt enviado (inicio):\n{prompt[:1500]}\n\n"
+            f"Stdout parcial capturado antes do kill:\n{parcial_out or '(nenhum)'}\n\n"
+            f"Stderr parcial capturado antes do kill:\n{parcial_err or '(nenhum)'}"
         )
-    except Exception:
-        pass
+        raise TarefaEscalada(
+            motivo=f"estourou o tempo maximo de {timeout_s}s", diagnostico=diagnostico,
+        ) from exc
 
+    if resultado.returncode != 0 and _e_rate_limit(resultado):
+        diagnostico = (
+            f"[RATE LIMIT] A conta do Claude CLI bateu o limite de uso e a "
+            f"tarefa foi interrompida (sem failover de conta -- decisao "
+            f"2026-09-15). Detalhe: {_mensagem_erro(resultado)[:500]}"
+        )
+        raise TarefaEscalada(motivo="rate limit da conta", diagnostico=diagnostico)
 
-def _rodar_com_failover(args: list[str], timeout_s: int):
-    """Roda o claude CLI; se bater rate limit (429 real, autoritativo) e
-    existir uma 2a conta configurada (~/.claude-account-b), tenta de novo
-    com ela automaticamente e notifica por email."""
-    resultado = subprocess.run(
-        args, capture_output=True, text=True, timeout=timeout_s, cwd=DIRETORIO_REPO,
-    )
-    if resultado.returncode == 0 or not _e_rate_limit(resultado):
-        return resultado
-
-    if not os.path.isdir(CLAUDE_CONFIG_DIR_B):
-        return resultado  # sem conta B configurada -- comportamento antigo
-
-    env_b = {**os.environ, "CLAUDE_CONFIG_DIR": CLAUDE_CONFIG_DIR_B}
-    resultado_b = subprocess.run(
-        args, capture_output=True, text=True, timeout=timeout_s, cwd=DIRETORIO_REPO, env=env_b,
-    )
-    _notificar_troca_de_conta(_mensagem_erro(resultado))
-    return resultado_b
+    return resultado
 
 
 def classificar(
@@ -288,8 +296,8 @@ def classificar(
         shortlist_formatada=_formatar_shortlist(shortlist),
     )
 
-    resultado = _rodar_com_failover(
-        ["claude", "-p", prompt, "--output-format", "json"], timeout_s=120,
+    resultado = _rodar(
+        ["claude", "-p", prompt, "--output-format", "json"], timeout_s=120, prompt=prompt,
     )
     if resultado.returncode != 0:
         raise RuntimeError(f"claude CLI falhou: {_mensagem_erro(resultado)[:500]}")
@@ -353,7 +361,7 @@ def executar(prompt_execucao: str) -> dict:
     já aprovado por humano (nunca decide sozinho o que fazer)."""
     prompt = PROMPT_EXECUCAO_WRAPPER.format(prompt_execucao=prompt_execucao)
 
-    resultado = _rodar_com_failover(
+    resultado = _rodar(
         # --allowedTools: só aqui, nunca em classificar(). A aprovação
         # humana já aconteceu (Power Automate) antes de chegar neste ponto
         # — é o que substitui a confirmação interativa que o Claude Code
@@ -364,7 +372,10 @@ def executar(prompt_execucao: str) -> dict:
         # mesmo com diagnóstico e correção corretos.
         ["claude", "-p", prompt, "--output-format", "json",
          "--allowedTools", "Edit,Write,Bash"],
-        timeout_s=600,  # execução real (commit/deploy) demora mais que classificação
+        timeout_s=TIMEOUT_MAXIMO_S,  # teto de 5min (decisao 2026-09-15) -- se a
+        # correcao real precisar de mais tempo que isso, e' sinal de que e'
+        # complexa demais pra automacao decidir sozinha; melhor escalar.
+        prompt=prompt,
     )
     if resultado.returncode != 0:
         raise RuntimeError(f"claude CLI falhou na execução: {_mensagem_erro(resultado)[:500]}")
