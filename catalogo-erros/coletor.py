@@ -251,7 +251,7 @@ def processar_grupo(
             f"'{msg_normalizada[:60]}' (+{qtd})")
         return {
             "cod_erro": staged["cod_erro"],
-            "aplicacao": aplicacao_sugerida,
+            "aplicacao": c.get("aplicacao", aplicacao_sugerida),
             "categoria": c.get("categoria", ""),
             "tipo_erro": c.get("tipo_erro", ""),
             "criticidade": c.get("criticidade", ""),
@@ -291,10 +291,13 @@ def processar_grupo(
                 "vale adicionar IF NOT EXISTS / IF EXISTS ao script que gera esse DDL."
             ),
         }
-        aplicacao_final = classificacao["aplicacao"]
         # Ruído de DDL é sempre criticidade baixa -- sempre represa pro
         # resumo do fim do dia, nunca cria na hora (ver _criar_item_staging).
-        return _criar_item_staging(aplicacao_final, msg_normalizada, exemplos_brutos, qtd, primeiro_timestamp, ultimo_timestamp, classificacao)
+        # Chave do staging é sempre aplicacao_sugerida (ver nota em
+        # staging_diario.buscar) -- aqui nem faz diferença de valor, já
+        # que classificacao["aplicacao"] == aplicacao_sugerida neste
+        # caminho, mas mantém o padrão consistente com a Camada 3 abaixo.
+        return _criar_item_staging(aplicacao_sugerida, msg_normalizada, exemplos_brutos, qtd, primeiro_timestamp, ultimo_timestamp, classificacao)
 
     # Camada 3: sem match exato — classifica e checa semelhança semântica.
     if len(contador_classificacoes) >= LIMITE_CLASSIFICACOES_POR_RODADA:
@@ -373,14 +376,18 @@ def processar_grupo(
             client, aplicacao_final, msg_normalizada, exemplos_brutos, qtd,
             primeiro_timestamp, ultimo_timestamp, classificacao,
         )
+    # Chave do staging é sempre aplicacao_sugerida, nunca aplicacao_final
+    # (ver nota em staging_diario.buscar) -- podem divergir aqui de
+    # verdade, já que a Camada 3 deixa a IA decidir a aplicação real (ex:
+    # itp_postgres sugere "ITP", mas a IA pode classificar como "BD").
     return _criar_item_staging(
-        aplicacao_final, msg_normalizada, exemplos_brutos, qtd,
+        aplicacao_sugerida, msg_normalizada, exemplos_brutos, qtd,
         primeiro_timestamp, ultimo_timestamp, classificacao,
     )
 
 
 def _criar_item_staging(
-    aplicacao_final: str,
+    aplicacao_chave: str,
     msg_normalizada: str,
     exemplos_brutos: list[str],
     qtd: int,
@@ -391,17 +398,21 @@ def _criar_item_staging(
     """Registra o item na memória do dia (staging_diario.py) em vez de
     criar na SharePoint List agora -- usado pra criticidade baixa/média
     (Camada 2.5 e Camada 3). O CodErro é gerado aqui, não na consolidação,
-    pra manter a mesma FK no Parquet desde a primeira ocorrência do dia."""
+    pra manter a mesma FK no Parquet desde a primeira ocorrência do dia.
+
+    aplicacao_chave é só a chave de dedup (aplicacao_sugerida do
+    container) -- a aplicação real gravada/usada na consolidação vem de
+    classificacao['aplicacao'] (pode ser diferente, ver staging_diario.buscar)."""
     cod_erro = gerar_cod_erro()
     staging_diario.criar(
-        aplicacao_final, msg_normalizada, classificacao, cod_erro, qtd,
+        aplicacao_chave, msg_normalizada, classificacao, cod_erro, qtd,
         primeiro_timestamp.isoformat(), ultimo_timestamp.isoformat(), exemplos_brutos[-1],
     )
     log(f"  criticidade {classificacao['criticidade']} — represado pro resumo "
         f"do fim do dia (sem ir pro SharePoint agora): {cod_erro}")
     return {
         "cod_erro": cod_erro,
-        "aplicacao": aplicacao_final,
+        "aplicacao": classificacao["aplicacao"],
         "categoria": classificacao["categoria"],
         "tipo_erro": classificacao["tipo_erro"],
         "criticidade": classificacao["criticidade"],
