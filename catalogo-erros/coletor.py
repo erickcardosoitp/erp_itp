@@ -26,6 +26,7 @@ import config
 import custos
 import normalizador
 import parquet_writer
+import staging_diario
 from claude_client import TarefaEscalada, classificar, registrar_escalonamento
 from graph_client import GraphClient
 
@@ -234,6 +235,29 @@ def processar_grupo(
             "status": status_atualizado or "",
         }
 
+    # Camada 2-staging (decisão 2026-09-15, a pedido do analista): mesma
+    # ideia da Camada 2 acima, mas contra a "memória do dia" de itens
+    # baixa/média ainda não consolidados no SharePoint (ver
+    # staging_diario.py). Sem isso, o mesmo erro baixo/médio reincidindo
+    # no mesmo dia gastaria IA de novo a cada ocorrência, já que a Camada
+    # 2 real só vê o que já está no SharePoint.
+    staged = staging_diario.buscar(aplicacao_sugerida, msg_normalizada)
+    if staged:
+        staging_diario.atualizar_existente(
+            aplicacao_sugerida, msg_normalizada, qtd, ultimo_timestamp.isoformat(), exemplos_brutos[-1],
+        )
+        c = staged["classificacao"]
+        log(f"  reincidência (staging, pendente de consolidação): "
+            f"'{msg_normalizada[:60]}' (+{qtd})")
+        return {
+            "cod_erro": staged["cod_erro"],
+            "aplicacao": aplicacao_sugerida,
+            "categoria": c.get("categoria", ""),
+            "tipo_erro": c.get("tipo_erro", ""),
+            "criticidade": c.get("criticidade", ""),
+            "status": "pendente_consolidacao",
+        }
+
     # Camada 2.5 (decisão 2026-09-15, pós-incidente de represamento de
     # backlog): ruído de DDL idempotente conhecido (relation/constraint/
     # type/... already exists) nunca é bug real -- classifica direto, sem
@@ -268,7 +292,9 @@ def processar_grupo(
             ),
         }
         aplicacao_final = classificacao["aplicacao"]
-        return _criar_item_novo(client, aplicacao_final, msg_normalizada, exemplos_brutos, qtd, primeiro_timestamp, ultimo_timestamp, classificacao)
+        # Ruído de DDL é sempre criticidade baixa -- sempre represa pro
+        # resumo do fim do dia, nunca cria na hora (ver _criar_item_staging).
+        return _criar_item_staging(aplicacao_final, msg_normalizada, exemplos_brutos, qtd, primeiro_timestamp, ultimo_timestamp, classificacao)
 
     # Camada 3: sem match exato — classifica e checa semelhança semântica.
     if len(contador_classificacoes) >= LIMITE_CLASSIFICACOES_POR_RODADA:
@@ -336,11 +362,51 @@ def processar_grupo(
         log(f"  aviso: IA apontou fusão com {cod_erro_fundido} mas item não foi "
             f"reencontrado — criando novo por segurança")
 
-    # Item genuinamente novo.
-    return _criar_item_novo(
-        client, aplicacao_final, msg_normalizada, exemplos_brutos, qtd,
+    # Item genuinamente novo. Decisão 2026-09-15 (a pedido do analista):
+    # só alta/crítica cria na hora no SharePoint (dispara o fluxo de
+    # aprovação em tempo real); baixa/média fica represado no staging até
+    # a consolidação do fim do dia (consolidar_diario.py) -- menos volume
+    # de notificação em tempo real, sem perder nada (tudo já vai pro
+    # Parquet de qualquer forma).
+    if classificacao["criticidade"] in ("alta", "critica"):
+        return _criar_item_novo(
+            client, aplicacao_final, msg_normalizada, exemplos_brutos, qtd,
+            primeiro_timestamp, ultimo_timestamp, classificacao,
+        )
+    return _criar_item_staging(
+        aplicacao_final, msg_normalizada, exemplos_brutos, qtd,
         primeiro_timestamp, ultimo_timestamp, classificacao,
     )
+
+
+def _criar_item_staging(
+    aplicacao_final: str,
+    msg_normalizada: str,
+    exemplos_brutos: list[str],
+    qtd: int,
+    primeiro_timestamp: datetime,
+    ultimo_timestamp: datetime,
+    classificacao: dict,
+) -> dict:
+    """Registra o item na memória do dia (staging_diario.py) em vez de
+    criar na SharePoint List agora -- usado pra criticidade baixa/média
+    (Camada 2.5 e Camada 3). O CodErro é gerado aqui, não na consolidação,
+    pra manter a mesma FK no Parquet desde a primeira ocorrência do dia."""
+    cod_erro = gerar_cod_erro()
+    staging_diario.criar(
+        aplicacao_final, msg_normalizada, classificacao, cod_erro, qtd,
+        primeiro_timestamp.isoformat(), ultimo_timestamp.isoformat(), exemplos_brutos[-1],
+    )
+    log(f"  criticidade {classificacao['criticidade']} — represado pro resumo "
+        f"do fim do dia (sem ir pro SharePoint agora): {cod_erro}")
+    return {
+        "cod_erro": cod_erro,
+        "aplicacao": aplicacao_final,
+        "categoria": classificacao["categoria"],
+        "tipo_erro": classificacao["tipo_erro"],
+        "criticidade": classificacao["criticidade"],
+        "status": "resolvido" if classificacao["ia_pode_resolver"] == "sem risco" else "pendente_consolidacao",
+    }
 
 
 def _criar_item_novo(
@@ -352,12 +418,18 @@ def _criar_item_novo(
     primeiro_timestamp: datetime,
     ultimo_timestamp: datetime,
     classificacao: dict,
+    cod_erro: str | None = None,
 ) -> dict:
     """Cria o item novo na SharePoint List a partir de uma classificação já
-    pronta -- usada tanto pelo resultado real da IA (Camada 3) quanto pela
-    classificação determinística de ruído de DDL idempotente (Camada 2.5,
-    sem custo de IA)."""
-    cod_erro = gerar_cod_erro()
+    pronta -- usada pelo resultado real da IA (Camada 3, criticidade
+    alta/crítica, direto), e pela consolidação diária (consolidar_diario.py,
+    itens baixa/média represados no staging_diario.py o dia inteiro).
+
+    cod_erro opcional (decisão 2026-09-15): itens represados já geram o
+    CodErro no momento do staging, pra manter a mesma FK no Parquet desde
+    a primeira ocorrência do dia até a consolidação -- só gera um novo se
+    não vier de fora (caso normal, item alta/crítica criado na hora)."""
+    cod_erro = cod_erro or gerar_cod_erro()
     novo_item = client.criar_item({
         "Title": classificacao["tipo_erro"][:255],
         "Aplicacao": aplicacao_final,
