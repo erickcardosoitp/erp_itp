@@ -1,4 +1,4 @@
-FROM node:22-slim AS builder
+FROM node:26-slim AS builder
 WORKDIR /app
 # BACKEND_INTERNAL_URL é usado dentro de next.config.mjs (rewrites), que o
 # `next build` resolve em tempo de build (vira parte do routes-manifest) —
@@ -11,7 +11,7 @@ RUN npm install
 COPY . .
 RUN npm run build
 
-FROM node:22-slim
+FROM node:26-slim
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=builder /app/.next ./.next
