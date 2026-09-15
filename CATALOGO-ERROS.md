@@ -408,3 +408,32 @@ achados só lendo o código):
 - Data de expiração/rotação da deploy key SSH usada pro push autônomo do `aplicador.py`.
 - Onde plugar APRXM e DW quando migrarem.
 - Fluxos B e C do Power Automate ainda não construídos na UI (seção 10).
+
+### 11.1 Alerta de escalonamento no Grafana — excluído em 2026-09-15
+
+O alerta `itp-alerta-catalogo-escalonamento` (Grafana, pasta ITP, grupo
+`itp-alertas-criticos`) foi **excluído a pedido do analista** depois de um
+falso-positivo real (`DatasourceNoData`) e da descoberta de um drift de
+provisionamento sem solução simples: o campo `noDataState` da regra
+ficava preso em `NoData` mesmo com o arquivo dizendo
+`no_data_state: OK`, e nem restart do container nem reload via API
+(`POST /api/admin/provisioning/alerting/reload`) reconciliavam esse
+campo específico (Grafana 13.2.1). Remover a regra do bloco `groups` do
+YAML e reiniciar também não apagava de verdade — o Grafana continuava
+servindo a versão antiga do banco interno. A exclusão real só funcionou
+usando a seção `deleteRules` do provisionamento (mecanismo oficial pra
+isso, diferente de só tirar do `groups`).
+
+**O que continua funcionando sem o alerta:** todo `TarefaEscalada`
+(timeout, rate-limit nas 2 contas, ou teto de 20%/sessão) continua sendo
+registrado normalmente em
+`~/itp-stack/catalogo-erros-escalonamentos.jsonl` (JSONL, um evento por
+linha, com motivo e diagnóstico completo) e na métrica Prometheus
+`catalogo_erros_escalonamentos_total` — só não existe mais uma regra
+dedicada no Grafana disparando notificação automática por isso. Consulta
+manual do JSONL ou da métrica continua possível a qualquer momento.
+
+**Se recriar no futuro:** recomendado criar direto pela UI do Grafana
+(Alerting → Alert rules → New), não por arquivo de provisionamento —
+esse Grafana especificamente não reconcilia bem o campo `noDataState`
+via arquivo depois que a regra já existe uma vez.
