@@ -72,7 +72,20 @@ def registrar_escalonamento(origem: str, contexto: str, motivo: str, diagnostico
 # de dentro de catalogo-erros/, o Claude corretamente se recusou a mexer em
 # apps/frontend/ ou rodar deploy.sh por não ter escopo — teve que reportar
 # "precisa de atenção humana" em vez de aplicar a correção real.
-DIRETORIO_REPO = os.path.expanduser("~/erp_itp")
+
+# Achado real 2026-09-15: fixar isso em ~/erp_itp sozinho deixava a IA cega
+# pra erros de origem APRXM -- itp_postgres hospeda tanto erp_itp_db quanto
+# aprxm_db (mesmo processo Postgres, logs saem misturados no mesmo stream),
+# e o container aprxm_backend existe desde a migração de 2026-09-12/14, mas
+# a classificação nunca teve acesso ao código real da APRXM pra investigar
+# (ex: triggers de integridade referencial de packages/residents/
+# association_id) -- todo item assim virava "sem origem localizada no
+# código do ERP ITP" por não ter onde procurar, não porque não era bug de
+# verdade. Correção: cwd aponta pra um workspace com symlink pros dois
+# repositórios (nunca pra ~ /itp-stack inteiro, que tem credenciais/.env) --
+# a IA decide qual dos dois é relevante pelo campo "aplicacao" que ela
+# mesma atribui.
+DIRETORIO_REPO = os.path.expanduser("~/itp-stack/catalogo-erros-workspace")
 
 CATEGORIAS_VALIDAS = {"banco", "código", "infra", "security", "integracao", "usuario", "terceiros"}
 CRITICIDADES_VALIDAS = {"baixa", "media", "alta", "critica"}
@@ -83,6 +96,18 @@ PROMPT_TEMPLATE = """Você está classificando um erro capturado nos logs da VM 
 vm-itp-prod, pro catálogo automático de erros descrito em CATALOGO-ERROS.md \
 do repositório erp_itp. Responda ESTRITAMENTE com um objeto JSON válido, \
 sem markdown, sem texto antes ou depois.
+
+## Repositórios disponíveis pra investigação
+
+Você tem acesso de leitura a DOIS repositórios diferentes, como subpastas \
+do seu diretório atual: `erp_itp/` (código do sistema ITP) e `aprxm_sys/` \
+(código do sistema APRXM). O container `itp_postgres` hospeda os bancos \
+DAS DUAS aplicações no mesmo processo Postgres (databases `erp_itp_db` e \
+`aprxm_db`), então um erro vindo desse container pode pertencer a qualquer \
+um dos dois — nunca assuma que é do ERP ITP só porque veio desse container. \
+Investigue primeiro qual repositório tem o código/tabela/trigger relacionado \
+à mensagem de erro (ex: nomes de tabela, coluna, endpoint) antes de escolher \
+o campo "aplicacao" da resposta.
 
 ## Contexto do erro
 
@@ -122,8 +147,9 @@ porquê) — isso é validado depois por revisão humana.
 
 ## Análise de impacto — obrigatória antes de propor a correção
 
-Você está rodando com acesso de leitura ao repositório erp_itp inteiro (não \
-só à mensagem de erro). Antes de finalizar "correcao_proposta":
+Você está rodando com acesso de leitura aos repositórios inteiros (não só à \
+mensagem de erro) — use o de `erp_itp/` ou `aprxm_sys/` conforme a origem \
+real do erro (ver seção acima). Antes de finalizar "correcao_proposta":
 
 1. Leia o código-fonte real relacionado ao erro — não infira só pela \
 mensagem de log. Abra o arquivo/função/entidade que o erro aponta.
