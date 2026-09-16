@@ -34,7 +34,15 @@ services:
     volumes:
       - pg_data:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      # Restrito a localhost (decisão 2026-09-16, achado real via catálogo
+      # de erros): porta exposta em 0.0.0.0 vinha sendo varrida por
+      # bots/scanners tentando logar com o role padrão "postgres"
+      # (inexistente aqui, superuser real é itp_admin) -- 22+ itens
+      # catalogados entre 09/09 e 09/16, vários criticidade alta, nunca
+      # corrigidos. Mesmo padrão já usado em postgres-exporter/
+      # blackbox-exporter abaixo. Acesso remoto direto (DBeaver/psql),
+      # se necessário, deve usar túnel SSH em vez de porta aberta.
+      - "127.0.0.1:5432:5432"
 
   erp_itp_backend:
     build:
