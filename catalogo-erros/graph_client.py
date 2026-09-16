@@ -53,13 +53,27 @@ class GraphClient:
 
     def buscar_por_assinatura(self, aplicacao: str, assinatura: str) -> dict | None:
         """Camada 2 do dedup: busca exata. Devolve os fields do item se achar,
-        None se não achar. Escapa aspas simples pro OData não quebrar."""
+        None se não achar. Escapa aspas simples pro OData não quebrar.
+
+        Filtra só por Assinatura, não por Aplicacao (parâmetro mantido só
+        por compatibilidade de assinatura da função, não usado no filtro)
+        -- achado real 2026-09-16: a Aplicacao gravada no item é a decisão
+        final da IA (classificacao['aplicacao']), que pode divergir da
+        aplicacao_sugerida do container que provocou a busca (ex:
+        itp_postgres sugere "ITP", IA classifica como "BD"). Os 2 pontos
+        de chamada desta função já usavam valores diferentes entre si
+        (aplicacao_sugerida num, aplicacao_final no outro) -- um filtro
+        que exige bater exatamente com qualquer um dos dois falha
+        silenciosamente sempre que a aplicação real do item diverge,
+        fazendo a Camada 2 nunca reencontrar o item (reclassifica de novo
+        pela IA a cada ocorrência) ou, no caminho de fusão por IA, logar
+        "item não foi reencontrado — criando novo por segurança" mesmo
+        quando a fusão estava certa. Assinatura sozinha já é específica o
+        suficiente como chave (normalizada, até 255 caracteres, inclui
+        contexto da mensagem) -- mesmo padrão de bug já corrigido no
+        staging_diario.py."""
         assinatura_escapada = assinatura.replace("'", "''")
-        aplicacao_escapada = aplicacao.replace("'", "''")
-        filtro = (
-            f"fields/Aplicacao eq '{aplicacao_escapada}' and "
-            f"fields/Assinatura eq '{assinatura_escapada}'"
-        )
+        filtro = f"fields/Assinatura eq '{assinatura_escapada}'"
         params = {"$expand": "fields", "$filter": filtro, "$top": "1"}
         resp = requests.get(self._items_url(), headers=self._headers(), params=params, timeout=30)
         resp.raise_for_status()
