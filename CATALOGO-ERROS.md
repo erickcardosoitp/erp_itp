@@ -495,6 +495,20 @@ via arquivo depois que a regra já existe uma vez.
   era assim desde antes de 2026-09-15. Não é regressão de hoje, não foi
   alterada, mas é uma fragilidade estrutural que existe.
 
+**Adicionado 2026-09-16 (ver seção 12.6):**
+
+- [ ] **Auditoria completa de `Ocorrencias` inflado** — só CAT-0137 foi
+  confirmado e corrigido manualmente; outros itens processados durante
+  janelas de falha repetida (09/12, 09/15-16) podem ter contagem
+  superestimada. O bug em si já está corrigido (state incremental), mas
+  os números históricos não foram todos revisados.
+- [ ] **Drift entre `infra/docker-compose.yml` (git) e
+  `~/itp-stack/docker-compose.yml` (produção)** — o de produção tem
+  serviços inteiros (`aprxm_clickhouse`, `aprxm_backend`, renderização
+  do Grafana) nunca commitados no repositório. Achado ao aplicar a
+  correção da porta 5432 (precisou ser feita manualmente nos dois
+  arquivos). Drift maior não resolvido.
+
 ---
 
 ## 12. Incidente de 2026-09-15 e evolução de arquitetura
@@ -647,3 +661,58 @@ construído, mas via código em vez de Power Automate:
   um bug no Fluxo A — descartado, os 430 itens da lista já tinham esse
   campo preenchido. A causa real foi a encadeada em 12.2.
 - **Alerta de escalonamento excluído do Grafana** — ver seção 11.1.
+
+### 12.6 Segunda rodada de checkup (2026-09-16): 2 problemas reais recorrentes
+
+Um dia depois, revisão do que a consolidação diária (12.4) realmente
+produziu revelou que 413 dos 415 itens represados eram **um único evento
+histórico** (a mesma restauração de schema do dia 14/09, seção 6/9 do
+spec) sendo finalmente drenado — não 413 problemas novos. Investigação
+mais funda, a pedido do analista ("matar esse problema e outros desse
+gênero"), achou 2 problemas de verdade, recorrentes e nunca corrigidos:
+
+**A) Porta 5432 do Postgres exposta publicamente — corrigido.**
+22+ itens catalogados entre 09/09 e 09/16 (vários criticidade alta,
+todos `Status=aberto`) documentavam bots/scanners tentando logar com o
+role padrão `postgres` (inexistente, superuser real é `itp_admin`). A
+porta estava em `0.0.0.0:5432`, diferente de `postgres-exporter`/
+`blackbox-exporter` no mesmo compose, que já usam `127.0.0.1`.
+Restringido pra `127.0.0.1:5432:5432` (`infra/docker-compose.yml` +
+mesma mudança aplicada manualmente em `~/itp-stack/docker-compose.yml`,
+que diverge do repo com serviços extras — ver nota abaixo). Confirmado
+sem regressão: `pgAdmin`/`postgres-exporter` conectam pela rede interna
+do Docker, não pela porta publicada. Volume `pg_data` é nomeado e
+externo ao container — recriação não afeta dados, confirmado via
+`docker volume inspect` antes de aplicar.
+
+**B) `Ocorrencias` inflado por perda de progresso do coletor — corrigido.**
+CAT-0137 mostrava 344 ocorrências de "Server Action com ID obsoleto",
+mas o log bruto do container (`docker logs erp_itp_frontend`, sem
+limite de tempo) tinha só **8 linhas reais**, todas com ID literal
+`"x"` (indício de sonda/bot, não usuário real — a mitigação real já
+existe desde o commit `3aecaeb5` de 2026-09-10). Rastreado até a causa:
+`salvar_state()` só rodava 1x, no fim de `main()` — uma falha não
+tratada em QUALQUER container/tarefa mais adiante no mesmo lote (achado
+real: `400 Bad Request` do Graph API processando `itp_traefik`, e
+separadamente um erro de parse JSON) derrubava o script inteiro antes
+de persistir, descartando o progresso de containers já processados com
+sucesso. Confirmado no log: `state` de `erp_itp_frontend` ficou travado
+em `2026-09-11T23:04:09` por 2h+ de execuções seguidas em 09/12 (uma
+falha diferente a cada rodada impedia o save final), mesmo padrão
+repetido em 09/15-16. Corrigido: state salvo imediatamente após cada
+container/tarefa concluído, não só ao final. CAT-0137 corrigido
+manualmente (`Ocorrencias=8`, `Status=resolvido`).
+
+**Limitação conhecida, não resolvida:** não foi feita uma auditoria
+completa dos 845 itens do catálogo pra achar todos os que podem ter
+`Ocorrencias` inflado pelo mesmo bug histórico (só CAT-0137 foi
+confirmado e corrigido) — o bug em si está corrigido dali pra frente,
+mas números históricos de outros itens podem estar superestimados.
+
+**Nota separada, não resolvida:** `~/erp_itp/infra/docker-compose.yml`
+(git) e `~/itp-stack/docker-compose.yml` (produção) não são idênticos —
+o de produção tem `aprxm_clickhouse`, `aprxm_backend`, configuração de
+renderização do Grafana e outros serviços que nunca foram commitados no
+repositório. A mudança da porta 5432 foi aplicada manualmente nos dois
+arquivos, mas essa drift maior entre eles continua existindo e não foi
+resolvida nesta sessão.
