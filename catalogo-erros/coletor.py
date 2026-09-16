@@ -619,6 +619,18 @@ def main() -> None:
 
         if not houve_adiamento:
             state[nome] = agora.isoformat()
+            # Salva incrementalmente, não só no fim de tudo (decisão
+            # 2026-09-16, achado real): salvar_state() só rodava 1x no
+            # final de main() -- qualquer falha não tratada mais adiante
+            # (ex: 400 do Graph API, timeout de rede) derrubava o script
+            # inteiro ANTES de persistir, descartando o progresso de TODO
+            # container já processado com sucesso na mesma rodada. Isso
+            # causava releitura + recontagem da mesma janela de log
+            # repetidamente (Ocorrencias inflado sem evento real
+            # acontecer de novo) até a falha parar de ocorrer sozinha --
+            # achado investigando CAT-0137 (contador em 344, só 8
+            # ocorrências reais no log bruto).
+            salvar_state(state)
         else:
             log(f"  {nome}: state não avançado (há grupo(s) adiado(s) pro próximo lote)")
 
@@ -674,6 +686,7 @@ def main() -> None:
                     })
         if not adiado:
             state[state_key] = agora.isoformat()
+            salvar_state(state)  # ver comentário no loop de containers acima
         else:
             log(f"  tarefa {task_id}: state não avançado (adiado pro próximo lote)")
 
