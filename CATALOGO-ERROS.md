@@ -467,14 +467,18 @@ via arquivo depois que a regra já existe uma vez.
 
 **Precisa verificação (ainda não confirmado ao vivo):**
 
-- [ ] **Consolidação diária das 20h BRT (23h UTC)** — `consolidar_diario.py`
-  nunca rodou de verdade em produção ainda (só testado isoladamente).
-  Primeira execução real será hoje à noite.
-- [ ] **Comportamento de falha da consolidação** — se `consolidar_diario.py`
-  quebrar no meio da execução (ex: falha de rede no Graph API), não há
-  `TarefaEscalada`/escalonamento associado a esse script — falha ficaria
-  silenciosa, visível só no log
-  (`~/itp-stack/catalogo-erros-consolidacao.log`). Não implementado.
+- [x] **Consolidação diária das 20h BRT (23h UTC)** — 1ª execução real
+  confirmada em 2026-09-15 23h UTC: **os 415 itens (414 baixa + 1 média)
+  foram criados corretamente na SharePoint List**, mas o email-resumo
+  falhou com `403 Forbidden` — usava a credencial errada (app
+  `Catalogo Erros - VM`, sem `Mail.Send`, em vez do app de email real).
+  Corrigido (ver PR #64), validado com import real na VM, e o email
+  perdido foi reenviado manualmente com os números corretos. Falta só
+  confirmar a próxima execução real (hoje à noite) já com a correção.
+- [x] **Comportamento de falha da consolidação** — implementado no mesmo
+  PR #64: qualquer falha agora passa por `registrar_escalonamento()`
+  (mesmo mecanismo de timeout/rate-limit do Claude CLI), em vez de só um
+  traceback cru no log do cron.
 - [ ] **Alerta `catalogo_erros_teto_atingido`** (Grafana, separado do que
   foi excluído em 11.1) — não verificado se tem o mesmo drift de
   `noDataState`.
