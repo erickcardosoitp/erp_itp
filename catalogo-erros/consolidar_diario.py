@@ -12,11 +12,13 @@ Roda 1x/dia via cron, no fim do dia local
 """
 from __future__ import annotations
 
+import os
 from datetime import datetime
 
 import config
 import requests
 import staging_diario
+from claude_client import registrar_escalonamento
 from coletor import _criar_item_novo
 from graph_client import GraphClient
 
@@ -41,6 +43,23 @@ def _montar_html(contagem: dict[str, int]) -> str:
 
 
 def main() -> None:
+    try:
+        _consolidar()
+    except Exception as exc:
+        # Achado real 2026-09-15: a 1ª execução de verdade quebrou no
+        # envio do email (403, credencial errada) sem nenhum registro
+        # além do traceback cru no log do cron -- ninguém saberia sem
+        # entrar na VM manualmente. Agora ao menos fica registrado no
+        # mesmo lugar que timeout/rate-limit do Claude CLI (embora a
+        # causa aqui nunca seja o Claude CLI em si).
+        registrar_escalonamento(
+            "consolidar_diario", "consolidacao_noturna", str(exc),
+            f"Falha na consolidação diária: {type(exc).__name__}: {exc}",
+        )
+        raise
+
+
+def _consolidar() -> None:
     cfg = config.carregar_env()
     client = GraphClient(cfg)
     staged = staging_diario.listar_tudo()
@@ -66,11 +85,28 @@ def main() -> None:
 
     staging_diario.limpar()
 
+    # Achado real 2026-09-15 (1ª execução de verdade, à noite): o app
+    # "Catalogo Erros - VM" (catalogo_erros.env, usado acima só pro
+    # GraphClient/SharePoint) só tem permissão Sites.ReadWrite.All, sem
+    # Mail.Send -- usar cfg (dele) pro token de email dava 403 Forbidden
+    # no sendMail, silenciosamente (todos os itens já tinham sido criados
+    # na lista, só o email de aviso que nunca saía). O app que de fato
+    # manda email é outro, carregado à parte, mesmo padrão já usado em
+    # claude_client.py::_notificar_troca_de_conta.
+    cfg_email = {}
+    with open(os.path.expanduser("~/itp-stack/relatorio_grafana.env"), "r", encoding="utf-8") as f:
+        for linha in f:
+            linha = linha.strip()
+            if not linha or linha.startswith("#") or "=" not in linha:
+                continue
+            k, v = linha.split("=", 1)
+            cfg_email[k.strip()] = v.strip()
+
     token_resp = requests.post(
-        f"https://login.microsoftonline.com/{cfg['MS_TENANT_ID']}/oauth2/v2.0/token",
+        f"https://login.microsoftonline.com/{cfg_email['MS_TENANT_ID']}/oauth2/v2.0/token",
         data={
-            "client_id": cfg["MS_CLIENT_ID"],
-            "client_secret": cfg["MS_CLIENT_SECRET"],
+            "client_id": cfg_email["MS_CLIENT_ID"],
+            "client_secret": cfg_email["MS_CLIENT_SECRET"],
             "scope": "https://graph.microsoft.com/.default",
             "grant_type": "client_credentials",
         },
