@@ -44,6 +44,28 @@ services:
       # se necessário, deve usar túnel SSH em vez de porta aberta.
       - "127.0.0.1:5432:5432"
 
+  aprxm_clickhouse:
+    image: clickhouse/clickhouse-server:24.10-alpine
+    container_name: aprxm_clickhouse
+    restart: unless-stopped
+    environment:
+      CLICKHOUSE_DB: aprxm_analytics
+      CLICKHOUSE_USER: aprxm
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    ports:
+      - "127.0.0.1:8123:8123"
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - ./clickhouse-config/backups.xml:/etc/clickhouse-server/config.d/backups.xml:ro
+      - /home/itpadmin/backups:/backups
+    mem_limit: 1g
+    cpus: "1.0"
+
   erp_itp_backend:
     build:
       context: /home/itpadmin/erp_itp/apps/backend
@@ -83,6 +105,23 @@ services:
       - "traefik.http.routers.erpitp-frontend.entrypoints=websecure"
       - "traefik.http.routers.erpitp-frontend.tls.certresolver=leresolver"
       - "traefik.http.services.erpitp-frontend.loadbalancer.server.port=3000"
+
+  aprxm_backend:
+    build:
+      context: /home/itpadmin/aprxm_sys/backend
+    container_name: aprxm_backend
+    restart: unless-stopped
+    env_file:
+      - aprxm_backend.env
+    mem_limit: 2g
+    ports:
+      - "127.0.0.1:8003:8000"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.aprxm-backend.rule=Host(`api-aprxm.institutotiapretinha.org`)"
+      - "traefik.http.routers.aprxm-backend.entrypoints=websecure"
+      - "traefik.http.routers.aprxm-backend.tls.certresolver=leresolver"
+      - "traefik.http.services.aprxm-backend.loadbalancer.server.port=8000"
 
   pgadmin:
     image: dpage/pgadmin4:latest
@@ -124,6 +163,11 @@ services:
     restart: unless-stopped
     environment:
       BACKEND_INTERNAL_URL: http://catalogo_backend:8000
+      MS_TENANT_ID: ${MS_TENANT_ID}
+      MS_CLIENT_ID: ${MS_CLIENT_ID}
+      MS_CLIENT_SECRET: ${MS_CLIENT_SECRET}
+      MS_REDIRECT_URI: http://localhost:8080/api/auth/callback
+      SESSION_SECRET: ${ITP_TEC_SESSION_SECRET}
     depends_on:
       - catalogo_backend
     ports:
@@ -136,8 +180,10 @@ services:
     restart: unless-stopped
     command:
       - '--path.rootfs=/host'
+      - '--collector.textfile.directory=/textfile-metrics'
     volumes:
       - '/:/host:ro,rslave'
+      - './textfile-metrics:/textfile-metrics:ro'
     ports:
       - "127.0.0.1:9100:9100"
 
@@ -208,6 +254,10 @@ services:
       GF_AUTH_AZUREAD_TOKEN_URL: https://login.microsoftonline.com/${MS_TENANT_ID}/oauth2/v2.0/token
       GF_AUTH_AZUREAD_ALLOWED_ORGANIZATIONS: ${MS_TENANT_ID}
       GF_AUTH_AZUREAD_ALLOW_SIGN_UP: "true"
+      GF_RENDERING_SERVER_URL: http://grafana_renderer:8081/render
+      GF_RENDERING_CALLBACK_URL: http://grafana:3000/
+      GF_RENDERING_RENDERER_TOKEN: ${GRAFANA_RENDERER_TOKEN}
+      GF_LOG_FILTERS: rendering:debug
     volumes:
       - grafana_data:/var/lib/grafana
       - ./monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
@@ -225,8 +275,20 @@ services:
       - "traefik.http.routers.grafana.tls.certresolver=leresolver"
       - "traefik.http.services.grafana.loadbalancer.server.port=3000"
 
+  grafana_renderer:
+    image: grafana/grafana-image-renderer:latest
+    container_name: itp_grafana_renderer
+    restart: unless-stopped
+    environment:
+      ENABLE_METRICS: "false"
+      AUTH_TOKEN: ${GRAFANA_RENDERER_TOKEN}
+      CALLBACK_URL: http://grafana:3000/
+      HTTP_HOST: 0.0.0.0
+
+
 volumes:
   pg_data:
+  clickhouse_data:
   pgadmin_data:
   traefik_letsencrypt:
   prometheus_data:
