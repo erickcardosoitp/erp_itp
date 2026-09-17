@@ -132,7 +132,13 @@ export class AuthController {
       };
 
     } catch (error: any) {
-      this.logger.error(`❌ Falha no Login: ${error.message}`);
+      // Credenciais inválidas / usuário inexistente são comportamento normal
+      // de usuário (já logado como warn dentro de authService.login) — não
+      // deve gerar log ERROR. Erro técnico real já vira UnauthorizedException
+      // genérica no service, mas mantemos aqui como warn também: o service é
+      // a fonte de verdade dos logs de auth, este catch só evita duplicar em
+      // nível mais grave do que o já registrado.
+      this.logger.warn(`Falha no Login: ${error.message}`);
       throw new UnauthorizedException(error.message);
     }
   }
@@ -308,6 +314,15 @@ export class AuthController {
       if (error instanceof SsoSemContaException) {
         this.logger.warn(`🔒 SSO sem conta correspondente: ${error.message}`);
         return res.redirect(`${MS_FRONTEND_URL}/login?erro=sso-sem-conta`);
+      }
+      // UnauthorizedException aqui cobre falhas esperadas do fluxo OAuth
+      // (state divergente por cookie expirado/reload, code ausente) — não
+      // são bug de código nem indício de ataque isolado, então não devem
+      // virar log ERROR. Falhas técnicas reais (JWKS, troca de token com a
+      // Microsoft) já são logadas como error nos pontos onde ocorrem, acima.
+      if (error instanceof UnauthorizedException) {
+        this.logger.warn(`Falha no login SSO Microsoft: ${error.message}`);
+        return res.redirect(`${MS_FRONTEND_URL}/login?erro=sso`);
       }
       this.logger.error(`❌ Falha no login SSO Microsoft: ${error.message}`);
       return res.redirect(`${MS_FRONTEND_URL}/login?erro=sso`);

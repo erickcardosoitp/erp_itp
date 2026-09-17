@@ -144,11 +144,61 @@ atualizado:
 
 ---
 
+## ✅ Feito (2026-09-16, checkup geral + revisão do catálogo)
+
+- **Porta 5432 do Postgres fechada pro público** (`127.0.0.1:5432:5432`),
+  confirmada tanto no `docker-compose.yml` quanto no container real em
+  produção — encerra 21+ itens de scan de bot (`FATAL: role "postgres"
+  does not exist`) catalogados entre 09/09 e 09/16, vários criticidade
+  alta.
+- **Bug real de deduplicação corrigido** (PR #69): `buscar_por_assinatura`
+  (Camada 2 do dedup) filtrava por `Assinatura` **e** `Aplicacao`, e a
+  `Aplicacao` final gravada (decisão da IA) podia divergir da sugerida
+  pelo container — fazendo a busca exata nunca encontrar o item já
+  existente e criar um novo a cada recorrência. Filtro agora usa só
+  `Assinatura`.
+- **Limpeza retroativa das duplicatas geradas por esse bug**: 368 itens
+  duplicados em 101 grupos encontrados no catálogo inteiro; 261
+  excluídos (mantido 1 canônico por grupo, com `Ocorrencias` somada).
+  Catálogo caiu de 845 pra 584 itens. Grupo da validação de tenant
+  (CAT-0089/090/152/153/179/180/261/411) preservado à parte por ser
+  achado de código, não ruído de log puro.
+- **CAT-0089/090/179 (falsos positivos de escopo) marcados `descartado`**:
+  código-alvo de duas delas não existe no repo certo (confundido com
+  `aprxm_sys`), e a terceira (trigger `check_package_resident_tenant`)
+  foi confirmada em produção como proteção multi-tenant funcionando
+  como projetado — auditoria SQL real não achou nenhuma linha
+  divergente hoje. Causa raiz da tentativa original (por que a app
+  tentou a gravação incompatível) não pôde ser confirmada — logs do
+  período já tinham expirado.
+- **CAT-0035 corrigido** (`ERR-6df1ae0ad9`, item de backlog desde
+  09-14): adicionado `healthcheck` ao serviço `grafana` — o Traefik só
+  passa a rotear pro container depois de `healthy`, eliminando a
+  corrida com o provider Docker. Aplicado e confirmado em produção
+  (`itp_grafana healthy`, rota 200) antes do commit.
+- **CAT-0397/CAT-0446 corrigidos**: log `ERROR` rebaixado pra `warn` em
+  login com credenciais inválidas e callback SSO com `state`
+  divergente — comportamento normal de usuário, não bug. PR #71.
+- **Catálogo revisado de 26 → 5 itens genuinamente abertos** depois da
+  limpeza de duplicatas: sobraram CAT-0153/CAT-0180 (falta de
+  validação de tenant no APRXM antes do UPDATE/entrega de encomenda —
+  ver pendências abaixo).
+- Confirmado que a PR #70 (reconciliação `infra/docker-compose.yml`
+  com produção) já estava mergeada — fecha o achado de drift descrito
+  no backlog abaixo, exceto pela parte de symlink (ver seção Backlog).
+
+---
+
 ## ⏳ Falta
 
 ### 🟡 Médio — precisa investigação antes de decidir a solução
 
-*(nenhum item médio pendente no momento)*
+- [ ] **CAT-0153 / CAT-0180**: falta validação de tenant no APRXM antes
+      do `UPDATE` em `deliver_package` e antes de persistir
+      `delivered_to_resident_id`, deixando o trigger de BD
+      `check_package_resident_tenant` estourar exceção 500 em vez da
+      aplicação retornar um erro tratado. Achado real, código a
+      corrigir em `aprxm_sys/backend/app/services/package_service.py`.
 
 ### 🔴 Depende de decisão/ação do usuário
 
@@ -208,10 +258,12 @@ atualizado:
 - [ ] Camadas extra de dedup/análise no catálogo de erros (correlação
       temporal, sub-agentes por categoria) — só depois que o volume real
       de erro aumentar.
-- [ ] **`ERR-6df1ae0ad9`** (Traefik perde a rota do Grafana por corrida
+- [x] ~~**`ERR-6df1ae0ad9`** (Traefik perde a rota do Grafana por corrida
       com o provider Docker, 40 ocorrências) — sem evidência de que foi
       corrigido, deixado aberto de propósito (2026-09-14) em vez de
-      fechar por suposição. Investigar se voltar a ocorrer.
+      fechar por suposição. Investigar se voltar a ocorrer.~~ Corrigido
+      2026-09-16 (CAT-0035): `healthcheck` no serviço `grafana`, ver
+      seção "Feito" acima.
 - [ ] **Vários arquivos de infra na VM são cópias manuais, não
       symlinks nem lidos direto do git**: `~/itp-stack/docker-compose.yml`,
       `~/itp-stack/monitoring/prometheus/prometheus.yml`, e todo
@@ -223,7 +275,9 @@ atualizado:
       tinha deployado mas não tinha" na mesma sessão. Vale trocar por
       symlink (ou o compose apontar direto pro checkout do repo) numa
       próxima rodada, pra eliminar essa classe de erro de vez.
-      `~/itp-stack/docker-compose.yml` também está **desatualizado**
-      em relação a `erp_itp/infra/docker-compose.yml` (faltam o serviço
-      `aprxm_backend`, vars `MS_TENANT_ID`/etc., vars do
-      `grafana_renderer`) — nunca foi sincronizado de volta pro repo.
+      `~/itp-stack/docker-compose.yml` **foi reconciliado com o repo em
+      2026-09-16 (PR #70)** — conteúdo igual hoje — mas continua sendo
+      cópia manual, não symlink; drift pode voltar a acontecer no
+      próximo deploy direto na VM sem replicar pro git (foi o que
+      quase aconteceu de novo com o `healthcheck` do CAT-0035 nesta
+      mesma sessão — replicado manualmente pro repo a tempo).
