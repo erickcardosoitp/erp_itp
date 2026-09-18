@@ -189,6 +189,45 @@ atualizado:
 
 ---
 
+## ✅ Feito (2026-09-17)
+
+- **PR #71 mergeado**: CAT-0035 (healthcheck do grafana), CAT-0397/CAT-0446
+  (log level de falhas de auth esperadas).
+- **CAT-0153 / CAT-0180 resolvidos** — na verdade já tinham sido corrigidos
+  direto na `main` do `aprxm_sys` por outro fluxo em paralelo (commits
+  `6d59459`/`2ca1a11`, mesma sessão): validação explícita de tenant antes
+  do INSERT/UPDATE em `receive_package`/`deliver_package`. Meu PR próprio
+  (#85) com a mesma correção foi fechado sem merge por redundância
+  (confirmado por diff manual — cobertura equivalente, versão da main
+  até mais enxuta). Catálogo atualizado (`resolvido`, referenciando os
+  commits reais).
+- **Testada a conexão com a camada Gold pro Power BI**: é o container
+  `aprxm_clickhouse` (banco `aprxm_analytics`, 40 tabelas gold), **não**
+  o Cloudflare R2 (R2 guarda só os Parquet Bronze/Silver/Gold do data
+  lake, sem conector nativo de BI) nem o Neon "aprxm-analytics" citado
+  na documentação antiga do código (`datalake_service.py`,
+  `presidencia_service.py`) — a variável real
+  `DATAWAREHOUSE_APRXM_DATABASE_URL` na VM já aponta pra
+  `clickhouse://`, migração feita sem atualizar os comentários no
+  código-fonte (achado, não corrigido — ver Backlog).
+- **Bug real achado e corrigido durante o teste**: `aprxm_clickhouse`
+  batia no teto de memória (`mem_limit: 1g`) só com o overhead interno
+  do próprio ClickHouse (mark cache/uncompressed cache), mesmo com
+  tabelas gold pequenas — `SELECT count() FROM system.merges` chegou a
+  falhar com `MEMORY_LIMIT_EXCEEDED`. Aumentado pra `1.5g`, aplicado e
+  confirmado em produção (query que falhava passou a funcionar). **Ainda
+  fica em ~90% de uso em repouso** (comportamento normal do ClickHouse,
+  que dimensiona caches proporcionalmente ao limite) — pode precisar
+  subir mais se queries pesadas do BI voltarem a falhar. PR #72.
+- **Conexão externa (Power BI) exige túnel SSH**: a porta 8123 do
+  ClickHouse está restrita a `127.0.0.1` (mesmo padrão da correção do
+  Postgres em 09-16) — acesso de fora da VM precisa de
+  `ssh -L 8123:localhost:8123 itpadmin@<ip-vm>` antes de apontar o BI
+  pra `localhost:8123`. Credenciais (`CLICKHOUSE_USER`/
+  `CLICKHOUSE_PASSWORD`) em `~/itp-stack/.env` na VM.
+
+---
+
 ## ⏳ Falta
 
 ### 🟡 Médio — precisa investigação antes de decidir a solução
@@ -250,6 +289,14 @@ atualizado:
 
 ### ⚫ Backlog — baixa prioridade, reavaliar depois
 
+- [ ] **Docs do `aprxm_sys` desatualizadas sobre a camada Gold**:
+      `datalake_service.py` e `presidencia_service.py` (comentários e
+      `config.py`, var `DATAWAREHOUSE_APRXM_DATABASE_URL`) ainda descrevem
+      o destino da camada Gold como "Neon aprxm-analytics" (Postgres),
+      mas a migração real já aponta pra `clickhouse://` (container
+      `aprxm_clickhouse` na VM) — achado 2026-09-17 testando a conexão
+      do Power BI. Vale atualizar os comentários pra não confundir a
+      próxima pessoa que for mexer nesse pipeline.
 - [ ] `aplicador.py` não escalona um item aprovado com `PromptExecucao`
       vazio — fica parado pra sempre. Gap conhecido, decisão do usuário
       de não mexer por ora.
