@@ -63,7 +63,11 @@ services:
       - clickhouse_data:/var/lib/clickhouse
       - ./clickhouse-config/backups.xml:/etc/clickhouse-server/config.d/backups.xml:ro
       - /home/itpadmin/backups:/backups
-    mem_limit: 1g
+    # 1g -> 1.5g (2026-09-17): container batia no teto so com overhead
+    # interno do ClickHouse (mark cache/uncompressed cache), mesmo com
+    # tabelas gold pequenas -- ate "SELECT count() FROM system.merges"
+    # falhava com MEMORY_LIMIT_EXCEEDED. Achado testando a conexao do BI.
+    mem_limit: 1.5g
     cpus: "1.0"
 
   erp_itp_backend:
