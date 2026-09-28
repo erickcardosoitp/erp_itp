@@ -601,7 +601,16 @@ def classificar(
     envelope = json.loads(resultado.stdout)
     custo_usd = envelope.get("total_cost_usd")
     texto_resposta = envelope.get("result", "")
-    classificacao = _extrair_json(texto_resposta)
+    try:
+        classificacao = _extrair_json(texto_resposta)
+    except json.JSONDecodeError as exc:
+        # Achado real 2026-09-28: JSON malformado (aspas sem escape) derrubava
+        # a rodada inteira do coletor, sem salvar o state nem registrar o custo
+        # -- e a rodada seguinte repetia a mesma chamada paga.
+        raise TarefaEscalada(
+            "resposta da IA com JSON inválido",
+            f"custo_usd={custo_usd}; erro={exc}; trecho={texto_resposta[:500]!r}",
+        ) from exc
 
     _validar(classificacao)
     classificacao["_custo_usd"] = custo_usd

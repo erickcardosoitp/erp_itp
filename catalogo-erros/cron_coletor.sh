@@ -42,7 +42,7 @@ echo "=== $(date -u -Iseconds) - executando coletor ==="
 # motivo da falha, levando a suposição errada de que era limite de
 # token do Claude — não era, o erro nem chegava a invocar IA).
 set +e
-SAIDA=$(python3 "$DIR/coletor.py" 2>&1)
+SAIDA=$(timeout 3300 python3 "$DIR/coletor.py" --sem-ia 2>&1)
 CODIGO_SAIDA=$?
 set -e
 echo "$SAIDA"
