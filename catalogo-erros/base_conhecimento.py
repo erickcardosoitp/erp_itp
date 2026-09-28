@@ -98,11 +98,13 @@ class BaseConhecimento:
         self._tickets.append({"id": resp.json()["id"], **fields, "CodProblema": cod})
         return cod
 
-    def registrar_ocorrencia(self, cod: str, ocorrencias: int, ultima_iso: str, incidente_novo: bool) -> None:
-        """Atualiza contadores do ticket; reabre se já estava resolvido/encerrado."""
+    def registrar_ocorrencia(self, cod: str, ocorrencias: int, ultima_iso: str, incidente_novo: bool) -> bool:
+        """Atualiza contadores do ticket; reabre se já estava resolvido/encerrado.
+        Devolve True se reabriu."""
         t = self.ticket(cod)
         if not t:
-            return
+            return False
+        reaberto = t.get("Estado") in ("resolvido", "encerrado")
         fields = {
             "QtdOcorrencias": int(t.get("QtdOcorrencias") or 0) + ocorrencias,
             "UltimaOcorrencia": ultima_iso,
@@ -114,3 +116,4 @@ class BaseConhecimento:
         requests.patch(f"{self._site}/lists/{LISTA_TICKETS}/items/{t['id']}/fields",
                        headers=self.client._headers(), json=fields, timeout=30).raise_for_status()
         t.update(fields)
+        return reaberto

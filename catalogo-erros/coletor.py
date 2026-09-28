@@ -31,6 +31,7 @@ import staging_diario
 from claude_client import TarefaEscalada, classificar, registrar_escalonamento
 from graph_client import GraphClient
 import jev_client
+import notificador
 from base_conhecimento import BaseConhecimento
 
 CAMPOS_SHORTLIST = ["CodErro", "TipoErro", "Assinatura", "Categoria"]
@@ -120,9 +121,23 @@ def _registrar_no_ticket(cod: str | None, ocorrencias: int, ultimo_timestamp: da
     if not (BASE and cod):
         return
     try:
-        BASE.registrar_ocorrencia(cod, ocorrencias, ultimo_timestamp.isoformat(), incidente_novo)
+        reaberto = BASE.registrar_ocorrencia(cod, ocorrencias, ultimo_timestamp.isoformat(), incidente_novo)
     except Exception as exc:  # contador do ticket não pode derrubar a rodada
         log(f"  aviso: falha ao atualizar ticket {cod}: {exc}")
+        return
+    t = BASE.ticket(cod) or {}
+    if reaberto and t.get("Criticidade") in ("alta", "critica"):
+        _alertar("Ticket reaberto: o problema voltou a acontecer", t.get("Criticidade"), t.get("Title") or "",
+                 cod, t.get("Sistema") or "", "", f"{ocorrencias} ocorrência(s) nova(s) em {ultimo_timestamp.isoformat()}")
+
+
+def _alertar(motivo: str, criticidade: str, titulo: str, cod: str | None, aplicacao: str, mensagem: str, detalhe: str) -> None:
+    """Aviso imediato por e-mail; falha de envio não derruba a rodada."""
+    try:
+        notificador.alertar(motivo, criticidade, titulo, cod, aplicacao, mensagem, detalhe)
+        log(f"  alerta imediato enviado ({criticidade}, {cod})")
+    except Exception as exc:
+        log(f"  aviso: falha ao enviar alerta imediato ({cod}): {exc}")
 
 METRICA_TETO_PATH = os.path.expanduser("~/itp-stack/textfile-metrics/catalogo-erros-teto.prom")
 
@@ -414,8 +429,11 @@ def processar_grupo(
             classificacao.pop("_jev", None)
             log(f"  triagem Jev: {classificacao['criticidade']} / {classificacao['ia_pode_resolver']} / ticket {classificacao.get('cod_problema')}")
             if classificacao["criticidade"] in ("alta", "critica"):
-                return _criar_item_novo(client, aplicacao_sugerida, msg_normalizada, exemplos_brutos, qtd,
-                                        primeiro_timestamp, ultimo_timestamp, classificacao)
+                resultado = _criar_item_novo(client, aplicacao_sugerida, msg_normalizada, exemplos_brutos, qtd,
+                                             primeiro_timestamp, ultimo_timestamp, classificacao)
+                _alertar("Erro novo de criticidade alta/crítica", classificacao["criticidade"], classificacao["tipo_erro"],
+                         classificacao.get("cod_problema"), aplicacao_sugerida, exemplos_brutos[0], classificacao["diagnostico"])
+                return resultado
             return _criar_item_staging(aplicacao_sugerida, msg_normalizada, exemplos_brutos, qtd,
                                        primeiro_timestamp, ultimo_timestamp, classificacao)
 
