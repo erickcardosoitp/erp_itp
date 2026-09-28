@@ -48,6 +48,11 @@ LIMITE_PICO_INTEGRACAO = 5  # ocorrências no mesmo lote pra considerar "pico"
 # isso que consumiu ~92% da janela de sessão de 5h em minutos no incidente.
 LIMITE_CLASSIFICACOES_POR_RODADA = 5
 
+# Modo sem IA (--sem-ia): nenhuma chamada ao Claude. Assinatura nova vira item
+# "pendente de triagem" direto no SharePoint, aguardando a triagem com Jev
+# (spec 2026-09-28-triagem-jev). Definido em main().
+SEM_IA = False
+
 METRICA_TETO_PATH = os.path.expanduser("~/itp-stack/textfile-metrics/catalogo-erros-teto.prom")
 
 
@@ -299,6 +304,27 @@ def processar_grupo(
         # caminho, mas mantém o padrão consistente com a Camada 3 abaixo.
         return _criar_item_staging(aplicacao_sugerida, msg_normalizada, exemplos_brutos, qtd, primeiro_timestamp, ultimo_timestamp, classificacao)
 
+    if SEM_IA:
+        log(f"  novo, pendente de triagem (modo sem IA): '{msg_normalizada[:80]}'")
+        # Criticidade "media" fica fora do gatilho do fluxo de aprovação
+        # (só alta/crítica) e vai direto pro SharePoint: a consolidação
+        # diária pode estar desligada, e o staging não seria visto.
+        return _criar_item_novo(client, aplicacao_sugerida, msg_normalizada, exemplos_brutos, qtd,
+                                primeiro_timestamp, ultimo_timestamp, {
+            "eh_reincidencia_de": None,
+            "aplicacao": aplicacao_sugerida,
+            "categoria": "pendente",
+            "tipo_erro": f"Pendente de triagem: {msg_normalizada[:200]}",
+            "descricao_resumida": "Erro novo registrado sem classificação (coletor em modo sem IA).",
+            "criticidade": "media",
+            "camada_investigacao": "pendente",
+            "confianca": 0,
+            "ia_pode_resolver": "mediano",
+            "diagnostico": "Não classificado: coletor rodando com --sem-ia. Aguardando triagem.",
+            "impacto_avaliado": "Não avaliado.",
+            "correcao_proposta": "Não avaliada.",
+        })
+
     # Camada 3: sem match exato — classifica e checa semelhança semântica.
     if len(contador_classificacoes) >= LIMITE_CLASSIFICACOES_POR_RODADA:
         log(f"  teto de {LIMITE_CLASSIFICACOES_POR_RODADA} classificações da rodada "
@@ -514,7 +540,10 @@ LOCK_FILE = os.path.expanduser("~/itp-stack/catalogo-erros-coletor.lock")
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--desde", default=None, help="Ex: 24h, 1h — ignora o state salvo")
+    parser.add_argument("--sem-ia", action="store_true", help="Não chama o Claude; erro novo vira item pendente de triagem")
     args = parser.parse_args()
+    global SEM_IA
+    SEM_IA = args.sem_ia
 
     # Trava de execucao unica: sem isso, duas execucoes concorrentes do
     # coletor (ex: rodada manual + cron, ou duas sessoes ao mesmo tempo)
