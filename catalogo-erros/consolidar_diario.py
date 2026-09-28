@@ -16,14 +16,13 @@ import os
 from datetime import datetime
 
 import config
-import requests
+import notificador
 import staging_diario
 from claude_client import registrar_escalonamento
 from coletor import _criar_item_novo
 from graph_client import GraphClient
 
 DESTINATARIO = "erickcardoso@institutotiapretinha.org"
-REMETENTE = "projetos@institutotiapretinha.org"  # mesma caixa usada pelo claude_client.py
 LINK_LISTA = "https://insttiapretinha.sharepoint.com/sites/ObservabilidadeITP/Lists/CatalogoErros"
 
 
@@ -85,52 +84,13 @@ def _consolidar() -> None:
 
     staging_diario.limpar()
 
-    # Achado real 2026-09-15 (1ª execução de verdade, à noite): o app
-    # "Catalogo Erros - VM" (catalogo_erros.env, usado acima só pro
-    # GraphClient/SharePoint) só tem permissão Sites.ReadWrite.All, sem
-    # Mail.Send -- usar cfg (dele) pro token de email dava 403 Forbidden
-    # no sendMail, silenciosamente (todos os itens já tinham sido criados
-    # na lista, só o email de aviso que nunca saía). O app que de fato
-    # manda email é outro, carregado à parte, mesmo padrão já usado em
-    # claude_client.py::_notificar_troca_de_conta.
-    cfg_email = {}
-    with open(os.path.expanduser("~/itp-stack/relatorio_grafana.env"), "r", encoding="utf-8") as f:
-        for linha in f:
-            linha = linha.strip()
-            if not linha or linha.startswith("#") or "=" not in linha:
-                continue
-            k, v = linha.split("=", 1)
-            cfg_email[k.strip()] = v.strip()
-
-    token_resp = requests.post(
-        f"https://login.microsoftonline.com/{cfg_email['MS_TENANT_ID']}/oauth2/v2.0/token",
-        data={
-            "client_id": cfg_email["MS_CLIENT_ID"],
-            "client_secret": cfg_email["MS_CLIENT_SECRET"],
-            "scope": "https://graph.microsoft.com/.default",
-            "grant_type": "client_credentials",
-        },
-        timeout=30,
-    )
-    token_resp.raise_for_status()
-    token = token_resp.json()["access_token"]
-
+    # E-mail sai pelo app com Mail.Send (ver notificador.py; achado de 2026-09-15).
     total = sum(contagem.values())
-    mensagem = {
-        "message": {
-            "subject": f"[Catálogo de Erros] Consolidação diária — {total} item(ns) baixa/média",
-            "body": {"contentType": "HTML", "content": _montar_html(contagem)},
-            "toRecipients": [{"emailAddress": {"address": DESTINATARIO}}],
-        },
-        "saveToSentItems": "false",
-    }
-    resp = requests.post(
-        f"https://graph.microsoft.com/v1.0/users/{REMETENTE}/sendMail",
-        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-        json=mensagem,
-        timeout=30,
+    notificador.enviar_email(
+        f"[Catálogo de Erros] Consolidação diária — {total} item(ns) baixa/média",
+        _montar_html(contagem),
+        DESTINATARIO,
     )
-    resp.raise_for_status()
     print(f"Consolidação diária concluída: {total} item(ns) criado(s) na lista, email enviado.")
 
 

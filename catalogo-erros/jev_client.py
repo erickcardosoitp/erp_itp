@@ -19,7 +19,10 @@ JEV_URL = "https://api.typesafe.ai/v1/systemone"
 JEV_MODELO = "jev-latest"
 
 # Limites de confiança (calibrar contra os tickets revisados).
-CONFIANCA_MIN_TICKET = 0.75
+CONFIANCA_MIN_TICKET = 0.5
+# Com trava, vínculo errado é mais caro (ex: violação de association_id ligada
+# ao ticket benigno da restauração do banco, confiança 0.52 no teste de 29/09).
+CONFIANCA_MIN_TICKET_COM_TRAVA = 0.75
 CONFIANCA_MIN_CRITICIDADE = 0.6
 CONFIANCA_MIN_FECHAR = 0.85
 
@@ -143,7 +146,8 @@ def triar(api_key: str, base: BaseConhecimento, aplicacao: str, container: str,
         criticidade = NIVEIS[min(NIVEIS.index(criticidade) + 1, 3)]
         motivos.append(f"criticidade subiu um nível (confiança {conf_crit:.2f})")
 
-    ticket_info = base.ticket(ticket) if ticket and ticket != "nenhum" and conf_ticket >= CONFIANCA_MIN_TICKET else None
+    limite_ticket = CONFIANCA_MIN_TICKET_COM_TRAVA if travas else CONFIANCA_MIN_TICKET
+    ticket_info = base.ticket(ticket) if ticket and ticket != "nenhum" and conf_ticket >= limite_ticket else None
     if ticket_info:
         crit_ticket = ticket_info.get("Criticidade") or criticidade
         # Ticket revisado por humano manda; senão vale o maior dos dois.
