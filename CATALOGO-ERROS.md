@@ -716,3 +716,10 @@ renderização do Grafana e outros serviços que nunca foram commitados no
 repositório. A mudança da porta 5432 foi aplicada manualmente nos dois
 arquivos, mas essa drift maior entre eles continua existindo e não foi
 resolvida nesta sessão.
+
+## 13. JiraIA — triagem com Jev (2026-09-28)
+
+A classificação pelo Claude foi substituída por triagem com o Jev (TypeSafe) e por gestão de problemas (tickets `PRB-NNNN` na lista `TicketsProblema`, base de conhecimento no SharePoint). O processo passou a se chamar **JiraIA**. Documentação completa em [`catalogo-erros/JIRAIA.md`](catalogo-erros/JIRAIA.md); especificação em `docs/superpowers/specs/2026-09-28-jiraia-triagem-jev-design.md`; pendências em `docs/superpowers/plans/2026-09-28-jiraia-pendencias.md`.
+
+Também em 2026-09-28: o coletor, pausado desde 18/09, voltou a rodar; uma resposta de JSON malformado do Claude derrubava a rodada sem salvar state nem registrar custo (corrigido no PR #77, que também criou o modo `--sem-ia`).
+
