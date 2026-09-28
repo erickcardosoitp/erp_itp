@@ -16,6 +16,7 @@ import argparse
 import fcntl
 import json
 import os
+import re
 import subprocess
 import sys
 import uuid
@@ -29,6 +30,8 @@ import parquet_writer
 import staging_diario
 from claude_client import TarefaEscalada, classificar, registrar_escalonamento
 from graph_client import GraphClient
+import jev_client
+from base_conhecimento import BaseConhecimento
 
 CAMPOS_SHORTLIST = ["CodErro", "TipoErro", "Assinatura", "Categoria"]
 
@@ -52,6 +55,74 @@ LIMITE_CLASSIFICACOES_POR_RODADA = 5
 # "pendente de triagem" direto no SharePoint, aguardando a triagem com Jev
 # (spec 2026-09-28-triagem-jev). Definido em main().
 SEM_IA = False
+
+# Modo Jev (--jev): triagem pelo Jev no lugar da classificação pelo Claude
+# (spec 2026-09-28-triagem-jev). BASE e JEV_API_KEY definidos em main().
+JEV = False
+JEV_API_KEY = ""
+BASE: BaseConhecimento | None = None
+LIMITE_TRIAGENS_JEV_POR_RODADA = 50
+
+# Rajada: muitos erros de banco do mesmo PID no mesmo minuto, com várias
+# assinaturas distintas = restauração/sincronização (ex: PRB-0001, 14/09
+# 23:04), não bug. Vira um ticket por dia, sem IA.
+_RAJADA_CHAVE = re.compile(r"(\d{4}-\d{2}-\d{2} \d{2}:\d{2}):\d{2}(?:\.\d+)? UTC \[(\d+)\]")
+RAJADA_MIN_LINHAS = 20
+RAJADA_MIN_ASSINATURAS = 5
+
+
+def detectar_rajadas(linhas_erro: list[str]) -> set:
+    """Chaves (minuto, pid) que caracterizam rajada neste lote."""
+    linhas_por_chave: dict = defaultdict(int)
+    assinaturas_por_chave: dict = defaultdict(set)
+    for linha in linhas_erro:
+        m = _RAJADA_CHAVE.search(linha)
+        if m:
+            chave = (m.group(1), m.group(2))
+            linhas_por_chave[chave] += 1
+            assinaturas_por_chave[chave].add(normalizador.normalizar(linha)[:255])
+    return {c for c, n in linhas_por_chave.items()
+            if n >= RAJADA_MIN_LINHAS and len(assinaturas_por_chave[c]) >= RAJADA_MIN_ASSINATURAS}
+
+
+def _rajada_do_grupo(exemplos: list[str], rajadas: set) -> tuple | None:
+    """Chave da rajada se TODAS as linhas do grupo pertencem a ela."""
+    if not rajadas:
+        return None
+    chaves = set()
+    for linha in exemplos:
+        m = _RAJADA_CHAVE.search(linha)
+        if not m or (m.group(1), m.group(2)) not in rajadas:
+            return None
+        chaves.add((m.group(1), m.group(2)))
+    return next(iter(chaves)) if len(chaves) == 1 else None
+
+
+def _ticket_rajada(dia: str, pid: str) -> str | None:
+    """Ticket de rajada do dia: reaproveita se já existe, senão cria."""
+    titulo = f"Rajada de erros de banco (restauração/sincronização) em {dia}"
+    existente = next((t for t in BASE._todos_tickets() if t.get("Title") == titulo), None)
+    if existente:
+        return existente["CodProblema"]
+    return BASE.criar_ticket({
+        "Title": titulo, "Sistema": "Banco", "Modulo": "Restauração/sincronização", "Camada": "banco",
+        "Natureza": "efeito-deploy", "Disposicao": "aceito-conhecido", "Criticidade": "baixa",
+        "JustificativaCriticidade": f"Detectado por regra (sem IA): {RAJADA_MIN_LINHAS}+ erros de banco do PID {pid} no mesmo minuto, com {RAJADA_MIN_ASSINATURAS}+ mensagens distintas.",
+        "CausaRaiz": "Provável pg_restore, sync ou migração rodando sobre base já populada. Confirmar o que rodou nesse horário.",
+        "Contorno": "Nenhum necessário se o banco final está íntegro.",
+        "Remediacao": "Ver padrão 04-Padroes-Recorrentes/restauracao-banco.md.",
+        "Estado": "erro-conhecido", "QtdIncidentes": 0, "QtdOcorrencias": 0, "OrigemClassificacao": "ia",
+        "PadraoRecorrente": "restauracao-banco.md",
+    })
+
+
+def _registrar_no_ticket(cod: str | None, ocorrencias: int, ultimo_timestamp: datetime, incidente_novo: bool) -> None:
+    if not (BASE and cod):
+        return
+    try:
+        BASE.registrar_ocorrencia(cod, ocorrencias, ultimo_timestamp.isoformat(), incidente_novo)
+    except Exception as exc:  # contador do ticket não pode derrubar a rodada
+        log(f"  aviso: falha ao atualizar ticket {cod}: {exc}")
 
 METRICA_TETO_PATH = os.path.expanduser("~/itp-stack/textfile-metrics/catalogo-erros-teto.prom")
 
@@ -208,6 +279,7 @@ def processar_grupo(
     ultimo_timestamp: datetime,
     custo_acumulado: list,
     contador_classificacoes: list,
+    rajada: tuple | None = None,
 ) -> dict | None:
     """Processa um grupo (mesma assinatura normalizada) visto neste lote.
     Devolve os campos usados pra gravar as linhas do Parquet — inclui
@@ -230,6 +302,7 @@ def processar_grupo(
         atualizacao.update(aplicar_matriz_reincidencia(fields, fields.get("Categoria"), qtd))
         status_atualizado = atualizacao.get("Status", status_atualizado)
         client.atualizar_item(existente["id"], atualizacao)
+        _registrar_no_ticket(fields.get("CodProblema"), qtd, ultimo_timestamp, incidente_novo=False)
         log(f"  reincidência exata: {cod_erro} (+{qtd} ocorrências)")
         return {
             "cod_erro": cod_erro,
@@ -304,8 +377,50 @@ def processar_grupo(
         # caminho, mas mantém o padrão consistente com a Camada 3 abaixo.
         return _criar_item_staging(aplicacao_sugerida, msg_normalizada, exemplos_brutos, qtd, primeiro_timestamp, ultimo_timestamp, classificacao)
 
-    if SEM_IA:
-        log(f"  novo, pendente de triagem (modo sem IA): '{msg_normalizada[:80]}'")
+    if rajada and BASE:
+        cod = _ticket_rajada(rajada[0][:10], rajada[1])
+        _registrar_no_ticket(cod, qtd, ultimo_timestamp, incidente_novo=True)
+        log(f"  rajada de banco {rajada} -> {cod} (sem IA): '{msg_normalizada[:60]}'")
+        return _criar_item_staging(aplicacao_sugerida, msg_normalizada, exemplos_brutos, qtd, primeiro_timestamp, ultimo_timestamp, {
+            "eh_reincidencia_de": None, "aplicacao": aplicacao_sugerida, "categoria": "banco",
+            "tipo_erro": f"Rajada de erros de banco em {rajada[0][:10]}", "descricao_resumida": "Parte de uma rajada de erros de banco (restauração/sincronização).",
+            "criticidade": "baixa", "camada_investigacao": "schema_banco", "confianca": 8, "ia_pode_resolver": "sem risco",
+            "diagnostico": f"Classificado por regra (sem IA): rajada {rajada}. Ver ticket {cod}.",
+            "impacto_avaliado": "Nenhum para usuários.", "correcao_proposta": "Ver padrão restauracao-banco.md.",
+            "cod_problema": cod,
+        })
+
+    if JEV and not normalizador.eh_ruido_ddl_idempotente(exemplos_brutos[0]):
+        if len(contador_classificacoes) >= LIMITE_TRIAGENS_JEV_POR_RODADA:
+            log(f"  teto de {LIMITE_TRIAGENS_JEV_POR_RODADA} triagens Jev da rodada — adiando '{msg_normalizada[:80]}'")
+            return GRUPO_ADIADO
+        contador_classificacoes.append(1)
+        try:
+            classificacao = jev_client.triar(JEV_API_KEY, BASE, aplicacao_sugerida, container,
+                                             msg_normalizada, exemplos_brutos[0], qtd)
+        except jev_client.JevIndisponivel as exc:
+            log(f"  Jev indisponível ({exc}) — registrando como pendente de triagem")
+            classificacao = None
+        if classificacao:
+            cod = classificacao["cod_problema"]
+            if cod:
+                _registrar_no_ticket(cod, qtd, ultimo_timestamp, incidente_novo=True)
+            else:
+                try:
+                    cod = BASE.criar_ticket(jev_client.campos_ticket_novo(classificacao, aplicacao_sugerida, ultimo_timestamp.isoformat(), qtd))
+                    classificacao["cod_problema"] = cod
+                except Exception as exc:
+                    log(f"  aviso: falha ao criar ticket: {exc}")
+            classificacao.pop("_jev", None)
+            log(f"  triagem Jev: {classificacao['criticidade']} / {classificacao['ia_pode_resolver']} / ticket {classificacao.get('cod_problema')}")
+            if classificacao["criticidade"] in ("alta", "critica"):
+                return _criar_item_novo(client, aplicacao_sugerida, msg_normalizada, exemplos_brutos, qtd,
+                                        primeiro_timestamp, ultimo_timestamp, classificacao)
+            return _criar_item_staging(aplicacao_sugerida, msg_normalizada, exemplos_brutos, qtd,
+                                       primeiro_timestamp, ultimo_timestamp, classificacao)
+
+    if SEM_IA or JEV:
+        log(f"  novo, pendente de triagem (sem classificação por IA): '{msg_normalizada[:80]}'")
         # Criticidade "media" fica fora do gatilho do fluxo de aprovação
         # (só alta/crítica) e vai direto pro SharePoint: a consolidação
         # diária pode estar desligada, e o staging não seria visto.
@@ -504,6 +619,7 @@ def _criar_item_novo(
         "IAPodeResolver": classificacao["ia_pode_resolver"],
         "Confianca": classificacao["confianca"],
         "CamadaInvestigacao": classificacao["camada_investigacao"],
+        **({"CodProblema": classificacao["cod_problema"]} if classificacao.get("cod_problema") else {}),
         "Reincidente": False,
         # Pré-preenchido já na criação (decisão 2026-09-15, a pedido do
         # analista): itens de criticidade baixa/média não disparam mais
@@ -541,9 +657,11 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--desde", default=None, help="Ex: 24h, 1h — ignora o state salvo")
     parser.add_argument("--sem-ia", action="store_true", help="Não chama o Claude; erro novo vira item pendente de triagem")
+    parser.add_argument("--jev", action="store_true", help="Triagem pelo Jev (exige JEV_API_KEY no catalogo_erros.env)")
     args = parser.parse_args()
-    global SEM_IA
+    global SEM_IA, JEV
     SEM_IA = args.sem_ia
+    JEV = args.jev
 
     # Trava de execucao unica: sem isso, duas execucoes concorrentes do
     # coletor (ex: rodada manual + cron, ou duas sessoes ao mesmo tempo)
@@ -562,6 +680,12 @@ def main() -> None:
 
     cfg = config.carregar_env()
     client = GraphClient(cfg)
+    global BASE, JEV_API_KEY
+    BASE = BaseConhecimento(client)
+    if JEV:
+        JEV_API_KEY = cfg.get("JEV_API_KEY", "")
+        if not JEV_API_KEY:
+            log("aviso: --jev sem JEV_API_KEY no env — erros novos ficam pendentes de triagem")
     state = carregar_state()
     agora = parquet_writer.agora_utc()
     custo_acumulado: list = []
@@ -584,6 +708,9 @@ def main() -> None:
 
         # Agrupa por assinatura normalizada dentro deste lote, guardando
         # também o timestamp real de cada ocorrência (quando a linha tiver).
+        rajadas = detectar_rajadas(linhas_erro)
+        if rajadas:
+            log(f"  rajada(s) de banco detectada(s): {sorted(rajadas)}")
         grupos: dict[str, list[str]] = defaultdict(list)
         timestamps_por_grupo: dict[str, list] = defaultdict(list)
         for linha in linhas_erro:
@@ -626,6 +753,7 @@ def main() -> None:
                 ultimo_timestamp=ultimo_ts,
                 custo_acumulado=custo_acumulado,
                 contador_classificacoes=contador_classificacoes,
+                rajada=_rajada_do_grupo(exemplos, rajadas),
             )
             if resultado is GRUPO_ADIADO:
                 # Fica pendente pro próximo lote -- não avança o state deste
