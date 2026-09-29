@@ -188,14 +188,26 @@ def logs_do_container(nome: str, desde_iso: str) -> str:
     return (resultado.stdout or "") + (resultado.stderr or "")
 
 
+# itp_postgres loga com log_line_prefix '%m [%p] app=%a| ' (ALTER SYSTEM na VM). Sessão manual (psql,
+# pgAdmin, DBeaver) é consulta de diagnóstico, não erro do sistema -- três delas reabriram o PRB-0021
+# em 28/09. O marcador sai da linha pra assinatura continuar igual à dos erros já catalogados.
+_APP_POSTGRES = re.compile(r" app=([^|]*)\| ")
+_APPS_MANUAIS = ("psql", "pgAdmin", "DBeaver")
+
+
 def extrair_erros(texto_log: str) -> list[str]:
-    linhas = texto_log.splitlines()
-    return [
-        l for l in linhas
-        if normalizador.contem_erro(l, config.PADRAO_ERRO)
-        and not normalizador.eh_access_log_ok(l)
-        and not normalizador.eh_nivel_nao_erro(l)
-    ]
+    erros = []
+    for l in texto_log.splitlines():
+        m = _APP_POSTGRES.search(l)
+        if m:
+            if m.group(1).startswith(_APPS_MANUAIS):
+                continue
+            l = l[:m.start()] + " " + l[m.end():]
+        if (normalizador.contem_erro(l, config.PADRAO_ERRO)
+                and not normalizador.eh_access_log_ok(l)
+                and not normalizador.eh_nivel_nao_erro(l)):
+            erros.append(l)
+    return erros
 
 
 def _desde_para_datetime(desde: str):
