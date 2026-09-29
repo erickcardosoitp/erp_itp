@@ -345,7 +345,12 @@ CHAMADA_TOKEN / NEXT_PUBLIC_CHAMADA_TOKEN  = itp-chamada-2026
 
 ## Numeração de Matrícula
 
-Formato: `ITP-ROLE-YYYYMM-###` — ex: `ITP-ALUNO-202503-001`
+Formato real: `ITP-AAAA-MMDD` + sequencial do dia **sem zeros à esquerda** — ex: `ITP-2026-08201` (1ª matrícula de 20/08/2026), `ITP-2026-081310` (10ª de 13/08).
+
+- Gerado só por `gerarNumeroMatricula()` (`apps/backend/src/alunos/numero-matricula.ts`), usado pela matrícula direta (`academico.service.ts`) e pela efetivação de inscrição (`matriculas.service.ts`).
+- Sequencial = **maior número já emitido no dia + 1** (não `COUNT(*)`: contagem repetia número depois de exclusão e batia no índice único `alunos_numero_matricula_key`). Trava `pg_advisory_xact_lock` por dia dentro da transação.
+- Coluna `alunos.numero_matricula` é `varchar(50)` com índice único.
+- **Formato mantido de propósito** (decisão 2026-09-29): o número sai impresso em documentos. O formato `ITP-ROLE-YYYYMM-###` que constava aqui nunca foi implementado.
 
 ---
 

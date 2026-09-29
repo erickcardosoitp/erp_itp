@@ -15,6 +15,7 @@ import { Turma } from '../academico/entities/turma.entity';
 import { AcademicoService } from '../academico/academico.service';
 import { NotificacoesService } from '../notificacoes/notificacoes.service';
 import { SupabaseService } from '../modules/supabase/supabase.service';
+import { gerarNumeroMatricula } from '../alunos/numero-matricula';
 
 
 /** Calcula a idade em anos completos a partir de uma data de nascimento (string ISO ou Date). */
@@ -682,7 +683,7 @@ export class MatriculasService {
         ? cursosSelecionados.join(', ')
         : inscricao.cursos_desejados ?? '';
 
-      const numeroMatricula = await this.generateMatriculaNumber(queryRunner.manager);
+      const numeroMatricula = await gerarNumeroMatricula(queryRunner.manager);
 
       const novoAluno = queryRunner.manager.create(Aluno, {
         numero_matricula:    numeroMatricula,
@@ -815,7 +816,7 @@ export class MatriculasService {
         }
       }
 
-      const numeroMatricula = await this.generateMatriculaNumber(queryRunner.manager);
+      const numeroMatricula = await gerarNumeroMatricula(queryRunner.manager);
 
       const novoAluno = queryRunner.manager.create(Aluno, {
         numero_matricula: numeroMatricula,
@@ -968,23 +969,6 @@ export class MatriculasService {
     }
   }
 
-  /**
-   * Helper para gerar o número de matrícula ITP-YYYY-MMDDX.
-   */
-  private async generateMatriculaNumber(manager: any): Promise<string> {
-    const hoje = new Date();
-    const anoStr = String(hoje.getFullYear());
-    const mesStr = String(hoje.getMonth() + 1).padStart(2, '0');
-    const diaStr = String(hoje.getDate()).padStart(2, '0');
-    const inicioHoje = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate(), 0, 0, 0);
-    const fimHoje = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate(), 23, 59, 59);
-    const contaHoje = await manager
-      .createQueryBuilder(Aluno, 'a')
-      .where('a.createdAt BETWEEN :ini AND :fim', { ini: inicioHoje, fim: fimHoje })
-      .getCount();
-    const seq = String(contaHoje + 1);
-    return `ITP-${anoStr}-${mesStr}${diaStr}${seq}`;
-  }
   // ── Documentos ───────────────────────────────────────────────────────────────
 
   /**
