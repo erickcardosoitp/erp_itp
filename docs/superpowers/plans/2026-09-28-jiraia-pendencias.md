@@ -8,7 +8,7 @@ Pendências do JiraIA e do catálogo de erros. Espelho da lista no SharePoint (`
 |---|---|---|---|
 | 1 | Revisar os tickets da `TicketsProblema` | Erick | Conferir natureza, disposição e criticidade; preencher `RevisadoPor`/`RevisadoEm`. Sem isso não há gabarito para calibrar os limites de confiança. |
 | 2 | Investigar PRB-0021, PRB-0026 e PRB-0027 | Equipe | `column r.deleted_at does not exist` (23/09, reabriu PRB-0021) · `value too long for type character varying(14)` (PRB-0026) · `duplicate key` em `uq_migration_...` (PRB-0027). |
-| 3 | Corrigir o restante do fluxo `testeErros` (Power Automate) | Erick | Condição de disparo corrigida em 28/09. Falta: (a) título da aprovação e assunto do e-mail usam `outputs('Atualizar_item')?['body/TipoErro']`, que vem vazio → `triggerBody()?['TipoErro']`; (b) Id vazio em "Atualizar item 1" (escalar) e "3" (rejeitar) → `triggerBody()?['ID']`; (c) Id do "Atualizar item 2" (aprovar) com `\r\n` no final. |
+| 3 | Corrigir o restante do fluxo `testeErros` (Power Automate) | Erick | Condição de disparo corrigida em 28/09. Falta: (a) título da aprovação e assunto do e-mail usam `outputs('Atualizar_item')?['body/TipoErro']`, que vem vazio → `triggerBody()?['TipoErro']`; (b) Id vazio em "Atualizar item 1" (escalar) e "3" (rejeitar) → `triggerBody()?['ID']`; (c) Id do "Atualizar item 2" (aprovar) com `\r\n` no final; (d) e-mail mostra objeto cru nas colunas de escolha: em ResumoNotificacao usar `triggerBody()?['Aplicacao']?['Value']` (idem Categoria, Criticidade, IAPodeResolver); (e) e-mail duplicado com o alerta imediato do JiraIA: remover "Enviar um e-mail (V2)" e manter só a aprovação. |
 
 ## Média
 
