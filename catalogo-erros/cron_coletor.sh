@@ -17,9 +17,12 @@ set -euo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 STATE_FILE="$HOME/itp-stack/catalogo-erros-cron-state.json"
 LIMITE_MUITOS_ERROS=5
-INTERVALO_NORMAL_H=6      # nenhum item novo, ou só criticidade baixa
-INTERVALO_MEDIA_MIN=120   # pior item novo = criticidade media
-INTERVALO_ALTA_MIN=30     # pior item novo = criticidade alta
+# 2026-09-29: teto de 10 min. Com 6h de intervalo "quieto", um erro alto das
+# 20:50 (ESC recriando usuário desativado) só seria coletado — e o alerta
+# imediato enviado — 4h30 depois. Rodada sem erro novo não chama IA.
+INTERVALO_NORMAL_MIN=10   # nenhum item novo, ou só criticidade baixa
+INTERVALO_MEDIA_MIN=10    # pior item novo = criticidade media
+INTERVALO_ALTA_MIN=10     # pior item novo = criticidade alta
 INTERVALO_CRITICA_MIN=5   # pior item novo = criticidade critica
 
 AGORA_EPOCH=$(date -u +%s)
@@ -76,7 +79,7 @@ elif [ "$ITENS_NOVOS" -gt "$LIMITE_MUITOS_ERROS" ]; then
   PROXIMO_INTERVALO_S=$((INTERVALO_ALTA_MIN * 60))
   echo "AVISO: $ITENS_NOVOS itens novos (> $LIMITE_MUITOS_ERROS), mesmo que baixa criticidade — próxima varredura em ${INTERVALO_ALTA_MIN} min"
 else
-  PROXIMO_INTERVALO_S=$((INTERVALO_NORMAL_H * 3600))
+  PROXIMO_INTERVALO_S=$((INTERVALO_NORMAL_MIN * 60))
 fi
 
 PROXIMA_NOVA_EPOCH=$((AGORA_EPOCH + PROXIMO_INTERVALO_S))
