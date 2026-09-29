@@ -32,7 +32,7 @@ container → filtro "error|exception|fatal|panic" → normalização → assina
    └─ criticidade baixa/média  → staging do dia → consolidação às 23h + e-mail-resumo
 ```
 
-Nenhuma correção é aplicada automaticamente nesta fase: o aplicador (`aplicador.py`) está desligado.
+Nenhuma correção é **publicada** automaticamente: o aplicador (`aplicador.py`) segue desligado. Desde 29/09 o investigador (fase 4a, seção 10) propõe correções em branches para revisão humana.
 
 ## 2. Componentes
 
@@ -103,3 +103,24 @@ Não use `--desde` para reprocessar logs já coletados: a Camada 2 somaria as oc
 ## 9. Vídeo de apresentação
 
 Projeto em [`video/`](video/), gerado com a skill `/brag` (latent-spaces/brag) sobre o Hyperframes. O áudio não é versionado (licença da trilha a confirmar); ver `video/README.md`.
+
+## 10. Investigador — fase 4a (desde 2026-09-29)
+
+`investigador.py`, a cada 30 min pelo cron, com trava própria (`~/itp-stack/jiraia-investigador.lock`):
+
+1. Escolhe até **5 tickets** elegíveis: estado aberto/reaberto, disposição remediar, criticidade média ou maior, **sem trava**, sistema com repositório conhecido (APRXM → `aprxm_sys`, ERP-ITP → `erp_itp`), não investigado nos últimos 7 dias. Ordem: criticidade, depois mais recente.
+2. Cria um **git worktree** isolado em `~/itp-stack/jiraia-worktrees/PRB-NNNN`, na branch `jiraia/PRB-NNNN-*` a partir de `origin/main`.
+3. Roda o Claude Code (conta única `dev.itp`, ferramentas só `Read,Grep,Glob,Edit,Write` — sem shell) com o ticket, os incidentes, o contexto do sistema e o padrão recorrente. Ele preenche título, causa raiz, impacto, contorno e remediação e, se a correção for pequena e segura, edita o código.
+4. O script **valida o diff**: nada em migrations, `/db/`, `.env`, `docker-compose`, `.github/`, `app.module.ts`, `vercel.json`; no máximo 6 arquivos e 400 linhas. Fora disso, a correção é descartada e o ticket fica em análise.
+5. **Jev avalia a correção** (corrige a causa? escopo mínimo? efeito colateral? risco) — resultado em `AvaliacaoCorrecao`.
+6. Commit, push da branch e **e-mail com o link "comparar e abrir PR"**. Ticket vai para `em-correcao` com `LinkPR`. Nada é mergeado nem publicado.
+
+Custo e cota: assinatura (conta `dev.itp`), teto preventivo de **50% da sessão de 5 h** (`FRACAO_MAXIMA_SESSAO`), recalibrado no próximo rate-limit real. Uma investigação custou ~US$ 0,75 (equivalente reportado pelo CLI) no teste de 29/09. A conta secundária de failover foi removida.
+
+```bash
+python3 investigador.py --dry-run               # investiga, mostra os campos, não grava nem envia
+python3 investigador.py --ticket PRB-0021       # um ticket específico
+```
+
+Fase 4b (publicação automática com rollback) só depois de avaliar a qualidade das propostas da 4a.
+

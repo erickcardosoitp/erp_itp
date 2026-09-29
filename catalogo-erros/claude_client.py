@@ -360,7 +360,7 @@ def _notificar_troca_de_conta(motivo: str) -> None:
 GLOBAL_LOCK_FILE = os.path.expanduser("~/itp-stack/claude-cli-global.lock")
 
 
-def _rodar_uma_vez(args: list[str], timeout_s: int, prompt: str, env=None):
+def _rodar_uma_vez(args: list[str], timeout_s: int, prompt: str, env=None, cwd: str | None = None):
     """Roda o claude CLI uma unica vez, com um env opcional (pra apontar
     CLAUDE_CONFIG_DIR pra outra conta). Timeout tratado explicitamente:
     se estourar TIMEOUT_MAXIMO_S, levanta TarefaEscalada documentando tudo
@@ -378,7 +378,7 @@ def _rodar_uma_vez(args: list[str], timeout_s: int, prompt: str, env=None):
         fcntl.flock(lock_fd, fcntl.LOCK_EX)
         try:
             return subprocess.run(
-                args, capture_output=True, text=True, timeout=timeout_s, cwd=DIRETORIO_REPO, env=env,
+                args, capture_output=True, text=True, timeout=timeout_s, cwd=cwd or DIRETORIO_REPO, env=env,
             )
         except subprocess.TimeoutExpired as exc:
             parcial_out = (exc.stdout or "")[:1000] if isinstance(exc.stdout, str) else ""
@@ -407,7 +407,9 @@ def _rodar_uma_vez(args: list[str], timeout_s: int, prompt: str, env=None):
 # conta, não há teto conhecido, então não bloqueia (só passa a bloquear
 # depois que existir pelo menos 1 evento real de rate-limit calibrando).
 TETO_SESSAO_PATH = os.path.expanduser("~/itp-stack/claude-sessao-teto.json")
-FRACAO_MAXIMA_SESSAO = 0.20
+# 2026-09-29: 50% (decisão do Erick). Conta única dev.itp, usada só pela
+# automação; a triagem saiu do Claude (Jev), o uso agora é o investigador.
+FRACAO_MAXIMA_SESSAO = 0.50
 JANELA_SESSAO_S = 5 * 3600
 
 
@@ -455,7 +457,7 @@ def _pode_gastar(conta: str) -> tuple[bool, str]:
     if custo_atual >= limite:
         return False, (
             f"conta {conta} já gastou ${custo_atual:.4f} na janela de 5h atual, "
-            f"acima do teto preventivo de 20% (${limite:.4f} de um teto calibrado "
+            f"acima do teto preventivo de {FRACAO_MAXIMA_SESSAO:.0%} (${limite:.4f} de um teto calibrado "
             f"de ${teto:.2f} observado no último rate-limit real desta conta)"
         )
     return True, ""
@@ -515,7 +517,7 @@ def _calibrar_teto(conta: str, mensagem_erro: str) -> None:
     _salvar_teto_sessao(dados)
 
 
-def _rodar(args: list[str], timeout_s: int, prompt: str):
+def _rodar(args: list[str], timeout_s: int, prompt: str, cwd: str | None = None, limite_s: int | None = None):
     """Roda o claude CLI com failover entre 2 contas dedicadas (decisão
     2026-09-15, revisada): nenhuma das duas é usada por humano em uso
     interativo -- ver checklist. Se a conta primária bater rate-limit,
@@ -529,16 +531,17 @@ def _rodar(args: list[str], timeout_s: int, prompt: str):
     Timeout de TIMEOUT_MAXIMO_S por tentativa (cada tentativa é uma
     chamada separada, então no pior caso -- rate-limit seguido de timeout
     na conta B -- uma única classificação pode levar até 2x isso)."""
-    timeout_s = min(timeout_s, TIMEOUT_MAXIMO_S)
+    # cwd/limite_s: investigador.py (JiraIA 4a) roda num worktree e pode levar até 10 min.
+    timeout_s = min(timeout_s, limite_s or TIMEOUT_MAXIMO_S)
 
     pode, motivo_bloqueio = _pode_gastar("principal")
     if not pode:
         raise TarefaEscalada(
-            motivo=f"teto de 20% da sessão atingido (conta principal): {motivo_bloqueio}",
+            motivo=f"teto de {FRACAO_MAXIMA_SESSAO:.0%} da sessão atingido (conta principal): {motivo_bloqueio}",
             diagnostico=f"Chamada bloqueada preventivamente, sem gastar nada. Prompt (início): {prompt[:800]}",
         )
 
-    resultado = _rodar_uma_vez(args, timeout_s, prompt)
+    resultado = _rodar_uma_vez(args, timeout_s, prompt, cwd=cwd)
     _registrar_custo_se_sucesso("principal", resultado)
     if resultado.returncode == 0 or not _e_rate_limit(resultado):
         return resultado
@@ -556,12 +559,12 @@ def _rodar(args: list[str], timeout_s: int, prompt: str):
     pode_b, motivo_bloqueio_b = _pode_gastar("secundaria")
     if not pode_b:
         raise TarefaEscalada(
-            motivo=f"teto de 20% da sessão atingido (conta secundária): {motivo_bloqueio_b}",
+            motivo=f"teto de {FRACAO_MAXIMA_SESSAO:.0%} da sessão atingido (conta secundária): {motivo_bloqueio_b}",
             diagnostico=f"Conta principal em rate-limit e conta secundária também no teto preventivo. Prompt (início): {prompt[:800]}",
         )
 
     env_b = {**os.environ, "CLAUDE_CONFIG_DIR": CLAUDE_CONFIG_DIR_B}
-    resultado_b = _rodar_uma_vez(args, timeout_s, prompt, env=env_b)
+    resultado_b = _rodar_uma_vez(args, timeout_s, prompt, env=env_b, cwd=cwd)
     _registrar_custo_se_sucesso("secundaria", resultado_b)
     _notificar_troca_de_conta(_mensagem_erro(resultado))
 
