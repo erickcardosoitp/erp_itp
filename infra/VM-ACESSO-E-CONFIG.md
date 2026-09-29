@@ -49,3 +49,24 @@ Arquivo [`clickhouse/logs-reduzidos.xml`](clickhouse/logs-reduzidos.xml), montad
 ## 5. E-mail do APRXM
 
 `~/itp-stack/aprxm_backend.env`: `MS_TENANT_ID`, `MS_CLIENT_ID`, `MS_CLIENT_SECRET` (app com `Mail.Send`) e `MAIL_SENDER=nao-responda@institutotiapretinha.org` (caixa compartilhada, sem licença e sem membros). Backup do env anterior: `aprxm_backend.env.bak-email-*`.
+
+## 6. Deploy do erp_itp
+
+O erp_itp não tem deploy por CI: as imagens são construídas na VM a partir de `~/erp_itp` (compose em `~/itp-stack`). Até 28/09/2026 isso era manual e a produção ficou 17 dias sem deploy.
+
+`infra/deploy/deploy-erp-itp.sh` automatiza pelo cron (a cada 15 min, só age quando a `main` muda):
+
+1. `git merge --ff-only origin/main` em `~/erp_itp`;
+2. backup `pg_dump erp_itp_db` em `~/backups/erp_itp_db-pre-deploy-*.sql.gz` (mantém os 10 últimos; backup vazio aborta);
+3. tag `:rollback` nas imagens atuais;
+4. `docker compose build` + `up -d` de `erp_itp_backend` e `erp_itp_frontend`;
+5. health check (até 3 min): log `Nest application successfully started`, `/login` 200 e `/api/auth/login` 400/401 pelo Traefik local;
+6. falhou → volta as imagens `:rollback`, `git reset` para o commit anterior e marca o commit em `~/itp-stack/.deploy-erp-itp-falhou` (não retenta até chegar commit novo). E-mail em todo deploy, feito ou revertido.
+
+Cron (`crontab -e` do `itpadmin`):
+
+```
+*/15 * * * * bash /home/itpadmin/erp_itp/infra/deploy/deploy-erp-itp.sh >> /home/itpadmin/itp-stack/deploy-erp-itp.log 2>&1
+```
+
+Migrations rodam no boot do backend (`runMigrations`); se o deploy for revertido depois de uma migration, o banco fica à frente do código — restaurar pelo backup se necessário. Deploy manual: rodar o mesmo script.
