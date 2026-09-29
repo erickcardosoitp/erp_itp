@@ -25,11 +25,13 @@ http_status() {  # $1 host, $2 caminho, resto: argumentos do curl. Passa pelo Tr
     curl -sk -o /dev/null -w '%{http_code}' -m 15 --resolve "$host:443:127.0.0.1" "$@" "https://$host$caminho" 2>/dev/null
 }
 
-saudavel() {  # $1 = início do deploy (UTC ISO), para ler só os logs novos
+# Só HTTP, sem esperar "Nest application successfully started" no log: commit que não muda a
+# imagem (docs, catalogo-erros, infra) não recria o container, a linha nunca aparecia e o deploy
+# revertia um commit saudável (29/09). Depois do `up -d` só o container novo responde.
+saudavel() {
     local i front back
     for i in $(seq 1 36); do
         sleep 5
-        docker logs --since "$1" erp_itp_backend 2>&1 | grep -q "Nest application successfully started" || continue
         front=$(http_status itp.institutotiapretinha.org /login)
         back=$(http_status api.itp.institutotiapretinha.org /api/auth/login -X POST -H 'Content-Type: application/json' -d '{}')
         # front 200 = Next no ar; back 400/401 = requisição chegou no Nest (502/404 seriam Traefik).
@@ -78,9 +80,7 @@ main() {
     local s
     for s in "${SERVICOS[@]}"; do docker tag "itp-stack-$s:latest" "itp-stack-$s:rollback"; done
 
-    local inicio
-    inicio=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-    if (cd "$STACK" && docker compose build "${SERVICOS[@]}" && docker compose up -d "${SERVICOS[@]}") && saudavel "$inicio"; then
+    if (cd "$STACK" && docker compose build "${SERVICOS[@]}" && docker compose up -d "${SERVICOS[@]}") && saudavel; then
         rm -f "$MARCA_FALHA"
         log "deploy ok"
         avisar "[erp_itp] Deploy feito: ${novo:0:8}" "Commits publicados:
