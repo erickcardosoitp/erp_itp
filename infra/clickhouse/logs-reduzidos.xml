@@ -1,0 +1,18 @@
+<clickhouse>
+    <!-- 2026-09-29 (PRB-0028): os logs internos de diagnostico somavam 3,6 GB
+         (text_log 3,2 GB em 15 dias) e as fusoes deles estouravam o mem_limit
+         de 1,5 GB, derrubando a sync do catalogo. Dado real < 150 KB. -->
+    <logger>
+        <level>warning</level>
+    </logger>
+    <text_log remove="1"/>
+    <metric_log remove="1"/>
+    <asynchronous_metric_log remove="1"/>
+    <trace_log remove="1"/>
+    <processors_profile_log remove="1"/>
+    <query_metric_log remove="1"/>
+    <part_log remove="1"/>
+    <query_log>
+        <ttl>event_date + INTERVAL 7 DAY DELETE</ttl>
+    </query_log>
+</clickhouse>
