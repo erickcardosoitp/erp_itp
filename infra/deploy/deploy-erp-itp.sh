@@ -20,9 +20,9 @@ avisar() {
         "$1" "$2") || log "falha ao enviar e-mail: $1"
 }
 
-http_status() {  # $1 host, resto: argumentos do curl. Passa pelo Traefik local.
-    local host=$1; shift
-    curl -sk -o /dev/null -w '%{http_code}' -m 15 --resolve "$host:443:127.0.0.1" "$@" "https://$host" 2>/dev/null
+http_status() {  # $1 host, $2 caminho, resto: argumentos do curl. Passa pelo Traefik local.
+    local host=$1 caminho=$2; shift 2
+    curl -sk -o /dev/null -w '%{http_code}' -m 15 --resolve "$host:443:127.0.0.1" "$@" "https://$host$caminho" 2>/dev/null
 }
 
 saudavel() {  # $1 = início do deploy (UTC ISO), para ler só os logs novos
@@ -31,7 +31,7 @@ saudavel() {  # $1 = início do deploy (UTC ISO), para ler só os logs novos
         sleep 5
         docker logs --since "$1" erp_itp_backend 2>&1 | grep -q "Nest application successfully started" || continue
         front=$(http_status itp.institutotiapretinha.org /login)
-        back=$(http_status api.itp.institutotiapretinha.org -X POST -H 'Content-Type: application/json' -d '{}' /api/auth/login)
+        back=$(http_status api.itp.institutotiapretinha.org /api/auth/login -X POST -H 'Content-Type: application/json' -d '{}')
         # front 200 = Next no ar; back 400/401 = requisição chegou no Nest (502/404 seriam Traefik).
         [[ $front == 200 && $back =~ ^40[01]$ ]] && return 0
     done
