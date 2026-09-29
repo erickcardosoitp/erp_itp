@@ -15,6 +15,7 @@ import { NotificacoesService } from '../notificacoes/notificacoes.service';
 import { EmailService } from '../email.service';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { SupabaseService } from '../modules/supabase/supabase.service';
+import { gerarNumeroMatricula } from '../alunos/numero-matricula';
 
 @Injectable()
 export class AcademicoService {
@@ -482,17 +483,7 @@ export class AcademicoService {
 
   async criarAluno(dto: Partial<Aluno>) {
     if (!dto.nome_completo) throw new BadRequestException('Nome completo é obrigatório');
-    const hoje = new Date();
-    const anoStr = String(hoje.getFullYear());
-    const mesStr = String(hoje.getMonth() + 1).padStart(2, '0');
-    const diaStr = String(hoje.getDate()).padStart(2, '0');
-
-    // Gera número de matrícula seqüencial do dia usando SQL direto (mais robusto no serverless)
-    const [{ count: contaHojeStr }] = await this.dataSource.query(
-      `SELECT COUNT(*) as count FROM alunos WHERE data_matricula::date = CURRENT_DATE`,
-    );
-    const contaHoje = parseInt(contaHojeStr, 10) || 0;
-    const numero_matricula = `ITP-${anoStr}-${mesStr}${diaStr}${contaHoje + 1}`;
+    const numero_matricula = await gerarNumeroMatricula(this.dataSource);
 
     const cpfLimpo = dto.cpf ? dto.cpf.replace(/\D/g, '') : null;
     if (cpfLimpo) {
