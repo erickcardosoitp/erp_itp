@@ -15,7 +15,7 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: "Um dos domínios públicos (site, API ou sistema ITP) parou de responder."
+          summary: "O QUE ACONTECEU:\nUm dos dominios publicos monitorados (site, API ou sistema ITP) parou de responder ao probe.\n\nPOR QUE IMPORTA:\nUsuarios externos provavelmente nao conseguem acessar o servico agora.\n\nO QUE FAZER:\n1. Confirmar no navegador se o dominio esta mesmo fora do ar\n2. Checar se o container/servico correspondente esta rodando na VM\n3. Ver logs do servico e do proxy reverso (nginx/traefik) para a causa"
         data:
           - refId: A
             datasourceUid: prometheus_itp
@@ -47,7 +47,7 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: "O disco principal da VM está acima de 90% de uso — risco de parada por falta de espaço."
+          summary: "O QUE ACONTECEU:\nO disco principal da VM esta acima de 90% de uso.\n\nPOR QUE IMPORTA:\nSem espaco livre, bancos, backups e logs podem parar de gravar e derrubar o sistema.\n\nO QUE FAZER:\n1. Rodar df -h e du -sh para achar o que esta ocupando espaco\n2. Limpar logs antigos, backups vencidos ou imagens Docker nao usadas (docker system prune)\n3. Se for crescimento normal, avaliar aumentar o disco da VM"
         data:
           - refId: A
             datasourceUid: prometheus_itp
@@ -79,7 +79,7 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: "Memória disponível da VM está abaixo de 10% — risco real de o sistema matar processos (OOM killer)."
+          summary: "O QUE ACONTECEU:\nA memoria disponivel da VM caiu abaixo de 10%.\n\nPOR QUE IMPORTA:\nO Linux pode comecar a matar processos automaticamente (OOM killer), incluindo containers em producao.\n\nO QUE FAZER:\n1. Rodar docker stats para achar qual container esta consumindo mais memoria\n2. Verificar se e pico pontual (ex: ETL/backup rodando) ou vazamento continuo\n3. Reiniciar o container problematico se for vazamento, ou aumentar mem_limit se for uso legitimo"
         data:
           - refId: A
             datasourceUid: prometheus_itp
@@ -102,6 +102,38 @@ groups:
                   reducer: { type: last, params: [] }
               refId: C
 
+      - uid: itp-alerta-swap-alto
+        title: Uso de swap alto (acima de 50%)
+        condition: C
+        for: 15m
+        no_data_state: OK
+        exec_err_state: Alerting
+        labels:
+          severity: warning
+        annotations:
+          summary: "O QUE ACONTECEU:\nO swap da VM esta acima de 50% ha mais de 15 minutos.\n\nPOR QUE IMPORTA:\nSwap alto e persistente indica falta de memoria real: o sistema fica lento e pode chegar ao OOM killer. Cache alto (buff/cache) NAO e problema; swap crescendo e.\n\nO QUE FAZER:\n1. Rodar free -h e olhar a coluna available\n2. Rodar docker stats para achar o container que mais cresceu\n3. Se for vazamento, reiniciar o container; se for uso legitimo, rever mem_limit ou a memoria da VM"
+        data:
+          - refId: A
+            datasourceUid: prometheus_itp
+            relativeTimeRange: { from: 300, to: 0 }
+            model:
+              editorMode: code
+              expr: 100 * (1 - node_memory_SwapFree_bytes / node_memory_SwapTotal_bytes)
+              instant: true
+              range: false
+              refId: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [50] }
+                  operator: { type: and }
+                  query: { params: [C] }
+                  reducer: { type: last, params: [] }
+              refId: C
+
       - uid: itp-alerta-container-caido
         title: Um serviço (container) parou de responder
         condition: C
@@ -111,7 +143,7 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: "Um dos serviços Docker parou de reportar métricas há mais de 5 minutos — provavelmente caiu ou está reiniciando em loop."
+          summary: "O QUE ACONTECEU:\nUm dos servicos Docker parou de reportar metricas ha mais de 5 minutos.\n\nPOR QUE IMPORTA:\nProvavelmente o container caiu ou esta em loop de reinicio, sem processar nada.\n\nO QUE FAZER:\n1. Rodar docker ps -a para ver qual container esta down/reiniciando\n2. Checar docker logs <container> para o erro real\n3. Corrigir a causa e rodar docker compose up -d --force-recreate <container>"
         data:
           - refId: A
             datasourceUid: prometheus_itp
@@ -152,7 +184,7 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "Mais de 20% das requisições HTTP nos últimos 5 minutos estão retornando erro de servidor (5xx)."
+          summary: "O QUE ACONTECEU:\nMais de 20% das requisicoes HTTP dos ultimos 5 minutos retornaram erro de servidor (5xx).\n\nPOR QUE IMPORTA:\nUsuarios reais estao vendo erro ao usar o sistema agora, nao e so um teste isolado.\n\nO QUE FAZER:\n1. Checar logs do backend para o erro mais frequente no periodo\n2. Ver se coincide com algum deploy recente\n3. Se for regressao de deploy, avaliar reverter enquanto investiga"
         data:
           - refId: A
             datasourceUid: prometheus_itp
@@ -184,7 +216,7 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "O coletor de erros (catalogo-erros-coletor, cron de 5 em 5 min) não teve nenhuma execução registrada há mais de 15 minutos — pode estar travando antes de gravar o heartbeat, ou o cron parou de disparar. Achado real 2026-09-14: até esta métrica existir, o único jeito de saber que o coletor tinha travado (40 falhas seguidas) era ele mesmo se auto-diagnosticar numa execução futura bem-sucedida — sem heartbeat externo, uma falha permanente passaria despercebida."
+          summary: "O QUE ACONTECEU:\nO coletor de erros nao registrou nenhuma execucao nos ultimos 15 minutos (deveria rodar a cada 5 min).\n\nCAUSA PROVAVEL:\nO processo travou antes de gravar o heartbeat, ou o cron parou de disparar.\n\nO QUE FAZER:\n1. Verificar se o processo esta rodando: ps aux | grep coletor.py\n2. Checar o log: ~/itp-stack/catalogo-erros-cron.log\n3. Se travado, matar o processo e conferir os locks em ~/itp-stack/*.lock"
         data:
           - refId: A
             datasourceUid: prometheus_itp
@@ -216,14 +248,14 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "O coletor de erros vem batendo no teto de 5 classificações por rodada há mais de 30min seguidos — sinal de backlog real se acumulando (não apenas um pico pontual). Decisão 2026-09-15: o teto existe pra evitar estourar a sessão do Claude CLI de novo (incidente do dia), mas um backlog persistente merece atenção humana, não só ficar sendo adiado pra sempre."
+          summary: "O QUE ACONTECEU:\nO coletor de erros bateu no teto de 5 classificacoes por rodada, com dado atualizado ha menos de 30 minutos (nao e valor antigo travado).\n\nPOR QUE IMPORTA:\nIsso indica backlog real de erros se acumulando, nao so um pico pontual.\n\nO QUE FAZER:\n1. Ver quantos erros novos entraram recentemente no catalogo\n2. Se for volume real, considerar aumentar o limite por rodada (LIMITE_CLASSIFICACOES_POR_RODADA em coletor.py)\n3. Se for erro repetido do mesmo tipo, investigar a causa raiz em vez de so aumentar o limite"
         data:
           - refId: A
             datasourceUid: prometheus_itp
             relativeTimeRange: { from: 300, to: 0 }
             model:
               editorMode: code
-              expr: catalogo_erros_teto_atingido
+              expr: 'catalogo_erros_teto_atingido * scalar(time() - node_textfile_mtime_seconds{file="/textfile-metrics/catalogo-erros-teto.prom"} < bool 1800)'
               instant: true
               range: false
               refId: A
